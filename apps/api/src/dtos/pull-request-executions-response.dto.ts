@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiResponseBaseDto } from './api-response.dto';
 
 export class PullRequestExecutionAuthorDto {
@@ -115,6 +115,14 @@ export class PullRequestExecutionDto {
         additionalProperties: true,
     })
     suggestionsCount: Record<string, unknown>;
+
+    @ApiPropertyOptional({
+        type: Object,
+        description:
+            'First delivered suggestion (id + filePath) — deep-link target when the PR-list count is clicked.',
+        additionalProperties: true,
+    })
+    firstSentSuggestion?: { id: string; filePath: string } | null;
 }
 
 export class PullRequestExecutionsPaginationDto {

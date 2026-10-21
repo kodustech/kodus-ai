@@ -9,6 +9,10 @@ jest.mock('@libs/common/utils/crypto', () => ({
 function build(opts: {
     configValue: unknown;
     catalog?: Array<{ id: string; name: string }> | Error;
+    /** Whether producing the catalog used the org's key. Live listings do;
+     *  static and curated-fallback lists do not, and a hit from those must not
+     *  stand in for a real probe. Defaults to a live listing. */
+    exercisedCredential?: boolean;
 }) {
     const orgParams = {
         findByKey: jest.fn().mockResolvedValue(
@@ -21,7 +25,14 @@ function build(opts: {
     const getModels = {
         execute: jest.fn(async () => {
             if (opts.catalog instanceof Error) throw opts.catalog;
-            return { models: opts.catalog ?? [] };
+            // A LIVE listing by default: these cases are about the catalog fast
+            // path, which only applies when producing the list authenticated.
+            // The curated/static case has its own suite, where a hit must fall
+            // through to a real probe because the key was never used.
+            return {
+                models: opts.catalog ?? [],
+                exercisedCredential: opts.exercisedCredential ?? true,
+            };
         }),
     } as any;
     return {
@@ -119,11 +130,81 @@ describe('TestByokModelUseCase', () => {
             model: 'some-model',
             organizationAndTeamData: org,
         });
-        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 provider: 'anthropic_compatible',
                 model: 'some-model',
                 apiKey: 'dec:enc',
+            }),
+        );
+    });
+
+    const bedrock = {
+        version: 2,
+        credentials: [
+            {
+                id: 'c1',
+                provider: 'amazon_bedrock',
+                settings: { awsBearerToken: 'enc', awsRegion: 'us-east-1' },
+            },
+        ],
+        models: [],
+    };
+
+    it('a CHANGED safe setting (region) skips the catalog and probes with the OVERRIDDEN region', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: bedrock,
+            // The stored-region catalog WOULD "find" it — but a changed region must
+            // not ride the stored-region listing.
+            catalog: [{ id: 'model-x', name: 'X' }],
+        });
+        await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'model-x',
+            organizationAndTeamData: org,
+            awsRegion: 'eu-west-1', // differs from the stored us-east-1
+        });
+        // Catalog shortcut skipped → a real probe ran against the NEW region.
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({ awsRegion: 'eu-west-1' }),
+        );
+    });
+
+    it('the SAME region keeps the fast catalog path (no needless probe)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: bedrock,
+            catalog: [{ id: 'model-x', name: 'X' }],
+        });
+        const res = await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'model-x',
+            organizationAndTeamData: org,
+            awsRegion: 'us-east-1', // equal to stored → not a change
+        });
+        expect(res.ok).toBe(true);
+        expect(connectionUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('NEVER sends the stored secret to a caller-supplied baseURL (keeps the stored endpoint)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot, // stored baseURL = https://api.moonshot.ai/v1
+            catalog: new Error('unlistable'), // force the connection probe path
+        });
+        // A caller trying to smuggle an exfil endpoint past the type. The stored
+        // secret must reach the STORED host only — never the caller's.
+        await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'some-model',
+            organizationAndTeamData: org,
+            baseURL: 'https://evil.example/v1',
+        } as any);
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                apiKey: 'dec:enc',
+                baseURL: 'https://api.moonshot.ai/v1',
             }),
         );
     });
@@ -148,5 +229,36 @@ describe('TestByokModelUseCase', () => {
                 organizationAndTeamData: org,
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // Regression (catalog removal): a key-only connect to an Anthropic-protocol
+    // BRAND stores NO baseURL. On a listing miss the probe still runs, delegated to
+    // TestByokConnection with the empty stored baseURL — which resolves the brand's
+    // defaultBaseURL (covered by that use-case's own spec). Before the fix this path
+    // had no endpoint and the probe threw "baseURL is required".
+    it('key-only brand connect (no stored baseURL) delegates the probe for the endpoint to be resolved', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: {
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'moonshot', apiKey: 'enc', settings: {} },
+                ],
+                models: [],
+            },
+            catalog: [], // listing miss → fall through to the probe
+        });
+        await useCase.execute({
+            provider: 'moonshot',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+        });
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                baseURL: undefined, // stored key-only → TestByokConnection fills it
+            }),
+        );
     });
 });

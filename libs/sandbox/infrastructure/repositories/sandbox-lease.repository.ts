@@ -120,10 +120,22 @@ export class SandboxLeaseRepository {
      * Only updates if the document is still in CREATING state to prevent
      * overwriting a concurrent INVALIDATED state change.
      */
-    async updateReady(prKey: string, sandboxId: string): Promise<void> {
+    async updateReady(
+        prKey: string,
+        sandboxId: string,
+        baseBranch?: string,
+        privilegesDropped?: boolean,
+    ): Promise<void> {
         await this.leaseModel.updateOne(
             { _id: prKey, state: 'CREATING' },
-            { $set: { state: 'READY', sandboxId } },
+            {
+                $set: {
+                    state: 'READY',
+                    sandboxId,
+                    ...(baseBranch ? { baseBranch } : {}),
+                    privilegesDropped: privilegesDropped === true,
+                },
+            },
         );
     }
 
@@ -160,10 +172,15 @@ export class SandboxLeaseRepository {
      */
     async findExpired(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            '_id' | 'sandboxId' | 'state' | 'killRetryCount' | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({ expiresAt: { $lt: now } })
-            .select('_id sandboxId state')
+            .select('_id sandboxId state killRetryCount organizationId')
             .lean();
     }
 
@@ -173,6 +190,70 @@ export class SandboxLeaseRepository {
      */
     async delete(prKey: string): Promise<void> {
         await this.leaseModel.deleteOne({ _id: prKey });
+    }
+
+    /**
+     * Detach a sandbox from its prKey without losing track of it.
+     *
+     * Sandboxes are created with `onTimeout: 'pause'`, so an E2B timeout only
+     * pauses them — the only thing that ever kills one is the reaper crons,
+     * and they only see sandboxes that still have a lease doc. Deleting the
+     * lease outright therefore leaves a paused orphan forever.
+     *
+     * Deletes the prKey lease first (so no acquire can join the sandbox after
+     * this point), then writes a retired doc (`<org>:retired:<sandboxId>`,
+     * never matched by acquire) carrying `killAt`. `killIdleSandboxes` kills
+     * the sandbox at `killAt` and removes the retired doc, retrying on real
+     * failures; the TTL reaper backs it up via `expiresAt`, and the orphan
+     * sweep covers a crash between the two writes.
+     *
+     * `killAt` comes from the leaseCount the deleted doc had — read in the
+     * same atomic delete, so a joiner that attached just before still counts:
+     * `busyKillAt` while someone else still holds the sandbox, `idleKillAt`
+     * otherwise. `ownHolds` discounts the caller's own hold.
+     */
+    async retire(
+        prKey: string,
+        sandboxId: string,
+        opts: { idleKillAt: Date; busyKillAt: Date; ownHolds?: number },
+    ): Promise<void> {
+        const detached = await this.leaseModel
+            .findOneAndDelete({ _id: prKey, sandboxId })
+            .select('leaseCount')
+            .lean();
+        const otherHolders =
+            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
+
+        const orgSegment = prKey.split(':')[0];
+        await this.leaseModel.updateOne(
+            { _id: `${orgSegment}:retired:${sandboxId}` },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: new Date(),
+                    expiresAt: killAt,
+                    killAt,
+                    organizationId: orgSegment,
+                },
+            },
+            { upsert: true },
+        );
+    }
+
+    /**
+     * Which of these sandbox ids still have a lease doc (active or retired).
+     * The orphan sweep kills only the ids NOT in this set.
+     */
+    async findSandboxIdsWithLease(sandboxIds: string[]): Promise<Set<string>> {
+        if (sandboxIds.length === 0) return new Set();
+        const docs = await this.leaseModel
+            .find({ sandboxId: { $in: sandboxIds } })
+            .select('sandboxId')
+            .lean();
+        return new Set(docs.map((d) => d.sandboxId));
     }
 
     /**
@@ -216,14 +297,36 @@ export class SandboxLeaseRepository {
      */
     async findReadyToKill(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'killAt'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            | '_id'
+            | 'sandboxId'
+            | 'killAt'
+            | 'killRetryCount'
+            | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
             })
-            .select('_id sandboxId killAt')
+            .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();
+    }
+
+    /**
+     * Atomically increment the reaper's kill-retry counter after a real
+     * `Sandbox.kill` failure (never on "already gone" — that deletes the
+     * doc immediately). Bounds the reaper's infinite-retry window (see
+     * MAX_KILL_RETRIES in sandbox-lease-reaper.service.ts).
+     */
+    async bumpKillRetry(prKey: string): Promise<void> {
+        await this.leaseModel.updateOne(
+            { _id: prKey },
+            { $inc: { killRetryCount: 1 } },
+        );
     }
 
     /**

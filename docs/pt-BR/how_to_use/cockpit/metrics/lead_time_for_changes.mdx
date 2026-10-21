@@ -1,0 +1,45 @@
+---
+title: "Tempo de Ciclo de PR"
+description: "Meça quanto tempo os pull requests ficam abertos, da abertura ao fechamento"
+---
+
+## O que é Tempo de Ciclo de PR
+
+O Tempo de Ciclo de PR mede quanto tempo um pull request fica aberto: desde quando é aberto até quando é fechado. Essa métrica representa a velocidade de revisão e merge do seu processo de desenvolvimento.
+
+No Cockpit, é o card **PR Cycle Time (p75)** e o gráfico **PR Cycle Time** na aba **Productivity**.
+
+## Como Calculamos
+
+Rastreamos automaticamente o tempo entre a abertura e o fechamento de cada pull request. Partimos da data de abertura do PR, e não do primeiro commit, porque branches com rebase podem carregar commits antigos que inflariam o número. Para o tempo gasto antes da abertura do PR, veja [Lead Time Breakdown](/pt-BR/how_to_use/cockpit/metrics/lead_time_breakdown).
+
+**O que rastreamos:**
+- Tempo da abertura do PR até o fechamento do PR
+- PRs fechados no intervalo de datas selecionado
+- Quanto tempo o código leva para ser integrado
+
+**O que não contamos:**
+- Tempo gasto em planejamento, design ou codificação antes da abertura do PR
+- Tempo após o merge (deploy, adoção pelos usuários, etc.)
+- Mudanças com falha ou abandonadas
+
+**Como é calculado:**
+```
+Tempo de Ciclo de PR = (Hora de Fechamento do PR) - (Hora de Abertura do PR)
+```
+
+Usamos o 75º percentil (P75) para mostrar o tempo de ciclo típico, filtrando outliers incomumente longos que poderiam distorcer sua compreensão do desempenho normal.
+
+## Por que é Importante
+
+O Tempo de Ciclo de PR é uma métrica crítica que mede a capacidade da sua equipe de completar o trabalho de desenvolvimento com eficiência. Tempos de ciclo altos podem indicar grandes tamanhos de lote, processos de revisão demorados ou gargalos no fluxo de trabalho de desenvolvimento.
+
+
+## Como Melhorar
+
+- Divida grandes mudanças em PRs menores (200-400 linhas)
+- Defina expectativas e diretrizes claras de revisão
+- Use verificações automatizadas para detectar problemas antes da revisão
+- Distribua a carga de revisão por toda a equipe
+- Obtenha feedback antecipado durante o desenvolvimento
+- Use uma estratégia de branching consistente

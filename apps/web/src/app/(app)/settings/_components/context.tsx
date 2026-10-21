@@ -171,6 +171,34 @@ export const CodeReviewModelDataProvider = (
     </CodeReviewModelDataContext.Provider>
 );
 
+/**
+ * Fetch state of the client-side code review config query. The
+ * kodus-config.yml overlay is only ever requested there — the server render
+ * deliberately skips it — so the UI needs to tell "the overlay is still on its
+ * way" from "the overlay failed", and neither from stored config.
+ */
+export type CodeReviewConfigFetchState = {
+    isFetching: boolean;
+    isError: boolean;
+};
+
+const CodeReviewConfigFetchStateContext =
+    createContext<CodeReviewConfigFetchState>({
+        isFetching: false,
+        isError: false,
+    });
+
+export const useCodeReviewConfigFetchState = (): CodeReviewConfigFetchState =>
+    useContext(CodeReviewConfigFetchStateContext);
+
+export const CodeReviewConfigFetchStateProvider = (
+    props: React.PropsWithChildren & { value: CodeReviewConfigFetchState },
+) => (
+    <CodeReviewConfigFetchStateContext.Provider value={props.value}>
+        {props.children}
+    </CodeReviewConfigFetchStateContext.Provider>
+);
+
 export { resolveCodeReviewConfigForScope };
 
 /**

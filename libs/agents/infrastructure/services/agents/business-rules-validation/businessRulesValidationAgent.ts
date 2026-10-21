@@ -5,9 +5,7 @@ import { finalText } from '@libs/agent-harness/domain/run-state.util';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
-    buildLangfuseTelemetry,
     pullRequestSessionId,
-    toAiSdkTelemetryArgs,
     type LangfuseTraceAttributes,
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
@@ -40,6 +38,7 @@ import {
     RequiredMcpPreflightError,
 } from '../../../../skills/skill.errors';
 import { createBusinessRulesBlueprint } from './blueprint';
+import { NO_TASK_MCP_SENTINEL as NO_TASK_MCP_SENTINEL_CONST } from './no-task-mcp-sentinel';
 import {
     buildMcpConnectionFailureFeedback,
 } from './required-mcp-feedback';
@@ -98,8 +97,12 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     BusinessRulesPrepareContext
 > {
     /** Returned when no task-management MCP is connected so the pipeline
-     *  stage can silently skip without posting any PR comment. */
-    static readonly NO_TASK_MCP_SENTINEL = '__NO_TASK_MCP__';
+     *  stage can silently skip without posting any PR comment.
+     *  @deprecated import NO_TASK_MCP_SENTINEL from './no-task-mcp-sentinel'
+     *  directly — reaching through this class just to read a static string
+     *  couples callers to a Nest-injectable provider they don't otherwise
+     *  depend on. Kept for existing callers/tests. */
+    static readonly NO_TASK_MCP_SENTINEL = NO_TASK_MCP_SENTINEL_CONST;
 
     private readonly logger = createLogger(
         BusinessRulesValidationAgentProvider.name,
@@ -578,10 +581,11 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     }
 
     /**
-     * Run a single LLM completion on the Vercel AI SDK. Replaces the legacy
-     * `super.createLLMAdapter(...).call(...)` (the legacy flow-engine LLM bridge):
-     * `buildModelFromSlot` resolves the BYOK model and `generateText` runs a
-     * plain (no-tools) completion. Langfuse parity via `buildLangfuseTelemetry`.
+     * Run a single LLM completion via `LLM.run` (the one door to the model).
+     * Replaces the legacy `super.createLLMAdapter(...).call(...)` (the flow-engine
+     * LLM bridge): this method resolves ONLY the BYOK slot and passes it to
+     * `LLM.run`, which resolves the model and runs a plain (no-tools) completion.
+     * Langfuse parity via `buildLangfuseTelemetry`.
      */
     /**
      * Telemetry metadata (org/team/PR/repo) for Langfuse so the analyzer +

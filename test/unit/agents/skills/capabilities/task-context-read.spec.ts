@@ -31,14 +31,16 @@ function createCapabilityRuntime(
     };
 }
 
-function createBaseParams() {
+// The reference is what the PR points at; a fixture that answers with a
+// different key is a wrong-task fetch, which the capability now discards.
+function createBaseParams(reference = 'TASK-1') {
     return {
         skillName: 'business-rules-validation',
         organizationId: 'org-1',
         teamId: 'team-1',
-        userQuestion: '@kody TASK-1',
-        pullRequestDescription: 'Related to TASK-1',
-        prBody: 'PR text TASK-1',
+        userQuestion: `@kody ${reference}`,
+        pullRequestDescription: `Related to ${reference}`,
+        prBody: `PR text ${reference}`,
         taskContextResolutionMode: 'cache_first' as const,
         enableAgenticFallback: true,
     };
@@ -199,7 +201,7 @@ describe('fetchTaskContext capability', () => {
             toolCaller,
             createCapabilityRuntime('notion'),
             {
-                ...createBaseParams(),
+                ...createBaseParams('AG-1'),
                 taskContextResolutionMode: 'agent_first',
             },
             hooks,
@@ -218,6 +220,114 @@ describe('fetchTaskContext capability', () => {
                     trace.mode === 'agentic' && trace.status === 'success',
             ),
         ).toBe(true);
+    });
+
+    it('ignores an unusable agent-first result and falls through to deterministic', async () => {
+        // The agent returned a fetch-failure string as taskContext — the same
+        // class isUsableTaskContext already filters on the deterministic path.
+        // It must not be propagated as resolved context; we fall through to the
+        // deterministic path instead.
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Failed to fetch (status 404)',
+                title: 'Agent title',
+                id: 'AG-1',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            result: {
+                data: {
+                    key: 'TASK-1',
+                    fields: {
+                        summary: 'Task title',
+                        description: 'Real deterministic description',
+                    },
+                },
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            callAgent,
+            getRegisteredTools: () => [{ name: 'searchTasks' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'searchTasks',
+                    parameters: {
+                        required: ['query'],
+                        properties: { query: { type: 'string' } },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['searchTasks']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                taskContextResolutionMode: 'agent_first',
+            },
+            hooks,
+        );
+
+        expect(result.normalized).toMatchObject({
+            id: 'TASK-1',
+            title: 'Task title',
+            description: 'Real deterministic description',
+            sourceProvider: 'jira',
+        });
+        expect(callTool).toHaveBeenCalled();
+        expect(callAgent).toHaveBeenCalled();
+    });
+
+    it('treats an unusable agent fallback result as empty instead of propagating it', async () => {
+        // Last-resort agent fallback also goes through isUsableTaskContext: a
+        // fetch-failure string must not become the surfaced task context.
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Failed to fetch (status 404)',
+                title: 'Agent title',
+                id: 'AG-1',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool: jest.fn(),
+            callAgent,
+            getRegisteredTools: () => [{ name: 'searchTasks' }],
+            getToolsForLLM: () => [],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => []),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('notion'),
+            createBaseParams(),
+            hooks,
+        );
+
+        expect(result.normalized).toBeUndefined();
+        expect(result.raw).toBe('');
+        expect(callAgent).toHaveBeenCalled();
     });
 
     it('explores registered deterministic tools when no seed boundary is available', async () => {
@@ -265,13 +375,13 @@ describe('fetchTaskContext capability', () => {
         const result = await fetchTaskContext(
             toolCaller,
             createCapabilityRuntime('jira'),
-            createBaseParams(),
+            createBaseParams('TASK-9'),
             hooks,
         );
 
         expect(callTool).toHaveBeenCalledWith(
             'searchTasks',
-            expect.objectContaining({ query: 'TASK-1' }),
+            expect.objectContaining({ query: 'TASK-9' }),
         );
         expect(callAgent).not.toHaveBeenCalled();
         expect(result.normalized).toMatchObject({
@@ -684,7 +794,7 @@ describe('fetchTaskContext capability', () => {
         const result = await fetchTaskContext(
             toolCaller,
             createCapabilityRuntime('notion'),
-            createBaseParams(),
+            createBaseParams('PAGE-42'),
             hooks,
         );
 
@@ -743,7 +853,7 @@ describe('fetchTaskContext capability', () => {
         const result = await fetchTaskContext(
             toolCaller,
             createCapabilityRuntime('linear'),
-            createBaseParams(),
+            createBaseParams('KC-1441'),
             hooks,
         );
 
@@ -932,6 +1042,12 @@ describe('fetchTaskContext capability', () => {
         expect(prompt).toContain('KNOWN_ISSUE_NUMBERS: 37');
         expect(prompt).toContain('KNOWN_REPOSITORY_OWNER: kodustech');
         expect(prompt).toContain('KNOWN_REPOSITORY_NAME: kodus-ai');
+
+        // #1770 regression: with a known issue number the agent MUST resolve
+        // exactly that issue — never a list/search "discovery" that picks an
+        // unrelated one.
+        expect(prompt).toContain('MANDATORY: resolve ONLY the issue(s)');
+        expect(prompt).toContain('Do NOT call issue-list/search tools');
     });
 
     it('uses typed candidates for optional-only tool parameters', async () => {
@@ -1037,7 +1153,7 @@ describe('fetchTaskContext capability', () => {
         const result = await fetchTaskContext(
             toolCaller,
             createCapabilityRuntime('linear'),
-            createBaseParams(),
+            createBaseParams('TASK-2'),
             hooks,
         );
 

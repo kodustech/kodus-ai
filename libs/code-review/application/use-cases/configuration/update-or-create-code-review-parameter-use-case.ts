@@ -1,6 +1,7 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     Inject,
     Injectable,
@@ -31,12 +32,29 @@ import {
     ContextReferenceDetectionService,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
+import { encryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
+import {
+    CliSecretMissingError,
+    effectiveStoredCustomAgents,
+    maskCliSecrets,
+    sealCustomAgentSecrets,
+    storedCustomAgentsAtLevel,
+} from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
+import {
+    assertCustomAgentsRevisions,
+    StaleCustomAgentsError,
+} from '@libs/code-review/domain/custom-agents/revision';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import {
     CodeReviewConfigWithoutLLMProvider,
     CodeReviewVersion,
+    CustomAgentConfig,
+    customAgentSlugClashMessage,
+    knowledgeLinkProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
@@ -89,6 +107,7 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { GenerateInitialKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     InvalidGroupPathError,
@@ -99,6 +118,8 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -124,6 +145,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -197,6 +219,15 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 configValue,
             );
 
+            // Custom agents and their skills and docs are Teams/Enterprise
+            // too, but a plan change must not lose them: on another plan the
+            // save leaves both lists out, so the stored ones stay as they are
+            // and the other settings still save.
+            await this.keepCustomAgentsIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
+
             if (!body.skipAuthorization) {
                 await this.authorizationService.ensure({
                     user: body.requestUser,
@@ -209,20 +240,119 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
             );
+
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
+
+            if (Array.isArray(configValue?.customAgents)) {
+                const atDirectory =
+                    !!repositoryId && (!!directoryId || !!resolvedPaths);
+                // At a directory, the repository's agents it adds its own to.
+                const inheritedAgents = atDirectory
+                    ? effectiveStoredCustomAgents(codeReviewConfigs, {
+                          repositoryId,
+                      })
+                    : [];
+
+                // A directory agent with an inherited id replaces that agent
+                // (an override); one with another id runs next to it, so its
+                // name must not give the same slug.
+                if (atDirectory) {
+                    // Stored agents, read whole: they carry their names.
+                    const inherited = {
+                        customAgents: inheritedAgents as CustomAgentConfig[],
+                    };
+                    const slugClash = customAgentSlugClashMessage(
+                        withDirectoryAgentLists(inherited, inherited, {
+                            customAgents: configValue.customAgents,
+                        }).customAgents,
+                    );
+                    if (slugClash) {
+                        throw new BadRequestException(slugClash);
+                    }
+                }
+
+                // A knowledge link must name an agent the saved level runs:
+                // one this save configures or, at a directory, one of the
+                // repository's agents the directory adds to. A dangling link
+                // would never load, and would start loading if an agent with
+                // that id were created. The screen saves agents and knowledge
+                // together; a payload without agents is not checked.
+                if (Array.isArray(configValue?.knowledge)) {
+                    const problems = knowledgeLinkProblems(
+                        configValue.knowledge,
+                        [...inheritedAgents, ...configValue.customAgents],
+                    );
+                    if (problems.length > 0) {
+                        throw new BadRequestException(problems.join('; '));
+                    }
+                }
+            }
+
+            // The custom agents and knowledge are written as whole lists: a
+            // save made from a copy someone else replaced since would drop
+            // their changes, so it is refused and the screen asks to reload.
+            try {
+                assertCustomAgentsRevisions(
+                    codeReviewConfigs,
+                    {
+                        repositoryId,
+                        directoryId,
+                        directoryPaths: resolvedPaths,
+                    },
+                    configValue as Record<string, unknown>,
+                    body.expectedRevisions,
+                );
+            } catch (error) {
+                if (error instanceof StaleCustomAgentsError) {
+                    throw new ConflictException(error.message);
+                }
+                throw error;
+            }
+
+            // CLI secrets are write-only: encrypt what was typed and keep
+            // what the screen echoed back masked, before anything is stored.
+            // Only the level being saved can supply a kept secret, so a
+            // secret never moves to another repository or level.
+            if (Array.isArray(configValue?.customAgents)) {
+                try {
+                    configValue.customAgents = sealCustomAgentSecrets(
+                        configValue.customAgents,
+                        storedCustomAgentsAtLevel(codeReviewConfigs, {
+                            repositoryId,
+                            directoryId,
+                            directoryPaths: resolvedPaths,
+                        }),
+                        encryptCliSecret,
+                    );
+                } catch (error) {
+                    if (error instanceof CliSecretMissingError) {
+                        throw new BadRequestException(error.message);
+                    }
+                    throw error;
+                }
+            }
 
             const filteredRepositoryInfo =
                 this.filterRepositoryInfo(codeRepositories);
 
             if (!codeReviewConfigs || !codeReviewConfigs.configs) {
-                return await this.createNewGlobalConfig(
+                const createdGlobalConfig = await this.createNewGlobalConfig(
                     organizationAndTeamData,
                     configValue,
                     filteredRepositoryInfo,
                     body.actor,
                 );
+
+                void this.telemetry.codeReviewSettingsUpdated({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                    configLevel: ConfigLevel.GLOBAL,
+                });
+
+                return createdGlobalConfig;
             }
 
             this.mergeRepositories(codeReviewConfigs, filteredRepositoryInfo);
@@ -460,13 +590,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 }
             }
 
-            const previousIdeSyncEnabled =
-                !!repositoryId &&
-                codeReviewConfigs?.repositories?.find(
-                    (r) => r.id === repositoryId,
-                )?.configs?.ideRulesSyncEnabled === true;
-
-            const result = await this.handleConfigUpdate(
+            const { result, updatedConfig } = await this.handleConfigUpdate(
                 organizationAndTeamData,
                 codeReviewConfigs,
                 configValue,
@@ -478,54 +602,57 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 previousRulesFileNames,
             );
 
-            if (
-                previousIdeSyncEnabled &&
-                (configValue as any)?.ideRulesSyncEnabled === false
-            ) {
-                // The action picked in the toggle-off modal in the web UI.
-                // Defaulting to 'keep' here is deliberate: any caller that
-                // doesn't pass an explicit action gets the least destructive
-                // option, which avoids the silent-deletion regression.
-                const action: IdeSyncDisableAction =
-                    (configValue as any)?.ideSyncDisableAction ?? 'keep';
-
-                const event: IdeRulesSyncDisabledEvent = {
+            if (!directoryId) {
+                this.applyKodyLearningTransitions({
                     organizationAndTeamData,
-                    repositoryId: repositoryId!,
-                    action,
-                };
-                this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+                    previousConfig: codeReviewConfigs,
+                    updatedConfig,
+                    repositoryId,
+                    ideSyncDisableAction: (configValue as any)
+                        ?.ideSyncDisableAction,
+                    generatorEnabledInPayload:
+                        configValue?.kodyRulesGeneratorEnabled === true,
+                });
             }
 
-            // Enabling the Kody Rules generator for a repo seeds its rules from
-            // the last 3 months of PR reviews right away, instead of waiting for
-            // the weekly cron (which also backfills, but only on its next run).
-            // The seed is idempotent — it skips when past-review rules already
-            // exist — so re-saving an already-enabled repo is a no-op. Fired
-            // detached so it never blocks the settings save (issue #1506).
-            if (
-                !!repositoryId &&
-                configValue?.kodyRulesGeneratorEnabled === true
-            ) {
-                void this.generateInitialKodyRulesUseCase
-                    .execute({ organizationAndTeamData, repositoryId })
-                    .catch((error) => {
-                        this.logger.error({
-                            message:
-                                'Failed to start initial Kody Rules generation',
-                            context:
-                                UpdateOrCreateCodeReviewParameterUseCase.name,
-                            error:
-                                error instanceof Error
-                                    ? error
-                                    : new Error(String(error)),
-                            metadata: { organizationAndTeamData, repositoryId },
-                        });
-                    });
-            }
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                configLevel:
+                    directoryId && repositoryId
+                        ? ConfigLevel.DIRECTORY
+                        : repositoryId
+                          ? ConfigLevel.REPOSITORY
+                          : ConfigLevel.GLOBAL,
+                repositoryId,
+            });
 
             return result;
         } catch (error) {
+            if (
+                error instanceof BadRequestException ||
+                error instanceof ConflictException
+            ) {
+                // A refused save (validation, stale revision): the reason
+                // names agents, paths or secret names, never values.
+                this.logger.warn({
+                    message: `Code review settings save refused (${error.getStatus()}): ${error.message}`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationId:
+                            body.organizationAndTeamData?.organizationId,
+                        teamId: body.organizationAndTeamData?.teamId,
+                        repositoryId: body.repositoryId,
+                        directoryId: body.directoryId,
+                        directoryPath: body.directoryPath,
+                        status: error.getStatus(),
+                        reason: error.message,
+                        source: body.actor?.source,
+                    },
+                });
+                throw error;
+            }
             if (error instanceof ForbiddenException) {
                 throw error;
             }
@@ -556,8 +683,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
     }
 
-    private filterRepositoryInfo(codeRepositories: ICodeRepository[]) {
-        return codeRepositories.map((repository) => ({
+    private filterRepositoryInfo(
+        codeRepositories: ICodeRepository[] | null | undefined,
+    ) {
+        return (codeRepositories ?? []).map((repository) => ({
             id: repository.id,
             name: repository.name,
             isSelected: false,
@@ -573,7 +702,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
      */
     private async stripLinkedRepositoriesIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
-        configValue: CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
     ): Promise<void> {
         if (!configValue) return;
         const links = (configValue as { linkedRepositories?: unknown })
@@ -618,6 +748,39 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         });
     }
 
+    private async keepCustomAgentsIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (
+            configValue?.customAgents === undefined &&
+            configValue?.knowledge === undefined
+        ) {
+            return;
+        }
+        if (
+            await isCustomAgentsPlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            )
+        ) {
+            return;
+        }
+
+        delete configValue.customAgents;
+        delete configValue.knowledge;
+        this.logger.log({
+            message:
+                'Left customAgents and knowledge out of the save — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+            },
+        });
+    }
+
     private async createNewGlobalConfig(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue: CreateOrUpdateCodeReviewParameterDto['configValue'],
@@ -631,8 +794,16 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {
         const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const { config: sanitizedConfigValue, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(configValue),
+                defaultConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            'global',
+        );
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
@@ -690,6 +861,26 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         codeReviewConfigs.repositories = updatedRepositories;
     }
 
+    /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
+    private logAlignedPromptOverrides(
+        alignedPaths: string[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        level: 'global' | 'repository' | 'directory',
+        repositoryId?: string,
+    ) {
+        if (!alignedPaths.length) return;
+        this.logger.log({
+            message: `Not storing ${alignedPaths.length} prompt override(s) identical to the inherited text`,
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationAndTeamData,
+                level,
+                repositoryId,
+                alignedPaths,
+            },
+        });
+    }
+
     private async handleConfigUpdate(
         organizationAndTeamData: OrganizationAndTeamData,
         codeReviewConfigs: CodeReviewParameter,
@@ -715,8 +906,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             await resolver.getResolvedParentConfig(repositoryId, directoryId),
         );
 
-        const sanitizedIncomingConfig =
-            this.stripCustomMessagesFromConfig(newConfigValue);
+        const { config: sanitizedIncomingConfig, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(newConfigValue),
+                parentConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            directoryId ? 'directory' : repositoryId ? 'repository' : 'global',
+            repositoryId,
+        );
 
         let oldConfig: ConfigDelta;
         let level: ConfigLevel;
@@ -837,7 +1037,143 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             requestUser,
         });
 
-        return centralizedPr ?? true;
+        return {
+            result: centralizedPr ?? true,
+            updatedConfig: updatedCodeReviewConfigValue,
+        };
+    }
+
+    /**
+     * Learning settings resolve default → global → repository, so one save can
+     * change the effective value of many repositories (a global save) or of
+     * one that only inherited it (a repository save). Each repository whose
+     * IDE rules sync goes on→off gets the cleanup picked in the toggle-off
+     * modal. Turning the generator on in a repository save seeds that
+     * repository right away. After a global save, the weekly cron backfills.
+     */
+    private applyKodyLearningTransitions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previousConfig: CodeReviewParameter;
+        updatedConfig: CodeReviewParameter;
+        repositoryId?: string;
+        ideSyncDisableAction?: IdeSyncDisableAction;
+        generatorEnabledInPayload: boolean;
+    }) {
+        const {
+            organizationAndTeamData,
+            previousConfig,
+            updatedConfig,
+            repositoryId,
+        } = params;
+        const level = repositoryId
+            ? ConfigLevel.REPOSITORY
+            : ConfigLevel.GLOBAL;
+        const repositoryIds = repositoryId
+            ? [repositoryId]
+            : (updatedConfig?.repositories ?? []).map((repo) =>
+                  String(repo.id),
+              );
+
+        const resolveBefore =
+            createKodyLearningSettingsResolver(previousConfig);
+        const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
+        // Defaulting to 'keep' is deliberate: any caller that doesn't pass an
+        // explicit action gets the least destructive option, which avoids the
+        // silent-deletion regression.
+        const ideSyncDisableAction = params.ideSyncDisableAction ?? 'keep';
+        const ideSyncDisabledIds: string[] = [];
+
+        for (const id of repositoryIds) {
+            const before = resolveBefore(id);
+            const after = resolveAfter(id);
+
+            if (before.ideRulesSyncEnabled && !after.ideRulesSyncEnabled) {
+                this.logger.log({
+                    message: 'IDE rules sync turned off for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        action: ideSyncDisableAction,
+                    },
+                });
+                ideSyncDisabledIds.push(id);
+            } else if (
+                !before.ideRulesSyncEnabled &&
+                after.ideRulesSyncEnabled
+            ) {
+                this.logger.log({
+                    message: 'IDE rules sync turned on for repository',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                    },
+                });
+            }
+
+            if (
+                before.kodyRulesGeneratorEnabled !==
+                after.kodyRulesGeneratorEnabled
+            ) {
+                this.logger.log({
+                    message: `Kody Rules generator turned ${after.kodyRulesGeneratorEnabled ? 'on' : 'off'} for repository`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        seedsNow:
+                            level === ConfigLevel.REPOSITORY &&
+                            after.kodyRulesGeneratorEnabled &&
+                            params.generatorEnabledInPayload,
+                    },
+                });
+            }
+
+            // Seeding is idempotent (it skips when past-review rules already
+            // exist), so re-saving an already-enabled repo is a no-op. Fired
+            // detached so it never blocks the settings save (issue #1506).
+            if (
+                level === ConfigLevel.REPOSITORY &&
+                after.kodyRulesGeneratorEnabled &&
+                params.generatorEnabledInPayload
+            ) {
+                this.seedInitialKodyRules(organizationAndTeamData, id);
+            }
+        }
+
+        // One cleanup for the whole save: the listener loads the org's rules
+        // once instead of once per repository.
+        if (ideSyncDisabledIds.length > 0) {
+            const event: IdeRulesSyncDisabledEvent = {
+                organizationAndTeamData,
+                repositoryIds: ideSyncDisabledIds,
+                action: ideSyncDisableAction,
+            };
+            this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+        }
+    }
+
+    private seedInitialKodyRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ) {
+        void this.generateInitialKodyRulesUseCase
+            .execute({ organizationAndTeamData, repositoryId })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Failed to start initial Kody Rules generation',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                    metadata: { organizationAndTeamData, repositoryId },
+                });
+            });
     }
 
     private async createCentralizedMutationIfEnabled(params: {
@@ -1392,12 +1728,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     userId: actor.userId,
                     userEmail: actor.userEmail,
                 },
-                oldConfig,
-                newConfig,
+                // The audit log is readable from the settings history: CLI
+                // secrets go in masked, like on every other read path.
+                oldConfig: maskCliSecrets(oldConfig),
+                newConfig: maskCliSecrets(newConfig),
                 actionType: ActionType.EDIT,
                 configLevel: level,
-                repository,
-                directory,
+                repository: maskCliSecrets(repository),
+                directory: maskCliSecrets(directory),
                 isCreation,
             });
         } catch (error) {
@@ -1423,7 +1761,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             error: error,
             metadata: {
                 parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
-                configValue: body.configValue,
+                // Only which settings were sent: their values carry prompts,
+                // instructions and other content written by the customer.
+                configKeys: Object.keys(body.configValue ?? {}),
                 organizationAndTeamData: body.organizationAndTeamData,
             },
         });

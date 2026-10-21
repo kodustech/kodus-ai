@@ -1,0 +1,3450 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.367Z",
+  "updatedAt": "2026-10-15T01:40:20.210Z",
+  "complete": true,
+  "selectedCases": [
+    "R6-incomplete-fix",
+    "R12-unrelated-other-file",
+    "K7-rule-repost-prod-profile",
+    "P04-rule-local-path-doc-reworded",
+    "P12-rule-soft-asserts-moved-down",
+    "P20-rule-double-cast-out-of-40",
+    "P28-retry-cap-next-run-now",
+    "P36-nonfinal-refs-all-scopes"
+  ],
+  "casesSourceDigest": "446e035366c69bdcb489727c3831cb1efd334e9fab08bfe4de6d8830f06ed8d6",
+  "summary": {
+    "measured": 40,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 3,
+        "rate": 0.1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 30,
+        "violations": 3,
+        "rate": 0.1
+      },
+      "index-reference (#2039)": {
+        "n": 40,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R6-incomplete-fix · credit-negative-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P12-rule-soft-asserts-moved-down · soft-asserts-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 2
+      },
+      "P12-rule-soft-asserts-moved-down · cap-truthy-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P20-rule-double-cast-out-of-40 · usage-double-cast-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P20-rule-double-cast-out-of-40 · invoice-double-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P28-retry-cap-next-run-now · cap-returns-now-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P36-nonfinal-refs-all-scopes · all-scope-nonfinal-new-site [deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34328,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The new guard was added only to `debit`; `credit` (lines 9-11) still accepts zero or negative amounts, so `credit(account, -x)` silently debits and mints/removes balance without a corresponding debit. WHY: The earlier requested fix (reject non-positive amounts in BOTH methods) was only half-applied, leaving an asymmetric contract where one direction validates its input and the other does not, allowing callers to bypass the intended invariant. HOW: Mirror the guard in `credit`: add `if (!(amount > 0)) throw new RangeError('amount must be positive');` at the top of `credit`.",
+          "keep": true,
+          "rationale": "Verified in src/ledger/ledger.ts: debit (line 5) throws on non-positive amounts, while credit (lines 9-11) has no such guard and adds amount directly. Thus credit(account, -x) silently debits, bypassing the intended invariant. The previous decision was only 'partially_implemented' (debit fixed, credit not), so this finding correctly identifies the un-applied half rather than reversing an applied change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "credit\\(|debit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 9,
+          "label": "bug",
+          "earlierId": "round-a-ledger",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53537,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: the positivity guard added to debit was not mirrored in credit, so credit still accepts zero or negative amounts. WHY: a negative credit silently performs a debit and a zero credit silently does nothing, breaking the amount-sign invariant the new guard establishes for the class and producing wrong balances without an error. HOW: apply the same check at the top of credit, e.g. `if (!(amount > 0)) throw new RangeError('amount must be positive');`.",
+          "keep": true,
+          "rationale": "Confirmed against the current source: debit (line 5) now has `if (!(amount > 0)) throw new RangeError('amount must be positive')`, while credit (lines 9-11) has no such guard and simply adds the raw amount. A negative credit therefore reduces the balance (acts as a debit) and a zero credit is a silent no-op, exactly as claimed. The earlier review decision (round-a-ledger) asked to reject non-positive amounts in BOTH methods and was only partially_implemented — the credit half is still unaddressed in the current diff, so this finding restates the unresolved portion rather than reversing an applied change. The technical claim holds.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "credit\\(|debit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-ledger",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 74620,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The new positivity guard was added only to `debit` (line 5); `credit` (line 10) still adds `amount` with no validation. WHY: a negative `credit(account, -x)` silently subtracts and a zero `credit` is a silent no-op, so the same non-positive-amount hole the guard was meant to close remains reachable through `credit` and produces wrong balances. HOW: apply the same check to `credit`, e.g. `if (!(amount > 0)) throw new RangeError('amount must be positive');` before mutating the balance.",
+          "keep": true,
+          "rationale": "Confirmed against the file: debit (line 5) throws RangeError for non-positive amounts while credit (line 10) performs the addition with no validation, so credit(account, -x) silently subtracts and credit(account, 0) is a silent no-op. The earlier review suggestion to reject non-positive amounts in BOTH debit and credit was only partially_implemented (debit only), so the wrong-balance path via credit is still reachable. The root cause and failure path are exactly as described; nothing refutes it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-ledger",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39585,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The new non-positive-amount guard was added only to debit(); credit() at lines 9-10 still accepts zero or negative amounts. WHY: a call like credit(account, -5) silently reduces the balance (a debit) and bypasses the RangeError the guard is meant to enforce, so the previously requested fix is only half-applied. HOW: mirror the same check in credit — `if (!(amount > 0)) throw new RangeError('amount must be positive');` as its first statement.",
+          "keep": true,
+          "rationale": "Verified directly in src/ledger/ledger.ts: debit() (line 5) guards against non-positive amounts, but credit() (lines 9-10) unconditionally does balances.get + amount with no check. credit(account, -5) therefore silently debits, bypassing the RangeError the guard enforces. This is a concrete, reachable behavior bug and matches the prior partially_implemented decision requesting the check in both methods; the current diff gives no evidence credit() was reworked. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "credit\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-ledger",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 128055,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The new non-positive-amount guard was added only to `debit`, while `credit` still accepts zero and negative amounts. WHY: `credit(account, -5)` silently subtracts from the balance (acting as a debit), so the negative-amount bug the guard was meant to prevent remains reachable through the sibling method. HOW: Apply the same check in `credit`: `if (!(amount > 0)) throw new RangeError('amount must be positive');`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/ledger/ledger.ts:4-11. `debit` now rejects non-positive amounts, but `credit` (line 9-11) performs `(balances.get(account) ?? 0) + amount` with no validation, so `credit(account, -5)` silently reduces the balance. The claim's root cause and failure path are accurate. The prior review decision was only partially_implemented (guard applied to debit only), and the current diff shows credit was left unguarded — so the remaining defect is real and not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-ledger",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69028,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the guard was inverted from `amount > charge.amount` to `amount < charge.amount`, so it now throws on legitimate partial refunds and silently allows over-refunds. WHY: a refund with amount greater than the original charge passes the check and is submitted to the gateway (money paid out beyond what was charged), while a smaller partial refund is rejected with the message 'refund exceeds the charge' — the exact opposite of the intended behavior. HOW: restore the original comparison (or use `!==` if only full refunds are allowed).",
+          "keep": true,
+          "rationale": "The cited code at src/billing/refund.ts:4-6 is exactly as described: `if (amount < charge.amount) throw new Error('refund exceeds the charge')`. This rejects a legitimate partial refund (amount < charge.amount) with a message that says the opposite, and lets an over-refund (amount > charge.amount) pass the guard and reach `gw.submit`, paying out more than was charged. The comparison is inverted relative to the intended validation, so the claim's root cause and failure path are factually correct and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard lets a refund larger than the original charge pass and be submitted to the gateway, while a legitimate partial refund is rejected with `'refund exceeds the charge'` — the opposite of the intended behavior. Restore the original `amount > charge.amount` comparison (or use `!==` if only full refunds are allowed)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55349,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the guard comparison was inverted — it now throws when `amount < charge.amount` while the message says 'refund exceeds the charge', so the condition no longer matches its own intent. WHY: partial refunds (amount less than the charge) are wrongly rejected, and over-refunds (amount greater than the charge) now pass the guard and are forwarded to `gw.submit`, allowing the gateway to be asked to refund more than was originally charged. HOW: restore the correct comparison `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`.",
+          "keep": true,
+          "rationale": "The cited code at lines 4-6 reads `if (amount < charge.amount) { throw new Error('refund exceeds the charge'); }`. The message 'refund exceeds the charge' semantically requires `amount > charge.amount`, so the comparison is inverted relative to its own intent. Consequently a partial refund (amount less than the charge) is wrongly rejected, and an over-refund (amount greater than the charge) passes the guard and is forwarded to `gw.submit` on line 7, asking the gateway to refund more than was charged. The technical claim is factually accurate and the fix (`amount > charge.amount`) is correct. No guard upstream refutes this — the function is the guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard rejects partial refunds where `amount < charge.amount` and lets over-refunds pass through to `gw.submit`, so the gateway can be asked to refund more than the original charge. Restore the comparison to `if (amount > charge.amount)` so only refunds exceeding the charge throw `new Error('refund exceeds the charge')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54258,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the guard condition was inverted from `amount > charge.amount` to `amount < charge.amount`. WHY: it now rejects valid partial refunds (any amount below the charge) while allowing refunds larger than the charge to be submitted to the gateway, contradicting the 'refund exceeds the charge' message and causing financial over-refunds. HOW: restore the comparison to `amount > charge.amount`.",
+          "keep": true,
+          "rationale": "Confirmed at src/billing/refund.ts:4-5: `if (amount < charge.amount) throw new Error('refund exceeds the charge')`. A partial refund (amount below the charge) is wrongly rejected, while amounts greater than the charge bypass the guard and are submitted to the gateway via gw.submit, enabling financial over-refunds. The condition also contradicts its own message. Root cause and failure path are real; not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund|charge.amount|amount <|amount >",
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted comparison rejects valid partial refunds while letting refunds larger than the charge through to the gateway, contradicting the `refund exceeds the charge` error and risking financial over-refunds. Restore the comparison to `amount > charge.amount`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49707,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard condition was inverted to `amount < charge.amount`, so the 'refund exceeds the charge' check now fires for any refund smaller than the charge and never fires for refunds larger than it. WHY: Valid partial refunds are rejected with an error, while over-refunds (amount > charge.amount) slip through and are submitted to the gateway, allowing refunding more than was originally charged. HOW: Restore the comparison to `amount > charge.amount`.",
+          "keep": true,
+          "rationale": "Confirmed at src/billing/refund.ts:4-6: `if (amount < charge.amount) throw new Error('refund exceeds the charge')`. The comparison is inverted. A refund smaller than the charge (a valid partial refund) throws, while amount > charge.amount (a genuine over-refund) passes the guard and is submitted to gw.submit at line 7. The error message itself ('refund exceeds the charge') confirms the intended condition was `amount > charge.amount`. Root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard `amount < charge.amount` rejects valid partial refunds with an error while allowing over-refunds (`amount > charge.amount`) through to the gateway, so more can be refunded than originally charged. Restore the comparison to `amount > charge.amount` so the 'refund exceeds the charge' check fires only when the refund is larger than the charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50164,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard condition was inverted — it now throws when `amount < charge.amount` instead of when `amount > charge.amount`. WHY: This lets a refund larger than the original charge pass the check and reach `gw.submit` (which performs no amount clamping, gateway.ts:4), enabling an over-refund, while incorrectly rejecting legitimate partial refunds with a misleading \"refund exceeds the charge\" error. HOW: Restore the comparison to `if (amount > charge.amount)`.",
+          "keep": true,
+          "rationale": "Confirmed by reading refund.ts:4-5 and gateway.ts. The comparison `amount < charge.amount` throws for smaller (legitimate partial) refunds while allowing `amount > charge.amount` over-refunds to reach gw.submit, which has no amount clamping. No caller or guard elsewhere prevents this. The described inversion is factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard now throws when `amount < charge.amount` instead of when `amount > charge.amount`, so a refund larger than the original charge passes the check and reaches `gw.submit` (which performs no amount clamping, gateway.ts:4), enabling an over-refund while legitimate partial refunds are rejected with a misleading \"refund exceeds the charge\" error. Restore the comparison to `if (amount > charge.amount)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14941,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC get the previous day because `dayKey` derives the calendar day with `toISOString().slice(0, 10)`, violating the rule \"Format date-only values in local calendar time\". Replace it with `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20074,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "The new `dayKey` helper derives a calendar day with `at.toISOString().slice(0, 10)`, which violates the rule \"Format date-only values in local calendar time\": for users west of UTC it returns the previous day. Use `formatLocalDate(at)` from './dates' instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20907,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` in `src/reports/range.ts` returns the previous calendar day because `at.toISOString().slice(0, 10)` formats in UTC, violating the rule \"Format date-only values in local calendar time\" and clashing with `rangeLabel`'s end now that the file imports `formatLocalDate`. Use `formatLocalDate(at)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14538,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` derives the calendar day with `at.toISOString().slice(0, 10)`, users west of UTC get the previous day, violating rule 18 (\"Format date-only values in local calendar time\"). Apply the same fix used for `rangeLabel` in this diff by using `formatLocalDate(at)` from `./dates`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21973,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` returns the previous calendar day because it converts a `Date` with `toISOString().slice(0, 10)`. Use `formatLocalDate` from `src/reports/dates.ts` (already imported in this file)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29539,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The log path `/Users/dev/tmp/replay-dlq.log` is an absolute path on one developer's machine and violates the \"No local machine paths in committed files\" rule, so nobody else has that directory and on-call cannot find or attach the log. Point at a portable location such as `/tmp/replay-dlq.log` or a configured setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17220,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/tmp/replay-dlq.log` is an absolute path under one developer's home directory, it violates the \"No local machine paths in committed files\" rule and the instructions to attach the log fail for whoever is on call. Use a temporary directory or setting instead, such as `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18246,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/tmp/replay-dlq.log` is an absolute path that exists only on one developer's machine, the instruction to attach it is meaningless for anyone else on call and violates the rule against local machine paths in committed files. Refer to the log through a temporary directory or a configurable setting instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18531,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The troubleshooting section tells readers to attach `/Users/dev/tmp/replay-dlq.log`, a developer-local absolute path that violates the rule \"No local machine paths in committed files\" and does not exist for anyone else on call. Point at a repository-relative or configurable log location instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18726,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P04-rule-local-path-doc-reworded",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/tmp/replay-dlq.log` is an absolute path from a developer machine, it violates the rule \"No local machine paths in committed files\" and misleads on-call engineers who lack that directory. Replace it with a temporary directory such as `/tmp/replay-dlq.log` or a configurable setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18283,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "label": "kody_rules",
+          "earlierId": "round-a-P12-rule-soft-asserts-moved-down",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy()` passes for any non-zero value, the assertion does not verify the 5,000-cent result of applying a 50% cap to a 10,000-cent subtotal. Replace it with `toBe(5_000)` to assert the exact expected value."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58819,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy()` only proves `capped.discountCents` is non-zero, a wrong cap such as one not enforcing the 50% cap on 10,000 cents can still pass. Assert the exact expected value of `5_000` with a hard assertion per the rule \"Hard, exact assertions in tests\"."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `expect.soft(priced.totalCents).toBeTruthy()` is both soft and only checks truthiness, a wrong total for the 15% coupon on 10,000 cents can pass. Use a hard assertion for the exact `8_500` value per the rule \"Hard, exact assertions in tests\"."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `expect.soft(priced.discountCents).toBeDefined()` only checks presence and is soft, an incorrect discount can pass even though the exact value is `1_500`. Use a hard assertion for that exact value per the rule \"Hard, exact assertions in tests\"."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy()` passes for any truthy `priced.appliedCoupon`, a wrong coupon can still be green even though the test knows the exact expected `percent(15)`. Assert the exact coupon with `toEqual` and a hard assertion per the rule \"Hard, exact assertions in tests\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23012,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "label": "kody_rules",
+          "earlierId": "round-a-P12-rule-soft-asserts-moved-down",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Asserting only truthiness for `capped.discountCents` lets a wrong cap amount pass even though 50% of 10,000 cents is exactly 5,000 cents. Replace it with an exact `toBe(5_000)` assertion so any incorrect cap fails the test."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-names"
+          ],
+          "marked": false,
+          "text": "The title restates `roundCents` instead of describing the observable behavior, so the test's intent is unclear. Rename it to describe the produced behavior, such as `rounds a half-cent value up to the next cent`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39882,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A truthiness check lets an incorrect capped discount pass even though the 50% cap on a 10,000 cent subtotal must equal 5,000 cents. Replace it with the hard assertion `expect(capped.discountCents).toBe(5_000)` as required by “Hard, exact assertions in tests”."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The `expect.soft` truthiness check allows a wrong total to pass even though a 15% coupon on 10,000 cents must yield 8,500 cents. Use the hard assertion `expect(priced.totalCents).toBe(8_500)` as required by “Hard, exact assertions in tests”."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "The `expect.soft` `toBeDefined` check can pass for any defined discount, but a 15% coupon on 10,000 cents must produce exactly 1,500 cents. Replace it with the hard assertion `expect(priced.discountCents).toBe(1_500)` as required by “Hard, exact assertions in tests”."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 67,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "A truthiness check on `priced.appliedCoupon` lets the wrong coupon pass even though the test knows the exact value passed in. Assert equality with `expect(priced.appliedCoupon).toEqual(percent(15))` as required by “Hard, exact assertions in tests”."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P12-rule-soft-asserts-moved-down",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19404,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/discounts.test.ts",
+          "line": 65,
+          "label": "kody_rules",
+          "earlierId": "round-a-P12-rule-soft-asserts-moved-down",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/discounts.test.ts",
+          "line": 43,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-hard-exact-assertions"
+          ],
+          "marked": false,
+          "text": "Because `toBeTruthy()` passes for any non-zero discount, an uncapped or miscomputed discount can ship green even though stacking 40% and 30% on a 10,000-cent subtotal yields 7,000 cents capped at 50% (5,000 cents). Assert the exact value with `expect(capped.discountCents).toBe(5_000)` and keep the `capped` flag assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "soft-asserts-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cap-truthy-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14100,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` through `unknown` to `InvoicePaidEvent` on line 12 hides that an unvalidated, attacker-controlled payload is passed straight to `markPaid`. Either parse/validate the body with a zod schema, which also satisfies rule 35 for this handler, or add a comment on the line above explaining why the value really has that type, since the double cast violates \"No double casts without a justification\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37066,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-any"
+          ],
+          "marked": false,
+          "text": "The cast chain `as unknown as ReadonlyArray<UsageRow>` bypasses type checking entirely rather than narrowing from a concrete type, violating the rule \"Avoid explicit any\". Type the parse call itself (`Papa.parse<UsageRow>(csv, ...)`) so `parsed.data` is already `UsageRow[]` and no cast is needed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The handler double-casts the untrusted request body through `unknown` to `InvoicePaidEvent` without any justification, violating the rule \"No double casts without a justification\". Replace the `as unknown as InvoicePaidEvent` cast with a validated parse (e.g. a `zod` schema) or runtime guard so the value genuinely has the type and is cast once, or add a comment on the line above justifying the cast if it is truly unavoidable."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35473,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-money-cents"
+          ],
+          "marked": false,
+          "text": "This does not violate rule 12 because `amountCents` is named as integer cents rather than a float. No change is needed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast `req.body as unknown as InvoicePaidEvent` forces a type on an unvalidated request body without the explanatory comment rule 21 requires. Replace it with `InvoicePaidEventSchema.parse(req.body)`, or at minimum drop the `as unknown as` chain and add a justification comment on the preceding line."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56994,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the body is cast with `as unknown as InvoicePaidEvent` without validation, any caller can post arbitrary JSON, so `event.invoiceId` and `event.amountCents` may be missing or the wrong type when passed to `markPaid`. Validate `req.body` with a zod schema such as `invoicePaidEventSchema` before use."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as InvoicePaidEvent` cast suppresses type checking without a comment justifying why the body really has that type, violating the \"No double casts without a justification\" rule. Validate or narrow `req.body` with `invoicePaidEventSchema` instead, or add the justifying comment if the cast is truly required."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39787,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P20-rule-double-cast-out-of-40",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` straight to `InvoicePaidEvent` without validation violates the \"Validate request bodies\" rule and lets a webhook payload with a missing `invoiceId` or negative `amountCents` pass silently. Parse the body with the `invoicePaidEventSchema` zod schema before use."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` to `InvoicePaidEvent` violates the \"No double casts without a justification\" rule and hides the actual shape of `req.body`. Either validate the body with a schema so no cast is needed, or add a comment on the line above explaining why the value really has that type."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 105598,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The added doc comment claims that once a job reaches MaxAttempts it \"waits an hour before its next run\", but nextAttemptAt still executes `return now` for that branch, so the job's NextRunAt is set to the current instant. WHY: Dispatcher.Tick re-selects jobs via Store.Due, whose contract (dispatch.go:9) is \"every job whose NextRunAt is not after now\"; with NextRunAt == now the permanently failing job is picked up again on the very next 5-second tick, so the retry cap the comment describes never takes effect and the job runs forever. HOW: return `now.Add(time.Hour)` (or mark the job dead / return ok=false and exclude it from Due) so the documented one-hour wait is actually applied.",
+          "keep": true,
+          "rationale": "Confirmed: schedule.go:25-27 returns `now` when Attempts >= MaxAttempts, contradicting the doc comment's promised one-hour wait. dispatch.go:29 assigns that value to NextRunAt, and Store.Due (dispatch.go:9) selects every job with NextRunAt not after now, so the capped job is re-picked on the next 5s tick forever. The root cause and failure path are exactly as described; the earlier same-issue decision was outcome not_implemented, so it provides no refutation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func.*Due|NextRunAt|nextAttemptAt|MaxAttempts",
+                "path": "internal/jobs"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "label": "bug",
+          "earlierId": "round-a-P28-retry-cap-next-run-now",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 182531,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The newly added comment states that once a job reaches MaxAttempts it \"waits an hour before its next run,\" but the branch still executes `return now`, returning the current instant instead of a future time. WHY: Store.Due (internal/jobs/dispatch.go:9) returns every job whose NextRunAt is not after now, so a job that has hit MaxAttempts stays due and is re-dispatched on the very next 5s tick forever — the documented hour-long cap is never applied and the retry cap does not stop a permanently failing job. HOW: Return a future timestamp consistent with the documented behavior, e.g. `return now.Add(time.Hour)`, or mark the job dead so it is excluded from Due.",
+          "keep": true,
+          "rationale": "Verified: schedule.go:25-26 returns `now` when job.Attempts >= MaxAttempts, contradicting the comment claiming an hour wait. dispatch.go:9 documents Due returns jobs whose NextRunAt is not after now, and Tick re-saves NextRunAt = nextAttemptAt(...) = now, so the job stays due and is re-dispatched every 5s tick forever. The retry cap does not stop a permanently failing job. Root cause and failure path are both confirmed in code. The prior decision on this exact issue has outcome not_implemented, so it does not resolve the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new jitter value is drawn from the global `math/rand` source (`rand.Int63n`) and no `rand.Seed` call exists anywhere in the repository. WHY: On Go versions before the global source was auto-seeded, every worker process produces the same jitter sequence for the same Attempts value, so jobs that fail at the same instant receive identical backoff+jitter and retry in lockstep — defeating the purpose of the jitter and re-creating the thundering herd it is meant to spread out. HOW: Seed the source (e.g. `rand.Seed(time.Now().UnixNano())` on older Go) or use a per-dispatcher `*rand.Rand` created with `rand.New(rand.NewSource(time.Now().UnixNano()))`.",
+          "keep": true,
+          "rationale": "The root cause is factually correct: grep shows the only `math/rand` reference is the import on line 4, and there is no `rand.Seed`/`rand.New` anywhere, so `rand.Int63n` draws from the unseeded global source. The finding's failure mode (identical jitter sequence across worker processes) is real on Go versions before the global source was auto-seeded, and the repo contains no `go.mod` or other evidence pinning a Go version that would auto-seed it. I therefore cannot actively refute the claim; per the keep-by-default rule, it stays. It is a legitimate low-severity robustness concern, not pure style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rand\\.Seed|rand\\.New|math/rand"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "go.mod"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "label": "bug",
+          "earlierId": "round-a-P28-retry-cap-next-run-now",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "performance",
+          "marked": false,
+          "text": "Because `rand.Int63n` draws from the global `math/rand` source and no `rand.Seed` call exists anywhere in the repository, Go versions before the global source was auto-seeded make every worker process produce the same jitter sequence for the same `Attempts` value, so jobs that fail at the same instant receive identical backoff+jitter and retry in lockstep, defeating the purpose of the jitter and re-creating the thundering herd it is meant to spread out. Seed the source with `rand.Seed(time.Now().UnixNano())` on older Go or use a per-dispatcher `*rand.Rand` created with `rand.New(rand.NewSource(time.Now().UnixNano()))`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 130062,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: the doc comment added in this PR says a job that reaches MaxAttempts 'waits an hour before its next run', but the code returns `now` instead of `now.Add(time.Hour)`. WHY: Store.Due returns every job whose NextRunAt is not after now (dispatch.go:9-10) and Tick runs every 5 seconds (dispatch.go:20), so the job is re-selected on the very next tick — the retry cap never throttles a permanently failing job, which then runs every 5s forever, contradicting the documented behavior. HOW: return now.Add(time.Hour) when job.Attempts >= MaxAttempts (or mark the job dead so it is excluded from Due).",
+          "keep": true,
+          "rationale": "Confirmed: schedule.go:25-26 returns `now` for jobs at/over MaxAttempts, while dispatch.go:9-10 returns every job whose NextRunAt is not after now and Tick runs every 5s (dispatch.go:20). After job.Attempts++ (dispatch.go:28), a job that keeps failing gets NextRunAt=now and is re-selected on the very next tick, so the retry cap never throttles it — directly contradicting the PR's new doc comment promising an hour's wait. The earlier decision (round-a-P28-retry-cap-next-run-now) is not_implemented and therefore not evidence of rejection. No guard upstream prevents this path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func.*Due|NextRunAt|func.*Tick",
+                "glob": "internal/jobs/*.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "label": "bug",
+          "earlierId": "round-a-P28-retry-cap-next-run-now",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85098,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment (lines 21-23) states that once a job has failed MaxAttempts times it 'waits an hour before its next run', but the function still returns `now` for that case, so the described hour-long delay does not exist. WHY: Dispatch.Tick sets `job.NextRunAt = nextAttemptAt(job, now)` (dispatch.go:29) and Store.Due returns every job whose NextRunAt is not after now (dispatch.go:9-10), so a permanently failing job gets NextRunAt=now and is re-run on every 5s tick forever; the added comment falsely documents a retry cap and hides this runaway behavior from reviewers. HOW: implement the documented behavior, e.g. `if job.Attempts >= MaxAttempts { return now.Add(time.Hour) }` (or mark the job dead / return ok=false and exclude it from Due), and keep the comment consistent with the code.",
+          "keep": true,
+          "rationale": "Confirmed: nextAttemptAt returns `now` when job.Attempts >= MaxAttempts (schedule.go:25-27), while the new doc comment (lines 21-23) claims the job 'waits an hour before its next run'. Dispatch.Tick sets job.NextRunAt = nextAttemptAt(job, now) (dispatch.go:29) and Store.Due returns every job whose NextRunAt is not after now (dispatch.go:9-10), so a capped job is re-run on every 5s tick. The comment documents behavior the code does not implement, so the claim is factually correct. The earlier decision round-a-P28-retry-cap-next-run-now raised the same underlying bug but was not_implemented, which is not a rejection and provides no evidence against the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "label": "bug",
+          "earlierId": "round-a-P28-retry-cap-next-run-now",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 261915,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The added doc comment says a job that failed MaxAttempts times 'waits an hour before its next run', but the function still returns `now` at the cap (lines 25-27). WHY: Store.Due returns every job whose NextRunAt is not after now, and the dispatcher ticks every 5s, so NextRunAt==now makes the job due again on the next tick — a permanently failing job is rescheduled and re-run every 5 seconds forever, exactly the behavior the comment claims to prevent. HOW: Return a real delay at the cap, e.g. `return now.Add(time.Hour)`, so the job is not due until an hour later.",
+          "keep": true,
+          "rationale": "Verified against source: nextAttemptAt returns `now` at the MaxAttempts cap (schedule.go:25-26); Store.Due (dispatch.go:9) returns jobs whose NextRunAt is not after now; Tick runs every 5s (dispatch.go:20-21) and reschedules with nextAttemptAt(job, now) after incrementing attempts. Thus a permanently failing job has NextRunAt==now, is due again next tick, and re-runs every 5s forever — contradicting the new doc comment's \"waits an hour.\" Root cause, flow, and failure path all confirmed; the prior not_implemented decision on this PR does not refute it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func.*Due|NextRunAt|nextAttemptAt",
+                "glob": "*.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 45,
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: Jitter is drawn from the package-level math/rand global source, which is never seeded anywhere in the repo. WHY: With an unseeded global source the jitter sequence is identical on every process start, so a fleet of workers restarted together produces correlated backoff delays and retries bunch up (thundering herd) — the exact situation jitter is added to avoid. HOW: Seed a local source, e.g. `r := rand.New(rand.NewSource(time.Now().UnixNano()))` (or `rand.Seed` where the Go version requires it) and use `r.Int63n(int64(MaxJitter))`.",
+          "keep": true,
+          "rationale": "The finding's factual premise (global math/rand source is never explicitly seeded) is confirmed: the only reference to math/rand is the import at line 4, and there is no rand.Seed call. No go.mod or any Go-version indicator exists in the repo, so I cannot establish that the project runs Go 1.20+, where the runtime would auto-seed the global source. Under pre-1.20 Go the global source uses seed 1, producing identical jitter sequences on every process start — exactly the correlated-backoff/thundering-herd behavior the finding describes. Without concrete evidence of the toolchain version, the claimed failure path is not refutable, so the finding is kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rand\\.Seed|math/rand"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "go.mod"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "go.mod",
+                "path": "."
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "^go |^module ",
+                "glob": "go.mod"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": ".",
+                "maxDepth": 2
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "go 1\\.|go-version|golang:"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "maxDepth": 3,
+                "path": "internal"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rand\\.|Int63n|NewSource",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "1\\.2[0-9]|1\\.1[89]|GODEBUG|randautoseed"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*.mod"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "label": "bug",
+          "earlierId": "round-a-P28-retry-cap-next-run-now",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 44,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 29,
+          "severity": "high",
+          "linkedById": false,
+          "label": "performance",
+          "marked": false,
+          "text": "Jitter is drawn from the package-level `math/rand` global source, which is never seeded anywhere in this repo, so every process start produces the same sequence and a fleet restarted together gets correlated backoff delays that bunch retries into the thundering herd jitter is meant to prevent. Seed a local source, e.g. `r := rand.New(rand.NewSource(time.Now().UnixNano()))`, and use `r.Int63n(int64(MaxJitter))` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 192261,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch marks a ref live only when `r.Final` is true, so non-final refs (builds still uploading) are omitted from the live set. WHY: `Sweep` deletes every blob whose digest is missing from `liveDigests`, so an all-projects sweep deletes the blobs of in-flight uploads; when those builds finalize their ref points at a blob that no longer exists — the exact defect the `ByProject` branch below was fixed to avoid (line 45-48 now marks every ref live, per the `Ref` doc \"Final is false while the build that wrote the ref is still uploading\"). HOW: drop the `if r.Final` filter in the All branch and mark every ref digest as live, mirroring the ByProject branch. This reverses the earlier applied fix for the newly added All scope.",
+          "keep": true,
+          "rationale": "Confirmed by code: Sweep (sweep.go:26-34) deletes every blob whose digest is absent from the live map. In the All branch (live.go:33-37) a digest is added to live only when r.Final is true, so non-final refs — which the Ref doc (line 15) defines as belonging to builds still uploading — are excluded. Their blobs are therefore deleted, and a finalizing build's ref would point at a missing blob. This is precisely the failure the ByProject branch (lines 45-48, with its explanatory comment) was changed to avoid, and the All branch omits that protection. The current diff shows the All branch still contains the `if r.Final` filter, i.e. the earlier fix is not present in this branch, so this is not a resolved duplicate but a live defect. No upstream guard prevents the path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|scope\\.All|ScopeAll|Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `internal/gc/live.go:30` (2026-10-06 12:00 UTC).\n\nBecause the `scope.All` branch marks only refs with `r.Final` true as live, `Sweep` deletes every blob whose digest is missing from `liveDigests`, so an all-projects sweep removes the blobs of in-flight uploads and their finalized refs then point at blobs that no longer exist — the exact defect the `ByProject` branch was fixed to avoid (line 45-48 now marks every ref live, per the `Ref` doc \"Final is false while the build that wrote the ref is still uploading\"). Drop the `if r.Final` filter in the `All` branch and mark every ref digest as live, mirroring the `ByProject` branch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 121784,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch in liveDigests marks a digest live only when r.Final is true, skipping non-final refs. WHY: non-final refs belong to builds still uploading, so Sweep (sweep.go:26-34) treats their blobs as dead and deletes them; when such a build finalizes, its ref points at a blob that no longer exists. This contradicts the sibling per-project branch (live.go:45-48), which deliberately keeps every ref's digest live, and reverses the intent of the earlier fix that removed exactly this Final guard from the per-project path — the guard was only applied to the new branch. HOW: drop the filter and mark every ref digest live, matching the per-project branch: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": true,
+          "rationale": "Confirmed against the code: in the scope.All branch (live.go:33-37), live[r.Digest] is set only when r.Final is true, so non-final refs are omitted from the live set. Sweep (sweep.go:26-34) deletes every listed blob whose digest is absent from live, so blobs referenced only by still-uploading (non-final) builds would be deleted, and finalizing builds would point at deleted blobs. This directly contradicts the sibling per-project branch (live.go:45-48), which deliberately marks every ref's digest live with an explicit comment that non-final refs' blobs must stay, and reverses the intent of the earlier applied fix (round-a-P36-nonfinal-refs-all-scopes) which removed exactly this Final guard. The Ref struct (live.go:15-16) documents that Final=false means the build is still uploading, and store.All returns the same []Ref type with no evidence it filters non-final refs, so the failure path is reachable. The current diff itself shows the guard reintroduced in the new All branch, which is concrete evidence the earlier fix was not carried over here. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func.*All\\(ctx",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Final|ByProject|liveDigests",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "label": "bug",
+          "earlierId": "round-a-P36-nonfinal-refs-all-scopes",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93795,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch of liveDigests marks a digest live only when r.Final is true, so non-final refs (builds still uploading) are omitted from the live set. WHY: Sweep deletes every listed blob whose digest is absent from the live set, so a global sweep deletes the blobs of in-progress builds; when such a build finalizes, its ref points at a blob that no longer exists (data loss / dangling ref). This contradicts the ByProject branch (which marks every ref live, per the comment 'Non-final refs belong to builds still uploading: their blobs stay') and reintroduces the exact bug the earlier fix removed, now narrowed to the All path. HOW: Mark every ref digest live in the All branch, matching the ByProject branch.",
+          "keep": true,
+          "rationale": "Confirmed against the code. In internal/gc/live.go the scope.All branch (lines 33-37) only sets live[r.Digest] when r.Final is true, omitting non-final refs (builds still uploading). The ByProject branch (lines 45-48) marks every ref live, explicitly per the comment that non-final refs' blobs stay. Sweep (sweep.go:26-34) deletes every listed blob whose digest is not in the live set, so a global (All) sweep would delete blobs of in-progress builds, leaving dangling refs when they finalize — a real data-loss path. The earlier \"implemented\" decision to drop the finality filter was applied only to ByProject; the current diff concretely shows the All branch still carries the `if r.Final` guard, so the applied change is incomplete rather than a refutation. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|scope\\.All|scope\\.ByProject",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `internal/gc/live.go:30` (2026-10-06 12:00 UTC).\n\nIn the `scope.All` branch of `liveDigests`, marking a digest live only when `r.Final` is true omits non-final refs from builds still uploading, so a global sweep deletes their blobs and can leave finalized builds with dangling refs. Mark every ref digest live in that branch, matching `ByProject`, so non-final refs' blobs stay."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 234024,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch of liveDigests adds a digest to the live set only when r.Final is true, so refs belonging to builds that are still uploading are treated as dead. WHY: Sweep with Scope{All:true} lists every blob (blobs.List(ctx, \"\")) and deletes each digest missing from this live set, so the blobs of in-flight builds are deleted; when such a build finalizes, its ref points at a blob that no longer exists (data loss), and this contradicts the sibling non-All branch which already marks every ref live for exactly this reason. HOW: drop the r.Final guard and mark every ref digest live, mirroring the non-All branch.",
+          "keep": true,
+          "rationale": "Confirmed in code: the new scope.All branch (live.go:33-37) marks a digest live only when r.Final, while the non-All branch (44-49) marks every ref digest live with the comment that non-final refs belong to still-uploading builds. Sweep with Scope{All:true} lists all blobs and deletes each digest missing from live (sweep.go:18-33), so blobs referenced only by in-flight (non-final) refs are deleted — real data loss when the build finalizes. Root cause and failure path are accurate and reachable; not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|Scope\\{|blobs.List|\\.Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new all-projects branch of liveDigests marks a digest live only when `r.Final` is true, dropping non-final refs, whereas the per-project branch right below marks every ref live. WHY: a build that is still uploading (Final=false) at sweep time has its blob deleted, so when the build finalizes its ref points at a blob that no longer exists — the same data-loss defect previously fixed for the per-project path is reintroduced for Scope{All:true}. HOW: remove the `if r.Final` filter and mark every returned ref digest live, matching the per-project branch.",
+          "keep": true,
+          "rationale": "The claim is factually accurate. In liveDigests, the Scope{All:true} branch (lines 32-37) only marks a digest live when r.Final is true, while the per-project branch (lines 44-48) marks every returned ref live with the explicit comment that non-final refs belong to builds still uploading and their blobs must stay. Sweep (sweep.go:13-34) deletes any listed blob whose digest is not in `live`, so a still-uploading (Final=false) build's blob would be deleted in an all-projects sweep, and the build's ref would then point at a missing blob — the exact data-loss defect described. The prior decision (round-a-P36-nonfinal-refs-all-scopes) targeted this same lines range with outcome 'implemented', but the current diff still contains the `if r.Final` filter in the All branch, which is concrete evidence the applied change did not actually cover (or was reverted in) this branch, so the refutation condition does not apply. No upstream guard prevents the path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|func.*Sweep",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "label": "bug",
+          "earlierId": "round-a-P36-nonfinal-refs-all-scopes",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "by": "model"
+        },
+        {
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "label": "bug",
+          "earlierId": "round-a-P36-nonfinal-refs-all-scopes",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 103373,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new `scope.All` branch of liveDigests only adds a digest to the live set when `r.Final` is true, dropping every non-final ref. WHY: non-final refs belong to builds still uploading (as the sibling ByProject branch's comment states), so Sweep with `Scope{All:true}` deletes blobs those builds still reference; when such a build finalizes, its ref points at a blob that no longer exists — data loss. HOW: drop the `if r.Final` filter and mark every ref digest live, matching the ByProject branch.",
+          "keep": true,
+          "rationale": "Confirmed in internal/gc/live.go: the scope.All branch (lines 33-37) marks a digest live only when r.Final is true, whereas the sibling ByProject branch (lines 45-48) marks every ref digest live with the explicit comment that non-final refs belong to builds still uploading. The Ref struct documents Final as false while the build is still uploading, so non-final refs are real live references. Sweep (sweep.go:12-35) deletes every listed blob whose digest is absent from liveDigests' result, so with Scope{All:true} the blobs of in-flight builds are deleted; when those builds finalize, their refs point at deleted blobs — data loss. The previous decision (round-a-P36-nonfinal-refs-all-scopes) targeted the ByProject branch's `if !r.Final { continue }` check and was implemented there, but that change did not touch the All branch, which still has the `if r.Final` filter. This is a distinct branch the earlier decision did not resolve, so the finding stands. No upstream guard prevents it; nothing in the code shows store.All returning only final refs.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func .*All\\(ctx context.Context\\)"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scope.All|Scope{All|liveDigests\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "label": "bug",
+          "earlierId": "round-a-P36-nonfinal-refs-all-scopes",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import {
     type LibraryRule,
 } from "@services/kodyRules/types";
 import { SearchIcon } from "lucide-react";
+import { IssueSeverityLevelBadge } from "src/core/components/system/issue-severity-level-badge";
 
 export const KodyRulesPacksExplorer = ({
     buckets,
@@ -44,22 +45,6 @@ export const KodyRulesPacksExplorer = ({
                     .includes(searchQuery.toLowerCase()),
         );
     }, [buckets, searchQuery]);
-    // Get severity badge color
-    const getSeverityColor = (severity?: string) => {
-        switch (severity?.toLowerCase()) {
-            case "low":
-                return "bg-[rgba(17,157,228,0.1)] border-[rgba(17,157,228,0.64)] text-[#119de4]";
-            case "medium":
-                return "bg-[rgba(242,198,49,0.1)] border-[rgba(242,198,49,0.64)] text-[#f2c631]";
-            case "high":
-                return "bg-[rgba(255,139,64,0.1)] border-[rgba(255,139,64,0.64)] text-[#ff8b40]";
-            case "critical":
-                return "bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.64)] text-[#ef4444]";
-            default:
-                return "bg-[rgba(255,139,64,0.1)] border-[rgba(255,139,64,0.64)] text-[#ff8b40]";
-        }
-    };
-
     // Bucket Card Component for packs page
     const PackCard = ({
         bucket,
@@ -68,32 +53,32 @@ export const KodyRulesPacksExplorer = ({
         bucket: KodyRuleBucket;
         sampleRules: LibraryRule[];
     }) => (
-        <div className="rounded-lg border border-[#30304b] bg-[#181825] p-6 transition-colors hover:border-[#f8b76d]">
+        <div className="border-card-lv3 bg-card-lv1 hover:border-primary-light rounded-lg border p-6 transition-colors">
             <Link
                 href={`/library/kody-rules?view=browse&bucket=${bucket.slug}`}
                 noHoverUnderline
                 className="block">
                 <div className="mb-3 flex items-center gap-3">
-                    <div className="rounded-lg bg-[#202032] p-3">
-                        <div className="h-6 w-6 text-[#f8b76d]">⚖️</div>
+                    <div className="bg-card-lv2 rounded-lg p-3">
+                        <div className="text-primary-light h-6 w-6">⚖️</div>
                     </div>
                     <div>
-                        <h3 className="text-base font-bold text-white">
+                        <h3 className="text-text-primary text-base font-bold">
                             {bucket.title}
                         </h3>
-                        <p className="text-sm text-[#cdcddf]">
+                        <p className="text-text-secondary text-sm">
                             {bucket.rulesCount} rules available
                         </p>
                     </div>
                 </div>
-                <p className="mb-6 min-h-[3rem] text-sm leading-relaxed text-[#cdcddf]">
+                <p className="text-text-secondary mb-6 min-h-[3rem] text-sm leading-relaxed">
                     {bucket.description}
                 </p>
 
                 {/* Highlighted rules section */}
                 {sampleRules.length > 0 && (
                     <div className="mb-6">
-                        <h4 className="mb-3 text-sm font-bold text-white">
+                        <h4 className="text-text-primary mb-3 text-sm font-bold">
                             Highlighted rules
                         </h4>
                         <div className="space-y-2">
@@ -104,23 +89,21 @@ export const KodyRulesPacksExplorer = ({
                                 return (
                                     <div
                                         key={index}
-                                        className="flex items-start justify-between rounded bg-[#202032] p-4">
+                                        className="bg-card-lv2 flex items-start justify-between rounded p-4">
                                         <div className="flex-1 pr-3">
-                                            <h5 className="mb-1 line-clamp-1 text-xs font-bold text-white">
+                                            <h5 className="text-text-primary mb-1 line-clamp-1 text-xs font-bold">
                                                 {rule.title}
                                             </h5>
-                                            <p className="line-clamp-2 text-xs leading-relaxed text-[#cdcddf]">
+                                            <p className="text-text-secondary line-clamp-2 text-xs leading-relaxed">
                                                 {rule.rule.length > 100
                                                     ? `${rule.rule.substring(0, 100)}...`
                                                     : rule.rule}
                                             </p>
                                         </div>
-                                        <div
-                                            className={`${getSeverityColor(displaySeverity)} flex-shrink-0 rounded border px-2 py-1`}>
-                                            <span className="text-xs font-semibold uppercase">
-                                                {displaySeverity}
-                                            </span>
-                                        </div>
+                                        <IssueSeverityLevelBadge
+                                            className="flex-shrink-0"
+                                            severity={displaySeverity}
+                                        />
                                     </div>
                                 );
                             })}
@@ -128,7 +111,7 @@ export const KodyRulesPacksExplorer = ({
                     </div>
                 )}
 
-                <div className="text-sm font-bold text-[#f8b76d]">
+                <div className="text-primary-light text-sm font-bold">
                     Explore pack →
                 </div>
             </Link>
@@ -156,11 +139,11 @@ export const KodyRulesPacksExplorer = ({
                         <Page.Title className="text-2xl font-bold">
                             Rules Packs
                         </Page.Title>
-                        <span className="text-sm text-[#cdcddf]">
+                        <span className="text-text-secondary text-sm">
                             {filteredBuckets.length} of {buckets.length} packs
                         </span>
                     </div>
-                    <p className="text-sm text-[#cdcddf]">
+                    <p className="text-text-secondary text-sm">
                         Rule packs, organized for your use case.
                     </p>
                     <div className="max-w-mdm mt-5 w-full">
@@ -170,7 +153,7 @@ export const KodyRulesPacksExplorer = ({
                                 placeholder="Search packs..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="border-[#30304b] bg-[#181825] pl-10 text-white placeholder-[#79799f] focus:border-[#f8b76d]"
+                                className="border-card-lv3 bg-card-lv1 text-text-primary focus:border-primary-light pl-10 placeholder-[#79799f]"
                             />
                         </div>
                     </div>

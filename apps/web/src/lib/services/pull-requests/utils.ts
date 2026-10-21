@@ -1,6 +1,32 @@
 import type { PullRequestExecution } from "./types";
 
 /**
+ * Review-screen deep link. The review page reads `?file=<path>` and
+ * `?suggestion=<id>`: with an id it scrolls to that finding's card and lights
+ * it up, with only a path it selects the file. Both params are independent, so
+ * whichever the caller knows is emitted — a file-only link still beats landing
+ * on the top of a large diff.
+ *
+ * Callers: the PR-list count (backend tags each row with its first delivered
+ * suggestion) and the cockpit suggestions explorer.
+ */
+export const buildReviewDeepLinkUrl = (
+    repositoryId: string,
+    prNumber: number,
+    target?: { id?: string | null; filePath?: string | null } | null,
+): string => {
+    const base = `/pull-requests/${repositoryId}/${prNumber}`;
+    const params: string[] = [];
+    if (target?.filePath) {
+        params.push(`file=${encodeURIComponent(target.filePath)}`);
+    }
+    if (target?.id) {
+        params.push(`suggestion=${encodeURIComponent(target.id)}`);
+    }
+    return params.length ? `${base}?${params.join("&")}` : base;
+};
+
+/**
  * Constrói a URL real do Pull Request baseado no provider e dados do repositório
  */
 export const buildPullRequestUrl = (pr: PullRequestExecution): string => {

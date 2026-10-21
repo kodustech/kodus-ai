@@ -51,6 +51,39 @@ function scriptedModel() {
     );
 }
 
+// Same scripted tool-call model, but wraps doGenerate to record the raw params
+// (including the message window) every call receives, so a test can prove which
+// conversation window actually reached the model (#1808).
+function recordedModel() {
+    const received: any[] = [];
+    const captured = scriptedModel();
+    const original = captured.doGenerate.bind(captured);
+    captured.doGenerate = (async (params: any) => {
+        received.push(params);
+        return original(params);
+    }) as any;
+    (captured as any).__received = received;
+    return captured;
+}
+
+// Return the full stringified conversational payload of each model call a
+// recorded model received. Exact AI-SDK message part shapes vary by version,
+// but the whole `prompt` is what reaches the model — stringifying it gives a
+// discriminating, stable read for the note/compression assertions without
+// coupling to a specific part structure.
+function receivedMessageTexts(model: any): string[] {
+    const received: any[] = model?.__received ?? [];
+    const texts: string[] = [];
+    for (const params of received) {
+        const prompt =
+            params?.prompt ?? params?.input?.messages ?? params?.messages;
+        if (prompt !== undefined) {
+            texts.push(JSON.stringify(prompt));
+        }
+    }
+    return texts;
+}
+
 const mockResolve = resolveModelConfig as jest.Mock;
 const wireVal = (model: any) => ({
     model,
@@ -106,6 +139,24 @@ function noCriticalLedger(): ProgressLedger {
     };
 }
 
+// A ledger that reports pending work (so CompletionGatePolicy.prepareStep()
+// injects a steering note on every step) yet has NO critical pending once done
+// is called — so the gate honors the finalize instead of vetoing the run
+// forever. This lets the note-injection and compression coexist on one step,
+// which is exactly the #1808 scenario.
+function debtLedger(): ProgressLedger {
+    return {
+        markFromToolCall: () => undefined,
+        summary: () => ({
+            totalTargets: 2,
+            pendingTargets: 0,
+            criticalTotal: 0,
+            criticalPending: 0,
+        }),
+        debtNote: () => 'review the pending critical finding',
+    };
+}
+
 const ctx: ToolContext = { runId: 'compress-e2e-1' };
 
 function specWithContextWindow(
@@ -123,6 +174,29 @@ function specWithContextWindow(
                 }),
             ),
             new CompletionGatePolicy(noCriticalLedger(), {
+                doneToolName: 'submitResult',
+            }),
+        ],
+        maxSteps: 20,
+        resultToolName: 'submitResult',
+    };
+}
+
+// Compression + a policy that injects a steering note in the SAME prepareStep
+// (#1808): the regression that let an injectNote discard the compressed window
+// and resend the uncompressed conversation to the model.
+function specWithDebtNoteAndContextWindow(
+    contextWindowTokens: number,
+): AgentSpec {
+    return {
+        id: 'generalist',
+        systemPrompt: 'review the diff',
+        tools: new InMemoryToolRegistry([readFileTool, doneTool]),
+        policies: [
+            new CompressionPolicy(
+                new ContextWindowCompressor(contextWindowTokens, {}),
+            ),
+            new CompletionGatePolicy(debtLedger(), {
                 doneToolName: 'submitResult',
             }),
         ],
@@ -222,6 +296,65 @@ describe('AiSdkAgentRunner + CompressionPolicy (context compression e2e)', () =>
             state.trace.some((e) => e.kind === 'error'),
         ).toBe(false);
         // Findings still produced — the review completes rather than failing.
+        expect(state.artifacts).toHaveLength(1);
+        expect(state.artifacts[0]).toMatchObject({ type: 'submitResult' });
+    });
+
+    // REGRESSION (issue #1808): when compression and a steering-note
+    // injection fire in the SAME prepareStep, the note must be appended to the
+    // COMPRESSED window — never to the uncompressed conversation. The old code
+    // rebuilt the message list from `(msgs ?? messages)` in the injectNote
+    // branch, discarding `merged.messages`, so the model received the huge raw
+    // tool result and the context clamp was bypassed.
+    it('appends a steering note to the compressed window, not the raw conversation (#1808)', async () => {
+        let model: any;
+        mockResolve.mockImplementation(() => {
+            if (!model) {
+                model = recordedModel();
+            }
+            return wireVal(model);
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+
+        // Tiny window → compression always fires; debt ledger → CompletionGate
+        // injects a steering note on every prepareStep.
+        const state = await runner.run(
+            specWithDebtNoteAndContextWindow(1),
+            { prompt: 'go' },
+            ctx,
+        );
+
+        // Both directives actually fired (else the test wouldn't exercise the bug).
+        expect(
+            state.trace.some((e) => e.kind === 'context.compress'),
+        ).toBe(true);
+        expect(
+            state.trace.some((e) => e.kind === 'progress.debt'),
+        ).toBe(true);
+
+        // The windows the model actually received across its calls.
+        const received = receivedMessageTexts(model);
+
+        // The steering note reached the model...
+        expect(
+            received.some((text) =>
+                text.includes('review the pending critical finding'),
+            ),
+        ).toBe(true);
+
+        // ...but the model saw the COMPRESSED window: no full-size raw tool
+        // result baked into a later call. The bug resent the whole BIG_RESULT;
+        // the fix sends the truncated/compressed form, so the marker line of the
+        // raw result must not appear verbatim in a window that also carries the
+        // note.
+        for (const text of received) {
+            if (text.includes('review the pending critical finding')) {
+                expect(text).not.toContain('const value1599 =');
+            }
+        }
+
+        // And the run completed cleanly, producing a result artifact.
+        expect(state.status).not.toBe('error');
         expect(state.artifacts).toHaveLength(1);
         expect(state.artifacts[0]).toMatchObject({ type: 'submitResult' });
     });

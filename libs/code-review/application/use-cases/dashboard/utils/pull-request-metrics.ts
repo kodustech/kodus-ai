@@ -1,3 +1,7 @@
+import {
+    SEVERITY_RANK,
+    UNRESOLVED_RANK_BONUS,
+} from '@libs/platformData/domain/pullRequests/deep-link-rank';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 
@@ -43,6 +47,32 @@ export function isUnresolvedDeliveredSuggestion(suggestion: {
     );
 }
 
+// Deep-link target ranking for the PR-list suggestion count.
+//
+// Clicking the count should land the reviewer on the finding that actually
+// wants attention, not on whatever happens to sit first in the document — a
+// low the author already applied is a bad place to drop someone who still has
+// a critical open two hunks below. So delivered suggestions are ranked by
+// "still unresolved" first, then severity, and document order only breaks
+// ties. The Mongo aggregation reproduces this exact arithmetic in $reduce;
+// keep the two in step.
+export function severityRank(severity?: string | null): number {
+    return SEVERITY_RANK[String(severity ?? '').toLowerCase()] ?? 0;
+}
+
+/** Higher wins; ties keep the earlier suggestion in document order. */
+export function deepLinkTargetRank(suggestion: {
+    deliveryStatus?: string | null;
+    implementationStatus?: string | null;
+    severity?: string | null;
+}): number {
+    return (
+        (isUnresolvedDeliveredSuggestion(suggestion)
+            ? UNRESOLVED_RANK_BONUS
+            : 0) + severityRank(suggestion?.severity)
+    );
+}
+
 // Exact author-identity match for the Author autocomplete filter: the selected
 // value must equal the PR author's display name, username, or email
 // (case-insensitive). NOT a substring/token match — "Wellington Santana" must
@@ -61,4 +91,24 @@ export function authorMatchesExact(
         .filter((value): value is string => Boolean(value))
         .map((value) => value.toLowerCase());
     return candidates.includes(wanted);
+}
+
+/**
+ * Does this PR match the requested PR state?
+ *
+ * Kept next to `isOpenPullRequest` so the list filter and the "needs
+ * attention" facet can never drift onto two different notions of "open" —
+ * the screen shows both at once and a disagreement between them is the kind
+ * of bug nobody reports, they just stop trusting the numbers.
+ *
+ * `undefined` means "no state filter", which matches everything.
+ */
+export function matchesPullRequestState(
+    pr: { merged?: boolean | null; status?: string | null },
+    prState?: 'open' | 'closed',
+): boolean {
+    if (!prState) {
+        return true;
+    }
+    return prState === 'open' ? isOpenPullRequest(pr) : !isOpenPullRequest(pr);
 }

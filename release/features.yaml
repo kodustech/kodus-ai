@@ -27,6 +27,24 @@ features:
             access token, for environments where the GitHub App flow isn't
             available.
 
+    deterministic-evidence:
+        name: "Deterministic evidence in review"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Kody reads the checks your own CI already ran and runs a small set
+            of security rules over the changed lines, then folds those findings
+            into the same review instead of reporting them separately.
+
+    custom-agents:
+        name: "Custom review agents"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Define your own reviewers with their instructions, the files they
+            look at, the tools they may use and how their comments appear,
+            and run them next to Kody on every pull request.
+
     heavy-review:
         name: "Heavy review (deeper pass)"
         stage: alpha
@@ -43,3 +61,13 @@ features:
         description: >-
             Use sanitized decisions distilled from local coding-agent sessions
             as repository-scoped context for Kody code reviews.
+
+    kodus-provider:
+        name: "Kodus as a provider (prepaid credits)"
+        stage: alpha
+        audience: [cloud]
+        description: >-
+            Pick a curated model and let Kodus run it on its own provider
+            accounts — no API key to manage, usage billed from a prepaid
+            credit balance you top up as you go.
+        documentation_url: how_to_use/en/byok#kodus-credits

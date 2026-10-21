@@ -105,12 +105,42 @@ export type FormattedGlobalCodeReviewConfig = Omit<
     repositories: FormattedRepositoryCodeReviewConfig[];
 };
 
+/**
+ * Health of the `kodus-config.yml` overlay for one scope. Reading the file
+ * means a live call to the git provider, which can be slow or rate-limited
+ * independently of the stored configuration — so the response says whether
+ * the overlay actually made it in, instead of silently returning stored
+ * config that differs from what a review would use.
+ */
+export enum KodusConfigFileOverlayStatus {
+    /** The file was read from the provider and merged into the config. */
+    LOADED = 'loaded',
+    /**
+     * The read completed but came back empty. Either the repository has no
+     * file, or a provider error was swallowed by the adapter — the two are
+     * indistinguishable, so this must not be presented as a successful read.
+     */
+    NOT_FOUND = 'not_found',
+    /** Override flag is off for this scope — no file is expected. */
+    DISABLED = 'disabled',
+    /** Override flag is on, but the provider did not answer in time. */
+    UNAVAILABLE = 'unavailable',
+    /** Caller asked for stored config only; the overlay was not attempted. */
+    SKIPPED = 'skipped',
+}
+
+export type KodusConfigFileOverlay = {
+    status: KodusConfigFileOverlayStatus;
+    error?: string;
+};
+
 export type FormattedRepositoryCodeReviewConfig = Omit<
     RepositoryCodeReviewConfig,
     'configs' | 'directories'
 > & {
     configs: FormattedCodeReviewConfig;
     directories: FormattedDirectoryCodeReviewConfig[];
+    kodusConfigFile: KodusConfigFileOverlay;
 };
 
 export type FormattedDirectoryCodeReviewConfig = Omit<
@@ -118,4 +148,5 @@ export type FormattedDirectoryCodeReviewConfig = Omit<
     'configs'
 > & {
     configs: FormattedCodeReviewConfig;
+    kodusConfigFile: KodusConfigFileOverlay;
 };

@@ -1,0 +1,1155 @@
+[
+    {
+        "id": "minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/minimax-m3@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/claude-sonnet-4-6",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/claude-sonnet-5-5",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/deepseek-v4-flash@fireworks",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/gemini-3.1-pro@openrouter",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/gemini-3.8-flash@openrouter",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/glm-5.3@openrouter",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/gpt-6-sol",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/kimi-k2.7-code@openrouter",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "only-reasoning-prose/minimax-m3@openrouter",
+        "checks": "Recovers findings written as prose in reasoning with no suggestions key (343 reviews in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "only-reasoning-prose",
+        "prose": true
+    },
+    {
+        "id": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding claude-sonnet-4-6 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding claude-sonnet-5-5 wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding deepseek-v4-flash@fireworks wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding gemini-3.1-pro@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding gemini-3.8-flash@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding glm-5.3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding gpt-6-sol wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "kimi-k2.7-code@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on anonymous-add-configurable-device-limit-grafana-codex, and invents none",
+        "payload": "payloads/kimi-k2.7-code@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding kimi-k2.7-code@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on add-guest-management-functionality-to-existing-bookings-cal-com, and invents none",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on enhance-embed-url-handling-and-validation-system-discourse-cursor, and invents none",
+        "payload": "payloads/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+        "checks": "Keeps every postable finding minimax-m3@openrouter wrote on span-buffer-multiprocess-enhancement-with-health-monitoring-sentry, and invents none",
+        "payload": "payloads/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json",
+        "shape": "as-sent"
+    },
+    {
+        "id": "suggestions-as-json-string/claude-sonnet-4-6",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/claude-sonnet-4-6",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/claude-sonnet-4-6",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/claude-sonnet-4-6",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/claude-sonnet-4-6",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/claude-sonnet-4-6",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/claude-sonnet-4-6",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/claude-sonnet-4-6",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/claude-sonnet-4-6",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/claude-sonnet-4-6",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/claude-sonnet-4-6",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/claude-sonnet-4-6",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/claude-sonnet-4-6",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/claude-sonnet-4-6",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on claude-sonnet-4-6",
+        "payload": "payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/claude-sonnet-5-5",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/claude-sonnet-5-5",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/claude-sonnet-5-5",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/claude-sonnet-5-5",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/claude-sonnet-5-5",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/claude-sonnet-5-5",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/claude-sonnet-5-5",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/claude-sonnet-5-5",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/claude-sonnet-5-5",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/claude-sonnet-5-5",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/claude-sonnet-5-5",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/claude-sonnet-5-5",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/claude-sonnet-5-5",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/claude-sonnet-5-5",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on claude-sonnet-5-5",
+        "payload": "payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/deepseek-v4-flash@fireworks",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/deepseek-v4-flash@fireworks",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/deepseek-v4-flash@fireworks",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/deepseek-v4-flash@fireworks",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/deepseek-v4-flash@fireworks",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/deepseek-v4-flash@fireworks",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/deepseek-v4-flash@fireworks",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on deepseek-v4-flash@fireworks",
+        "payload": "payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/gemini-3.1-pro@openrouter",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/gemini-3.1-pro@openrouter",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/gemini-3.1-pro@openrouter",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/gemini-3.1-pro@openrouter",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/gemini-3.1-pro@openrouter",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/gemini-3.1-pro@openrouter",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/gemini-3.1-pro@openrouter",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on gemini-3.1-pro@openrouter",
+        "payload": "payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 1,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/gemini-3.8-flash@openrouter",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/gemini-3.8-flash@openrouter",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/gemini-3.8-flash@openrouter",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/gemini-3.8-flash@openrouter",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/gemini-3.8-flash@openrouter",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/gemini-3.8-flash@openrouter",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/gemini-3.8-flash@openrouter",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on gemini-3.8-flash@openrouter",
+        "payload": "payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/glm-5.3@openrouter",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/glm-5.3@openrouter",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/glm-5.3@openrouter",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/glm-5.3@openrouter",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/glm-5.3@openrouter",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/glm-5.3@openrouter",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/glm-5.3@openrouter",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/glm-5.3@openrouter",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/glm-5.3@openrouter",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/glm-5.3@openrouter",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/glm-5.3@openrouter",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/glm-5.3@openrouter",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/glm-5.3@openrouter",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/glm-5.3@openrouter",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on glm-5.3@openrouter",
+        "payload": "payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/gpt-6-sol",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/gpt-6-sol",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/gpt-6-sol",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/gpt-6-sol",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/gpt-6-sol",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/gpt-6-sol",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/gpt-6-sol",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/gpt-6-sol",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/gpt-6-sol",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/gpt-6-sol",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/gpt-6-sol",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/gpt-6-sol",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/gpt-6-sol",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/gpt-6-sol",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on gpt-6-sol",
+        "payload": "payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/kimi-k2.7-code@openrouter",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/kimi-k2.7-code@openrouter",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/kimi-k2.7-code@openrouter",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/kimi-k2.7-code@openrouter",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/kimi-k2.7-code@openrouter",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/kimi-k2.7-code@openrouter",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/kimi-k2.7-code@openrouter",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on kimi-k2.7-code@openrouter",
+        "payload": "payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json",
+        "end": 0,
+        "shape": "one-without-description"
+    },
+    {
+        "id": "suggestions-as-json-string/minimax-m3@openrouter",
+        "checks": "Keeps the findings when suggestions arrives as a JSON string (90 reviews in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-as-json-string"
+    },
+    {
+        "id": "suggestions-broken-json/minimax-m3@openrouter",
+        "checks": "Keeps the findings before an unescaped quote breaks the suggestions JSON string (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "suggestions-broken-json"
+    },
+    {
+        "id": "array-then-stray-brace/minimax-m3@openrouter",
+        "checks": "Keeps a valid suggestions array followed by a stray closing brace (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "array-then-stray-brace"
+    },
+    {
+        "id": "string-items-mixed-in/minimax-m3@openrouter",
+        "checks": "Keeps the object findings when the array also holds plain-string items (22 reviews, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "string-items-mixed-in"
+    },
+    {
+        "id": "text-node-split/minimax-m3@openrouter",
+        "checks": "Keeps the postable part of a finding split into {\"$text\"} items, as MiniMax-M3 sends them (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "text-node-split"
+    },
+    {
+        "id": "improved-code-missing/minimax-m3@openrouter",
+        "checks": "Keeps a finding with no improvedCode (122 findings in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-missing"
+    },
+    {
+        "id": "existing-code-missing/minimax-m3@openrouter",
+        "checks": "Keeps a finding with no existingCode (49 findings in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "existing-code-missing"
+    },
+    {
+        "id": "improved-code-null/minimax-m3@openrouter",
+        "checks": "Keeps a finding whose improvedCode is null (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "improved-code-null"
+    },
+    {
+        "id": "rule-uuid-null/minimax-m3@openrouter",
+        "checks": "Keeps a finding whose ruleUuid is null (76 findings in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "rule-uuid-null"
+    },
+    {
+        "id": "revises-id-null/minimax-m3@openrouter",
+        "checks": "Keeps a finding whose revisesSuggestionId is null (10 findings in 8 days, #2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "revises-id-null"
+    },
+    {
+        "id": "label-lines-confidence-null/minimax-m3@openrouter",
+        "checks": "Keeps a finding whose label, relevantLinesEnd or confidence is null (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "label-lines-confidence-null"
+    },
+    {
+        "id": "severity-capitalized/minimax-m3@openrouter",
+        "checks": "Keeps a finding whose severity is capitalized, such as \"High\" (#2112) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "severity-capitalized"
+    },
+    {
+        "id": "one-without-file/minimax-m3@openrouter",
+        "checks": "Drops a finding with no relevantFile and keeps the rest (control) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-file"
+    },
+    {
+        "id": "one-without-description/minimax-m3@openrouter",
+        "checks": "Drops a finding with no description and keeps the rest (control) — on minimax-m3@openrouter",
+        "payload": "payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json",
+        "end": 0,
+        "shape": "one-without-description"
+    }
+]

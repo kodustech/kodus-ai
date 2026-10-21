@@ -1,5 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
 import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
+import {
+    extractJsonFromText,
+    normalizeEnvelope,
+} from '@libs/llm/structured-output-repair';
+import { LLM_ENVELOPE_TAG, LLM_ERROR_TAG } from '@libs/llm/log-tags';
 
 import {
     AIAnalysisResult,
@@ -17,25 +22,39 @@ export class LLMResponseProcessor {
         response: string,
     ): AIAnalysisResult | null {
         try {
-            let cleanResponse = response;
-
-            // If the response is in markdown format (Claude), remove the markers
-            if (response?.startsWith('```')) {
-                cleanResponse = response
-                    .replace(/^```json\n/, '')
-                    .replace(/\n```$/, '')
-                    .trim();
-            }
+            // The ONE text→JSON extractor: unwraps a ```json fence, drops prose
+            // around the object, strips trailing commas — replaces the bespoke
+            // inline markdown-strip this used to carry.
+            const cleanResponse = extractJsonFromText(response) ?? response;
 
             // Attempt to parse the JSON — validator picks the first block
             // containing codeSuggestions when multiple code blocks exist
-            const parsedResponse = tryParseJSONObject(cleanResponse, (obj) =>
+            let parsedResponse = tryParseJSONObject(cleanResponse, (obj) =>
                 Array.isArray(obj?.codeSuggestions),
             );
 
+            // SHAPE recovery (#1786): a non-strict model that wrapped
+            // ({result:{codeSuggestions}}), renamed (suggestions/findings), or
+            // bare-arrayed the payload fails the predicate above → returns null →
+            // the caller drops it silently. Recover the canonical shape first.
+            if (!parsedResponse) {
+                const normalized = normalizeEnvelope(
+                    response,
+                    'codeSuggestions',
+                    ['suggestions', 'findings'],
+                );
+                if (
+                    normalized &&
+                    typeof normalized === 'object' &&
+                    Array.isArray((normalized as any).codeSuggestions)
+                ) {
+                    parsedResponse = normalized as any;
+                }
+            }
+
             if (!parsedResponse) {
                 this.logger.error({
-                    message: 'Failed to parse LLM response',
+                    message: `${LLM_ERROR_TAG} ${LLM_ENVELOPE_TAG} Failed to parse LLM response (unrecoverable off-schema payload → dropped)`,
                     context: 'LLMResponseProcessor',
                     metadata: {
                         originalResponse: response,
@@ -62,7 +81,7 @@ export class LLMResponseProcessor {
             };
         } catch (error) {
             this.logger.error({
-                message: `Error processing LLM response for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} Error processing LLM response for PR#${prNumber}`,
                 context: 'LLMResponseProcessor',
                 error,
                 metadata: {
@@ -96,7 +115,7 @@ export class LLMResponseProcessor {
 
             if (!parsedResponse) {
                 this.logger.error({
-                    message: 'Failed to parse review mode response',
+                    message: `${LLM_ERROR_TAG} ${LLM_ENVELOPE_TAG} Failed to parse review mode response`,
                     context: 'LLMResponseProcessor',
                     metadata: {
                         originalResponse: response,
@@ -114,7 +133,7 @@ export class LLMResponseProcessor {
             };
         } catch (error) {
             this.logger.error({
-                message: `Error processing review mode response for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} Error processing review mode response for PR#${prNumber}`,
                 context: 'LLMResponseProcessor',
                 error,
                 metadata: {

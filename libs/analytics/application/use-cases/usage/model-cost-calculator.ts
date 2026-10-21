@@ -151,10 +151,15 @@ export class ModelCostCalculator {
         const cacheReadRate = pick(rates.cacheRead);
         const cacheWriteRate = pick(rates.cacheWrite);
 
-        // Cache reads are a subset of input tokens — subtract them from the
-        // billable-at-full-price pool so we don't charge input AND cache for
-        // the same tokens.
-        const uncachedInput = Math.max(0, bucket.input - bucket.cacheRead);
+        // Cache reads AND cache writes are both a subset of the reported input
+        // tokens (ai@7 normalizes inputTokens = noCache + cacheRead + cacheWrite),
+        // so subtract BOTH from the billable-at-full-price pool — otherwise a
+        // cache-write token is charged at the input rate here AND again at the
+        // cacheWrite rate below (double billing for anthropic/bedrock).
+        const uncachedInput = Math.max(
+            0,
+            bucket.input - bucket.cacheRead - bucket.cacheWrite,
+        );
 
         const input = uncachedInput * inputRate;
         const output = bucket.output * outputRate;

@@ -6,7 +6,6 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { formatISO, subWeeks } from "date-fns";
 import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 import { getDeployFrequencyAnalytics } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
 import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/utils";
@@ -14,6 +13,7 @@ import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/u
 import { InsightsBadge } from "../_components/insights-badge";
 import { CockpitNoDataPlaceholder } from "../_components/no-data-placeholder";
 import { PercentageDiff } from "../_components/percentage-diff";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { DeployFrequencyAnalyticsHeader } from "./_components/header";
 
 const comparisonParameters = {
@@ -42,12 +42,11 @@ const comparisonParameters = {
 >;
 
 export default async function DeployFrequencyAnalytics() {
-    const endDate = new Date();
-    const startDate = subWeeks(endDate, 2);
+    const selectedDateRange = await getSelectedDateRange();
 
     const response = await getDeployFrequencyAnalytics({
-        startDate: formatISO(startDate, { representation: "date" }),
-        endDate: formatISO(endDate, { representation: "date" }),
+        startDate: selectedDateRange.startDate,
+        endDate: selectedDateRange.endDate,
     });
 
     const data = extractApiData(response);

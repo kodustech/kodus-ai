@@ -1,10 +1,9 @@
 import type { ReasoningConfig } from '../kernel/model-types';
 
 /** o-series and gpt-5 are OpenAI's reasoning families (level-based effort). Also
- *  gates `supportsTemperature` in the module (reasoners reject temperature). */
-export function isOpenAiReasoner(model: string): boolean {
-    return /^o[134](\b|[-_@])/i.test(model) || /^gpt-5(\b|[-_@])/i.test(model);
-}
+ *  gates the module's temperature policy (reasoners reject temperature).
+ *  Delegates: the rule lives in the model layer, not once per provider. */
+export { isOpenAiReasonerId as isOpenAiReasoner } from '../kernel/model-family';
 
 /**
  * OpenAI reasoning config — the OpenAI family owner's answer. gpt-5 exposes
@@ -16,6 +15,18 @@ export function openaiReasoningConfig(
 ): ReasoningConfig | undefined {
     if (!model) return undefined;
     const m = model.toLowerCase();
+    // gpt-6 names its own levels when it refuses one: low/medium/high/xhigh.
+    // `xhigh` has no ReasoningEffort member, so the picker stops at high.
+    // Same shape as isOpenAiReasonerId's regex — one or two digits, excluding
+    // the whole pre-5 3x/4x range (gpt-40/gpt-41/gpt-45 are GPT-4.0/4.1/4.5,
+    // non-reasoning), not just Azure's `gpt-35-turbo` alias.
+    if (
+        /^gpt-(?!3[0-9](\b|[-_@]))(?!4[0-9](\b|[-_@]))([6-9]|\d{2})(\b|[-_@])/.test(
+            m,
+        )
+    ) {
+        return { type: 'level', options: ['low', 'medium', 'high'] };
+    }
     if (/^gpt-5(\b|[-_@])/.test(m)) {
         return { type: 'level', options: ['medium', 'high'] };
     }

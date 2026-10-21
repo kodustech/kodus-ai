@@ -4,7 +4,7 @@
  * ids. Add-a-provider = create a `./<provider>/` folder (index.ts self-registers)
  * and add its `import './<provider>'` line here.
  *
- * The 9 provider folders cover the 11 ids: openai (+openai_compatible),
+ * The 10 provider folders cover the 12 ids (+ `kodus`, a routing brand): openai (+openai_compatible),
  * anthropic (+anthropic_compatible), google-gemini, vertex (google_vertex,
  * incl. Claude-on-Vertex), openrouter, bedrock, novita, moonshot, azure. Shared
  * kernel (types, registry, capabilities, conformance) lives in ./kernel.
@@ -19,6 +19,8 @@ import './novita';
 import './moonshot';
 import './azure';
 import './zai';
+// Kodus-as-provider (routing brand over the three modules above; cloud-only).
+import './kodus';
 
 export { REGISTRY, registerProvider } from './kernel/registry';
 export type { ProviderModule } from './kernel/types';

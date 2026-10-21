@@ -506,6 +506,50 @@
     }
   },
   {
+    "key": "customAgents.controller.ts#resolve",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/custom-agents/resolve",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#try",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/custom-agents/try",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#tryRun",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/try/:runId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "github.controller.ts#getOrganizationName",
     "httpMethod": "GET",
     "urlPath": "/github/organization-name",
@@ -623,6 +667,17 @@
       "owner": "allow",
       "billing_manager": "deny",
       "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "kodusCredits.controller.ts#charges",
+    "httpMethod": "GET",
+    "urlPath": "/credits/charges",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "deny",
       "contributor": "deny"
     }
   },
@@ -828,6 +883,17 @@
     "key": "kodyRules.controller.ts#getInheritedRules",
     "httpMethod": "GET",
     "urlPath": "/kody-rules/inherited-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#getKodyRulesIndex",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/index",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -1111,17 +1177,6 @@
     }
   },
   {
-    "key": "organizationParameters.controller.ts#getByokCatalog",
-    "httpMethod": "GET",
-    "urlPath": "/organization-parameters/byok/catalog",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
     "key": "organizationParameters.controller.ts#getByokProviders",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/byok/providers",
@@ -1169,6 +1224,28 @@
     "key": "organizationParameters.controller.ts#listModelOverrides",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/model-overrides",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#listModelsWithKey",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/list-models",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#modelCapabilities",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/model-capabilities",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -1279,6 +1356,17 @@
     "key": "parameters.controller.ts#getCodeReviewParameter",
     "httpMethod": "GET",
     "urlPath": "/parameters/code-review-parameter",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "parameters.controller.ts#getCodeReviewScopes",
+    "httpMethod": "GET",
+    "urlPath": "/parameters/code-review-scopes",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -1482,6 +1570,17 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "deny"
+    }
+  },
+  {
+    "key": "pullRequestMessages.controller.ts#findAllOverrideCounts",
+    "httpMethod": "GET",
+    "urlPath": "/pull-request-messages/override-counts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
     }
   },
   {

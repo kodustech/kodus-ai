@@ -1,0 +1,29 @@
+---
+title: "为什么我的代码审查被暂停了"
+description: "了解 Kodus 自动暂停行为以及如何恢复自动代码审查。"
+---
+
+如果 Kodus 在之前正常工作后停止审查您的 PR，很可能是由于**自动暂停**功能。
+
+## 什么是自动暂停
+
+自动暂停防止活跃开发期间的审查垃圾信息。当 Kodus 检测到快速连续推送时（默认：15 分钟内 3 次推送），它会暂停该 PR 上的审查，并发布一条 "Auto-paused – comment @kody start-review when you're ready." 评论。在您恢复之前，后续推送都会被跳过。
+
+这是一个功能，不是 bug — 它避免了在您仍在积极推送更改时用多次审查淹没 PR。
+
+## 如何恢复
+
+- **评论** `@kody start-review` 以恢复并立即触发审查
+- **更改节奏**为"自动"（如果您总是希望每次推送都审查）
+
+## 更改行为
+
+前往 **Code review → General** → **Enable Automated Code Review** → **Review Cadence**：
+
+| 模式 | 行为 |
+|------|------|
+| **Automatic** | 审查每次推送 — 不暂停（默认） |
+| **Auto-pause** | 在一连串推送后暂停；可通过 **Pushes to trigger pause** 和 **Time window (minutes)** 进行调整 |
+| **Manual** | 仅在您评论 `@kody start-review` 时审查 |
+
+更多详情，请参阅[通用配置](/zh/how_to_use/code_review/configs/general)。

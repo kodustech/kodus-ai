@@ -15,6 +15,23 @@ import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/en
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 
 /** Rough token estimate: 1 token ≈ 4 characters */
+/**
+ * Chars per token for the planner's estimates. A flat ratio HERE is a measured
+ * engineering decision, not the leftover it looks like.
+ *
+ * The repo had five estimators answering "how many tokens is this text" with
+ * four different ratios, and the others were moved onto the real tokenizer. This
+ * one was too, and then moved back: `o200k_base` costs ~15ms on a 92k-char file,
+ * and this planner walks the same files repeatedly — estimate, chunk, re-estimate
+ * per chunk, recurse — over slices that are NEW strings each pass, so nothing
+ * memoizes. The recursion suite went from 1.5s to 160s. A hundredfold on the
+ * chunking path buys accuracy this decision does not need.
+ *
+ * 4 is the measured figure: o200k_base on this repo's own TypeScript runs ~4.2
+ * chars/token, so this sits within ~5% and slightly UNDER, which converts a
+ * length into slightly more tokens than it really is — the safe direction for a
+ * budget. The guard that must be exact is the preflight, and that one measures.
+ */
 export const CHARS_PER_TOKEN = 4;
 /**
  * Ceiling on the ESTIMATED full prompt (not just diffs) as a fraction of

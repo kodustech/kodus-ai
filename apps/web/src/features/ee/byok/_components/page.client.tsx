@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
-import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
+import type {
+    LLMConfigStatus,
+    LLMProviderModel,
+} from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
     ExternalLinkIcon,
@@ -14,14 +18,17 @@ import {
     WalletIcon,
 } from "lucide-react";
 import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
+import {
     Tabs,
     TabsContent,
     TabsList,
     TabsTrigger,
 } from "src/core/components/ui/tabs";
 
-import { CatalogProvider } from "../_data/catalog-context";
-import type { CuratedModel } from "../_data/curated-models.types";
+import { isPlatformFundedProvider } from "../_data/platform-funded";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
@@ -31,6 +38,8 @@ import { RoutingTab } from "./tabs/routing-tab";
 
 const providerLabel = (providerId?: string) => {
     switch (providerId) {
+        case "kodus":
+            return "Kodus";
         case "openai":
             return "OpenAI";
         case "openai_compatible":
@@ -123,7 +132,7 @@ export const ByokPageClient = ({
     costByModelId,
     periodLabel,
     costRangeQuery,
-    catalog,
+    kodusCatalog,
 }: {
     config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
@@ -131,8 +140,12 @@ export const ByokPageClient = ({
     costByModelId?: Record<string, ByokModelCost>;
     periodLabel?: string;
     costRangeQuery?: string;
-    /** Curated model catalog, backend-sourced (replaces curated-models.json). */
-    catalog: CuratedModel[];
+    /** Kodus catalog (name + list price) keyed by model id; only fetched
+     *  when the org has the Kodus provider. */
+    kodusCatalog?: Record<
+        string,
+        { name: string; pricing?: LLMProviderModel["pricing"] }
+    >;
 }) => {
     // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
     // Both tabs stay reachable — Routing shows its own "connect a provider
@@ -148,39 +161,107 @@ export const ByokPageClient = ({
     // Nag about an env-based LLM only when no BYOK model is configured at all.
     const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
 
+    // A Kodus-routed model makes the prepaid balance load-bearing: the page
+    // header says so, and the wallet lives on the Kodus provider card.
+    const usesKodusProvider = (config?.credentials ?? []).some((c) =>
+        isPlatformFundedProvider(c.provider),
+    );
+    const searchParams = useSearchParams();
+    const requestedTab = searchParams.get("tab");
+
     // Controlled tab value so cross-tab affordances (e.g. Routing's empty-state
     // "Go to Providers") can switch tabs via a callback — no DOM scraping.
-    const [tab, setTab] = useState("providers");
+    const [tab, setTab] = useState(
+        requestedTab === "routing" || requestedTab === "budget"
+            ? requestedTab
+            : "providers",
+    );
+
+    // A later navigation to ?tab=… while the page is already mounted must
+    // still switch tabs — the initializer above only runs once.
+    useEffect(() => {
+        if (!requestedTab) return;
+        if (["providers", "routing", "budget"].includes(requestedTab)) {
+            setTab(requestedTab);
+        }
+    }, [requestedTab]);
+
+    // /byok#kodus (navbar wallet chip, banners, emails, Stripe's return URL)
+    // lands on the Kodus provider card. Hash changes do not re-render, so
+    // listen for them too — the chip can be clicked while already here.
+    useEffect(() => {
+        const jump = () => {
+            if (window.location.hash !== "#kodus") return;
+            setTab("providers");
+            // After the tab content mounts.
+            requestAnimationFrame(() =>
+                document
+                    .getElementById("kodus")
+                    ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+            );
+        };
+        jump();
+        window.addEventListener("hashchange", jump);
+        return () => window.removeEventListener("hashchange", jump);
+    }, []);
 
     // Deep-link target for the Providers-tab "Used in" chips: clicking one
     // switches to Routing and scrolls to the matching row. RoutingTab consumes
     // `routingAnchor` on mount, then clears it via `onScrolled`.
     const [routingAnchor, setRoutingAnchor] = useState<string | null>(null);
     const openRouting = (anchor: string) => {
+        if (!changeTab("routing")) return;
         setRoutingAnchor(anchor);
-        setTab("routing");
     };
 
+    // Radix unmounts the panel it leaves, and each tab re-seeds its state from
+    // `config` on mount — so a tab switch silently threw away an unsaved
+    // routing edit. Every switch now goes through the same guard that stops a
+    // nav link or the command palette. Returns whether the switch happened.
+    function changeTab(next: string): boolean {
+        if (next === tab) return true;
+        if (hasUnsavedChanges()) {
+            triggerNavigationBlock();
+            return false;
+        }
+        setTab(next);
+        return true;
+    }
+
     return (
-        <CatalogProvider models={catalog}>
         <Page.Root>
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.TitleContainer>
                     <Page.Title className="text-balance">
-                        Bring your own key
+                        AI providers
                     </Page.Title>
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
-                            Connect the providers your team uses, then choose
-                            which model runs each task.
+                            {usesKodusProvider
+                                ? "Connect the providers your team uses — Kodus credits with no key, or your own keys — then choose which model runs each task."
+                                : "Connect the providers your team uses, then choose which model runs each task."}
                         </span>
                         <span className="flex items-center gap-2">
                             <span>
-                                You pay your provider directly —{" "}
-                                <strong className="text-text-primary font-medium">
-                                    Kodus never sees your key
-                                </strong>
-                                .
+                                {usesKodusProvider ? (
+                                    <>
+                                        Your own keys are billed by your
+                                        provider —{" "}
+                                        <strong className="text-text-primary font-medium">
+                                            Kodus never sees them
+                                        </strong>
+                                        . Models routed by Kodus are paid from
+                                        your credits.
+                                    </>
+                                ) : (
+                                    <>
+                                        You pay your provider directly —{" "}
+                                        <strong className="text-text-primary font-medium">
+                                            Kodus never sees your key
+                                        </strong>
+                                        .
+                                    </>
+                                )}
                                 <a
                                     href="https://docs.kodus.io/how_to_use/en/byok"
                                     target="_blank"
@@ -195,14 +276,14 @@ export const ByokPageClient = ({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 {showEnvNotice && llmConfigStatus && (
                     <EnvConfigNotice env={llmConfigStatus.env} />
                 )}
 
                 <ModelOverridesBanner teamId={teamId} />
 
-                <Tabs value={tab} onValueChange={setTab}>
+                <Tabs value={tab} onValueChange={changeTab}>
                     <TabsList>
                         <TabsTrigger value="providers">
                             <span className="flex items-center gap-2">
@@ -239,6 +320,7 @@ export const ByokPageClient = ({
                             costRangeQuery={costRangeQuery}
                             llmConfigStatus={llmConfigStatus}
                             onOpenRouting={openRouting}
+                            kodusCatalog={kodusCatalog}
                         />
                     </TabsContent>
 
@@ -247,18 +329,20 @@ export const ByokPageClient = ({
                             config={config}
                             llmConfigStatus={llmConfigStatus}
                             teamId={teamId}
-                            onGoToProviders={() => setTab("providers")}
+                            onGoToProviders={() => changeTab("providers")}
                             scrollAnchor={routingAnchor}
                             onScrolled={() => setRoutingAnchor(null)}
                         />
                     </TabsContent>
 
                     <TabsContent value="budget">
-                        <SpendLimitSection teamId={teamId} />
+                        <SpendLimitSection
+                            teamId={teamId}
+                            onGoToProviders={() => changeTab("providers")}
+                        />
                     </TabsContent>
                 </Tabs>
             </Page.Content>
         </Page.Root>
-        </CatalogProvider>
     );
 };

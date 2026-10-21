@@ -47,6 +47,23 @@ const API_CRON_SYNC_CODE_REVIEW_REACTIONS =
 // only make the cron slower.
 const DB_CONCURRENCY = 5;
 
+/**
+ * Execution states where Kody may have posted comments, and therefore where a
+ * reaction can exist to sync.
+ *
+ * PARTIAL_ERROR is one of them: the review ran and delivered suggestions, and
+ * something failed afterwards. Filtering on SUCCESS alone made those PRs
+ * invisible to the sync forever — their comments can be reacted to like any
+ * other, but the reactions were never collected.
+ *
+ * The remaining states have nothing to offer: SKIPPED and ERROR never
+ * delivered a suggestion, and PENDING/IN_PROGRESS have not finished.
+ */
+const REVIEWED_EXECUTION_STATUSES = [
+    AutomationStatus.SUCCESS,
+    AutomationStatus.PARTIAL_ERROR,
+];
+
 const LOCK_KEY = 'CRON:SYNC_CODE_REVIEW_REACTIONS';
 // TTL just longer than the worst observed run so a crashed holder
 // unlocks quickly for the next tick.
@@ -190,7 +207,7 @@ export class CodeReviewFeedbackCronProvider {
                                 sevenDaysAgo,
                                 now,
                                 teamAutomation.uuid,
-                                AutomationStatus.SUCCESS,
+                                REVIEWED_EXECUTION_STATUSES,
                             )
                             .then((executions) => ({
                                 team,

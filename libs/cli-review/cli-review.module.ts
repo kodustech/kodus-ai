@@ -63,6 +63,7 @@ import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
+import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
@@ -116,6 +117,7 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         forwardRef(() => KodyRulesModule), // For loading kody rules in CLI review
         forwardRef(() => GithubModule), // For GitHubRateLimitGateService dependency
         forwardRef(() => PlatformCoreModule), // For CodeManagementService (platform resolution)
+        forwardRef(() => PermissionValidationModule), // For BYOK task-slot resolution
     ],
     providers: [
         // Strategy

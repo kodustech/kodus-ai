@@ -12,8 +12,10 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    isHeavyReviewCommand
+    isHeavyReviewCommand,
+    parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -514,7 +516,13 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                 return;
             }
 
-            const isStartCommand = isReviewCommand(comment.body);
+            // `@kody -v <agent>` reviews the PR again with that custom agent only.
+
+            const customAgentSlug = parseCustomAgentCommand(comment.body);
+
+            const isStartCommand =
+
+                isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
@@ -539,6 +547,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         triggerCommentId: comment?.id,
                         reviewDirective: parseReviewDirective(comment.body),
                         heavy: isHeavyReviewCommand(comment.body),
+                        onlyCustomAgent: customAgentSlug,
                     },
                 };
 
@@ -576,7 +585,12 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
             if (
                 !hasMarker &&
                 !isStartCommand &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(
+                        PlatformType.AZURE_REPOS,
+                        params.event,
+                        payload,
+                    ))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;

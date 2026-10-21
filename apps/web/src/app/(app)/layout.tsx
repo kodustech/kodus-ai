@@ -3,8 +3,10 @@ import { getTeamParametersNoCache } from "@services/parameters/fetch";
 import { ParametersConfigKey } from "@services/parameters/types";
 import { auth } from "src/core/config/auth";
 import { UserRole } from "src/core/enums";
-import { NavMenu } from "src/core/layout/navbar";
 import { CriticalNotificationBanner } from "src/core/layout/navbar/_components/critical-notification-banner";
+import { AppSidebar } from "src/core/layout/sidebar";
+import { SIDEBAR_COLLAPSED_COOKIE } from "src/core/layout/sidebar/collapsed-cookie";
+import { ScopeToolsProvider } from "src/core/layout/sidebar/scope-tools";
 import { UpdateAvailableTopbar } from "src/core/layout/update-available-topbar";
 import { TEAM_STATUS } from "src/core/types";
 import { BYOKMissingKeyTopbar } from "src/features/ee/byok/_components/missing-key-topbar";
@@ -19,7 +21,6 @@ import { SubscriptionProvider } from "src/features/ee/subscription/_providers/su
 
 import { getLayoutData, getTeamsCached } from "./_helpers/get-layout-data";
 import { Providers } from "./providers";
-import { AppRightSidebar } from "./right-sidebar";
 
 // Team-scoped layout fetches (platform config + layout data), run in parallel.
 // getLayoutData is React-cache()'d on teamId, so calling this twice with the
@@ -49,6 +50,8 @@ export default async function Layout({ children }: React.PropsWithChildren) {
     const selectedTeamIdFromCookie = cookieStore.get(
         "global-selected-team-id",
     )?.value;
+    const sidebarCollapsed =
+        cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
 
     const [session, teams, speculative] = await Promise.all([
         auth(),
@@ -114,6 +117,11 @@ export default async function Layout({ children }: React.PropsWithChildren) {
     // Surface it from the LLM config so the trial UI (badge/banner/card)
     // reflects "unlimited with your key".
     const hasByokKey = Boolean(llmConfigStatus?.byok?.configured);
+    // A configured model on the Kodus provider makes the prepaid balance
+    // load-bearing (gate + banner). Local config decides, never billing.
+    const usesKodusProvider = Boolean(
+        llmConfigStatus?.models?.some((m) => m.providerId === "kodus"),
+    );
     const isTrial = organizationLicense?.subscriptionStatus === "trial";
     const isEnterprise = organizationLicense
         ? isEnterprisePlan(organizationLicense)
@@ -160,21 +168,27 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                               numberOfLicenses: 0,
                           }
                 }
-                usersWithAssignedLicense={usersWithAssignedLicense}>
-                <NavMenu />
-                <FinishedTrialModal />
-                <CriticalNotificationBanner />
-                <SubscriptionStatusTopbar />
-
-                <UpdateAvailableTopbar
-                    isOwner={session.user.role === UserRole.OWNER}
-                />
-
-                {showBYOKMissingKeyTopbar && <BYOKMissingKeyTopbar />}
-
-                {children}
-
-                <AppRightSidebar />
+                usersWithAssignedLicense={usersWithAssignedLicense}
+                usesKodusProvider={usesKodusProvider}>
+                <ScopeToolsProvider>
+                    {/* The sidebar on the left; the banners and the page
+                        stacked in the rest of the row. */}
+                    <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
+                        <AppSidebar initialCollapsed={sidebarCollapsed} />
+                        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                            <FinishedTrialModal />
+                            <CriticalNotificationBanner />
+                            <SubscriptionStatusTopbar />
+                            <UpdateAvailableTopbar
+                                isOwner={session.user.role === UserRole.OWNER}
+                            />
+                            {showBYOKMissingKeyTopbar && (
+                                <BYOKMissingKeyTopbar />
+                            )}
+                            {children}
+                        </div>
+                    </div>
+                </ScopeToolsProvider>
             </SubscriptionProvider>
         </Providers>
     );

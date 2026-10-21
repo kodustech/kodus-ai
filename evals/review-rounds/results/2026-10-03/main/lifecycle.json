@@ -1,0 +1,3345 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "6839eb92aa6ee4b3fcbd7cc377dec4b558d6ebd7377b6d94ec098b0729e00139"
+  },
+  "complete": true,
+  "reps": 3,
+  "runs": [
+    {
+      "sequence": "rejected-four-rounds",
+      "action": "Developer rejects as intentional; persisted status remains not_implemented.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 225223,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: On NotReadyError the code now calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2 'The gateway has the charge but has not settled it yet') and Gateway.submit is explicitly NOT idempotent (gateway.ts:3 'every call creates a new charge'). WHY: resubmitting an already-accepted charge creates a second charge, causing duplicate/double billing of the customer — the removed comment ('this charge is already submitted') shows the original code intentionally avoided this. HOW: do not resubmit on NotReadyError (restore the previous behavior of just recording the resubmit metric and returning), or make submit idempotent by passing an idempotency key derived from charge.id so a retry cannot create a new charge.",
+              "keep": true,
+              "rationale": "Source evidence confirms the claim. errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet', and gateway.ts:3 states submit is 'NOT idempotent: every call creates a new charge'. poller.ts:14-16 resubmits via gw.submit(charge.payload) on NotReadyError with no idempotency key (submit only accepts payload), so a transient 'not settled' status causes a second charge to be created — duplicate billing. No upstream guard or idempotency mechanism prevents it. The poller's inline comment contradicts the authoritative class doc, which is precisely the flaw. Cannot refute.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "errors.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "gateway.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 21,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 125887,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 10,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:08:42.660Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 1: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 130976,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:08:42.660Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 1: telemetry documentation only.\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 72349,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:08:42.660Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 1: telemetry documentation only.\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 50517,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:08:42.660Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -25,3 +25,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 180082,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/status.ts",
+              "claim": "WHAT: the arguments to FailedError are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as the first parameter (chargeId) and the chargeId as the second (cause). WHY: FailedError is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)`, so the thrown error now reports `chargeId` equal to the error string and `cause` equal to the charge id, and `super(chargeId)` makes the Error message the raw error text instead of the charge id — any caller reading `error.chargeId` to identify the failed charge gets the wrong value. HOW: restore the parameter order while keeping the string conversion: `throw new FailedError(chargeId, String(err));`.",
+              "keep": true,
+              "rationale": "errors.ts line 4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)` and calls `super(chargeId)`. The call at status.ts:11 is `new FailedError(String(err), chargeId)`, so the stringified error is bound to `chargeId` and the real charge id to `cause`, and the Error message becomes the raw error text. The described root cause (swapped arguments) is factually accurate; callers reading `error.chargeId` get the wrong value.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "class FailedError"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "FailedError\\("
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts",
+                    "startLine": 1,
+                    "endLine": 20
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 15,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/status.ts",
+              "line": 11,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The arguments to FailedError are swapped in `new FailedError(String(err), chargeId)`, so `chargeId` gets the stringified error and `cause` gets the charge id; since FailedError is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)`, `super(chargeId)` sets the Error message to the raw error text and callers reading `error.chargeId` get the wrong value. Restore the parameter order while keeping the string conversion: `throw new FailedError(chargeId, String(err));`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "swapped-args",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On NotReadyError the code calls `gw.submit(charge.payload)`, but NotReadyError means the gateway already has the charge (errors.ts:2) and `Gateway.submit` is not idempotent (gateway.ts:3), so resubmitting creates a second charge and double-bills the customer. Remove the `gw.submit` call on NotReadyError so only the resubmit metric is recorded, or make submit idempotent by passing an idempotency key derived from `charge.id`.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:08:42.660Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/status.ts",
+              "patchWithLinesStr": "## file: 'src/billing/status.ts'\n\n@@ -8,5 +8,5 @@\n__new hunk__\n8          if (err instanceof NotReadyError) {\n9              throw err;\n10          }\n11 +        throw new FailedError(String(err), chargeId);\n12      }\n__old hunk__\n         if (err instanceof NotReadyError) {\n             throw err;\n         }\n-        throw new FailedError(chargeId, err);\n     }"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rejected-four-rounds",
+      "action": "Developer rejects as intentional; persisted status remains not_implemented.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 198600,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly documented as non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError is defined as \"the gateway has the charge but has not settled it yet\" (errors.ts:1). WHY: pollCharge runs on every tick, so each tick that sees the transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer; the previous code was a deliberate no-op (\"this charge is already submitted\") that this change removes. HOW: Do not resubmit for an already-received charge — restore the no-op/wait behavior, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "keep": true,
+              "rationale": "The claim is directly supported by the code. errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. poller.ts:16 now calls gw.submit(charge.payload) in the NotReadyError branch, which pollCharge runs on every tick. So a transient not-ready state that persists across ticks would trigger repeated non-idempotent submits, i.e. duplicate charges — the exact failure path the finding describes. The only counter-evidence is the poller.ts:8 comment claiming NotReadyError means 'the gateway never received it', but that comment contradicts the authoritative error definition in errors.ts and does not refute the double-submit risk. I cannot actively refute the finding.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "errors.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "gateway.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 23,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 115415,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:21:22.745Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 1: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 156696,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 8,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:21:22.745Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 1: telemetry documentation only.\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 156340,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 9,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:21:22.745Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 1: telemetry documentation only.\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 150649,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 8,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:21:22.745Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -25,3 +25,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "rejected-four-rounds:round-5",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 237758,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/status.ts",
+              "claim": "WHAT: The FailedError arguments are reversed — `new FailedError(String(err), chargeId)` passes the stringified gateway error as the constructor's `chargeId` parameter and the actual charge ID as `cause`. WHY: FailedError's signature is `constructor(readonly chargeId: string, readonly cause?: unknown)` (errors.ts:4), so every consumer that reads `err.chargeId` (or the Error message produced by `super(chargeId)`) now gets the stringified underlying error instead of the charge identifier, and `err.cause` holds the charge ID string instead of the original error — corrupting the error contract for any logging/monitoring or retry logic keyed on chargeId. Both args are strings so it compiles silently. HOW: restore the argument order: `throw new FailedError(chargeId, err);` (or, if the intent was to surface the message, change errors.ts to accept the message separately — but with the current constructor the correct call is `new FailedError(chargeId, err)`).",
+              "keep": true,
+              "rationale": "errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, so the first arg becomes chargeId (and the Error message) and the second becomes cause. The call at status.ts:11 passes `String(err)` first and the real `chargeId` second, exactly reversing them. Both are strings, so it compiles silently. Every consumer reading err.chargeId or the message gets the stringified gateway error, and err.cause holds the charge ID instead of the original error — a real behavioral defect, not style.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts",
+                    "startLine": 1,
+                    "endLine": 20
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 13,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/status.ts",
+              "line": 11,
+              "severity": "medium",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The `FailedError` arguments are reversed in `new FailedError(String(err), chargeId)`: because the constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)` (errors.ts:4), consumers reading `err.chargeId` or the `super(chargeId)` message get the stringified gateway error while `err.cause` holds the charge ID, silently corrupting the error contract for logging, monitoring, or retry logic keyed on `chargeId`. Restore the argument order with `throw new FailedError(chargeId, err);` (or change `errors.ts` to accept a message separately if that was the intent)."
+            }
+          ],
+          "claims": [
+            {
+              "id": "swapped-args",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "medium",
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "rejected-four-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "The NotReadyError branch now calls `gw.submit(charge.payload)`, but `submit` is explicitly non-idempotent (\"every call creates a new charge\", gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1); since pollCharge runs on every tick, each transient NotReady state issues a fresh submit, creating duplicate charges and double-billing the customer and removing the previous deliberate no-op. Restore the no-op/wait behavior for an already-received charge, or pass an idempotency key so submit deduplicates (requires extending the Gateway.submit signature).",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T13:21:22.745Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/status.ts",
+              "patchWithLinesStr": "## file: 'src/billing/status.ts'\n\n@@ -8,5 +8,5 @@\n__new hunk__\n8          if (err instanceof NotReadyError) {\n9              throw err;\n10          }\n11 +        throw new FailedError(String(err), chargeId);\n12      }\n__old hunk__\n         if (err instanceof NotReadyError) {\n             throw err;\n         }\n-        throw new FailedError(chargeId, err);\n     }"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "rejected-four-rounds",
+      "action": "Developer rejects as intentional; persisted status remains not_implemented.",
+      "rep": 3,
+      "rounds": [
+        {
+          "case": "rejected-four-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 208395,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: The NotReadyError branch now calls `await gw.submit(charge.payload)` on a gateway whose `submit` is documented as non-idempotent (\"every call creates a new charge\"), even though NotReadyError means the gateway already holds the charge (transient/not settled). WHY: This creates a duplicate charge on every poll tick where the charge stays unsettled, double- or multi-billing the customer — a financial-integrity regression. HOW: Do not resubmit when the gateway already has the charge; keep the prior wait-and-retry behavior, or gate the resubmit behind an idempotency key that the gateway deduplicates (e.g. `gw.submit(charge.payload, { idempotencyKey: charge.id })`) if such support exists.",
+              "keep": false,
+              "rationale": "The finding's root cause rests on the premise that NotReadyError means 'the gateway already holds the charge (transient/not settled)'. That premise is directly contradicted by the code's own documented semantics: poller.ts lines 6-8 explicitly state the function is 'Called on every tick for charges the gateway has ACCEPTED. NotReadyError means \"the gateway never received it\": resubmit.' The resubmit on NotReadyError is therefore the intended, documented behavior, not a financial-integrity regression. There is no throw site or other evidence anywhere in the repo supporting the claim that NotReadyError indicates an already-held/settling charge; the only in-code definition of its meaning says the opposite. Since the described root cause is factually wrong, the duplicate-charge failure path cannot occur as claimed.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts",
+                    "startLine": 1,
+                    "endLine": 80
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "submit\\s*\\(|NotReadyError|idempotency",
+                    "glob": "*.ts",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "glob": "*.ts",
+                    "pattern": "throw new NotReadyError|new NotReadyError"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError|implements Gateway|status\\("
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReady|submit",
+                    "glob": "*.md"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 23,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 0
+          },
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": false
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "fixed-three-rounds",
+      "action": "Developer removes the duplicate submission; persisted status deliberately stays pending.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 228882,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but `NotReadyError` means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3). WHY: Resubmitting a charge the gateway has already accepted creates a duplicate charge, double-billing the customer and corrupting billing state; the previous code deliberately did not resubmit for exactly this reason. HOW: Do not resubmit on `NotReadyError` — restore the no-op (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), and only resubmit on an error that genuinely means the gateway never received the charge. If a real resend is intended, `submit` must accept and honor an idempotency key.",
+              "keep": true,
+              "rationale": "Confirmed by the code. errors.ts:2 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' pollCharge catches NotReadyError and calls gw.submit(charge.payload), which creates a second charge for a charge the gateway already holds — a duplicate/double-billing path. The only contrary signal is the poller.ts header comment claiming NotReadyError means 'the gateway never received it', but that comment contradicts the authoritative error-class definition in errors.ts, which the finding correctly cites. The root cause (non-idempotent resubmit on an already-accepted charge) is factually supported, not refuted.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts",
+                    "startLine": 1,
+                    "endLine": 60
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "errors.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "gateway.ts",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "endLine": 20,
+                    "path": "src/billing/errors.ts",
+                    "startLine": 1
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "endLine": 30,
+                    "path": "src/billing/gateway.ts",
+                    "startLine": 1
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "endLine": 40,
+                    "path": "src/billing/status.ts",
+                    "startLine": 1
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 27,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but that error means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), so resubmitting creates a duplicate charge, double-billing the customer and corrupting billing state. Restore the no-op for `NotReadyError` (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), resubmitting only on errors that genuinely mean the gateway never received the charge — and if a real resend is intended, `submit` must accept and honor an idempotency key."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 191075,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 26,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but that error means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), so resubmitting creates a duplicate charge, double-billing the customer and corrupting billing state. Restore the no-op for `NotReadyError` (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), resubmitting only on errors that genuinely mean the gateway never received the charge — and if a real resend is intended, `submit` must accept and honor an idempotency key.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:42:16.899Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -5,16 +5,16 @@\n \n /**\n  * Called on every tick for charges the gateway has ACCEPTED.\n- * NotReadyError means \"the gateway never received it\": resubmit.\n+ * NotReadyError means the gateway is settling the submitted charge: wait.\n  */\n export async function pollCharge(gw: Gateway, charge: { id: string; payload: unknown }) {\n     try {\n         return await fetchStatus(gw, charge.id);\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n-            metrics.increment('billing.resubmit');\n-            await gw.submit(charge.payload); // resend\n-            return { state: 'resubmitted' as const };\n+            metrics.increment('billing.pending');\n+            // Already submitted: wait for the gateway instead of submitting twice.\n+            return { state: 'pending' as const };\n         }\n         throw err;\n     }\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 78003,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 9,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but that error means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), so resubmitting creates a duplicate charge, double-billing the customer and corrupting billing state. Restore the no-op for `NotReadyError` (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), resubmitting only on errors that genuinely mean the gateway never received the charge — and if a real resend is intended, `submit` must accept and honor an idempotency key.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:42:16.899Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 83987,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 9,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but that error means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), so resubmitting creates a duplicate charge, double-billing the customer and corrupting billing state. Restore the no-op for `NotReadyError` (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), resubmitting only on errors that genuinely mean the gateway never received the charge — and if a real resend is intended, `submit` must accept and honor an idempotency key.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:42:16.899Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 54273,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 4,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:1:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a `NotReadyError`, pollCharge now calls `gw.submit(charge.payload)`, but that error means the gateway already holds the charge (errors.ts:2) and `Gateway.submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), so resubmitting creates a duplicate charge, double-billing the customer and corrupting billing state. Restore the no-op for `NotReadyError` (keep the metric and return `{ state: 'resubmitted' }`, or rename the state to reflect 'already submitted'), resubmitting only on errors that genuinely mean the gateway never received the charge — and if a real resend is intended, `submit` must accept and honor an idempotency key.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:42:16.899Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "fixed-three-rounds",
+      "action": "Developer removes the duplicate submission; persisted status deliberately stays pending.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 308174,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: The NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge, and `Gateway.submit` is explicitly non-idempotent (\"every call creates a new charge\"). WHY: Resubmitting a charge the gateway already received creates a second charge for the same logical payment — a duplicate/double billing on every tick where the charge is still unsettled. The original code deliberately did nothing here (\"this charge is already submitted\") to prevent exactly this. HOW: Do not resubmit on NotReadyError; treat it as a transient not-yet-settled state and simply return/wait (as before), e.g. `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };` — or, if a resend is genuinely required, it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not.",
+              "keep": true,
+              "rationale": "NotReadyError is defined in errors.ts as \"The gateway has the charge but has not settled it yet (transient)\", and Gateway.submit is documented as non-idempotent (\"every call creates a new charge\"). pollCharge's catch branch calls gw.submit on NotReadyError with no idempotency key, so each tick on an unsettled-but-received charge creates a duplicate charge. status.ts rethrows NotReadyError unchanged, so this path is genuinely reached; no upstream guard prevents it. The finding's root cause and failure path are confirmed by the code.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "submit",
+                    "glob": "**/gateway*.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/gateway.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 20,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "In src/billing/poller.ts, the NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is explicitly non-idempotent ('every call creates a new charge'), so resubmitting creates a second charge for the same logical payment and duplicate/double billing on every tick where the charge is still unsettled; the original code deliberately did nothing here ('this charge is already submitted') to prevent exactly this. Do not resubmit on NotReadyError—treat it as a transient not-yet-settled state and return/wait as before (e.g., `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };`), or if a resend is genuinely required it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 155367,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 28,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "In src/billing/poller.ts, the NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is explicitly non-idempotent ('every call creates a new charge'), so resubmitting creates a second charge for the same logical payment and duplicate/double billing on every tick where the charge is still unsettled; the original code deliberately did nothing here ('this charge is already submitted') to prevent exactly this. Do not resubmit on NotReadyError—treat it as a transient not-yet-settled state and return/wait as before (e.g., `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };`), or if a resend is genuinely required it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:54:12.421Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -5,16 +5,16 @@\n \n /**\n  * Called on every tick for charges the gateway has ACCEPTED.\n- * NotReadyError means \"the gateway never received it\": resubmit.\n+ * NotReadyError means the gateway is settling the submitted charge: wait.\n  */\n export async function pollCharge(gw: Gateway, charge: { id: string; payload: unknown }) {\n     try {\n         return await fetchStatus(gw, charge.id);\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n-            metrics.increment('billing.resubmit');\n-            await gw.submit(charge.payload); // resend\n-            return { state: 'resubmitted' as const };\n+            metrics.increment('billing.pending');\n+            // Already submitted: wait for the gateway instead of submitting twice.\n+            return { state: 'pending' as const };\n         }\n         throw err;\n     }\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 85708,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "In src/billing/poller.ts, the NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is explicitly non-idempotent ('every call creates a new charge'), so resubmitting creates a second charge for the same logical payment and duplicate/double billing on every tick where the charge is still unsettled; the original code deliberately did nothing here ('this charge is already submitted') to prevent exactly this. Do not resubmit on NotReadyError—treat it as a transient not-yet-settled state and return/wait as before (e.g., `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };`), or if a resend is genuinely required it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:54:12.421Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 51099,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 5,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "In src/billing/poller.ts, the NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is explicitly non-idempotent ('every call creates a new charge'), so resubmitting creates a second charge for the same logical payment and duplicate/double billing on every tick where the charge is still unsettled; the original code deliberately did nothing here ('this charge is already submitted') to prevent exactly this. Do not resubmit on NotReadyError—treat it as a transient not-yet-settled state and return/wait as before (e.g., `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };`), or if a resend is genuinely required it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:54:12.421Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 50971,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:2:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "In src/billing/poller.ts, the NotReadyError branch now calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is explicitly non-idempotent ('every call creates a new charge'), so resubmitting creates a second charge for the same logical payment and duplicate/double billing on every tick where the charge is still unsettled; the original code deliberately did nothing here ('this charge is already submitted') to prevent exactly this. Do not resubmit on NotReadyError—treat it as a transient not-yet-settled state and return/wait as before (e.g., `metrics.increment('billing.resubmit'); return { state: 'resubmitted' as const };`), or if a resend is genuinely required it must be an idempotent operation keyed by `charge.id`, which `submit(payload)` is not.",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T13:54:12.421Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "fixed-three-rounds",
+      "action": "Developer removes the duplicate submission; persisted status deliberately stays pending.",
+      "rep": 3,
+      "rounds": [
+        {
+          "case": "fixed-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 155377,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/billing/poller.ts",
+              "claim": "WHAT: On a transient `NotReadyError` the poller now calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway ALREADY has the charge and `Gateway.submit` is documented as NOT idempotent (every call creates a new charge). WHY: This creates a duplicate charge on every tick for a charge that was only awaiting settlement, causing double billing for the customer. HOW: Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit` (e.g. restore the previous no-resubmit behavior). The poller's doc comment on line 8 (\"never received it\") should be corrected to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\".",
+              "keep": true,
+              "rationale": "Confirmed. errors.ts:1 documents NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\", contradicting the poller's doc comment (line 8) that claims it means the gateway never received the charge. gateway.ts:3 documents submit() as \"NOT idempotent: every call creates a new charge.\" Therefore the catch block at poller.ts:14-17 calling `await gw.submit(charge.payload)` on NotReadyError resubmits a charge the gateway already holds, producing a duplicate charge / double billing. The root cause and failure path are factually accurate and reachable; no upstream guard prevents it.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/poller.ts",
+                    "startLine": 1,
+                    "endLine": 60
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "NotReadyError",
+                    "path": "src/billing"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/errors.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/billing/status.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "path": "src/billing/gateway.ts",
+                    "pattern": "submit|idempoten|NotReady"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "endLine": 20,
+                    "path": "src/billing/gateway.ts",
+                    "startLine": 1
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "throw new NotReadyError|new NotReadyError"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 19,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/billing/poller.ts",
+              "line": 16,
+              "severity": "critical",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "On a transient `NotReadyError` the poller calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway already has the charge and `Gateway.submit` is documented as not idempotent, so this creates a duplicate charge on every tick and double bills the customer. Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit`, and correct the poller's doc comment on line 8 (\"never received it\") to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\"."
+            }
+          ],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "critical",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -13,7 +13,7 @@\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n             metrics.increment('billing.resubmit');\n-            // Wait: this charge is already submitted.\n+            await gw.submit(charge.payload); // resend\n             return { state: 'resubmitted' as const };\n         }\n         throw err;\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 192739,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 26,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:3:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a transient `NotReadyError` the poller calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway already has the charge and `Gateway.submit` is documented as not idempotent, so this creates a duplicate charge on every tick and double bills the customer. Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit`, and correct the poller's doc comment on line 8 (\"never received it\") to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\".",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T14:02:30.952Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -5,16 +5,16 @@\n \n /**\n  * Called on every tick for charges the gateway has ACCEPTED.\n- * NotReadyError means \"the gateway never received it\": resubmit.\n+ * NotReadyError means the gateway is settling the submitted charge: wait.\n  */\n export async function pollCharge(gw: Gateway, charge: { id: string; payload: unknown }) {\n     try {\n         return await fetchStatus(gw, charge.id);\n     } catch (err) {\n         if (err instanceof NotReadyError) {\n-            metrics.increment('billing.resubmit');\n-            await gw.submit(charge.payload); // resend\n-            return { state: 'resubmitted' as const };\n+            metrics.increment('billing.pending');\n+            // Already submitted: wait for the gateway instead of submitting twice.\n+            return { state: 'pending' as const };\n         }\n         throw err;\n     }\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 85859,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 10,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:3:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a transient `NotReadyError` the poller calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway already has the charge and `Gateway.submit` is documented as not idempotent, so this creates a duplicate charge on every tick and double bills the customer. Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit`, and correct the poller's doc comment on line 8 (\"never received it\") to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\".",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T14:02:30.952Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -19,3 +19,5 @@\n         throw err;\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 75636,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:3:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a transient `NotReadyError` the poller calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway already has the charge and `Gateway.submit` is documented as not idempotent, so this creates a duplicate charge on every tick and double bills the customer. Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit`, and correct the poller's doc comment on line 8 (\"never received it\") to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\".",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T14:02:30.952Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -21,3 +21,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "fixed-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 90083,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "resubmit-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "fixed-three-rounds:3:0:0",
+              "relevantFile": "src/billing/poller.ts",
+              "relevantLinesStart": 16,
+              "suggestionContent": "On a transient `NotReadyError` the poller calls `await gw.submit(charge.payload)`, but `NotReadyError` means the gateway already has the charge and `Gateway.submit` is documented as not idempotent, so this creates a duplicate charge on every tick and double bills the customer. Do not resubmit on `NotReadyError` — treat it as a pending state and return without calling `gw.submit`, and correct the poller's doc comment on line 8 (\"never received it\") to match errors.ts, which defines `NotReadyError` as \"has the charge but has not settled it yet (transient)\".",
+              "label": "bug",
+              "outcome": "pending",
+              "decidedAt": "2026-10-03T14:02:30.952Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/billing/poller.ts",
+              "patch": "@@ -23,3 +23,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "refinement-three-rounds",
+      "action": "Developer adds an ineffective timeout; the hang the first comment raised is not posted again.",
+      "rep": 1,
+      "rounds": [
+        {
+          "case": "refinement-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 121277,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The change removes the `AbortSignal.timeout(5000)` option, leaving `fetch(url)` with no timeout. WHY: `fetch` has no built-in timeout, so if the remote host accepts the connection but never responds (or stalls mid-body), the returned promise never settles — every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket and exhausting resources under repeated calls. This is a regression: the diff deletes the only guard that bounded the wait to 5s. HOW: Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` (or pass a configurable timeout).",
+              "keep": true,
+              "rationale": "The cited code confirms `getJson` calls `fetch(url)` with no timeout option, and a repo-wide grep shows no other fetch call or timeout wrapper guarding it. `fetch` has no built-in timeout for a connection that stalls, so deleting a 5s `AbortSignal.timeout` leaves callers awaiting `getJson` unbounded — a concrete behavioral regression, not a style/doc issue. No upstream guard prevents the hang, so the claim cannot be refuted.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|fetch\\(",
+                    "glob": "*.ts",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 15,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "linkedById": false,
+              "label": "performance",
+              "marked": false,
+              "text": "In src/http/client.ts, removing `AbortSignal.timeout(5000)` leaves `fetch(url)` with no timeout, so if the remote host accepts the connection but never responds or stalls mid-body, the promise never settles and every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket; this is a regression because it deletes the only guard bounding the wait to 5s. Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` or pass a configurable timeout."
+            }
+          ],
+          "claims": [
+            {
+              "id": "timeout-missing",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,5 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });\n+    const res = await fetch(url);\n     if (!res.ok) throw new Error(`HTTP ${res.status}`);\n     return await res.json();\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 145540,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "",
+              "claim": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without `{ signal: controller.signal }` — so `controller.abort()` is a no-op and the 5s setTimeout does not actually bound the request, potentially letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call.",
+              "keep": true,
+              "rationale": "Confirmed in src/http/client.ts: line 2 creates an AbortController, line 3 schedules controller.abort() after 5000ms, but line 5 calls `fetch(url)` with no options object. Since the signal is never wired into fetch, controller.abort() has no effect on the in-flight request; the 5s timeout does not bound it and a stalled request can hang (and hold the pending socket) indefinitely. The root cause is factually accurate and the failure path is real.",
+              "tools": [
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortController",
+                    "namesOnly": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "fetch\\(url\\)"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: `fetch(url)` is called without `{ signal: controller.signal }`, so the AbortController that the new 5s setTimeout aborts is never attached to the request. WHY: `controller.abort()` has no effect on the fetch — if the remote host accepts the connection but stalls (never responds or stalls mid-body), the promise never settles, every caller awaiting `getJson` hangs indefinitely and leaks the pending request/socket, i.e. the added timeout is dead code and the previous no-timeout regression is not actually fixed. HOW: pass the signal: `const res = await fetch(url, { signal: controller.signal });`.",
+              "keep": true,
+              "rationale": "Confirmed at src/http/client.ts:5: `const res = await fetch(url);` is called without `{ signal: controller.signal }`. The AbortController is created (line 2) and aborted via setTimeout after 5s (line 3), but its signal is never passed to fetch, so controller.abort() has no effect on the request. The timeout is dead code and a stalled remote would leave getJson hanging indefinitely. The claim is factually correct and the failure path is real. (This complements, but differs from, the prior decision which only said no timeout existed — here a timeout was added but is ineffective.)",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "",
+              "claim": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without `{ signal: controller.signal }` — so `controller.abort()` is a no-op and the 5s setTimeout does not actually bound the request, potentially letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call.",
+              "keep": true,
+              "rationale": "Confirmed: src/http/client.ts creates an AbortController (line 2) and schedules controller.abort() after 5s (line 3), but fetch(url) (line 5) is invoked without { signal: controller.signal }. The signal is never wired into the request, so abort() has no effect on the fetch and the 5s timeout does not bound it — matching the finding's root cause and failure path exactly.",
+              "tools": [
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "fetch\\(url\\)"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortController"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 10,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 2,
+            "after": 2
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "`fetch(url)` is called without `{ signal: controller.signal }`, so the new 5s setTimeout's `controller.abort()` is a no-op and a stalled host leaves every caller awaiting `getJson` hanging indefinitely while leaking the pending request/socket. Pass the signal to fetch so the timeout actually bounds the request."
+            },
+            {
+              "sourceIndex": 1,
+              "file": "",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "`fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` is a no-op and the 5s setTimeout does not bound the request, letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call."
+            }
+          ],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": false
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `AbortSignal.timeout(5000)` leaves `fetch(url)` with no timeout, so if the remote host accepts the connection but never responds or stalls mid-body, the promise never settles and every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket; this is a regression because it deletes the only guard bounding the wait to 5s. Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` or pass a configurable timeout.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:11:56.568Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,11 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url);\n-    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n-    return await res.json();\n+    const controller = new AbortController();\n+    const timer = setTimeout(() => controller.abort(), 5000);\n+    try {\n+        const res = await fetch(url);\n+        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n+        return await res.json();\n+    } finally {\n+        clearTimeout(timer);\n+    }\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 221476,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 2,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `AbortSignal.timeout(5000)` leaves `fetch(url)` with no timeout, so if the remote host accepts the connection but never responds or stalls mid-body, the promise never settles and every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket; this is a regression because it deletes the only guard bounding the wait to 5s. Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` or pass a configurable timeout.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:11:56.568Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so the new 5s setTimeout's `controller.abort()` is a no-op and a stalled host leaves every caller awaiting `getJson` hanging indefinitely while leaking the pending request/socket. Pass the signal to fetch so the timeout actually bounds the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:1",
+              "relevantFile": "",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` is a no-op and the 5s setTimeout does not bound the request, letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -9,3 +9,5 @@\n         clearTimeout(timer);\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 52865,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 1,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `AbortSignal.timeout(5000)` leaves `fetch(url)` with no timeout, so if the remote host accepts the connection but never responds or stalls mid-body, the promise never settles and every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket; this is a regression because it deletes the only guard bounding the wait to 5s. Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` or pass a configurable timeout.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:11:56.568Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so the new 5s setTimeout's `controller.abort()` is a no-op and a stalled host leaves every caller awaiting `getJson` hanging indefinitely while leaking the pending request/socket. Pass the signal to fetch so the timeout actually bounds the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:1",
+              "relevantFile": "",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` is a no-op and the 5s setTimeout does not bound the request, letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -11,3 +11,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 107594,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:1:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `AbortSignal.timeout(5000)` leaves `fetch(url)` with no timeout, so if the remote host accepts the connection but never responds or stalls mid-body, the promise never settles and every caller awaiting `getJson` hangs indefinitely, leaking the pending request/socket; this is a regression because it deletes the only guard bounding the wait to 5s. Restore a timeout, e.g. `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });` or pass a configurable timeout.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:11:56.568Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so the new 5s setTimeout's `controller.abort()` is a no-op and a stalled host leaves every caller awaiting `getJson` hanging indefinitely while leaking the pending request/socket. Pass the signal to fetch so the timeout actually bounds the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:1:1:1",
+              "relevantFile": "",
+              "relevantLinesStart": 5,
+              "suggestionContent": "`fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` is a no-op and the 5s setTimeout does not bound the request, letting a stalled request hang and leak the pending socket. Wire the signal into the fetch call.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:14:22.111Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -13,3 +13,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "refinement-three-rounds",
+      "action": "Developer adds an ineffective timeout; the hang the first comment raised is not posted again.",
+      "rep": 2,
+      "rounds": [
+        {
+          "case": "refinement-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 136968,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The diff removes the `{ signal: AbortSignal.timeout(5000) }` option from the `fetch(url)` call, so getJson no longer bounds how long the request can run. WHY: A slow or unresponsive remote endpoint now makes the request hang indefinitely (until OS TCP timeout, potentially minutes) instead of failing fast at 5s, so every caller awaiting getJson keeps its request/task and associated resources occupied for the full duration — a burst of such calls can exhaust the connection pool / event-loop slots. HOW: Restore the timeout signal (optionally configurable): `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`",
+              "keep": true,
+              "rationale": "The cited code at src/http/client.ts:2 is `const res = await fetch(url);` with no AbortSignal, and a repo-wide search confirms no timeout/AbortSignal/AbortController exists anywhere and no caller supplies one (getJson is an exported utility with no in-repo guard). The root cause — the fetch call has no explicit time bound — is factually accurate, so a slow/unresponsive endpoint can occupy the request far longer than the prior 5s cap. No upstream guard prevents this and the branch is reachable for any consumer of the exported function, so the finding is not refuted.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|AbortSignal|fetch\\(",
+                    "path": "src"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "findFile",
+                  "args": {
+                    "pattern": "*",
+                    "path": "src/http"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortSignal|AbortController|timeout|getJson|fetch\\(",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "listDir",
+                  "args": {
+                    "maxDepth": 3
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 17,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "linkedById": false,
+              "label": "performance",
+              "marked": false,
+              "text": "In src/http/client.ts, removing `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call means getJson no longer bounds the request, so a slow or unresponsive remote endpoint can hang until the OS TCP timeout (potentially minutes) instead of failing fast at 5s, keeping every caller awaiting getJson and its request/task and associated resources occupied and risking connection pool/event-loop exhaustion. Restore the timeout signal (optionally configurable) as `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`."
+            }
+          ],
+          "claims": [
+            {
+              "id": "timeout-missing",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,5 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });\n+    const res = await fetch(url);\n     if (!res.ok) throw new Error(`HTTP ${res.status}`);\n     return await res.json();\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 429401,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The new `AbortController`/timer is never connected to the request — `fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` at 5s is a no-op. WHY: The intended 5s timeout has no effect, so a slow or unresponsive endpoint can hang until the OS TCP timeout, keeping every caller of getJson and its resources occupied (the exact unbounded-wait the change was meant to prevent). HOW: Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+              "keep": true,
+              "rationale": "Line 5 is literally `const res = await fetch(url);` with no signal option, while lines 2-3 create an AbortController and a 5s timer that calls controller.abort(). Because the signal is never passed to fetch, the abort cannot cancel the request, so the intended 5s timeout is a no-op and getJson can hang until the OS TCP timeout. The described root cause is factually correct and the failure path is reachable for any slow endpoint. The earlier review decision concerns a different change (removal of the old AbortSignal.timeout signal), not this unwired AbortController, so it does not resolve this issue.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 30
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The new AbortController/timer is never connected to the request — `fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` aborts a controller nothing is listening to. WHY: the 5s timeout is a no-op, so a slow or unresponsive endpoint still hangs getJson until the OS TCP timeout (potentially minutes) instead of failing fast, keeping every caller and its resources occupied — the exact failure this change was meant to prevent. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`",
+              "keep": true,
+              "rationale": "Confirmed at src/http/client.ts:5: `fetch(url)` is called without `{ signal: controller.signal }`. The controller created on line 2 is aborted by the timer on line 3, but since its signal is never passed to fetch, the abort has no effect — the 5s timeout is a no-op and getJson can hang until the OS TCP timeout. The root cause and failure path are factually correct and directly present in the current diff. The previous decision (not_implemented) addressed a different fix (AbortSignal.timeout); it does not refute this finding.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 9,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 2,
+            "after": 2
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() aborts a controller nothing is listening to and the 5s timeout is a no-op, leaving getJson to hang until the OS TCP timeout (potentially minutes) instead of failing fast. Pass the signal to fetch so the abort actually cancels the request."
+            },
+            {
+              "sourceIndex": 1,
+              "file": "src/http/client.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() at 5s is a no-op and a slow or unresponsive endpoint can hang until the OS TCP timeout, keeping every caller of getJson and its resources occupied. Pass the signal to fetch so the intended timeout takes effect."
+            }
+          ],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": false
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call means getJson no longer bounds the request, so a slow or unresponsive remote endpoint can hang until the OS TCP timeout (potentially minutes) instead of failing fast at 5s, keeping every caller awaiting getJson and its request/task and associated resources occupied and risking connection pool/event-loop exhaustion. Restore the timeout signal (optionally configurable) as `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:23:01.027Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,11 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url);\n-    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n-    return await res.json();\n+    const controller = new AbortController();\n+    const timer = setTimeout(() => controller.abort(), 5000);\n+    try {\n+        const res = await fetch(url);\n+        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n+        return await res.json();\n+    } finally {\n+        clearTimeout(timer);\n+    }\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 99808,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call means getJson no longer bounds the request, so a slow or unresponsive remote endpoint can hang until the OS TCP timeout (potentially minutes) instead of failing fast at 5s, keeping every caller awaiting getJson and its request/task and associated resources occupied and risking connection pool/event-loop exhaustion. Restore the timeout signal (optionally configurable) as `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:23:01.027Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() aborts a controller nothing is listening to and the 5s timeout is a no-op, leaving getJson to hang until the OS TCP timeout (potentially minutes) instead of failing fast. Pass the signal to fetch so the abort actually cancels the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() at 5s is a no-op and a slow or unresponsive endpoint can hang until the OS TCP timeout, keeping every caller of getJson and its resources occupied. Pass the signal to fetch so the intended timeout takes effect.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -9,3 +9,5 @@\n         clearTimeout(timer);\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 121989,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 6,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call means getJson no longer bounds the request, so a slow or unresponsive remote endpoint can hang until the OS TCP timeout (potentially minutes) instead of failing fast at 5s, keeping every caller awaiting getJson and its request/task and associated resources occupied and risking connection pool/event-loop exhaustion. Restore the timeout signal (optionally configurable) as `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:23:01.027Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() aborts a controller nothing is listening to and the 5s timeout is a no-op, leaving getJson to hang until the OS TCP timeout (potentially minutes) instead of failing fast. Pass the signal to fetch so the abort actually cancels the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() at 5s is a no-op and a slow or unresponsive endpoint can hang until the OS TCP timeout, keeping every caller of getJson and its resources occupied. Pass the signal to fetch so the intended timeout takes effect.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -11,3 +11,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 45761,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 1,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:2:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "In src/http/client.ts, removing `{ signal: AbortSignal.timeout(5000) }` from the `fetch(url)` call means getJson no longer bounds the request, so a slow or unresponsive remote endpoint can hang until the OS TCP timeout (potentially minutes) instead of failing fast at 5s, keeping every caller awaiting getJson and its request/task and associated resources occupied and risking connection pool/event-loop exhaustion. Restore the timeout signal (optionally configurable) as `const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:23:01.027Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() aborts a controller nothing is listening to and the 5s timeout is a no-op, leaving getJson to hang until the OS TCP timeout (potentially minutes) instead of failing fast. Pass the signal to fetch so the abort actually cancels the request.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:2:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The new AbortController/timer is never connected to the request — fetch(url) is called without { signal: controller.signal }, so controller.abort() at 5s is a no-op and a slow or unresponsive endpoint can hang until the OS TCP timeout, keeping every caller of getJson and its resources occupied. Pass the signal to fetch so the intended timeout takes effect.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:30:10.437Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -13,3 +13,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sequence": "refinement-three-rounds",
+      "action": "Developer adds an ineffective timeout; the hang the first comment raised is not posted again.",
+      "rep": 3,
+      "rounds": [
+        {
+          "case": "refinement-three-rounds:round-0",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 195198,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: the 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely. WHY: a slow or non-responsive endpoint leaves the promise (and its underlying connection) pending forever, exhausting the connection pool / event-loop resources for any caller of this helper. HOW: restore the abort signal, e.g. `fetch(url, { signal: AbortSignal.timeout(5000) })` (optionally make the timeout a parameter with a sane default).",
+              "keep": true,
+              "rationale": "The cited line `const res = await fetch(url)` in src/http/client.ts:2 genuinely passes no signal/timeout, and a repo-wide grep finds no AbortSignal.timeout anywhere, so no timeout is applied by the helper or any wrapper. getJson is an exported public helper with no upstream guard. A slow/non-responsive endpoint can therefore leave the fetch promise (and its connection) pending, which is a concrete resource-exhaustion path rather than a generic style or \"missing X\" suggestion. I could not find evidence to refute the root cause (no guard prevents it, the value is not validated elsewhere). The only unverifiable part is the \"was removed\" premise, which is not a refutation.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 60
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "AbortSignal|timeout|fetch\\(",
+                    "path": "src/http"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|AbortSignal\\.timeout",
+                    "excludeTests": true
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 12,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 1,
+            "after": 1
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "linkedById": false,
+              "label": "performance",
+              "marked": false,
+              "text": "The 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely; a slow or non-responsive endpoint leaves the promise and its underlying connection pending forever, exhausting the connection pool and event-loop resources for any caller of this helper. Restore the abort signal, optionally making the timeout a parameter with a sane default."
+            }
+          ],
+          "claims": [
+            {
+              "id": "timeout-missing",
+              "expect": "deliver",
+              "proposed": false,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": true
+            }
+          ],
+          "historyBefore": [],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,5 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });\n+    const res = await fetch(url);\n     if (!res.ok) throw new Error(`HTTP ${res.status}`);\n     return await res.json();\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-1",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 184748,
+          "indexRefs": 0,
+          "verificationEvidence": [
+            {
+              "file": "src/http/client.ts",
+              "claim": "The AbortController created in getJson is never wired into the request: fetch(url) at line 5 is called with no options, so controller.signal is never passed. As a result the abort timer is inert — when the timeout fires nothing is aborted and the request can hang forever (also leaving an unbounded pending connection). Note this is the same root cause as the already-reported existing finding, restated here only for completeness.",
+              "keep": true,
+              "rationale": "Verified in src/http/client.ts: line 2 creates the AbortController, line 3 arms a 5000ms abort timer, but line 5 calls `fetch(url)` with no options, so controller.signal is never wired in. The abort is therefore inert and a slow endpoint can hang the promise indefinitely. The claim is factually accurate and the previous related decision was 'not_implemented' (unresolved), so there is no refutation.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts"
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|AbortController|controller.signal",
+                    "glob": "*.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            },
+            {
+              "file": "src/http/client.ts",
+              "claim": "WHAT: The AbortController's signal is never passed to fetch — `fetch(url)` is called without an options object, so `controller.abort()` after 5000ms cannot cancel the request. WHY: The timeout is a no-op; a slow or non-responsive endpoint still leaves the promise and its underlying connection pending indefinitely, exhausting the connection pool and event-loop resources for every caller of getJson — the exact hang the change was meant to prevent. HOW: Pass the signal to fetch: `await fetch(url, { signal: controller.signal })`.",
+              "keep": true,
+              "rationale": "Verified in src/http/client.ts: line 2 creates an AbortController, line 3 schedules controller.abort() after 5000ms, but line 5 calls fetch(url) with no options object, so controller.signal is never passed to fetch. Aborting a controller whose signal was never attached to a request does not cancel that request, making the timeout a no-op. The root cause is factually correct and the failure path (pending promise/connection on a slow endpoint) is real. The earlier review decision also flagged the missing timeout and remains not_implemented, so nothing supersedes this.",
+              "tools": [
+                {
+                  "name": "readFile",
+                  "args": {
+                    "path": "src/http/client.ts",
+                    "startLine": 1,
+                    "endLine": 40
+                  },
+                  "failed": false
+                },
+                {
+                  "name": "grep",
+                  "args": {
+                    "pattern": "getJson|AbortController|signal|fetch\\(",
+                    "path": "src/http/client.ts"
+                  },
+                  "failed": false
+                }
+              ]
+            }
+          ],
+          "alreadyPosted": [],
+          "sandboxCalls": 14,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": {
+            "before": 2,
+            "after": 2
+          },
+          "delivered": [
+            {
+              "sourceIndex": 0,
+              "file": "src/http/client.ts",
+              "line": 2,
+              "severity": "high",
+              "linkedById": false,
+              "label": "performance",
+              "marked": false,
+              "text": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without an options object, so `controller.abort()` after 5000ms cannot cancel the request and the timeout is a no-op, leaving a slow or non-responsive endpoint to keep the promise and its underlying connection pending indefinitely, exhausting the connection pool and event-loop resources for every caller of getJson. Pass the signal to fetch: `await fetch(url, { signal: controller.signal })`."
+            },
+            {
+              "sourceIndex": 1,
+              "file": "src/http/client.ts",
+              "line": 5,
+              "severity": "high",
+              "linkedById": false,
+              "label": "bug",
+              "marked": false,
+              "text": "The AbortController created in getJson is never wired into the request: `fetch(url)` at line 5 is called with no options, so controller.signal is never passed and the abort timer is inert — when the timeout fires nothing is aborted and the request can hang forever, also leaving an unbounded pending connection. This is the same root cause as the already-reported existing finding, restated here only for completeness."
+            }
+          ],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": true,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": "high",
+              "pass": false
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:3:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely; a slow or non-responsive endpoint leaves the promise and its underlying connection pending forever, exhausting the connection pool and event-loop resources for any caller of this helper. Restore the abort signal, optionally making the timeout a parameter with a sane default.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:37:53.221Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -1,5 +1,11 @@\n export async function getJson(url: string) {\n-    const res = await fetch(url);\n-    if (!res.ok) throw new Error(`HTTP ${res.status}`);\n-    return await res.json();\n+    const controller = new AbortController();\n+    const timer = setTimeout(() => controller.abort(), 5000);\n+    try {\n+        const res = await fetch(url);\n+        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n+        return await res.json();\n+    } finally {\n+        clearTimeout(timer);\n+    }\n }\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-2",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 72356,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 3,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:3:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely; a slow or non-responsive endpoint leaves the promise and its underlying connection pending forever, exhausting the connection pool and event-loop resources for any caller of this helper. Restore the abort signal, optionally making the timeout a parameter with a sane default.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:37:53.221Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without an options object, so `controller.abort()` after 5000ms cannot cancel the request and the timeout is a no-op, leaving a slow or non-responsive endpoint to keep the promise and its underlying connection pending indefinitely, exhausting the connection pool and event-loop resources for every caller of getJson. Pass the signal to fetch: `await fetch(url, { signal: controller.signal })`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The AbortController created in getJson is never wired into the request: `fetch(url)` at line 5 is called with no options, so controller.signal is never passed and the abort timer is inert — when the timeout fires nothing is aborted and the request can hang forever, also leaving an unbounded pending connection. This is the same root cause as the already-reported existing finding, restated here only for completeness.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -9,3 +9,5 @@\n         clearTimeout(timer);\n     }\n }\n+\n+// Review commit 2: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-3",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 56265,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 4,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": false,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:3:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely; a slow or non-responsive endpoint leaves the promise and its underlying connection pending forever, exhausting the connection pool and event-loop resources for any caller of this helper. Restore the abort signal, optionally making the timeout a parameter with a sane default.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:37:53.221Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without an options object, so `controller.abort()` after 5000ms cannot cancel the request and the timeout is a no-op, leaving a slow or non-responsive endpoint to keep the promise and its underlying connection pending indefinitely, exhausting the connection pool and event-loop resources for every caller of getJson. Pass the signal to fetch: `await fetch(url, { signal: controller.signal })`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The AbortController created in getJson is never wired into the request: `fetch(url)` at line 5 is called with no options, so controller.signal is never passed and the abort timer is inert — when the timeout fires nothing is aborted and the request can hang forever, also leaving an unbounded pending connection. This is the same root cause as the already-reported existing finding, restated here only for completeness.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -11,3 +11,5 @@\n }\n \n // Review commit 2: telemetry documentation only.\n+\n+// Review commit 3: telemetry documentation only.\n"
+            }
+          ]
+        },
+        {
+          "case": "refinement-three-rounds:round-4",
+          "family": "rounds",
+          "sandbox": "alive",
+          "ms": 58425,
+          "indexRefs": 0,
+          "verificationEvidence": [],
+          "alreadyPosted": [],
+          "sandboxCalls": 1,
+          "sandboxFailed": 0,
+          "anomalies": {
+            "stepsLe2": true,
+            "zeroToolCalls": false,
+            "zeroStrongEvidenceFiles": false,
+            "zeroCoverage": false,
+            "lowCoverage": false,
+            "lowStrongEvidenceFiles": false
+          },
+          "warnings": 0,
+          "verification": null,
+          "delivered": [],
+          "claims": [
+            {
+              "id": "signal-not-passed-repeat",
+              "expect": "not_deliver",
+              "proposed": true,
+              "truth": "true",
+              "delivered": false,
+              "linked": false,
+              "linkedById": false,
+              "marked": false,
+              "severity": null,
+              "pass": true
+            }
+          ],
+          "historyBefore": [
+            {
+              "suggestionId": "refinement-three-rounds:3:0:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The 5000ms AbortSignal.timeout was removed from the fetch call, so requests now have no timeout and can hang indefinitely; a slow or non-responsive endpoint leaves the promise and its underlying connection pending forever, exhausting the connection pool and event-loop resources for any caller of this helper. Restore the abort signal, optionally making the timeout a parameter with a sane default.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:37:53.221Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:0",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 2,
+              "suggestionContent": "The AbortController's signal is never passed to fetch — `fetch(url)` is called without an options object, so `controller.abort()` after 5000ms cannot cancel the request and the timeout is a no-op, leaving a slow or non-responsive endpoint to keep the promise and its underlying connection pending indefinitely, exhausting the connection pool and event-loop resources for every caller of getJson. Pass the signal to fetch: `await fetch(url, { signal: controller.signal })`.",
+              "label": "performance",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            },
+            {
+              "suggestionId": "refinement-three-rounds:3:1:1",
+              "relevantFile": "src/http/client.ts",
+              "relevantLinesStart": 5,
+              "suggestionContent": "The AbortController created in getJson is never wired into the request: `fetch(url)` at line 5 is called with no options, so controller.signal is never passed and the abort timer is inert — when the timeout fires nothing is aborted and the request can hang forever, also leaving an unbounded pending connection. This is the same root cause as the already-reported existing finding, restated here only for completeness.",
+              "label": "bug",
+              "outcome": "not_implemented",
+              "decidedAt": "2026-10-03T14:40:57.977Z"
+            }
+          ],
+          "changedFiles": [
+            {
+              "filename": "src/http/client.ts",
+              "patch": "@@ -13,3 +13,5 @@\n // Review commit 2: telemetry documentation only.\n \n // Review commit 3: telemetry documentation only.\n+\n+// Review commit 4: telemetry documentation only.\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

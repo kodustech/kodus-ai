@@ -22,6 +22,8 @@ import { FetchChangedFilesStage } from '../stages/fetch-changed-files.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from '../stages/finish-comments.stage';
 import { RequestChangesOrApproveStage } from '../stages/finish-process-review.stage';
 import { InitialCommentStage } from '../stages/initial-comment.stage';
+import { LoadCiEvidenceStage } from '../stages/load-ci-evidence.stage';
+import { RunAnalyzersStage } from '../stages/run-analyzers.stage';
 import { ResolveConfigStage } from '../stages/resolve-config.stage';
 import { ValidateConfigStage } from '../stages/validate-config.stage';
 import { ValidateNewCommitsStage } from '../stages/validate-new-commits.stage';
@@ -47,9 +49,11 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
         private readonly fetchChangedFilesStage: FetchChangedFilesStage,
         @Inject(LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN)
         private readonly loadExternalContextStage: ILoadExternalContextStage,
+        private readonly loadCiEvidenceStage: LoadCiEvidenceStage,
         private readonly initialCommentStage: InitialCommentStage,
         private readonly businessLogicValidationStage: BusinessLogicValidationStage,
         private readonly createSandboxStage: CreateSandboxStage,
+        private readonly runAnalyzersStage: RunAnalyzersStage,
         private readonly agentReviewStage: AgentReviewStage,
         private readonly createPrLevelCommentsStage: CreatePrLevelCommentsStage,
         private readonly validateSuggestionsStage: ValidateSuggestionsStage,
@@ -69,6 +73,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             // Agent is the only engine now: no branch, no engine-selection gate.
             this.businessLogicValidationStage,
             this.createSandboxStage,
+            this.runAnalyzersStage,
             this.agentReviewStage,
             ...this.sharedPostStages(),
         ];
@@ -86,6 +91,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             this.validateConfigStage,
             this.fetchChangedFilesStage,
             this.loadExternalContextStage,
+            this.loadCiEvidenceStage,
             this.initialCommentStage,
         ];
     }

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { Page } from "@components/ui/page";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     getTokenPricingBatch,
     getTokenUsageByDeveloper,
@@ -9,9 +10,9 @@ import {
 import {
     BaseUsageContract,
     ModelPricingInfo,
+    UsageByPrResultContract,
     UsageByTaskAreaResultContract,
     UsageByTaskModelSpanContract,
-    UsageByPrResultContract,
     UsageSummaryContract,
 } from "@services/usage/types";
 import { CookieName } from "src/core/utils/cookie";
@@ -82,11 +83,27 @@ export default async function TokenUsagePage({
         getSelectedDateRange(),
     ]);
 
-    const subscription = await validateOrganizationLicense({ teamId }).catch(
-        () => null,
-    );
+    const [subscription, llmConfigStatus] = await Promise.all([
+        validateOrganizationLicense({ teamId }).catch(() => null),
+        getLLMConfigStatus().catch(() => null),
+    ]);
 
-    const isBYOK = subscription ? isBYOKSubscriptionPlan(subscription) : false;
+    // Which usage bucket the screen queries. The backend records env/managed
+    // LLM usage as isByok=false (the byok=false "managed" view) and BYOK-slot
+    // usage as isByok=true. On self-hosted the plan flag is ALWAYS true, so
+    // keying the view off the plan (isBYOKSubscriptionPlan) queries the empty
+    // BYOK view for an install that actually runs the env/managed LLM — every
+    // card reads zero even though usage IS recorded. Pick the view from the
+    // ACTUAL configured source instead; the license check stays the
+    // precondition and cloud keeps the plan-based flag unchanged.
+    const isSelfHosted =
+        subscription?.subscriptionStatus === "self-hosted" ||
+        subscription?.subscriptionStatus === "licensed-self-hosted";
+    const isBYOK = isSelfHosted
+        ? llmConfigStatus?.source === "byok"
+        : subscription
+          ? isBYOKSubscriptionPlan(subscription)
+          : false;
     const isTrial = subscription?.subscriptionStatus === "trial";
 
     const filters = {
@@ -291,10 +308,10 @@ export default async function TokenUsagePage({
         <Page.Root>
             {/* Full-width like the cockpit (its layout uses the same
                 max-w-full px-6 on header + content). */}
-            <Page.Header className="max-w-full px-6">
+            <Page.Header>
                 <Page.Title>Token Usage</Page.Title>
             </Page.Header>
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <TokenUsagePageClient
                     data={data}
                     byTaskArea={byTaskArea}

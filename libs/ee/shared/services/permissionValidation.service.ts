@@ -34,6 +34,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { createLogger } from '@libs/core/log/logger';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 
 export enum PlanType {
     FREE = 'free',
@@ -47,6 +48,9 @@ export enum ValidationErrorType {
     USER_NOT_LICENSED = 'USER_NOT_LICENSED',
     BYOK_REQUIRED = 'BYOK_REQUIRED',
     PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
+    /** The review would run on the Kodus provider and the org's prepaid
+     *  credit balance is at or below zero. */
+    CREDITS_EXHAUSTED = 'CREDITS_EXHAUSTED',
     NOT_ERROR = 'NOT_ERROR',
 }
 
@@ -82,6 +86,16 @@ export type ExecutionPermissionValidationOptions = {
     usersWithLicense?: UserWithLicense[];
 };
 
+/**
+ * `contextName` the code-review pipeline passes to validateExecutionPermissions
+ * (ValidatePrerequisitesStage.name). The BYOK codeReview-integrity probe runs
+ * ONLY for this context so a broken codeReview credential never blocks the chat
+ * or issues callers, which route their own task's model. Matched by literal to
+ * avoid a code-review → ee/shared import cycle; keep in sync with that stage's
+ * class name.
+ */
+const CODE_REVIEW_PERMISSION_CONTEXT = 'ValidatePrerequisitesStage';
+
 @Injectable()
 export class PermissionValidationService {
     private readonly isCloud: boolean;
@@ -97,6 +111,51 @@ export class PermissionValidationService {
     ) {
         this.isCloud = environment.API_CLOUD_MODE;
         this.isDevelopment = environment.API_DEVELOPMENT_MODE;
+    }
+
+    /**
+     * Prepaid-credit gate for a slot routed by the Kodus provider ("Kodus as
+     * the provider"). Blocks only on a KNOWN non-positive balance: when billing
+     * did not return a number (older billing, transport hiccup) the review
+     * runs and the metering sweep bills it after the fact — a flaky read must
+     * never skip a paying customer's review. Returns null when the gate does
+     * not apply or passes.
+     */
+    private gateKodusCredits(
+        slot: NormalizedModel | undefined,
+        validation: OrganizationLicenseValidationResult,
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): ValidationResult | null {
+        if (!slot || !isPlatformFundedProvider(slot.provider)) {
+            return null;
+        }
+        const balance = validation.creditBalanceUsd;
+        if (typeof balance !== 'number' || !Number.isFinite(balance)) {
+            return null;
+        }
+        if (balance > 0) {
+            return null;
+        }
+        this.logger.warn({
+            message: 'Kodus credits exhausted — review blocked',
+            context: contextName || PermissionValidationService.name,
+            metadata: {
+                organizationAndTeamData,
+                creditBalanceUsd: balance,
+                model: slot.model,
+            },
+        });
+        return {
+            allowed: false,
+            errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+            metadata: {
+                creditBalanceUsd: balance,
+                creditsExhausted: true,
+                model: slot.model,
+            },
+            subscriptionStatus: validation.subscriptionStatus,
+        };
     }
 
     /**
@@ -151,6 +210,81 @@ export class PermissionValidationService {
         options: ExecutionPermissionValidationOptions = {},
     ): Promise<ValidationResult> {
         try {
+            // BYOK integrity — enforced UNIFORMLY (no dev/prod split): if the org
+            // configured a codeReview model but its credential is broken, the review
+            // must NEVER silently fall to the managed default — surface it (reusing
+            // BYOK_REQUIRED) and let them fix the credential. Three deliberate scopes:
+            //   • ONLY the code-review flow. validateExecutionPermissions is shared
+            //     with chat and issues, which route their OWN task's model; a broken
+            //     codeReview credential must not block those unrelated flows.
+            //   • ONLY a POSITIVELY-broken credential (a model was NAMED for
+            //     codeReview but couldn't be routed — the `verdict.modelId && !slot`
+            //     signal resolveTaskSlot itself uses). A config that simply doesn't
+            //     bind codeReview legitimately uses the managed default and passes.
+            //   • ONLY outside an active trial: Kodus foots the managed credits there
+            //     (the trial branch below owns that path), so a trial keeps running.
+            // Resolves the verdict from the ALREADY-LOADED config (no second DB read).
+            // Runs BEFORE the dev short-circuit so a broken BYOK is caught locally
+            // exactly as in production.
+            try {
+                // The code-review pipeline is the only caller that hard-requires a
+                // routable codeReview slot; keep this coupled to that stage's context
+                // by name to avoid a code-review → ee/shared import cycle.
+                const isCodeReviewFlow =
+                    contextName === CODE_REVIEW_PERMISSION_CONTEXT;
+                const storedByok = isCodeReviewFlow
+                    ? await this.getBYOKConfig(organizationAndTeamData)
+                    : undefined;
+                if (storedByok) {
+                    const { slot, verdict } = resolveTaskSlotFromConfig(
+                        storedByok,
+                        LLM_TASK.codeReview,
+                    );
+                    // A NAMED model that produced no slot = incomplete credential
+                    // (the exact "configured but broken" case). An unnamed/absent
+                    // codeReview binding leaves verdict.modelId falsy → not broken.
+                    const credentialBroken = !!verdict?.modelId && !slot;
+                    if (credentialBroken) {
+                        const status = await this.getSubscriptionStatus(
+                            organizationAndTeamData,
+                        );
+                        if (status !== 'trial') {
+                            this.logger.warn({
+                                message:
+                                    'BYOK codeReview model configured but its credential is incomplete — blocking (never falls to the managed default outside trial)',
+                                context:
+                                    contextName ||
+                                    PermissionValidationService.name,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    subscriptionStatus: status,
+                                    unroutableModelId: verdict?.modelId,
+                                },
+                            });
+                            return {
+                                allowed: false,
+                                errorType: ValidationErrorType.BYOK_REQUIRED,
+                                metadata: { byokModelUnresolvable: true },
+                                subscriptionStatus: status,
+                            };
+                        }
+                    }
+                }
+            } catch (error) {
+                // A flaky BYOK read/resolve must NEVER block on its own: we only
+                // block when we POSITIVELY resolved "configured but unroutable". On
+                // an error we can't rule out a working key, so fall through to the
+                // normal flow (which fails open for a flaky read) instead of letting
+                // the outer catch turn a transient read failure into a hard block.
+                this.logger.debug({
+                    message:
+                        'BYOK integrity probe errored; skipping the block and continuing (fail open)',
+                    context: contextName || PermissionValidationService.name,
+                    error: error as Error,
+                    metadata: { organizationAndTeamData },
+                });
+            }
+
             // Development mode always allows
             if (this.isDevelopment) {
                 return { allowed: true };
@@ -227,6 +361,20 @@ export class PermissionValidationService {
                 // so a user who burned their credits and then connected BYOK
                 // must not be blocked by a flaky read — fail open on BYOK.
                 const noByok = !trialByokConfig && !byokLookupFailed;
+
+                // Kodus-routed slot on a trial: the review is paid from the
+                // org's prepaid credits, not from trial credits — so the
+                // credit balance is the gate, and the trial-credit gate below
+                // is skipped (the slot is real BYOK, `noByok` is false).
+                const trialCreditsGate = this.gateKodusCredits(
+                    trialByokConfig,
+                    validation,
+                    organizationAndTeamData,
+                    contextName,
+                );
+                if (trialCreditsGate) {
+                    return trialCreditsGate;
+                }
 
                 // Divergence alarm: billing still reports BYOK (its `byok` flag
                 // is plan-derived, so a `*_byok` trial keeps it set) while the
@@ -387,6 +535,17 @@ export class PermissionValidationService {
                 organizationAndTeamData,
                 LLM_TASK.codeReview,
             );
+
+            // 3b. Kodus-routed slot: prepaid credits must cover the review.
+            const creditsGate = this.gateKodusCredits(
+                byokConfig,
+                validation,
+                organizationAndTeamData,
+                contextName,
+            );
+            if (creditsGate) {
+                return creditsGate;
+            }
 
             // 4. Managed plans use our keys
             // if (identifiedPlanType === PlanType.MANAGED) {
@@ -804,6 +963,26 @@ export class PermissionValidationService {
         });
 
         this.logRoutingVerdict(organizationAndTeamData, task, verdict);
+
+        // A verdict that NAMED a model but produced no slot is a silent degrade to
+        // the managed default — the model's credential is incomplete (missing the
+        // auth material its provider needs). `logRoutingVerdict` stays quiet here
+        // (it only flags a BLOCKED verdict, i.e. no modelId), so surface it: the
+        // org configured this model and expects it to run, not the managed default.
+        if (verdict?.modelId && !slot) {
+            this.logger.warn({
+                message: `[byok-routing] "${task}" selected ${verdict.modelId} but its credential is incomplete — degraded to the managed default`,
+                context: 'resolveTaskSlot',
+                metadata: {
+                    organizationId:
+                        organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    task,
+                    resolvedModelId: verdict.modelId,
+                },
+            });
+        }
+
         return slot;
     }
 

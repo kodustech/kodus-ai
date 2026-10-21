@@ -31,6 +31,7 @@ import type {
     LlmTask,
 } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { asServedSlot } from '@libs/llm/served-slot';
 import type { RequestContext } from '@libs/llm/routing-strategy';
 import {
     runStructuredReviewCall,
@@ -100,7 +101,7 @@ export interface LlmRequest extends Omit<BaseReviewCallParams, 'byokConfig' | 'u
  */
 function resolveSlot(req: LlmRequest): NormalizedModel | undefined {
     if (req.byokConfig) {
-        return req.byokConfig;
+        return asServedSlot(req.byokConfig);
     }
     if (req.config && req.task) {
         return resolveTaskSlot(req.config, req.task, { ctx: req.ctx }).slot;

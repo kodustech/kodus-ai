@@ -11,17 +11,61 @@ import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { REGISTRY } from '@libs/llm/providers';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
+import {
+    NON_REASONING_TRAITS,
+    resolveCompatibleReasoningTraits,
+} from '@libs/llm/providers/kernel/reasoning-traits';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 const logger = createLogger('ReasoningOptions');
 
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
-export const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
-    none: 0,
-    low: 5_000,
-    medium: 15_000,
-    high: 40_000,
-};
+// Re-exported from the kernel leaf so existing importers keep working; the
+// value itself lives in ONE place now (kernel/effort-budget.ts).
+export { EFFORT_TO_BUDGET } from '@libs/llm/providers/kernel/effort-budget';
+
+/**
+ * The DEFAULT reasoning effort for a model when its slot leaves `reasoningEffort`
+ * unset — derived from the provider module's own `reasoningTraits`, so it is
+ * FAMILY-driven (a new opus/sonnet/kimi inherits it with no code change) and
+ * applied UNIFORMLY to both the env-managed and BYOK slot paths through the one
+ * `resolveModelConfig` funnel. This is the tuning default that used to sit (dead)
+ * in the model catalog — now it lives with the provider, exactly like
+ * `temperaturePolicy`, and reaches BOTH config paths instead of just BYOK.
+ *
+ * Rule: a model that THINKS BY DEFAULT gets 'medium' unless the slot overrides;
+ * models that don't (budget/opt-in reasoners, non-reasoning) stay unset so the
+ * caller's own default (e.g. the review's 'none') decides. No per-model table.
+ */
+export function defaultReasoningEffortFor(
+    slot: NormalizedModel | undefined,
+): ReasoningEffort | undefined {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) return undefined;
+    try {
+        const module = REGISTRY.get(provider);
+        const traits =
+            module.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
+        if (!traits.thinksByDefault) return undefined;
+
+        // `thinksByDefault` is a FACT; imposing a family default is a POLICY.
+        // Reading one as the other is what made the fact unsafe to declare — a
+        // provider whose omission is harmless (Gemini) could not state that it
+        // reasons without us overriding its own default level.
+        //
+        // The policy needs exactly one answer: would omitting turn reasoning OFF?
+        // That is NOT derivable — `reasoning(cfg,'none')` emitting nothing looks
+        // neutral, but OpenAI defaults gpt-5.1's effort to `none`, so omitting
+        // there disables. So the module DECLARES it, and an undeclared model
+        // stays on the safe side (impose; costs tokens, never disables).
+        return traits.omittingDisablesReasoning === false ? undefined : 'medium';
+    } catch {
+        // A lookup failure must never break the call — fall back to the caller's
+        // own default (matches resolveStructuredPlan's best-effort posture).
+        return undefined;
+    }
+}
 
 /**
  * Build provider-specific reasoning `providerOptions` for a generateText call.
@@ -44,13 +88,51 @@ export function buildProviderOptions(
     if (input?.reasoningConfigOverride) {
         try {
             const parsed = JSON.parse(input.reasoningConfigOverride);
-            const override = autoWrapProviderOverride(
-                parsed,
+            const override = normalizeOverrideSpelling(
+                autoWrapProviderOverride(
+                    parsed,
+                    input?.byokProvider,
+                    input?.modelName,
+                ),
                 input?.byokProvider,
+                input?.modelName,
             );
+            const routing = buildOpenRouterRouting({
+                ...input,
+                // A hand-written override IS a request for reasoning when it
+                // names reasoning at all — gated the same way as the effort
+                // path below.
+                wantsReasoning:
+                    JSON.stringify(parsed).includes('reasoning') &&
+                    !!resolveCompatibleReasoningTraits(input?.modelName ?? '')
+                        ?.thinksByDefault,
+            });
             return {
-                ...buildOpenRouterRouting(input),
+                ...routing,
                 ...override,
+                // A plain spread REPLACES the routing's `openrouter` object
+                // with the override's, so an override naming only `reasoning`
+                // came out with no `provider` block at all — losing the very
+                // `require_parameters` it needed, on the routing lottery this
+                // exists to escape.
+                //
+                // The guard is what keeps this scoped: `buildOpenRouterRouting`
+                // returns {} for every provider that is not OpenRouter, so
+                // `routing.openrouter` is undefined and the spread above is the
+                // whole answer — an Anthropic or Gemini override is untouched.
+                //
+                // An `openrouter.provider` block the user wrote themselves
+                // still wins outright. Someone who pins their own routing has
+                // already solved the problem, and the two production overrides
+                // that do this set `require_parameters` by hand.
+                ...(routing.openrouter && override.openrouter
+                    ? {
+                          openrouter: {
+                              ...routing.openrouter,
+                              ...override.openrouter,
+                          },
+                      }
+                    : {}),
             };
         } catch {
             // Invalid JSON — fall through to effort-based mapping
@@ -62,7 +144,17 @@ export function buildProviderOptions(
         input?.reasoningEffort,
         input?.modelName,
     );
-    const routing = buildOpenRouterRouting(input);
+    const routing = buildOpenRouterRouting({
+        ...input,
+        // An effort above 'none' is a request for reasoning — but only a model
+        // the table CONFIRMS reasons may have that request made binding, or
+        // the routing has nowhere left to send it.
+        wantsReasoning:
+            !!input?.reasoningEffort &&
+            input.reasoningEffort !== 'none' &&
+            !!resolveCompatibleReasoningTraits(input?.modelName ?? '')
+                ?.thinksByDefault,
+    });
     const merged = mergeOpenRouterOptions(reasoning, routing);
     logger.log({
         message: '[thinking] providerOptions resolved',
@@ -90,6 +182,8 @@ function buildOpenRouterRouting(input?: {
     byokProvider?: BYOKProvider | string;
     openrouterProviderOrder?: string[];
     openrouterAllowFallbacks?: boolean;
+    /** The slot asked for reasoning AND the model is a confirmed reasoner. */
+    wantsReasoning?: boolean;
 }): Record<string, any> {
     if (!input || input.byokProvider !== BYOKProvider.OPEN_ROUTER) return {};
 
@@ -100,12 +194,47 @@ function buildOpenRouterRouting(input?: {
     const hasFallbacksOverride =
         typeof input.openrouterAllowFallbacks === 'boolean';
 
-    if (!hasOrder && !hasFallbacksOverride) return {};
+    if (!hasOrder && !hasFallbacksOverride && !input.wantsReasoning) {
+        return {};
+    }
 
     const providerPayload: Record<string, any> = {};
     if (hasOrder) providerPayload.order = order;
     if (hasFallbacksOverride) {
         providerPayload.allow_fallbacks = input.openrouterAllowFallbacks;
+    }
+    // A reasoning effort the routing can silently discard is not a setting, it
+    // is a coin flip — but forcing the point breaks the models that have no
+    // reasoning-capable upstream at all, so it is gated.
+    //
+    // OpenRouter picks an upstream PER REQUEST, weighted by price, and the
+    // parameters it routes on are `tools`, `response_format` and `verbosity`.
+    // Reasoning is not among them, and the docs say what happens then: "the
+    // request is still routed to that model and the parameter is ignored". No
+    // error, no warning, a normal answer that simply did not think. Measured,
+    // not inferred: the same z-ai/glm-5.2 request returned 135 reasoning
+    // tokens on one call and 0 on the next, minutes apart.
+    //
+    // `require_parameters` turns that soft preference into a hard one. It is
+    // sent ONLY for a model the family table confirms reasons, and that limit
+    // is measured too — applied to every slot with an effort, a live run came
+    // back with:
+    //
+    //     qwen/qwen3-coder — No endpoints found that can handle the requested
+    //     parameters.
+    //
+    // Not a degraded answer: no answer. There is no reasoning-capable upstream
+    // for that model, so the hard preference removed every candidate and the
+    // review would have failed outright. A silently ignored parameter costs
+    // the user a setting; a dead request costs them the review.
+    //
+    // Models that reason WITHOUT being declared (nemotron, grok and mimo all
+    // did on the same run) stay on the soft preference. They lose the
+    // guarantee; they never lose the call.
+    //
+    // https://openrouter.ai/docs/features/provider-routing
+    if (input.wantsReasoning) {
+        providerPayload.require_parameters = true;
     }
     return { openrouter: { provider: providerPayload } };
 }
@@ -114,22 +243,37 @@ function buildOpenRouterRouting(input?: {
  * The Vercel AI SDK `providerOptions` namespace key for a BYOK provider id,
  * resolved from its provider module (the single source) — never a hand-kept map.
  */
-function providerOptionsNamespace(provider?: BYOKProvider | string): string | undefined {
+function providerOptionsNamespace(
+    provider?: BYOKProvider | string,
+    model?: string,
+): string | undefined {
     if (!provider) return undefined;
     const id = String(provider);
     return REGISTRY.has(id)
-        ? REGISTRY.get(id).providerOptionsNamespace?.(id)
+        ? REGISTRY.get(id).providerOptionsNamespace?.(id, model)
         : undefined;
 }
 
 /** Keys that count as "already namespaced" at the top level of an override:
  *  every namespace the registry's modules declare, plus `langsmith` (a telemetry
- *  namespace, not a provider). Derived so a new provider is recognized for free. */
+ *  namespace, not a provider). Derived so a new provider is recognized for free.
+ *  Model-less on purpose: this asks "is this key A namespace", not "is it THIS
+ *  model's namespace", and every model-dependent answer (Vertex's `anthropic`)
+ *  is already contributed by the module that owns it.
+ *
+ *  Aliases count too. Recognising a key is not the same question as choosing one:
+ *  we wrap under the canonical namespace, but a paste that already carries a key
+ *  the SDK reads must be left alone. Missing an alias is the worst outcome here —
+ *  a CORRECT override gets wrapped a second time and disappears. */
 function knownNamespaceKeys(): Set<string> {
     const keys = new Set<string>(['langsmith']);
     for (const id of REGISTRY.ids()) {
-        const ns = REGISTRY.get(id).providerOptionsNamespace?.(id);
+        const mod = REGISTRY.get(id);
+        const ns = mod.providerOptionsNamespace?.(id);
         if (ns) keys.add(ns);
+        for (const alias of mod.providerOptionsNamespaceAliases?.(id) ?? []) {
+            keys.add(alias);
+        }
     }
     return keys;
 }
@@ -145,6 +289,7 @@ function knownNamespaceKeys(): Set<string> {
 function autoWrapProviderOverride(
     override: unknown,
     provider?: BYOKProvider | string,
+    model?: string,
 ): Record<string, any> {
     if (!override || typeof override !== 'object' || Array.isArray(override)) {
         return {};
@@ -157,10 +302,36 @@ function autoWrapProviderOverride(
     const alreadyNamespaced = keys.some((k) => known.has(k));
     if (alreadyNamespaced) return obj;
 
-    const ns = providerOptionsNamespace(provider);
+    const ns = providerOptionsNamespace(provider, model);
     if (!ns) return obj; // Unknown provider — pass through and let the SDK decide.
 
     return { [ns]: obj };
+}
+
+/**
+ * The override with the provider's wire spellings renamed to its adapter's
+ * option names, under the namespace this slot's adapter reads (see
+ * `normalizeReasoningOverride`). Other namespaces are left as pasted.
+ */
+function normalizeOverrideSpelling(
+    override: Record<string, any>,
+    provider?: BYOKProvider | string,
+    model?: string,
+): Record<string, any> {
+    if (!provider) return override;
+    const id = String(provider);
+    const mod = REGISTRY.has(id) ? REGISTRY.get(id) : undefined;
+    const ns = providerOptionsNamespace(provider, model);
+    const options = ns ? override[ns] : undefined;
+    if (
+        !mod?.normalizeReasoningOverride ||
+        !options ||
+        typeof options !== 'object' ||
+        Array.isArray(options)
+    ) {
+        return override;
+    }
+    return { ...override, [ns]: mod.normalizeReasoningOverride(ns, options) };
 }
 
 /** Deep-merge the openrouter namespace so reasoning + routing co-exist. */
@@ -219,7 +390,11 @@ export function buildReasoningProviderOptions(
     const providerModule = REGISTRY.get(id);
     if (!providerModule.reasoning) return {};
     return providerModule.reasoning(
-        { provider: id, model: modelName ?? '', apiKey: '' } as ProviderBuildConfig,
+        {
+            provider: id,
+            model: modelName ?? '',
+            apiKey: '',
+        } as ProviderBuildConfig,
         effort ?? 'none',
     );
 }

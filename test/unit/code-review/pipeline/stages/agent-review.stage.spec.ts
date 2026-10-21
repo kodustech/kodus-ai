@@ -46,9 +46,7 @@ jest.mock(
         // resolved slot / managed default). Split out of byok-to-vercel into
         // byok-defaults and re-exported; the stage calls it before building.
         trialDefaultModel: jest.fn().mockReturnValue(undefined),
-        // Used by resolveSecondaryPassModel when platform OpenAI key is absent.
-        getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
-        byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        // The model builder the stage calls to construct the LanguageModel.
         buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
         // Platform (non-BYOK) model seam used by the summary/secondary paths.
         buildPlatformModel: jest
@@ -993,7 +991,10 @@ describe('AgentReviewStage', () => {
             try {
                 const result = await (stage as any).deduplicateSuggestions(suggestions, 42);
                 expect(result.suggestions).toHaveLength(1); // merged
-                expect(result.suggestions[0].suggestionContent).toContain('Also found in');
+                expect(result.suggestions[0].alsoFoundIn).toHaveLength(1);
+                expect(result.suggestions[0].suggestionContent).toBe(
+                    suggestions[0].suggestionContent,
+                );
             } finally {
                 if (origKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
                 else process.env.API_OPEN_AI_API_KEY = origKey;
@@ -1198,7 +1199,10 @@ describe('AgentReviewStage', () => {
                 const file0 = result.suggestions.find(
                     (s: any) => s.relevantFile === 'src/file-0.ts',
                 );
-                expect(file0.suggestionContent).toContain('src/file-1.ts');
+                expect(file0.alsoFoundIn).toEqual([
+                    expect.stringMatching(/^src\/file-1\.ts:/),
+                ]);
+                expect(file0.suggestionContent).toBe(suggestions[0].suggestionContent);
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_OPEN_AI_API_KEY;
@@ -1311,13 +1315,16 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // suggestion 0 should have "Also found in" for suggestion 1's location
+                // The formatter receives prose separately from merged locations.
                 expect(result.suggestions).toHaveLength(1);
                 expect(result.suggestions[0].relevantFile).toBe(
                     'src/file-0.ts',
                 );
-                expect(result.suggestions[0].suggestionContent).toContain(
-                    'src/file-1.ts',
+                expect(result.suggestions[0].alsoFoundIn).toEqual([
+                    expect.stringMatching(/^src\/file-1\.ts:/),
+                ]);
+                expect(result.suggestions[0].suggestionContent).toBe(
+                    suggestions[0].suggestionContent,
                 );
             } finally {
                 if (origKey === undefined) {

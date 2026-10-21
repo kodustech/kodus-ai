@@ -304,6 +304,39 @@ describe('ValidatePrerequisitesStage', () => {
         ).not.toHaveBeenCalled();
     });
 
+    // Billing answers 409 for an org that already has a license, and startTrial
+    // treats 409 as success — so a canceled org re-ran the heal on every PR,
+    // logged "POST trial failed" and a false "Auto-provisioned" (204/day).
+    it('does not provision a trial for an org whose license exists but is canceled', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            {
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+                metadata: {
+                    validation: {
+                        valid: false,
+                        subscriptionStatus: 'canceled',
+                    },
+                },
+            },
+        );
+        mockParametersService.findByKey.mockImplementation((key: string) => {
+            if (key === ParametersKey.PLATFORM_CONFIGS) {
+                return Promise.resolve({
+                    configValue: { finishOnboard: true },
+                });
+            }
+            return Promise.resolve(undefined);
+        });
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
     it('does not provision a trial when onboarding is not finished', async () => {
         const context = makeContext();
 
@@ -707,6 +740,35 @@ describe('ValidatePrerequisitesStage', () => {
                     .body;
             expect(body).toContain('Kodus-paid PR reviews');
             expect(body).toContain('/byok');
+            expect(body).not.toContain('trial has ended');
+        });
+
+        it('posts a top-up comment (not BYOK-required, not trial-ended) when Kodus credits are exhausted', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+                    subscriptionStatus: 'active',
+                    metadata: { creditsExhausted: true, creditBalanceUsd: 0 },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Kodus credits');
+            expect(body).toContain('/byok#kodus');
+            expect(body).not.toContain('BYOK Configuration Required');
             expect(body).not.toContain('trial has ended');
         });
 

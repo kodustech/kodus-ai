@@ -153,12 +153,8 @@ describe('KodyRulesTools.createKodyRule', () => {
         const result = await runCreate({ repositoryId: 'repo-1' });
         const structured = (result as any).structuredContent;
 
-        expect(structured.prUrl).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
-        expect(structured.link).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
+        expect(structured.prUrl).toBe('https://github.com/org/repo/pull/42');
+        expect(structured.link).toBe('https://github.com/org/repo/pull/42');
         expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
     });
 });
@@ -289,4 +285,68 @@ describe('KodyRulesTools.updateKodyRule', () => {
         expect(structured.success).toBe(false);
         expect(structured.message).toMatch(/not found/i);
     });
+
+    it('looks the rule up inside the requested organization only', async () => {
+        (mockKodyRulesService.findById as jest.Mock).mockResolvedValue(null);
+
+        await runUpdate();
+
+        expect(mockKodyRulesService.findById).toHaveBeenCalledWith(
+            'rule-789',
+            'org-1',
+        );
+        expect(
+            mockKodyRulesService.updateRuleWithLogging,
+        ).not.toHaveBeenCalled();
+    });
+});
+
+describe('KodyRulesTools rule listings', () => {
+    let tools: KodyRulesTools;
+    const findByOrganizationId = jest.fn();
+
+    beforeEach(async () => {
+        findByOrganizationId.mockReset();
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                KodyRulesTools,
+                {
+                    provide: KODY_RULES_SERVICE_TOKEN,
+                    useValue: { findByOrganizationId },
+                },
+                { provide: CentralizedConfigPrService, useValue: {} },
+                {
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+                    useValue: {},
+                },
+            ],
+        }).compile();
+        tools = module.get(KodyRulesTools);
+    });
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s answers an organization that never saved a rule with an empty list',
+        async (_name, tool, args) => {
+            findByOrganizationId.mockResolvedValue(null);
+
+            const result: any = await tool().execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.structuredContent).toEqual({
+                success: true,
+                count: 0,
+                data: [],
+            });
+        },
+    );
 });

@@ -1,13 +1,16 @@
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
-import { estimateTokenCount } from '@libs/common/utils/document';
+// The real tokenizer, not the bytes/4 approximation this used to import from
+// libs/common. libs/common cannot import libs/llm — llm already depends on
+// common and that arrow stays one-directional — so the swap happens HERE, at
+// the only call site, which is free to import either.
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 export interface TokenChunkingOptions {
-    model?: LLMModelProvider | string;
+    model?: string;
     data: any[];
     usagePercentage?: number;
     defaultMaxTokens?: number;
@@ -232,7 +235,7 @@ export class TokenChunkingService {
      * Gets the maximum token limit for a model
      */
     private getMaxTokensForModel(
-        model?: LLMModelProvider | string,
+        model?: string,
         inputMaxTokens: number = 64000,
     ): number {
         if (!model) {
@@ -250,7 +253,7 @@ export class TokenChunkingService {
      */
     private countTokensForItem(
         item: any,
-        model?: LLMModelProvider | string,
+        model?: string,
     ): number {
         try {
             // Converts item to string for counting
@@ -265,12 +268,12 @@ export class TokenChunkingService {
                     return encoder.encode(text).length;
                 } catch (error) {
                     // If fails, use estimation
-                    return estimateTokenCount(text);
+                    return estimateTextTokens(text);
                 }
             }
 
             // For other models, use estimation
-            return estimateTokenCount(text);
+            return estimateTextTokens(text);
         } catch (error) {
             this.logger.warn({
                 message:
@@ -343,21 +346,21 @@ export class TokenChunkingService {
     /**
      * Checks if it is an OpenAI model
      */
-    private isOpenAIModel(model: LLMModelProvider | string): boolean {
+    private isOpenAIModel(model: string): boolean {
         const openaiModels = [
-            LLMModelProvider.OPENAI_GPT_4O,
-            LLMModelProvider.OPENAI_GPT_4O_MINI,
-            LLMModelProvider.OPENAI_GPT_4_1,
-            LLMModelProvider.OPENAI_GPT_O4_MINI,
+            'openai:gpt-4o',
+            'openai:gpt-4o-mini',
+            'openai:gpt-4.1',
+            'openai:o4-mini',
         ];
 
-        return openaiModels.includes(model as LLMModelProvider);
+        return openaiModels.includes(model);
     }
 
     /**
      * Gets the OpenAI model name for tiktoken
      */
-    private getOpenAIModelName(model: LLMModelProvider | string): string {
+    private getOpenAIModelName(model: string): string {
         // The OpenAI enum values are `openai:<tiktoken-name>` (e.g.
         // `openai:gpt-4o`), so the tiktoken model name is just the id's tail —
         // no lookup table needed. Only reached for isOpenAIModel() members,

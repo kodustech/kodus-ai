@@ -80,7 +80,6 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
                 ignorePaths: [],
                 v2PromptOverrides: {},
             });
-        jest.spyOn(service as any, 'getGlobalIgnorePaths').mockResolvedValue([]);
         jest
             .spyOn(service as any, 'sanitizeV2PromptOverrides')
             .mockReturnValue({});

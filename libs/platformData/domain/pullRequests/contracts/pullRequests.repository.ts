@@ -8,6 +8,7 @@ import {
     IPullRequests,
     IFile,
     ISuggestion,
+    ISuggestionByPR,
     IPullRequestWithDeliveredSuggestions,
     IPullRequestUserMapping,
     SuggestionCountsBySeverity,
@@ -178,6 +179,51 @@ export interface IPullRequestsRepository {
         prNumber: number,
         deliveryStatus: DeliveryStatus,
     ): Promise<ISuggestion[]>;
+    /**
+     * Like `findSuggestionsByPRAndFilename`, but for several files in one
+     * query and scoped by `deliveryStatus` — the multi-file read `PrDecisionStore`
+     * needs (issue #1313). Filters by `repository.fullName` (unlike
+     * `findSuggestionsByPR`, which matches on `number` alone and can cross
+     * repository boundaries when two repos in the same org happen to share a
+     * PR number).
+     */
+    findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]>;
+    /**
+     * The most recent `limit` file-level suggestions with this
+     * `deliveryStatus` on the PR, across ALL its files. Repository-scoped like
+     * `findSuggestionsByPRAndFilenames`, but not narrowed to the files of the
+     * current diff: a finding can repeat an earlier one that was anchored on
+     * another file (code moved between rounds).
+     */
+    findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]>;
+    /**
+     * PR-LEVEL suggestions (stored separately in `prLevelSuggestions`, not
+     * nested under `files[]` — today exclusively kody-rules PULL_REQUEST-scope
+     * findings, which judge the diff as a whole and carry no `relevantFile`).
+     * Needed alongside `findSuggestionsByPRAndFilenames` for a complete
+     * `PrDecisionStore` read (issue #1313 Fase 1b) — a file-scoped query alone
+     * always misses these.
+     */
+    findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        /** Most recent N kept (default 5). */
+        limit?: number,
+    ): Promise<ISuggestionByPR[]>;
     findSuggestionsByRuleId(
         ruleId: string,
         organizationId: string,
@@ -236,8 +282,22 @@ export interface IPullRequestsRepository {
         totalChanges: number;
     }>;
 
-    /** Generates a stable id for file/suggestion sub-documents. */
+    /**
+     * Server-side sum of the UTF-8 bytes embedded in `files[].patch` for one
+     * PR (`$strLenBytes`). Lets the caller enforce the aggregate embedded-diff
+     * budget against ground truth after a write instead of trusting a
+     * potentially stale in-memory read of `existingPR.files` (#1841).
+     */
+    computeEmbeddedPatchBytes(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<number>;
+
+    /** Generates a stable ObjectId-shaped id for file sub-documents. */
     newSubDocumentId(): string;
+
+    /** Generates a UUID-shaped id accepted by the fine-tuning suggestion ingest. */
+    newSuggestionId(): string;
 
     addSuggestionToFile(
         fileId: string,

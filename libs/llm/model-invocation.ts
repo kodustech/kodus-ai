@@ -33,12 +33,14 @@ import {
     type ResolveAgentModelOptions,
 } from '@libs/llm/agent-model';
 import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
+import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
 import {
     resolveSlotCallOptions,
     type SlotCallOptions,
 } from '@libs/llm/slot-call-options';
 import {
     buildProviderOptions,
+    defaultReasoningEffortFor,
     type ReasoningEffort,
 } from '@libs/llm/reasoning-options';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
@@ -54,12 +56,17 @@ export interface ModelInvocation {
     providerOptions: Record<string, unknown>;
 }
 
-export interface ResolveModelInvocationOptions
-    extends ResolveAgentModelOptions {
+export interface ResolveModelInvocationOptions extends ResolveAgentModelOptions {
     /** Names the reasoning-options log line + telemetry (usually the agent/functionId). */
     runName: string;
     /** Model-build options forwarded to the builder — notably `structuredOutputs`. */
     modelOptions?: ByokModelOptions;
+    /** Force reasoning OFF for this call (effort 'none', override dropped). Set by
+     *  the structured executor when `planStructuredCall` → 'suppress-thinking' — a
+     *  disable-able model that would otherwise 400 on a forced tool_choice while
+     *  thinking. The per-model decision lives in the plan (providers own the
+     *  traits); this primitive just obeys the flag. */
+    suppressReasoning?: boolean;
     /** Effort tier applied when the slot itself leaves `reasoningEffort` unset.
      *  Defaults to `'low'` — the standard every agent used before this primitive
      *  existed. Pass `'none'` to opt a consumer out of default reasoning. */
@@ -88,6 +95,7 @@ export function resolveModelConfig(
     const {
         runName,
         modelOptions,
+        suppressReasoning,
         // The standard fallback effort lives HERE, not at each call-site — a
         // consumer only passes it to deviate (e.g. 'none' to disable).
         reasoningEffortDefault = 'low',
@@ -99,17 +107,58 @@ export function resolveModelConfig(
 
     const resolvedSlot = slot ?? undefined;
 
+    // The env/managed path routes an `undefined` slot, so the provider lives in
+    // the env config, not the slot. Resolve it ONCE here (only when there's no
+    // BYOK slot) and reuse it for both the model build and the reasoning default —
+    // so a failing env-LLM (e.g. a suspended Moonshot/Kimi key) reports its REAL
+    // provider in the byok-error notification instead of "unknown".
+    const envDescriptor = resolvedSlot ? undefined : envManagedReasoningDescriptor();
+
     const model = resolveAgentModel(resolvedSlot, {
         ...agentModelOptions,
-        provider: agentModelOptions.provider ?? resolvedSlot?.provider,
+        provider:
+            agentModelOptions.provider ??
+            resolvedSlot?.provider ??
+            envDescriptor?.provider,
         modelOptions,
     });
 
+    // The env/managed path routes an `undefined` slot (no BYOK), so its provider +
+    // model live in the env config, NOT the slot. Recover them for the reasoning
+    // computation ONLY — so an env-configured reasoner (Opus/Kimi/GLM) gets the
+    // SAME family-default thinking a connected BYOK slot of that model would. The
+    // model BUILD still flows through resolveAgentModel above (it reads the env
+    // itself); this descriptor only feeds the reasoning-effort default and the
+    // provider-options namespace. A real BYOK slot always wins over it.
+    const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
+        resolvedSlot ?? envDescriptor;
+
+    // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
+    // the structured executor sets it when its `planStructuredCall` returns
+    // 'suppress-thinking' (a disable-able model that would otherwise 400 with a
+    // forced tool_choice + thinking). The WHOLE per-model decision lives in that
+    // plan (providers own the traits); this primitive stays provider-agnostic and
+    // only obeys the boolean. Agent loops and 'as-is'/'reroute-json' plans never
+    // set it, so their reasoning is untouched.
+    const effectiveReasoningEffort: ReasoningEffort = suppressReasoning
+        ? 'none'
+        : (resolvedSlot?.reasoningEffort ??
+          // Family default from the provider's own reasoningTraits (thinks-by-
+          // default → 'medium'), applied to BOTH env and BYOK slots. Replaces the
+          // dead per-model catalog default; the slot's explicit effort still wins,
+          // and a non-reasoning model falls through to the caller's own default.
+          defaultReasoningEffortFor(
+              reasoningSlot as NormalizedModel | undefined,
+          ) ??
+          reasoningEffortDefault);
+
     const providerOptions = buildProviderOptions(runName, telemetryMetadata, {
-        reasoningEffort: resolvedSlot?.reasoningEffort ?? reasoningEffortDefault,
-        reasoningConfigOverride: resolvedSlot?.reasoningConfigOverride,
-        byokProvider: resolvedSlot?.provider,
-        modelName: resolvedSlot?.model,
+        reasoningEffort: effectiveReasoningEffort,
+        reasoningConfigOverride: suppressReasoning
+            ? undefined
+            : resolvedSlot?.reasoningConfigOverride,
+        byokProvider: reasoningSlot?.provider,
+        modelName: reasoningSlot?.model,
         openrouterProviderOrder,
         openrouterAllowFallbacks,
     });
@@ -119,7 +168,10 @@ export function resolveModelConfig(
         // `defaultModelOverride` (in agentModelOptions) already reached the model
         // build via resolveAgentModel; honor it here too so the env/managed-default
         // NAME matches the model actually built (no slot → the override wins).
-        modelName: getModelName(resolvedSlot, agentModelOptions.defaultModelOverride),
+        modelName: getModelName(
+            resolvedSlot,
+            agentModelOptions.defaultModelOverride,
+        ),
         callOptions: resolveSlotCallOptions(resolvedSlot),
         providerOptions,
     };

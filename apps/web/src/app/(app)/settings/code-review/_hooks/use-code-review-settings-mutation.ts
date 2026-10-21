@@ -18,6 +18,16 @@ import {
     type FormattedCodeReviewConfig,
     type FormattedGlobalCodeReviewConfig,
 } from "../_types";
+import {
+    getChangedConfigMask,
+    pickChangedConfig,
+} from "../_utils/changed-config";
+import {
+    CodeReviewSettingsConflictError,
+    CodeReviewSettingsValidationError,
+    expectedCustomAgentsRevisions,
+    withoutListRevisions,
+} from "../_utils/settings-save-conflict";
 import { mergeFormattedCodeReviewConfigForScope } from "../_utils/settings-shell";
 
 type SavePreparationResult = {
@@ -85,7 +95,12 @@ export const useCodeReviewSettingsMutation = (params: {
         });
     };
 
-    const invalidateRelatedQueries = () => {
+    const invalidateRelatedQueries = (awaitConfigRefetch = false) => {
+        queryClient.invalidateQueries({
+            queryKey: generateQueryKey(PARAMETERS_PATHS.CODE_REVIEW_SCOPES, {
+                params: { teamId },
+            }),
+        });
         // Use "all" instead of "inactive" so the active query refetches
         // from the backend after save. The backend's formatLevel() computes
         // overriddenValue/overriddenLevel correctly — the optimistic cache
@@ -101,7 +116,7 @@ export const useCodeReviewSettingsMutation = (params: {
             }),
             refetchType: "all",
         });
-        void queryClient.invalidateQueries({
+        const configRefetch = queryClient.invalidateQueries({
             queryKey: generateQueryKey(
                 PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
                 {
@@ -119,6 +134,8 @@ export const useCodeReviewSettingsMutation = (params: {
             }),
             refetchType: "all",
         });
+
+        return awaitConfigRefetch ? configRefetch : Promise.resolve();
     };
 
     const saveSettings = async (
@@ -127,12 +144,62 @@ export const useCodeReviewSettingsMutation = (params: {
     ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
-        const result = await createOrUpdateCodeReviewParameter(
+        const { language: _language, ...formattedConfig } = formData;
+        // `formState.defaultValues` is the snapshot of the last render and
+        // lags behind a reset; the control holds the live defaults.
+        const changedConfig = pickChangedConfig(
             prepared.codeReviewConfig,
-            teamId,
-            repositoryId,
-            directoryId,
+            getChangedConfigMask(formattedConfig, form.control._defaultValues),
         );
+
+        // Nothing in the code-review config changed (e.g. only the language,
+        // which `prepare` already saved).
+        if (Object.keys(changedConfig).length === 0) {
+            form.reset(withoutListRevisions(prepared.savedFormData));
+            invalidateRelatedQueries();
+            return {};
+        }
+
+        // A save of the custom agents or knowledge names the revision of
+        // each list it was made from; the server refuses it if the list
+        // changed since.
+        const expectedRevisions = expectedCustomAgentsRevisions(
+            formattedConfig,
+            changedConfig,
+        );
+
+        // A save that writes neither list calls exactly as before.
+        const result = await (expectedRevisions === undefined
+            ? createOrUpdateCodeReviewParameter(
+                  changedConfig,
+                  teamId,
+                  repositoryId,
+                  directoryId,
+              )
+            : createOrUpdateCodeReviewParameter(
+                  changedConfig,
+                  teamId,
+                  repositoryId,
+                  directoryId,
+                  undefined,
+                  { expectedRevisions },
+              ));
+
+        // Someone else saved the lists this save was made from: nothing was
+        // written, and the form keeps the user's edits.
+        if ((result as { error?: unknown })?.error === 409) {
+            throw new CodeReviewSettingsConflictError();
+        }
+
+        const refused = (result as { messages?: unknown })?.messages;
+        if (
+            (result as { error?: unknown })?.error === 400 &&
+            (Array.isArray(refused) || typeof refused === "string")
+        ) {
+            throw new CodeReviewSettingsValidationError(
+                ([] as unknown[]).concat(refused).map(String),
+            );
+        }
 
         if ((result as { error?: string })?.error) {
             throw new Error(
@@ -140,14 +207,20 @@ export const useCodeReviewSettingsMutation = (params: {
             );
         }
 
+        const savedFormData = withoutListRevisions(prepared.savedFormData);
+        // A save of the lists changed their revisions: resolve once the
+        // config carrying the new ones is loaded, or the next edit would
+        // start from the old ones and be refused as if someone else saved.
+        const awaitConfigRefetch = expectedRevisions !== undefined;
+
         if (isCentralizedPrResponse(result)) {
-            form.reset(prepared.savedFormData);
-            invalidateRelatedQueries();
+            form.reset(savedFormData);
+            await invalidateRelatedQueries(awaitConfigRefetch);
             return { centralizedPr: result };
         }
 
-        form.reset(prepared.savedFormData);
-        invalidateRelatedQueries();
+        form.reset(savedFormData);
+        await invalidateRelatedQueries(awaitConfigRefetch);
 
         return {};
     };

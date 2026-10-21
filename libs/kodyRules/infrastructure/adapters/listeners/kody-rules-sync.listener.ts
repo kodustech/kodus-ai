@@ -188,10 +188,10 @@ export class KodyRulesSyncListener {
     async handleIdeRulesSyncDisabled(
         event: IdeRulesSyncDisabledEvent,
     ): Promise<void> {
-        if (!event?.repositoryId) {
+        if (!event?.repositoryIds?.length) {
             this.logger.warn({
                 message:
-                    'Received ide-rules-sync.disabled event without repositoryId, skipping',
+                    'Received ide-rules-sync.disabled event without repositories, skipping',
                 context: KodyRulesSyncListener.name,
                 metadata: { event },
             });
@@ -206,7 +206,7 @@ export class KodyRulesSyncListener {
             message: `Handling ide-rules-sync.disabled event with action=${action}`,
             context: KodyRulesSyncListener.name,
             metadata: {
-                repositoryId: event.repositoryId,
+                repositoryIds: event.repositoryIds,
                 organizationAndTeamData: event.organizationAndTeamData,
                 action,
             },
@@ -218,18 +218,18 @@ export class KodyRulesSyncListener {
                 // stay ACTIVE.
                 return;
             case 'pause':
-                await this.kodyRulesSyncService.pauseAllIdeSyncRulesForRepository(
+                await this.kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories(
                     {
                         organizationAndTeamData: event.organizationAndTeamData,
-                        repositoryId: event.repositoryId,
+                        repositoryIds: event.repositoryIds,
                     },
                 );
                 return;
             case 'delete':
-                await this.kodyRulesSyncService.purgeAllIdeSyncRulesForRepository(
+                await this.kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories(
                     {
                         organizationAndTeamData: event.organizationAndTeamData,
-                        repositoryId: event.repositoryId,
+                        repositoryIds: event.repositoryIds,
                     },
                 );
                 return;

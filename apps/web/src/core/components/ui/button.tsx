@@ -12,13 +12,17 @@ const buttonVariants = cva(
         "rounded-xl font-semibold transition text-start shrink-0 text-sm w-fit",
         "bg-(--button-background) text-(--button-foreground) [&_svg]:size-(--icon-size) ring-card-lv3",
         "[&[aria-haspopup=dialog]]:ring-1",
-        "button-focused:ring-3!",
+        // The focus ring uses the dedicated `--color-ring` token, not the
+        // structural `card-lv3`: at #30304b on a card the ring measures 1.38:1,
+        // far under the 3:1 WCAG 2.1 requires of a focus indicator, so it was
+        // thick and invisible at the same time.
+        "button-focused:ring-3! button-focused:ring-ring",
         "button-hover:brightness-120 button-active:brightness-120",
         "cursor-pointer",
         "button-loading:cursor-wait",
         "button-disabled:cursor-not-allowed group-disabled/link:cursor-not-allowed",
         "group-disabled/link:[&:hover]:brightness-100!",
-        "group-button-focused/link:ring-3!",
+        "group-button-focused/link:ring-3! group-button-focused/link:ring-ring",
     ),
     {
         variants: {

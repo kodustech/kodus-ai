@@ -89,15 +89,14 @@ export class KodusIssuesTools {
             },
             execute: wrapToolHandler(
                 async (args: InputType): Promise<ListIssuesResponse> => {
-                    const issues =
-                        await this.codeManagementService.listIssues({
-                            organizationAndTeamData: {
-                                organizationId: args.organizationId,
-                                teamId: args.teamId,
-                            },
-                            repository: args.repository,
-                            filters: args.filters,
-                        });
+                    const issues = await this.codeManagementService.listIssues({
+                        organizationAndTeamData: {
+                            organizationId: args.organizationId,
+                            teamId: args.teamId,
+                        },
+                        repository: args.repository,
+                        filters: args.filters,
+                    });
 
                     return {
                         success: true,

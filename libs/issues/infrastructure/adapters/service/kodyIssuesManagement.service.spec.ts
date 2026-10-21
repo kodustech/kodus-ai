@@ -15,6 +15,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 describe('KodyIssuesManagementService', () => {
     let service: KodyIssuesManagementService;
@@ -143,6 +144,61 @@ describe('KodyIssuesManagementService', () => {
         service = module.get<KodyIssuesManagementService>(
             KodyIssuesManagementService,
         );
+    });
+
+    describe('createNewIssues — issue text', () => {
+        it('describes the issue with the full explanation, not the short comment body', async () => {
+            pullRequestsServiceMock.findByNumberAndRepositoryName = jest
+                .fn()
+                .mockResolvedValue({ number: 42, user: { id: 'user-1' } });
+            issuesServiceMock.create.mockResolvedValue({ uuid: 'i-1' });
+
+            await service.createNewIssues(
+                {
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    pullRequest: mockPullRequest,
+                } as any,
+                [
+                    {
+                        ...mockSuggestion,
+                        suggestionContent: 'Short body.',
+                        fullExplanation:
+                            'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                    } as any,
+                ],
+            );
+
+            expect(issuesServiceMock.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Add null safety check',
+                    description:
+                        'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                }),
+            );
+        });
+    });
+
+    // #2097: a finding the repeat check kept off the PR is stored not sent,
+    // with the schema's default implementationStatus; the earlier comment
+    // already tracks it, so it never becomes an issue.
+    it('leaves a suggestion discarded as a repeat out of the issues', async () => {
+        const valid = await (service as any).filterValidSuggestionsFromPrByStatus([
+            {
+                path: 'src/main.ts',
+                suggestions: [
+                    mockSuggestion,
+                    {
+                        ...mockSuggestion,
+                        id: 'suggestion-repeat',
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                    },
+                ],
+            },
+        ]);
+
+        expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
     });
 
     it('should be defined', () => {

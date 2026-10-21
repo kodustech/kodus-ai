@@ -145,6 +145,26 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     payload.pullRequestNumber,
                 ));
 
+            // null when the provider can't serve the PR (deleted, revoked
+            // access) — nothing to verify against.
+            if (!platformPr) {
+                this.logger.warn({
+                    message: `PR#${payload.pullRequestNumber} not available on the platform; implementation check did not run`,
+                    context: ImplementationVerificationProcessor.name,
+                    metadata: {
+                        organizationAndTeamData:
+                            payload.organizationAndTeamData,
+                        prNumber: payload.pullRequestNumber,
+                        repositoryId: payload.repository.id,
+                        jobId,
+                    },
+                });
+                await this.markCompleted(jobId, {
+                    reason: 'PLATFORM_PR_NOT_FOUND',
+                });
+                return;
+            }
+
             const teamAutomations = await this.teamAutomationService.find({
                 team: { uuid: payload.organizationAndTeamData.teamId },
                 status: true,
@@ -156,13 +176,18 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     AutomationType.AUTOMATION_CODE_REVIEW,
             );
 
-            // Retrieve last analyzed commit from the last successful code review execution
+            // Retrieve last analyzed commit from the last code review that
+            // posted its comments. PARTIAL_ERROR posts them too (only an
+            // auxiliary stage failed), and its suggestions are the ones to check.
             const lastExecution =
                 await this.automationExecutionService.findLatestExecutionByFilters(
                     {
                         pullRequestNumber: payload.pullRequestNumber,
                         repositoryId: payload.repository.id,
-                        status: AutomationStatus.SUCCESS,
+                        status: [
+                            AutomationStatus.SUCCESS,
+                            AutomationStatus.PARTIAL_ERROR,
+                        ],
                         teamAutomation: { uuid: teamAutomation?.uuid },
                     },
                 );

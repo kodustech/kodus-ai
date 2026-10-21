@@ -10,8 +10,10 @@ export interface IContextReferenceRepository {
         contextReference: IContextReference,
     ): Promise<ContextReferenceEntity | undefined>;
 
+    /** Newest first. `limit` caps the rows read from the database. */
     find(
         filter?: Partial<IContextReference>,
+        limit?: number,
     ): Promise<ContextReferenceEntity[]>;
 
     findOne(

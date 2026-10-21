@@ -37,17 +37,19 @@ export class GetCliReviewByIdUseCase
     ) {}
 
     async execute(input: GetCliReviewByIdInput): Promise<CliReviewDetail> {
-        const execution = await this.automationExecutionService.findById(
-            input.executionUuid,
-        );
+        // The organization is part of the query: findById loads no relations,
+        // so an ownership check on the loaded entity never ran and any
+        // execution uuid was readable across organizations.
+        const [execution] = input.organizationId
+            ? ((await this.automationExecutionService.find({
+                  uuid: input.executionUuid,
+                  teamAutomation: {
+                      team: { organization: { uuid: input.organizationId } },
+                  },
+              } as any)) ?? [])
+            : [];
 
         if (!execution || execution.origin !== 'cli') {
-            throw new NotFoundException('CLI review not found');
-        }
-
-        const ownerOrgId = (execution as any).teamAutomation?.team?.organization
-            ?.uuid;
-        if (ownerOrgId && ownerOrgId !== input.organizationId) {
             throw new NotFoundException('CLI review not found');
         }
 

@@ -1,40 +1,39 @@
-# Format eval
+# format
 
-Measures the review pipeline's **suggestion content formatter**
-(`format-suggestion-content.ts` / `format-prompt.ts`) — the secondary pass that
-turns WHAT/WHY/HOW scaffolding into natural prose.
+> - **Answers:** Does the formatter turn each finding into prose the reader can act on — no WHAT/WHY/HOW labels, its code names kept, in the team's language and length?
+> - **Runs:** nightly when the formatter or its cases change (`evals/nightly-evals.js`), weekly on every tier-0 model against its floor (`evals/weekly.js`), and on every PR in `evals/wiring-smoke.js` against the scripted model.
+> - **Run it:** `node evals/format/run.js --model=<id>`
+> - **Gate:** `--gate` fails below the model's floor in `evals/format/targets.json`.
+> - **Cost:** one formatter call per case (155), the batch of one review each.
 
-## Why
+The review stage hands the findings of a review to `formatSuggestionContent`
+(`libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts`),
+which rewrites the finder's WHAT/WHY/HOW text into the comment a developer
+reads, and falls back to stripping the labels locally when the model call
+fails. The stage runs it inside `formatAndShapeSuggestions`
+(`format-and-shape-suggestions.ts`), which then gives each comment its shape
+(the impact-and-action fallback, the scaffolding strip, and no code block, no
+title repeat, two sentences unless the team wrote its own guideline). The eval
+calls that same function and scores what it leaves in each finding; it supplies
+only the findings and the team's settings.
 
-Cosmetic vs dedup/severity, but under BYOK a weak model can:
-- strip technical identifiers (function names, etc.)
-- leave scaffold labels
-- fail to parse → prod keeps original (silent no-op)
+- `batches.json`: the findings of 31 reviews, as nine models wrote them on public
+  PRs (the run ends recorded for `evals/parse`, the one with the most findings
+  per model and PR). `node evals/format/build-cases.js` rebuilds it.
+- `variants.js`: the configurations production runs it under, from the teams'
+  `language_config` (en-US, pt-BR, zh-CN, es-ES cover nearly every team that
+  sets one) and a team writing guideline, the kind of real edit teams make.
+- `checks.js`: what a shipped comment owes the reader, each a rule of the
+  formatter prompt (`format-prompt.ts`) or of the configuration — no labels, at
+  least half the cited code names still in the text or the title above it, no
+  code block, the title not repeated, the sentence limit, the word limit where
+  the team set none (#2157), no line number, a title over the ceiling
+  rewritten rather than cut, the language.
 
-## Metrics (automated — CI-friendly)
+A finding counts as right when it passes every check. The checks read the text;
+none judges whether the claim is still the same one.
 
-| Metric | Meaning |
-|---|---|
-| `auto_pass_rate` | non-empty + no WHAT/WHY/HOW + idents kept ≥0.5 + length ≤3× |
-| `ident_recall_mean` | fraction of original code-ish tokens still present |
-| `no_scaffold_rate` | fraction without WHAT/WHY/HOW labels |
-| `parse_fail` | unparseable JSON (prod keeps original) |
-
-## Run
-
-```bash
-# CI
-node evals/format/run.js --mock=perfect --gate
-node evals/format/run.js --mock=identity          # baseline: scaffold still present
-
-# Live
-node evals/format/run.js --model=gpt-5.4-mini --gate
-```
-
-Datasets: `evals/secondary/datasets/`.
-
-## Exit codes
-
-- `0` pass
-- `1` quality gate
-- `2` infra
+Under the scripted model (`--model=eval-fake`) the call returns nothing usable
+and the local fallback ships. It only removes the labels, so there it is scored
+on the labels, the code names and the code block, not on length or language.
+`--limit` takes the configurations in turn, so `--limit=5` runs one of each.

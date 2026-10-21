@@ -33,13 +33,14 @@ import {
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import { agentModelIdentity } from '@libs/llm/model-identity';
-import { systemCacheControl } from '@libs/llm/system-cache';
-import {
-    markLastToolForCache,
-    markLatestUserForCache,
-} from '@libs/llm/prompt-cache';
+import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import {
+    hardTimeout,
+    timeoutSignal,
+    AGENT_TIMEOUT_MS,
+} from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -108,6 +109,10 @@ export interface AgentLoopParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Cancellation / hard-timeout signal (the caller composes parent + timeout). */
     signal?: AbortSignal;
+    /** Wall-clock ceiling for the whole loop. Defaults to AGENT_TIMEOUT_MS.
+     *  Separate from `signal`: the signal is a request the provider may ignore,
+     *  this is the deadline that holds when it does. */
+    hardTimeoutMs?: number;
     /** Fallback max-output when the slot omits one (else provider default). */
     maxOutputTokens?: number;
     /** Override the slot's sampling temperature. */
@@ -133,7 +138,7 @@ export async function runAgentLoopCall(
         organizationId,
         reporter,
         telemetryMetadata,
-        signal,
+        signal: callerSignal,
     } = params;
 
     // ── access + tuning + reasoning: the SAME montagem the one-shot uses ──
@@ -152,6 +157,22 @@ export async function runAgentLoopCall(
         openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
         openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
     });
+    // The deadline, decided once and used twice: the signal asks the provider to
+    // stop, the race below stops waiting for it.
+    const hardTimeoutMs = params.hardTimeoutMs ?? AGENT_TIMEOUT_MS;
+    // Self-arm when the caller supplies nothing. Threading a signal from the
+    // caller was always allowed and no review caller does it, so the loop ran
+    // with `abortSignal: undefined` — no cancellation at all. The race added
+    // below frees the PIPELINE, but only an abort frees the REQUEST: without
+    // one the socket stays open and the BYOK limiter never gets its slot back
+    // (its release is a `finally` on a task that never settles), so a stalled
+    // call would keep spending a concurrency slot for the life of the worker.
+    //
+    // The one-shot path has always self-armed (`timeoutSignal(...)` in
+    // structured-review-call). This gives the loop the same floor, and the 5s
+    // grace inside `hardTimeout` is what orders them: abort first, race only if
+    // the abort was ignored.
+    const signal = callerSignal ?? timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
     const maxOutputTokens =
         inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
@@ -160,30 +181,20 @@ export async function runAgentLoopCall(
     const providerOptions = params.providerOptions ?? inv.providerOptions;
 
     // ── prompt-cache breakpoints (provider concern; only a real multi-step loop
-    // pays back the write premium). systemCacheControl returns the Anthropic
-    // inline marker for providers that honor it, undefined otherwise (no-op). ──
-    const cacheHint =
-        loop.maxSteps > 1
-            ? systemCacheControl({
-                  provider: slot?.provider,
-                  // Fall back to the built model for the no-slot (managed / env
-                  // default) path: systemCacheControl keys its no-provider branch
-                  // off the model NAME (isAnthropicModel), so a self-hosted env
-                  // default on an Anthropic model still gets the system-prompt
-                  // cache hint — parity with the old core-agent-loop `?? input.model`.
-                  model: slot?.model ?? inv.model,
-              })
-            : undefined;
-    const systemArg =
-        cacheHint && system
-            ? ({ role: 'system', content: system, providerOptions: cacheHint } as any)
-            : system;
-    const callMessages = cacheHint
-        ? markLatestUserForCache(messages, cacheHint)
-        : messages;
-    const callTools = cacheHint
-        ? markLastToolForCache(loop.tools, cacheHint)
-        : loop.tools;
+    // pays back the write premium). The helper asks the model's provider whether
+    // it honors inline markers and stamps the three breakpoints when it does;
+    // otherwise (implicit-cache/unknown providers, or a single-step call) the
+    // inputs pass through untouched. Fall back to the built model for the no-slot
+    // (managed / env default) path so a self-hosted Anthropic env default still
+    // gets the hint (systemCacheControl keys its no-provider branch off the name).
+    const { systemArg, callMessages, callTools } = applyCacheBreakpoints({
+        system,
+        messages,
+        tools: loop.tools,
+        maxSteps: loop.maxSteps,
+        provider: slot?.provider,
+        model: slot?.model ?? inv.model,
+    });
 
     // ── ONE usage identity for the span — billing keys from the resolved slot ──
     const identity = agentModelIdentity(slot);
@@ -233,7 +244,8 @@ export async function runAgentLoopCall(
     // ── ONE observability span — records the run's aggregate usage. Absent port
     // (a bare unit test) runs directly, still gets the model/loop, just no span. ──
     const observability = getLlmObservability();
-    return observability
+    const run = () =>
+        observability
         ? observability.runAiSdkLLMInSpan<any>({
               spanName: spanName ?? runName,
               runName,
@@ -244,10 +256,23 @@ export async function runAgentLoopCall(
               // resolveTaskSlot (route = the LlmTask, not the tier).
               route: slot?.route,
               usedFallback: slot?.usedFallback,
+              // Same condition that turns the SDK telemetry on above.
+              traced: !!telemetryMetadata,
               attrs: spanAttrs,
               exec,
           })
         : exec();
+
+    // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
+    // OpenAI-compatible proxies accept the connection, ignore the abort and
+    // never answer, and an `await` on that settles never — so nothing throws,
+    // no `catch` runs, and the caller waits forever with its span open and its
+    // sandbox lease held. The one-shot path has had this net since it was
+    // written (`llm-call.ts`); the loop, where reviews actually run, did not.
+    //
+    // Not a new ceiling: AGENT_TIMEOUT_MS was always the intended maximum. This
+    // is what makes it true when the provider declines to cooperate.
+    return hardTimeout(run(), hardTimeoutMs, runName);
 }
 
 // Re-export so callers can build a fixed model handle if needed (parity with

@@ -1,8 +1,26 @@
 {
     "schema_version": 1,
-    "generated_at": "2026-08-11T19:06:02.620Z",
+    "generated_at": "2026-10-17T16:28:20.970Z",
     "source": "manual",
     "features": {
+        "custom-agents": {
+            "name": "Custom review agents",
+            "stage": "beta",
+            "description": "Define your own reviewers with their instructions, the files they look at, the tools they may use and how their comments appear, and run them next to Kody on every pull request.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "deterministic-evidence": {
+            "name": "Deterministic evidence in review",
+            "stage": "beta",
+            "description": "Kody reads the checks your own CI already ran and runs a small set of security rules over the changed lines, then folds those findings into the same review instead of reporting them separately.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "github-enterprise-server-pat": {
             "name": "GitHub Enterprise Server (PAT auth)",
             "stage": "beta",
@@ -19,6 +37,15 @@
             "audience": [
                 "cloud",
                 "self-hosted"
+            ]
+        },
+        "kodus-provider": {
+            "name": "Kodus as a provider (prepaid credits)",
+            "stage": "alpha",
+            "description": "Pick a curated model and let Kodus run it on its own provider accounts — no API key to manage, usage billed from a prepaid credit balance you top up as you go.",
+            "documentation_url": "how_to_use/en/byok#kodus-credits",
+            "audience": [
+                "cloud"
             ]
         },
         "kodus-trace-review-context": {

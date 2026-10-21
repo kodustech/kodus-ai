@@ -124,4 +124,17 @@ describe("/api/proxy/api/[...path]", () => {
         const methods = fetchMock.mock.calls.map((c) => c[1].method);
         expect(methods).toEqual(["PUT", "PATCH", "DELETE"]);
     });
+
+    it.each([[["mcp"]], [["mcp", "issues"]], [["MCP"]]])(
+        "never forwards the @Public() MCP endpoints (%j)",
+        async (segments) => {
+            authMock.mockResolvedValue(null);
+            const res = await POST(
+                mockReq("POST", `/${segments.join("/")}`),
+                ctx(segments),
+            );
+            expect(res.status).toBe(404);
+            expect(fetchMock).not.toHaveBeenCalled();
+        },
+    );
 });

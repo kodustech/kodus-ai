@@ -7,6 +7,7 @@ import {
 } from "@services/permissions/types";
 import { hasPermission } from "src/core/utils/permission-map";
 
+import { isPlatformFundedProvider } from "./_data/platform-funded";
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
 import type {
     BYOKConfig,
@@ -27,6 +28,7 @@ export const TASK_LABELS: Record<LlmTask, string> = {
     businessValidation: "Business Rules",
     prSummary: "PR Summary",
     conversation: "Chat",
+    customAgent: "Custom Agents",
 };
 
 /**
@@ -45,6 +47,8 @@ export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
         "Validates a diff against your task's acceptance criteria.",
     prSummary: "Writes the summary at the top of each pull request.",
     conversation: "Powers the Kody chat assistant in the dashboard and IDE.",
+    customAgent:
+        "Runs the review agents your team created. Each one reads the PRs its file patterns match, writes findings and verifies them.",
 };
 
 /** Resolve a model id to its human label within a pool, falling back to the raw
@@ -212,39 +216,6 @@ export const shouldShowBYOKMissingKeyTopbar = (params: {
 };
 
 /**
- * Mirror of `supportsSamplingParams` in `libs/llm/anthropic-model-traits.ts`
- * — keep aligned.
- *
- * Anthropic removed temperature / top_p / top_k from Claude 4.7 onward:
- * sending one is a 400 that fails the whole request. The backend already
- * withholds the value, so this only decides whether we show a field that
- * could not take effect. An unrecognized Claude is treated as new (same bias
- * as the backend) — a model we can't place is far more likely to be newer
- * than one of the handful of legacy ids.
- */
-export const anthropicRejectsTemperature = (
-    provider?: string,
-    model?: string,
-): boolean => {
-    if (provider !== "anthropic") return false;
-    if (!model?.trim()) return true;
-
-    let name = model.trim().toLowerCase();
-    const colon = name.indexOf(":");
-    if (colon > -1) name = name.slice(colon + 1);
-    if (name.startsWith("anthropic.")) name = name.slice("anthropic.".length);
-    name = name.split("@")[0].replace(/-\d{8}$/, "");
-
-    // Claude 2.x / 3.x, and 4 through 4.5, still accept sampling params — as
-    // does 4.6, the last generation before they were removed.
-    const acceptsSamplingParams =
-        /^claude-[23](\b|[-.])/.test(name) ||
-        /^claude-(opus|sonnet|haiku)-4(-[0-6])?$/.test(name);
-
-    return !acceptsSamplingParams;
-};
-
-/**
  * Obfuscate an API key for display so shoulder-surfing and screen-sharing
  * can't leak the secret. Keeps a short prefix + suffix so the user can
  * still recognize which key is stored.
@@ -261,6 +232,7 @@ export const maskKey = (key?: string): string => {
  * so the same provider reads with the same colour everywhere on the screen.
  */
 export const PROVIDER_AVATAR: Record<string, string> = {
+    kodus: "bg-primary-light/15 text-primary-light",
     anthropic: "bg-pink-500/15 text-pink-300",
     anthropic_compatible: "bg-pink-500/15 text-pink-300",
     openai: "bg-emerald-500/15 text-emerald-300",
@@ -278,10 +250,12 @@ export const PROVIDER_AVATAR: Record<string, string> = {
 
 /** Avatar tint for a provider, falling back to a neutral card tint. */
 export const providerAvatarTint = (provider?: string): string =>
-    (provider && PROVIDER_AVATAR[provider]) ?? "bg-card-lv2 text-text-secondary";
+    (provider && PROVIDER_AVATAR[provider]) ??
+    "bg-card-lv2 text-text-secondary";
 
 /** Single-letter glyph per provider for the avatar badge. */
 const PROVIDER_LETTER: Record<string, string> = {
+    kodus: "K",
     anthropic: "A",
     anthropic_compatible: "A",
     openai: "O",
@@ -312,4 +286,46 @@ export const providerFromModel = (model?: string): string | undefined => {
     if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3"))
         return "openai";
     return undefined;
+};
+
+/**
+ * Does anything the router can actually pick resolve to a Kodus-routed model?
+ *
+ * Having a Kodus credential is not the same as using it. An org can connect
+ * Kodus, leave its own key as the org default, and never send a request
+ * through Kodus — in which case an empty prepaid balance pauses nothing, and
+ * an alarm about paused reviews is simply wrong.
+ *
+ * "Reachable" means the org default, the fallback, or a per-task override. A
+ * Kodus model that merely sits in the list does not count.
+ */
+export const routesThroughKodus = (
+    config: BYOKConfig | null | undefined,
+): boolean => {
+    const routing = config?.routing;
+    if (!routing) return false;
+
+    const kodusCredentialIds = new Set(
+        (config?.credentials ?? [])
+            .filter((credential) =>
+                isPlatformFundedProvider(credential.provider),
+            )
+            .map((credential) => credential.id),
+    );
+    if (!kodusCredentialIds.size) return false;
+
+    const kodusModelIds = new Set(
+        (config?.models ?? [])
+            .filter((model) => kodusCredentialIds.has(model.credentialId))
+            .map((model) => model.id),
+    );
+    if (!kodusModelIds.size) return false;
+
+    const reachable = [
+        routing.defaultModelId,
+        routing.fallbackModelId,
+        ...Object.values(routing.taskOverrides ?? {}),
+    ].filter(Boolean) as string[];
+
+    return reachable.some((modelId) => kodusModelIds.has(modelId));
 };

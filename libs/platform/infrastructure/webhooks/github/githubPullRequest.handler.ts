@@ -7,8 +7,10 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    isHeavyReviewCommand
+    isHeavyReviewCommand,
+    parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -456,7 +458,13 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 return;
             }
 
-            const isStartCommand = isReviewCommand(comment.body);
+            // `@kody -v <agent>` reviews the PR again with that custom agent only.
+
+            const customAgentSlug = parseCustomAgentCommand(comment.body);
+
+            const isStartCommand =
+
+                isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
@@ -572,6 +580,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
                             heavy: isHeavyReviewCommand(comment.body),
+                            onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||
                                 pullRequest ||
@@ -616,7 +625,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     event === 'issue_comment') &&
                 !hasMarker &&
                 !isStartCommand &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    isNewThreadReply(PlatformType.GITHUB, event, payload))
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;

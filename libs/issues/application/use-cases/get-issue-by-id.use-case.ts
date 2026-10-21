@@ -56,7 +56,14 @@ export class GetIssueByIdUseCase implements IUseCase {
     async execute(id: string): Promise<IIssueDetails | null> {
         const issue = await this.issuesService.findById(id);
 
-        if (!issue || !issue.repository?.id) {
+        // The repository-scoped check below builds its subject from the
+        // caller's organization, never the issue's, so an issue of another
+        // organization must be filtered out here.
+        if (
+            !issue ||
+            !issue.repository?.id ||
+            issue.organizationId !== this.request.user?.organization?.uuid
+        ) {
             return null;
         }
 

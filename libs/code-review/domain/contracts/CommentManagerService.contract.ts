@@ -52,6 +52,8 @@ export interface ICommentManagerService {
         prPreview?: boolean,
         externalPromptContext?: any,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
+        prLevelCommentResults?: CommentResult[],
     ): Promise<string>;
 
     updateOverallComment(
@@ -70,6 +72,8 @@ export interface ICommentManagerService {
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
+        singleAgentRun?: boolean,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -87,6 +91,9 @@ export interface ICommentManagerService {
         language: string,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -111,6 +118,8 @@ export interface ICommentManagerService {
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{ commentResults: Array<CommentResult> }>;
 
     findLastReviewComment(
@@ -143,5 +152,6 @@ export interface ICommentManagerService {
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
     ): Promise<void>;
 }

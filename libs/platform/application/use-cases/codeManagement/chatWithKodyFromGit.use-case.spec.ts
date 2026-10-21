@@ -16,6 +16,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
         addReactionToComment: jest.Mock;
         getPullRequestReviewComment: jest.Mock;
         createResponseToComment: jest.Mock;
+        createIssueComment: jest.Mock;
+        updateIssueComment: jest.Mock;
+        updateResponseToComment: jest.Mock;
+        removeReactionsFromComment: jest.Mock;
         getCloneParams: jest.Mock;
     };
     let conversationAgentUseCase: {
@@ -31,6 +35,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         acquire: jest.Mock;
         release: jest.Mock;
     };
+    let pullRequestsService: { findByNumberAndRepositoryId: jest.Mock };
 
     beforeEach(() => {
         codeManagementService = {
@@ -47,6 +52,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
             addReactionToComment: jest.fn().mockResolvedValue(undefined),
             getPullRequestReviewComment: jest.fn().mockResolvedValue([]),
             createResponseToComment: jest.fn().mockResolvedValue({ id: 999 }),
+            createIssueComment: jest.fn().mockResolvedValue({ id: 998 }),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateResponseToComment: jest.fn().mockResolvedValue(undefined),
+            removeReactionsFromComment: jest.fn().mockResolvedValue(undefined),
             getCloneParams: jest.fn().mockResolvedValue(undefined),
         };
         conversationAgentUseCase = {
@@ -71,12 +80,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
             release: jest.fn().mockResolvedValue(undefined),
         };
 
+        pullRequestsService = {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+        };
+
         useCase = new ChatWithKodyFromGitUseCase(
             codeManagementService as any,
             conversationAgentUseCase as any,
             businessRulesValidationAgentUseCase as any,
             permissionValidationService as any,
             leaseManager as any,
+            pullRequestsService as any,
         );
     });
 
@@ -199,6 +213,55 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     }),
                 }),
             }),
+        );
+    });
+
+    // Regression: __NO_TASK_MCP__ is an internal marker the agent returns
+    // when no task-management MCP is connected — it must NEVER reach a PR
+    // comment verbatim. The pipeline path already guards it; this is the
+    // explicit @kody -v business-logic command path, which had no guard.
+    // Exercises the private handler directly — the full webhook dispatch
+    // (ack/reaction/posting branching) is covered by the other tests in this
+    // file; this one isolates the translation itself.
+    it('translates the NO_TASK_MCP sentinel into a readable message instead of returning it raw', async () => {
+        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
+            '__NO_TASK_MCP__',
+        );
+
+        const response = await (useCase as any).handleBusinessLogicValidation(
+            {
+                prepareContext: { userQuestion: '@kody -v business-logic' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                thread: undefined,
+            },
+        );
+
+        expect(response).not.toBe('__NO_TASK_MCP__');
+        expect(response).not.toContain('__NO_TASK_MCP__');
+        expect(response).toMatch(/no task-management mcp/i);
+    });
+
+    it('passes through a real business-logic result unchanged', async () => {
+        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
+            '## Business Rules Validation\n\nStatus: Issues Found',
+        );
+
+        const response = await (useCase as any).handleBusinessLogicValidation(
+            {
+                prepareContext: { userQuestion: '@kody -v business-logic' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                thread: undefined,
+            },
+        );
+
+        expect(response).toBe(
+            '## Business Rules Validation\n\nStatus: Issues Found',
         );
     });
 
@@ -363,7 +426,9 @@ describe('ChatWithKodyFromGitUseCase', () => {
             expect(
                 codeManagementService.createResponseToComment,
             ).toHaveBeenCalledWith(
-                expect.objectContaining({ body: 'an answer' }),
+                expect.objectContaining({
+                    body: expect.stringContaining('an answer'),
+                }),
             );
         });
     });
@@ -561,6 +626,191 @@ describe('ChatWithKodyFromGitUseCase', () => {
             expect.objectContaining({
                 prepareContext: expect.objectContaining({
                     userQuestion: '@kody what does this pull request change?',
+                }),
+            }),
+        );
+    });
+});
+
+describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
+    const KODY_COMMENT_ID = 555;
+    // buildPrKey rejects a non-UUID organization id.
+    const ORGANIZATION_ID = '11111111-1111-1111-1111-111111111111';
+
+    function buildParams() {
+        return {
+            event: 'pull_request_review_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'billing-api' },
+                issue: {
+                    id: 1,
+                    body: 'body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/acme/billing-api/pulls/812',
+                    },
+                },
+                comment: {
+                    id: 900,
+                    in_reply_to_id: KODY_COMMENT_ID,
+                    body: '@kody this is a false positive',
+                    path: 'src/worker/invoice.ts',
+                },
+                pull_request: {
+                    number: 812,
+                    head: { ref: 'feat/invoice-retry' },
+                    base: { ref: 'main' },
+                },
+                sender: { id: 'user-1', login: 'dev-one' },
+            },
+        } as any;
+    }
+
+    function build(pullRequest: unknown) {
+        const conversationAgentUseCase = {
+            execute: jest.fn().mockResolvedValue('an answer'),
+        };
+        const pullRequestsService = {
+            findByNumberAndRepositoryId: jest
+                .fn()
+                .mockResolvedValue(pullRequest),
+        };
+        const useCase = new ChatWithKodyFromGitUseCase(
+            {
+                findTeamAndOrganizationIdByConfigKey: jest
+                    .fn()
+                    .mockResolvedValue({
+                        integration: {
+                            organization: { uuid: ORGANIZATION_ID },
+                        },
+                        team: { uuid: 'team-1' },
+                    }),
+                addReactionToComment: jest.fn().mockResolvedValue(undefined),
+                getPullRequestReviewComment: jest.fn().mockResolvedValue([
+                    {
+                        id: KODY_COMMENT_ID,
+                        body: 'Wrap the call in a try/catch. <!-- kody-codereview -->',
+                        user: { login: 'kody-codereview' },
+                        diff_hunk: '@@ -1 +1 @@',
+                    },
+                    {
+                        id: 900,
+                        in_reply_to_id: KODY_COMMENT_ID,
+                        body: '@kody this is a false positive',
+                        path: 'src/worker/invoice.ts',
+                        user: { login: 'dev-one' },
+                    },
+                ]),
+                createResponseToComment: jest
+                    .fn()
+                    .mockResolvedValue({ id: 999 }),
+                removeReactionsFromComment: jest
+                    .fn()
+                    .mockResolvedValue(undefined),
+                getCloneParams: jest.fn().mockResolvedValue(undefined),
+            } as any,
+            conversationAgentUseCase as any,
+            { execute: jest.fn() } as any,
+            {
+                validateExecutionPermissions: jest
+                    .fn()
+                    .mockResolvedValue({ allowed: true }),
+            } as any,
+            {
+                acquire: jest.fn().mockResolvedValue({
+                    sandbox: { type: 'null' },
+                    leaseId: 'lease',
+                    wasCreated: true,
+                    sandboxId: 'sb',
+                }),
+                release: jest.fn().mockResolvedValue(undefined),
+            } as any,
+            pullRequestsService as any,
+        );
+
+        return { useCase, conversationAgentUseCase, pullRequestsService };
+    }
+
+    it('attaches the rule ids of the suggestion the thread started from', async () => {
+        const { useCase, conversationAgentUseCase } = build({
+            files: [
+                {
+                    suggestions: [
+                        {
+                            id: 'sug-9',
+                            label: 'kody_rules',
+                            brokenKodyRulesIds: ['rule-abc'],
+                            comment: { id: KODY_COMMENT_ID },
+                        },
+                        {
+                            id: 'sug-other',
+                            comment: { id: 111 },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-9',
+                            label: 'kody_rules',
+                            brokenKodyRulesIds: ['rule-abc'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
+    it('finds the rule ids of a PR-level finding too', async () => {
+        const { useCase, conversationAgentUseCase } = build({
+            files: [],
+            prLevelSuggestions: [
+                {
+                    id: 'sug-pr-1',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-pr'],
+                    comment: { id: KODY_COMMENT_ID },
+                },
+            ],
+        });
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-pr-1',
+                            brokenKodyRulesIds: ['rule-pr'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
+    it('still answers when the suggestion cannot be resolved', async () => {
+        const { useCase, conversationAgentUseCase } = build(null);
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: undefined,
+                        }),
+                    }),
                 }),
             }),
         );

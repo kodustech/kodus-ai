@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@enums";
 
 import { auth } from "./core/config/auth";
+import { isDateRangeAwarePath } from "./core/utils/date-range-routes";
 import {
     CURRENT_PATH_HEADER,
     CURRENT_SEARCH_HEADER,
@@ -72,16 +73,10 @@ export const proxy = auth(async (req) => {
     const headers = new Headers(req.headers);
     headers.set(CURRENT_PATH_HEADER, pathname);
     // Mirror the query string so server components can treat URL params as
-    // the source of truth (Cockpit's shareable filter state) without
-    // prop-drilling `searchParams` from every page/slot. Scope it to the
-    // cockpit routes that consume it — mirroring globally would copy
-    // sensitive auth tokens (password-reset / email-confirmation query
-    // params) into a header reachable by every server component and any
-    // logging layer.
-    if (
-        pathname.startsWith("/cockpit") ||
-        pathname.startsWith("/organization/cockpit")
-    ) {
+    // the source of truth (the shareable filter state) without prop-drilling
+    // `searchParams` from every page/slot. See date-range-routes.ts for why
+    // the mirror is scoped to a list.
+    if (isDateRangeAwarePath(pathname)) {
         headers.set(CURRENT_SEARCH_HEADER, req.nextUrl.search);
     }
 

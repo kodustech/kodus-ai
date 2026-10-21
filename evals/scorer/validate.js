@@ -1,15 +1,16 @@
 /**
  * Validação do schema de submission.
  *
- * Sem dependência externa de propósito: isto roda no CI do PR de submissão de
- * terceiro, e a mensagem de erro é o que a pessoa vai ler para consertar. Erro
- * claro > validador genérico.
+ * Sem dependência externa de propósito: a mensagem de erro é o que a pessoa vai ler
+ * para consertar, e ela é lida na revisão do PR de submissão — não por um validador
+ * automático, que não existe neste caminho. Erro claro > validador genérico.
  *
  * Contrato completo: evals/scorer/README.md
  */
 
 const EXECUTION_MODES = new Set(['replay', 'live']);
-const ACCESS_PATHS = new Set(['api', 'subscription', 'local', 'unknown']);
+// byok / managed: the finder eval's production routes (evals/investigation/run-recall.js runMetaOf).
+const ACCESS_PATHS = new Set(['api', 'subscription', 'local', 'unknown', 'byok', 'managed']);
 const SEVERITIES = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const REASONING_CONFIGS = new Set(['vendor-default', 'explicit', 'disabled']);
 
@@ -27,7 +28,7 @@ function validateSubmission(s) {
     if (!isObj(s)) return errs;
 
     req(typeof s.benchmarkVersion === 'string' && s.benchmarkVersion,
-        'benchmarkVersion: string obrigatória (ex: "light-30-v1")');
+        'benchmarkVersion: string obrigatória (ex: "light-v1")');
 
     // ── run ──
     const run = s.run;

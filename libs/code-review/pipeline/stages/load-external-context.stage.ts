@@ -18,11 +18,18 @@ import {
 } from '@libs/ai-engine/domain/prompt/contracts/promptContextLoader.contract';
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
 import { BuildTraceContextPackUseCase } from '@libs/cli-review/application/use-cases/build-trace-context-pack.use-case';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import {
+    FeatureGateService,
+    FEATURE_KEYS,
+    type FeatureKey,
+} from '@libs/feature-gate';
 import {
     IOrganizationService,
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
+import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 @Injectable()
 export class LoadExternalContextStage
@@ -45,12 +52,22 @@ export class LoadExternalContextStage
         private readonly featureGate: FeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
+        private readonly buildPreviousReviewDecisionsUseCase: BuildPreviousReviewDecisionsUseCase,
     ) {
         super();
     }
 
-    private async isTraceReviewContextEnabled(
+    /**
+     * Shared alpha-gate evaluator: fail-closed (disabled) on ANY error —
+     * PostHog outage, release-track lookup failure, whatever — so a flaky
+     * flag provider only ever costs the optional context, never the review
+     * itself. Both `traceDecisions` and `previousDecisions` gate through this
+     * same shape; the only per-feature bits are the key and the log label.
+     */
+    private async evaluateAlphaGate(
         context: CodeReviewPipelineContext,
+        featureKey: FeatureKey,
+        gateLabel: string,
     ): Promise<boolean> {
         const organizationAndTeamData = context.organizationAndTeamData;
 
@@ -59,22 +76,18 @@ export class LoadExternalContextStage
                 organizationAndTeamData.organizationId,
             );
 
-            return await this.featureGate.isEnabled(
-                FEATURE_KEYS.kodusTraceReviewContext,
-                {
-                    identifier: organizationAndTeamData.organizationId,
-                    organizationAndTeamData,
-                    releaseTrack,
-                    groups: {
-                        team: organizationAndTeamData.teamId,
-                        repository: String(context.repository.id),
-                    },
+            return await this.featureGate.isEnabled(featureKey, {
+                identifier: organizationAndTeamData.organizationId,
+                organizationAndTeamData,
+                releaseTrack,
+                groups: {
+                    team: organizationAndTeamData.teamId,
+                    repository: String(context.repository.id),
                 },
-            );
+            });
         } catch (error) {
             this.logger.warn({
-                message:
-                    'Kodus Trace alpha gate could not be evaluated; review context remains disabled',
+                message: `${gateLabel} alpha gate could not be evaluated; feature remains disabled`,
                 context: this.stageName,
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,
@@ -86,6 +99,16 @@ export class LoadExternalContextStage
             });
             return false;
         }
+    }
+
+    private async isTraceReviewContextEnabled(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        return this.evaluateAlphaGate(
+            context,
+            FEATURE_KEYS.kodusTraceReviewContext,
+            'Kodus Trace',
+        );
     }
 
     /**
@@ -151,6 +174,74 @@ export class LoadExternalContextStage
         }
     }
 
+    /**
+     * Suggestions already posted on THIS PR in a previous review round
+     * (issue #1313). Unconditional — every org gets this, no alpha gate.
+     * Fail-open discipline preserved: returns undefined — never throws — on
+     * any store failure, so a review with no history (or an unavailable
+     * store) is byte-identical to current behaviour.
+     */
+    private async loadPreviousReviewDecisions(
+        context: CodeReviewPipelineContext,
+    ): Promise<PrDecisionRecord[] | undefined> {
+        try {
+            // A custom agent reviewing ignored files (#2172) weighs its own
+            // past findings on them too.
+            if (
+                !context.changedFiles?.length &&
+                !ignoredFilesForCustomAgents(
+                    context,
+                    context.ignoredFileChanges,
+                ).length
+            ) {
+                return undefined;
+            }
+
+            const repositoryFullName =
+                context.repository?.fullName ||
+                context.pullRequest?.base?.repo?.fullName;
+            const prNumber = context.pullRequest?.number;
+
+            if (!repositoryFullName || !prNumber) {
+                return undefined;
+            }
+
+            // The whole PR's history, not only the changed files: a finding
+            // can repeat a suggestion anchored on a file it moved out of.
+            const decisions = await this.buildPreviousReviewDecisionsUseCase.execute({
+                organizationId: context.organizationAndTeamData.organizationId,
+                prNumber,
+                repositoryFullName,
+            });
+
+            if (decisions.length === 0) {
+                return undefined;
+            }
+
+            this.logger.log({
+                message: `Loaded ${decisions.length} previous review decisions for PR#${prNumber}`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber,
+                },
+            });
+
+            return decisions;
+        } catch (error) {
+            // Never fail a review over the decision store.
+            this.logger.warn({
+                message: 'Failed to load previous review decisions',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                },
+            });
+            return undefined;
+        }
+    }
+
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
@@ -205,6 +296,8 @@ export class LoadExternalContextStage
             }
 
             const traceDecisions = await this.loadTraceDecisions(context);
+            const previousDecisions =
+                await this.loadPreviousReviewDecisions(context);
 
             let sharedContextPack = undefined;
             let updatedCodeReviewConfig = context.codeReviewConfig;
@@ -261,6 +354,7 @@ export class LoadExternalContextStage
                 externalPromptLayers: contextLayers,
                 sharedContextPack,
                 traceDecisions,
+                previousDecisions,
             };
         } catch (error) {
             this.logger.error({
@@ -279,6 +373,7 @@ export class LoadExternalContextStage
                 externalPromptLayers: undefined,
                 sharedContextPack: undefined,
                 traceDecisions: undefined,
+                previousDecisions: undefined,
             };
         }
     }

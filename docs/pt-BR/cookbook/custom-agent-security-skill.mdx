@@ -1,0 +1,112 @@
+---
+title: "Revisor de segurança a partir de uma skill do repositório"
+description: "Transforme a skill de segurança do seu time num agente personalizado que a segue em todo pull request."
+icon: "shield-halved"
+---
+
+## Por que uma skill
+
+Seu time pode já manter as regras de segurança como uma skill de agente, para assistentes de código. Um agente personalizado pode seguir a mesma skill no code review: ele abre a skill quando a mudança pede, lê os arquivos de referência e cita a regra que cada apontamento aplica. Quando a skill muda na branch principal, o agente segue a versão nova sem mexer nas configurações.
+
+O exemplo é uma API de agendamento multi-tenant em que toda consulta precisa ficar restrita ao workspace de quem chama.
+
+## Passo 1 — A skill no repositório
+
+```markdown .claude/skills/tenant-isolation/SKILL.md
+---
+name: tenant-isolation
+description: Rules that keep one workspace's data out of another's. Use when changing endpoints, queries or background jobs.
+---
+
+# Tenant isolation
+
+- Every query on a tenant table filters by `workspaceId` taken from the authenticated session, never from the request body or query string.
+- Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+- Background jobs receive `workspaceId` in their payload and pass it to every repository call.
+- Logs never include tokens, passwords or full email addresses.
+
+For the list of tenant tables, see references/tenant-tables.md.
+```
+
+```markdown .claude/skills/tenant-isolation/references/tenant-tables.md
+# Tenant tables
+
+bookings, calendars, invoices, members, resources
+```
+
+O nome da pasta e o `name` precisam ser iguais, e `description` é obrigatório.
+
+## Passo 2 — Importe como agente
+
+<Steps>
+  <Step title="Abra as configurações do repositório">
+    Escolha o repositório no seletor de escopo e vá em **What to review → Custom agents → New agent**.
+  </Step>
+  <Step title="Import from repository">
+    A aba lista as skills encontradas na branch padrão. Clique em **tenant-isolation**.
+  </Step>
+  <Step title="Confira o resultado">
+    O agente é criado desligado, com o nome **Tenant isolation reviewer**, a skill vinculada e estas instruções:
+
+    ```text
+    Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+    ```
+  </Step>
+</Steps>
+
+## Passo 3 — Afine as instruções
+
+Mantenha a referência à skill e acrescente que prova um apontamento precisa:
+
+```text Instructions
+Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+
+Trace where workspaceId comes from in every query or repository call the change adds or edits. A finding must show the line where the value enters (session, body, query string, job payload) and the line where it is used.
+
+Ignore tests and seed scripts. Do not report general security issues the skill does not cover; Kody's own review handles those.
+```
+
+| Campo | Valor |
+| --- | --- |
+| **Files** | `src/api/**`, `src/jobs/**`, `src/repositories/**` |
+| **Except** | `**/*.test.ts`, `src/db/seeds/**` |
+
+## Passo 4 — Opcional: um plugin
+
+Se o seu gerenciador de tarefas está instalado como plugin, ligue-o em **Tools → Plugins**. Só ferramentas de leitura são oferecidas. Quando a descrição do pull request tem o link de um ticket, o agente pode ler o ticket e conferir a mudança contra o que ele pede.
+
+## Passo 5 — Comentários
+
+| Campo | Valor | Por quê |
+| --- | --- | --- |
+| **Format** | Inline comments | |
+| **Minimum severity** | High | Só vazamento entre tenants e falta de autorização, não ideias de hardening. |
+| **Suggested fix** | When confident | |
+
+Clique em **Save**.
+
+## Passo 6 — Try it
+
+Rode o **Try it** num pull request que adiciona um endpoint. Confira:
+
+- **Skills opened** mostra `.claude/skills/tenant-isolation` e, quando o agente precisou, `references/tenant-tables.md`.
+- Os apontamentos mantidos citam uma regra da skill:
+
+```markdown
+**Rule** (`.claude/skills/tenant-isolation/SKILL.md`):
+> Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+```
+
+- Os apontamentos descartados mostram o motivo. Uma observação geral de segurança que a skill não cobre é descartada como fora do foco do agente, que é o que você quer aqui.
+
+Ligue o agente. Para pedir uma segunda opinião num pull request aberto mais tarde, comente `@kody -v tenant-isolation-reviewer`.
+
+## Checklist
+
+- [ ] O `SKILL.md` tem `name` igual ao da pasta e uma `description`
+- [ ] Os arquivos de referência ficam no máximo uma pasta abaixo da skill
+- [ ] As instruções dizem que prova um apontamento precisa
+- [ ] A severidade mínima combina com o quanto o agente deve falar
+- [ ] Testado num pull request com uma falha conhecida
+
+Veja [Skills & docs](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) para a detecção e os orçamentos.

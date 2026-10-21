@@ -24,14 +24,16 @@ const QUESTION =
 
 /**
  * Proves Kody's CONVERSATION path honors a Claude-on-Vertex BYOK key. The
- * conversation agent runs on the legacy v2 langchain engine
- * (BaseAgentProvider builds `new BYOKPromptRunnerService(byokConfig)`), so a
- * broken Vertex routing there means Kody silently never answers an `@kody`
- * mention — distinct from the code-review path (which is v5/Vercel SDK).
+ * conversation agent (`BaseAgentProvider`) resolves its model through
+ * `resolveTaskSlot` → `LLM.run`, the same AI SDK stack the code-review path
+ * uses — there is no separate engine here anymore, so this scenario is about
+ * routing (does the conversation task pick up the org's Vertex BYOK slot),
+ * not about a distinct execution path. A broken Vertex routing here means
+ * Kody silently never answers an `@kody` mention.
  */
 export const conversationVertexByok: Scenario = {
     id: 'conversation-vertex-byok',
-    title: 'Kody answers an @kody mention using a Claude-on-Vertex BYOK key (v2 path)',
+    title: 'Kody answers an @kody mention using a Claude-on-Vertex BYOK key',
     priority: 'P2',
     appliesTo: {
         target: ['self-hosted'],

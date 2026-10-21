@@ -3,7 +3,7 @@
  * has drifted. Run with `pnpm run env:check`.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
@@ -15,11 +15,17 @@ type Target = { name: string; generated: string; committed: string };
 
 const tmp = mkdtempSync(join(tmpdir(), 'kodus-env-drift-'));
 
-execSync(`ts-node ${join(__dirname, 'generate.ts')}`, {
-    cwd: REPO_ROOT,
-    env: { ...process.env, KODUS_ENV_OUT_DIR: tmp },
-    stdio: 'inherit',
-});
+// Run the generator in this same Node with ts-node's hook, without a shell:
+// the path is one argument, so a checkout path with spaces stays whole.
+execFileSync(
+    process.execPath,
+    ['-r', 'ts-node/register', join(__dirname, 'generate.ts')],
+    {
+        cwd: REPO_ROOT,
+        env: { ...process.env, KODUS_ENV_OUT_DIR: tmp },
+        stdio: 'inherit',
+    },
+);
 
 // Local drift check — only repos that live inside kodus-ai are checked here.
 // The kodus-installer drift check runs in CI (env-sync-release.yml) against

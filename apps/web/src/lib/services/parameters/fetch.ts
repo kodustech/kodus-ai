@@ -33,26 +33,43 @@ export const getTeamParametersNoCache = async <
         cache: "no-store",
     });
 
-export const getFormattedCodeReviewParameterNoCache = async (teamId: string) =>
+export const getFormattedCodeReviewParameterNoCache = async (
+    teamId: string,
+    options?: { includeFileOverlay?: boolean; signal?: AbortSignal },
+) =>
     authorizedFetch<{
         uuid: string;
         configKey: string;
         configValue: FormattedGlobalCodeReviewConfig;
     }>(PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER, {
-        params: { teamId },
+        params: {
+            teamId,
+            // Omitted unless explicitly disabled: the API defaults to true and
+            // every other caller wants the overlay.
+            ...(options?.includeFileOverlay === false
+                ? { includeFileOverlay: false }
+                : {}),
+        },
         cache: "no-store",
+        signal: options?.signal,
     });
 
-export const getDefaultCodeReviewParameterNoCache = async () =>
+export const getDefaultCodeReviewParameterNoCache = async (options?: {
+    signal?: AbortSignal;
+}) =>
     authorizedFetch<
         CodeReviewGlobalConfig & {
             customMessages: CustomMessageConfig;
         }
     >(PARAMETERS_PATHS.DEFAULT_CODE_REVIEW_PARAMETER, {
         cache: "no-store",
+        signal: options?.signal,
     });
 
-export const getPlatformConfigParameterNoCache = async (teamId: string) =>
+export const getPlatformConfigParameterNoCache = async (
+    teamId: string,
+    options?: { signal?: AbortSignal },
+) =>
     authorizedFetch<{
         uuid: string;
         configKey: ParametersConfigKey.PLATFORM_CONFIGS;
@@ -63,6 +80,7 @@ export const getPlatformConfigParameterNoCache = async (teamId: string) =>
             key: ParametersConfigKey.PLATFORM_CONFIGS,
         },
         cache: "no-store",
+        signal: options?.signal,
     });
 
 export const getParameterByKey = async (key: string, teamId: string) => {
@@ -105,6 +123,10 @@ export const createOrUpdateCodeReviewParameter = async (
     repositoryId: LiteralUnion<"global"> | undefined,
     directoryId?: string,
     directoryPaths?: string[],
+    options?: {
+        /** Revisions of the custom agents lists the save was made from. */
+        expectedRevisions?: { customAgents?: string; knowledge?: string };
+    },
 ) => {
     try {
         const trimmedCodeReviewConfigValue =
@@ -119,12 +141,17 @@ export const createOrUpdateCodeReviewParameter = async (
                     repositoryId === "global" ? undefined : repositoryId,
                 directoryId,
                 directoryPaths,
+                expectedRevisions: options?.expectedRevisions,
             },
         );
 
         return response.data;
     } catch (error: any) {
-        return { error: error.response?.status || "Erro desconhecido" };
+        return {
+            error: error.response?.status || "Erro desconhecido",
+            // What the server refused, e.g. which agent field is too long.
+            messages: error.response?.data?.message,
+        };
     }
 };
 

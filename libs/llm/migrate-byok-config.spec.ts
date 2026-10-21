@@ -6,6 +6,10 @@
  * that contract explicitly (ciphertext-verbatim bytes + a log spy that must see
  * no plaintext across every case).
  */
+
+
+
+
 import { encrypt, decrypt } from '@libs/common/utils/crypto';
 import { migrateLegacyToV2 } from './migrate-byok-config';
 import { isByokConfig, type BYOKConfig } from './byok-config';
@@ -280,6 +284,519 @@ describe('migrateLegacyToV2', () => {
                 main: legacySlot({ apiKey: encrypt(plaintext) }),
             });
             expect(JSON.stringify(v2)).not.toContain(plaintext);
+        });
+    });
+
+    // Regression: shapes measured in the production BYOK export (416 legacy
+    // rows). Before these fixes, 19 rows migrated to the empty/managed default
+    // (losing their BYOK key) and 7 dropped their OpenRouter provider-pinning.
+    describe('production edge cases', () => {
+        // Amazon Bedrock authenticates with a bearer token (or access-key pair),
+        // NOT an apiKey — the slot carries no apiKey at all.
+        const bedrockSlot = (overrides: Record<string, unknown> = {}) => ({
+            provider: 'amazon_bedrock',
+            model: 'us.anthropic.claude-sonnet-4-6',
+            awsBearerToken: encrypt('bedrock-bearer-token'),
+            awsRegion: 'us-east-1',
+            ...overrides,
+        });
+
+        it('migrates a Bedrock main (bearer token, NO apiKey) — never empties', () => {
+            const main = bedrockSlot();
+            const v2 = migrateLegacyToV2({ main });
+
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+            expect(v2.credentials[0].provider).toBe('amazon_bedrock');
+            expect(v2.credentials[0].apiKey).toBeUndefined();
+            // aws secret carried verbatim into settings (same ciphertext bytes).
+            expect(v2.credentials[0].settings?.awsBearerToken).toBe(
+                main.awsBearerToken,
+            );
+            expect(v2.credentials[0].settings?.awsRegion).toBe('us-east-1');
+            expect(v2.routing?.defaultModelId).toBe(v2.models[0].id);
+        });
+
+        it('migrates a Bedrock main + Bedrock fallback to two credentials', () => {
+            const v2 = migrateLegacyToV2({
+                main: bedrockSlot(),
+                fallback: bedrockSlot({
+                    model: 'global.anthropic.claude-opus-4-7',
+                    awsBearerToken: encrypt('bedrock-bearer-token-2'),
+                }),
+            });
+            expect(v2.credentials).toHaveLength(2);
+            expect(v2.models).toHaveLength(2);
+        });
+
+        it('accepts a Bedrock access-key pair as auth', () => {
+            const v2 = migrateLegacyToV2({
+                main: {
+                    provider: 'amazon_bedrock',
+                    model: 'us.anthropic.claude-sonnet-4-6',
+                    awsAccessKeyId: encrypt('AKIA...'),
+                    awsSecretAccessKey: encrypt('secret'),
+                },
+            });
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+        });
+
+        it('PROMOTES a fallback-only config (no usable main) instead of emptying', () => {
+            const fallback = legacySlot({
+                provider: 'openai_compatible',
+                apiKey: encrypt('sk-fallback-only'),
+                model: 'minimax-m3',
+            });
+            const v2 = migrateLegacyToV2({ fallback });
+
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+            // The promoted fallback becomes the default model.
+            expect(v2.routing?.defaultModelId).toBe(v2.models[0].id);
+            expect(v2.credentials[0].provider).toBe('openai_compatible');
+            expect(v2.credentials[0].apiKey).toBe(fallback.apiKey);
+            expect(v2.models[0].model).toBe('minimax-m3');
+        });
+
+        it('promotes the fallback when the main slot is present but UNUSABLE', () => {
+            const v2 = migrateLegacyToV2({
+                main: { provider: 'openai', apiKey: encrypt('k') }, // no model → unusable
+                fallback: legacySlot({ model: 'gpt-5.4' }),
+            });
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models[0].model).toBe('gpt-5.4');
+        });
+
+        it('still empties a config with NO usable slot (managed default)', () => {
+            const v2 = migrateLegacyToV2({
+                main: { provider: 'openai' }, // no key, no model
+            });
+            expect(v2.credentials).toHaveLength(0);
+            expect(v2.models).toHaveLength(0);
+        });
+
+        it('carries OpenRouter provider-pinning into credential settings', () => {
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: encrypt('sk-or'),
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita', 'z-ai'],
+                    openrouterAllowFallbacks: false,
+                }),
+            });
+            expect(v2.credentials[0].settings?.openrouterProviderOrder).toEqual([
+                'novita',
+                'z-ai',
+            ]);
+            expect(v2.credentials[0].settings?.openrouterAllowFallbacks).toBe(
+                false,
+            );
+        });
+
+        it('does NOT dedup two OpenRouter slots that differ only in provider order', () => {
+            const key = encrypt('sk-shared-or');
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: key,
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita'],
+                }),
+                fallback: legacySlot({
+                    provider: 'open_router',
+                    apiKey: key,
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['z-ai'],
+                }),
+            });
+            // Same key, but distinct routing → two credentials, both preserved.
+            expect(v2.credentials).toHaveLength(2);
+        });
+    });
+
+    // End-to-end: the whole point of migrating is that the READ path
+    // (resolveDefaultSlot → the slot providers actually build from) resolves the
+    // migrated blob correctly. Migrate, then resolve, then assert the slot.
+    describe('post-migration read path (resolveDefaultSlot)', () => {
+        it('resolves a migrated Bedrock config to a usable slot (no apiKey)', () => {
+            const v2 = migrateLegacyToV2({
+                main: {
+                    provider: 'amazon_bedrock',
+                    model: 'us.anthropic.claude-sonnet-4-6',
+                    awsBearerToken: encrypt('bedrock-bearer'),
+                    awsRegion: 'us-east-1',
+                },
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot).toBeDefined();
+            expect(slot?.provider).toBe('amazon_bedrock');
+            expect(slot?.model).toBe('us.anthropic.claude-sonnet-4-6');
+            expect(slot?.apiKey).toBe(''); // aws-auth: empty apiKey, not undefined
+            expect(slot?.awsBearerToken).toBeTruthy();
+            expect(slot?.awsRegion).toBe('us-east-1');
+        });
+
+        it('resolves a migrated fallback-only config to the promoted slot', () => {
+            const v2 = migrateLegacyToV2({
+                fallback: legacySlot({
+                    provider: 'openai_compatible',
+                    apiKey: encrypt('sk-fb'),
+                    model: 'minimax-m3',
+                    baseURL: 'https://api.example.com/v1',
+                }),
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot).toBeDefined();
+            expect(slot?.provider).toBe('openai_compatible');
+            expect(slot?.model).toBe('minimax-m3');
+            expect(slot?.baseURL).toBe('https://api.example.com/v1');
+        });
+
+        it('surfaces OpenRouter provider-pinning onto the resolved slot', () => {
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: encrypt('sk-or'),
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita', 'z-ai'],
+                    openrouterAllowFallbacks: false,
+                }),
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot?.openrouterProviderOrder).toEqual(['novita', 'z-ai']);
+            expect(slot?.openrouterAllowFallbacks).toBe(false);
+        });
+    });
+
+    // ── Mutation-hardening: pin every branch/boundary/literal the transform
+    // depends on, so a plausible off-by-one, dropped-field, or flipped-operator
+    // regression makes a test fail (not merely reduces coverage). ─────────────
+    describe('mutation-hardening', () => {
+        describe('hasAuth branches (apiKey OR bearer OR access-key PAIR)', () => {
+            it('a lone awsAccessKeyId (no secret) is NOT auth → unusable (AND, not OR)', () => {
+                const v2 = migrateLegacyToV2({
+                    main: {
+                        provider: 'amazon_bedrock',
+                        model: 'm',
+                        awsAccessKeyId: encrypt('AKIA'),
+                    },
+                });
+                expect(v2.credentials).toHaveLength(0);
+                expect(v2.models).toHaveLength(0);
+            });
+
+            it('a lone awsSecretAccessKey (no id) is NOT auth → unusable (AND, not OR)', () => {
+                const v2 = migrateLegacyToV2({
+                    main: {
+                        provider: 'amazon_bedrock',
+                        model: 'm',
+                        awsSecretAccessKey: encrypt('secret'),
+                    },
+                });
+                expect(v2.credentials).toHaveLength(0);
+                expect(v2.models).toHaveLength(0);
+            });
+
+            it('a bearer token alone IS auth → usable', () => {
+                const v2 = migrateLegacyToV2({
+                    main: {
+                        provider: 'amazon_bedrock',
+                        model: 'm',
+                        awsBearerToken: encrypt('bearer'),
+                    },
+                });
+                expect(v2.credentials).toHaveLength(1);
+            });
+        });
+
+        describe('STR() empty-string guard (length > 0)', () => {
+            it('an empty-string provider counts as absent → slot unusable', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ provider: '' }),
+                });
+                expect(v2.credentials).toHaveLength(0);
+            });
+
+            it('an empty-string model counts as absent → slot unusable', () => {
+                const v2 = migrateLegacyToV2({ main: legacySlot({ model: '' }) });
+                expect(v2.credentials).toHaveLength(0);
+            });
+
+            it('an empty-string apiKey counts as absent auth → slot unusable', () => {
+                const v2 = migrateLegacyToV2({
+                    main: { provider: 'openai', model: 'gpt-4o', apiKey: '' },
+                });
+                expect(v2.credentials).toHaveLength(0);
+            });
+        });
+
+        describe('exact synthetic id literals', () => {
+            it('pins cred-main / model-main / cred-fallback / model-fallback for two distinct slots', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ apiKey: encrypt('key-a') }),
+                    fallback: legacySlot({
+                        apiKey: encrypt('key-b'),
+                        model: 'gpt-4o-mini',
+                    }),
+                });
+                expect(v2.credentials[0].id).toBe('cred-main');
+                expect(v2.credentials[1].id).toBe('cred-fallback');
+                expect(v2.models[0].id).toBe('model-main');
+                expect(v2.models[0].credentialId).toBe('cred-main');
+                expect(v2.models[1].id).toBe('model-fallback');
+                expect(v2.models[1].credentialId).toBe('cred-fallback');
+                expect(v2.routing?.defaultModelId).toBe('model-main');
+            });
+
+            it('a folded (deduped) fallback model keeps its own id but references cred-main', () => {
+                const shared = encrypt('sk-shared-key');
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ apiKey: shared }),
+                    fallback: legacySlot({
+                        apiKey: shared,
+                        model: 'gpt-4o-mini',
+                    }),
+                });
+                expect(v2.credentials).toHaveLength(1);
+                expect(v2.credentials[0].id).toBe('cred-main');
+                expect(v2.models[1].id).toBe('model-fallback');
+                expect(v2.models[1].credentialId).toBe('cred-main');
+            });
+        });
+
+        describe('managedDefaultV2 exact shape', () => {
+            it('empty result is exactly {version:2,credentials:[],models:[]} with NO routing', () => {
+                const v2 = migrateLegacyToV2({});
+                expect(v2).toEqual({ version: 2, credentials: [], models: [] });
+                expect(v2.routing).toBeUndefined();
+            });
+
+            it('a non-object blob (string / number) → managed default', () => {
+                expect(migrateLegacyToV2('nonsense')).toEqual({
+                    version: 2,
+                    credentials: [],
+                    models: [],
+                });
+                expect(migrateLegacyToV2(42)).toEqual({
+                    version: 2,
+                    credentials: [],
+                    models: [],
+                });
+            });
+        });
+
+        describe('credentialFromSlot settings presence', () => {
+            it('omits `settings` entirely when the slot carries no setting fields', () => {
+                const v2 = migrateLegacyToV2({ main: legacySlot() });
+                expect(v2.credentials[0].settings).toBeUndefined();
+            });
+
+            it('attaches only the present non-secret settings', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ baseURL: 'https://x.example' }),
+                });
+                expect(v2.credentials[0].settings).toEqual({
+                    baseURL: 'https://x.example',
+                });
+            });
+        });
+
+        describe('modelFromSlot numeric fields use typeof number, not truthiness', () => {
+            it('carries ZERO-valued numeric tuning fields', () => {
+                const m = migrateLegacyToV2({
+                    main: legacySlot({
+                        temperature: 0,
+                        maxInputTokens: 0,
+                        maxOutputTokens: 0,
+                        maxConcurrentRequests: 0,
+                    }),
+                }).models[0];
+                expect(m.temperature).toBe(0);
+                expect(m.maxInputTokens).toBe(0);
+                expect(m.maxOutputTokens).toBe(0);
+                expect(m.maxConcurrentRequests).toBe(0);
+            });
+
+            it('omits a non-number tuning field', () => {
+                const m = migrateLegacyToV2({
+                    main: legacySlot({ temperature: 'hot' }),
+                }).models[0];
+                expect(m.temperature).toBeUndefined();
+            });
+
+            it('omits tuning fields that are absent', () => {
+                const m = migrateLegacyToV2({ main: legacySlot() }).models[0];
+                expect(m.temperature).toBeUndefined();
+                expect(m.maxInputTokens).toBeUndefined();
+                expect(m.maxOutputTokens).toBeUndefined();
+                expect(m.maxConcurrentRequests).toBeUndefined();
+                expect(m.reasoningEffort).toBeUndefined();
+                expect(m.reasoningConfigOverride).toBeUndefined();
+            });
+
+            it('carries reasoningConfigOverride but drops an empty-string override', () => {
+                const withOverride = migrateLegacyToV2({
+                    main: legacySlot({ reasoningConfigOverride: 'cfg' }),
+                }).models[0];
+                expect(withOverride.reasoningConfigOverride).toBe('cfg');
+
+                const emptyOverride = migrateLegacyToV2({
+                    main: legacySlot({ reasoningConfigOverride: '' }),
+                }).models[0];
+                expect(emptyOverride.reasoningConfigOverride).toBeUndefined();
+            });
+        });
+
+        describe('sameCredential distinctness guards (each field matters)', () => {
+            const shared = () => encrypt('sk-shared-key');
+
+            it('different vertexLocation → distinct credentials', () => {
+                const key = shared();
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        apiKey: key,
+                        vertexLocation: 'us-central1',
+                    }),
+                    fallback: legacySlot({
+                        apiKey: key,
+                        model: 'gpt-4o-mini',
+                        vertexLocation: 'europe-west4',
+                    }),
+                });
+                expect(v2.credentials).toHaveLength(2);
+            });
+
+            it('different awsRegion → distinct credentials', () => {
+                const key = shared();
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ apiKey: key, awsRegion: 'us-east-1' }),
+                    fallback: legacySlot({
+                        apiKey: key,
+                        model: 'gpt-4o-mini',
+                        awsRegion: 'us-west-2',
+                    }),
+                });
+                expect(v2.credentials).toHaveLength(2);
+            });
+
+            it('secret present on ONLY one slot → distinct credentials', () => {
+                const key = shared();
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ apiKey: key }),
+                    fallback: legacySlot({
+                        apiKey: key,
+                        model: 'gpt-4o-mini',
+                        awsSessionToken: encrypt('sess'),
+                    }),
+                });
+                expect(v2.credentials).toHaveLength(2);
+            });
+
+            it('secret ABSENT on both slots does not block dedup (continue branch)', () => {
+                const key = shared();
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({ apiKey: key }),
+                    fallback: legacySlot({ apiKey: key, model: 'gpt-4o-mini' }),
+                });
+                expect(v2.credentials).toHaveLength(1);
+            });
+
+            it('differing openrouterAllowFallbacks → distinct credentials', () => {
+                const key = encrypt('sk-shared-or');
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        provider: 'open_router',
+                        apiKey: key,
+                        model: 'z-ai/glm-5.2',
+                        openrouterAllowFallbacks: true,
+                    }),
+                    fallback: legacySlot({
+                        provider: 'open_router',
+                        apiKey: key,
+                        model: 'z-ai/glm-5.2',
+                        openrouterAllowFallbacks: false,
+                    }),
+                });
+                expect(v2.credentials).toHaveLength(2);
+            });
+        });
+
+        describe('openrouter settings extraction from untrusted arrays/values', () => {
+            it('drops openrouterProviderOrder when every entry is empty/non-string', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        provider: 'open_router',
+                        model: 'z-ai/glm-5.2',
+                        openrouterProviderOrder: ['', 123, null],
+                    }),
+                });
+                expect(
+                    v2.credentials[0].settings?.openrouterProviderOrder,
+                ).toBeUndefined();
+            });
+
+            it('filters non-string entries but keeps valid provider slugs in ORDER', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        provider: 'open_router',
+                        model: 'z-ai/glm-5.2',
+                        openrouterProviderOrder: ['novita', '', 42, 'z-ai'],
+                    }),
+                });
+                expect(
+                    v2.credentials[0].settings?.openrouterProviderOrder,
+                ).toEqual(['novita', 'z-ai']);
+            });
+
+            it('does not carry a non-boolean openrouterAllowFallbacks', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        provider: 'open_router',
+                        model: 'z-ai/glm-5.2',
+                        openrouterAllowFallbacks: 'yes',
+                    }),
+                });
+                expect(
+                    v2.credentials[0].settings?.openrouterAllowFallbacks,
+                ).toBeUndefined();
+            });
+
+            it('carries openrouterAllowFallbacks:true (boolean true is not dropped)', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot({
+                        provider: 'open_router',
+                        model: 'z-ai/glm-5.2',
+                        openrouterAllowFallbacks: true,
+                    }),
+                });
+                expect(
+                    v2.credentials[0].settings?.openrouterAllowFallbacks,
+                ).toBe(true);
+            });
+        });
+
+        describe('secondary emitted only when BOTH slots usable', () => {
+            it('an unusable fallback is ignored when main is usable (no secondary)', () => {
+                const v2 = migrateLegacyToV2({
+                    main: legacySlot(),
+                    fallback: { provider: 'openai' }, // no model/auth → unusable
+                });
+                expect(v2.credentials).toHaveLength(1);
+                expect(v2.models).toHaveLength(1);
+                expect(v2.models[0].id).toBe('model-main');
+            });
+
+            it('a promoted fallback-only config emits exactly one model with model-main id', () => {
+                const v2 = migrateLegacyToV2({
+                    fallback: legacySlot({ model: 'gpt-4o-mini' }),
+                });
+                expect(v2.models).toHaveLength(1);
+                expect(v2.models[0].id).toBe('model-main');
+                expect(v2.credentials[0].id).toBe('cred-main');
+                expect(v2.routing?.defaultModelId).toBe('model-main');
+            });
         });
     });
 });

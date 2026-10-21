@@ -33,11 +33,12 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { UpdateSpendLimitDto } from '../dtos/spend-limit.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Spend Limit')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
-@UseGuards(PolicyGuard)
+@UseGuards(PolicyGuard, TenantScopeGuard)
 @Controller({ path: 'spend-limit', scope: Scope.REQUEST })
 export class SpendLimitController {
     constructor(

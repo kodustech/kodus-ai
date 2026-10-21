@@ -28,6 +28,33 @@
  * // Output: "Hello @mcp<kodus|kodus_list_commits> world"
  * convertTiptapJSONToText(tiptapJson);
  */
+// Same markdown syntax convertTiptapJSONToMarkdown uses for these marks, so
+// the plain-text ("saveFormat=text") round-trip and the markdown export stay
+// consistent. Applied innermost-first (marks reversed) to nest correctly,
+// e.g. bold+italic -> **_text_**.
+function applyInlineMarksAsMarkdown(text: string, marks?: any[]): string {
+    if (!marks?.length) return text;
+
+    return [...marks].reverse().reduce((acc, mark) => {
+        switch (mark.type) {
+            case "bold":
+                return `**${acc}**`;
+            case "italic":
+                return `*${acc}*`;
+            case "code":
+                return `\`${acc}\``;
+            case "strike":
+                return `~~${acc}~~`;
+            case "link": {
+                const href = mark.attrs?.href || "";
+                return `[${acc}](${href})`;
+            }
+            default:
+                return acc;
+        }
+    }, text);
+}
+
 export function convertTiptapJSONToText(
     content: string | object | null | undefined,
 ): string {
@@ -54,24 +81,81 @@ export function convertTiptapJSONToText(
         try {
             let text = "";
 
-            function traverse(node: any): void {
+            function traverse(node: any, listMarker?: string): void {
                 if (!node || typeof node !== "object") return;
 
                 if (node.type === "text") {
-                    text += node.text || "";
-                } else if (node.type === "mcpMention") {
+                    text += applyInlineMarksAsMarkdown(
+                        node.text || "",
+                        node.marks,
+                    );
+                    return;
+                }
+                if (node.type === "mcpMention") {
                     // Convert mention node to token format
                     const app = node.attrs?.app || "";
                     const tool = node.attrs?.tool || "";
                     text += `@mcp<${app}|${tool}>`;
-                } else if (node.content && Array.isArray(node.content)) {
+                    return;
+                }
+                if (node.type === "hardBreak") {
+                    text += "\n";
+                    return;
+                }
+                if (node.type === "heading") {
+                    const level = Math.min(
+                        Math.max(node.attrs?.level || 1, 1),
+                        6,
+                    );
+                    text += "#".repeat(level) + " ";
+                    (node.content ?? []).forEach((c: any) => traverse(c));
+                    text += "\n";
+                    return;
+                }
+                if (node.type === "bulletList") {
+                    (node.content ?? []).forEach((item: any) =>
+                        traverse(item, "- "),
+                    );
+                    return;
+                }
+                if (node.type === "orderedList") {
+                    let index = node.attrs?.start || 1;
+                    (node.content ?? []).forEach((item: any) => {
+                        traverse(item, `${index}. `);
+                        index++;
+                    });
+                    return;
+                }
+                if (node.type === "listItem") {
+                    text += listMarker ?? "- ";
+                    // A list item's content is one or more paragraphs — flatten
+                    // the first one inline instead of letting the generic
+                    // paragraph handler insert its own line break before the
+                    // list marker is even on the line.
+                    (node.content ?? []).forEach((c: any) => {
+                        if (c.type === "paragraph") {
+                            (c.content ?? []).forEach((inline: any) =>
+                                traverse(inline),
+                            );
+                        } else {
+                            traverse(c);
+                        }
+                    });
+                    text += "\n";
+                    return;
+                }
+                if (node.content && Array.isArray(node.content)) {
                     // Recursively traverse child nodes
-                    node.content.forEach(traverse);
+                    node.content.forEach((c: any) => traverse(c));
+                }
+                if (node.type === "paragraph") {
+                    // Block boundary: separate this paragraph from the next
+                    text += "\n";
                 }
             }
 
             traverse(content);
-            return text;
+            return text.replace(/\n$/, "");
         } catch {
             return "";
         }

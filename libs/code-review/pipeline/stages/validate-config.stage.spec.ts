@@ -4,6 +4,9 @@ import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/auto
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 
 describe('ValidateConfigStage — no BYOK config', () => {
     let stage: ValidateConfigStage;
@@ -266,5 +269,412 @@ describe('ValidateConfigStage — v2 routing', () => {
         const result = await stage.execute(buildContext(undefined));
 
         expect(result.codeReviewConfig.byokConfig).toBeUndefined();
+    });
+});
+
+describe('ValidateConfigStage — base branch scope', () => {
+    let stage: ValidateConfigStage;
+
+    const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+    const validate = (
+        configBaseBranches: string[] | undefined,
+        apiBaseBranch: string | undefined,
+        targetBranch: string,
+        sourceBranch = 'feature/x',
+    ) =>
+        stage['_isBranchLogicValid'](
+            sourceBranch,
+            targetBranch,
+            configBaseBranches,
+            apiBaseBranch,
+            'github' as any,
+            orgAndTeam,
+        );
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: { findLatestExecutionByFilters: jest.fn() },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn() },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment: jest.fn() },
+                },
+            ],
+        }).compile();
+
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    describe('missing config (undefined / not an array)', () => {
+        it('does not block when baseBranches is undefined', () => {
+            expect(validate(undefined, 'main', 'develop').canProceed).toBe(true);
+        });
+
+        it('does not block when baseBranches is corrupt', () => {
+            expect(validate('main' as any, 'main', 'develop').canProceed).toBe(
+                true,
+            );
+        });
+    });
+
+    describe('empty list — scope is the repository default branch', () => {
+        it('reviews a PR targeting the default branch', () => {
+            expect(validate([], 'main', 'main').canProceed).toBe(true);
+        });
+
+        it('skips a PR targeting a non-default branch', () => {
+            const result = validate([], 'main', 'develop');
+
+            expect(result.canProceed).toBe(false);
+            expect(result.details?.message).toContain('develop');
+        });
+
+        it('falls back to reviewing when the default branch is unknown', () => {
+            expect(validate([], undefined, 'develop').canProceed).toBe(true);
+        });
+    });
+
+    describe('non-empty list — scope is the configured patterns', () => {
+        it('reviews a PR targeting a configured branch', () => {
+            expect(validate(['develop'], 'main', 'develop').canProceed).toBe(
+                true,
+            );
+        });
+
+        it('still reviews a PR targeting the default branch', () => {
+            expect(validate(['develop'], 'main', 'main').canProceed).toBe(true);
+        });
+
+        it('skips a PR targeting a branch outside the patterns', () => {
+            expect(validate(['develop'], 'main', 'staging').canProceed).toBe(
+                false,
+            );
+        });
+
+        it('lets an explicit exclusion opt the default branch out', () => {
+            expect(
+                validate(['develop', '!main'], 'main', 'main').canProceed,
+            ).toBe(false);
+        });
+
+        it('matches wildcard patterns', () => {
+            expect(
+                validate(['release/*'], 'main', 'release/2.0').canProceed,
+            ).toBe(true);
+        });
+    });
+});
+
+describe('ValidateConfigStage — @kody -v naming no agent', () => {
+    let stage: ValidateConfigStage;
+    let createSingleIssueComment: jest.Mock;
+
+    const agent = (id: string, name: string, enabled = true) => ({
+        id,
+        name,
+        enabled,
+        instructions: '',
+        scope: {},
+        tools: {},
+        presentation: {
+            tag: { color: 'blue' },
+            format: 'inline',
+            suggestedFix: 'when-confident',
+        },
+    });
+
+    const buildContext = (
+        onlyCustomAgent: string | undefined,
+        customAgents: unknown[],
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 7,
+                title: 'feat: ledger',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            onlyCustomAgent,
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                customAgents,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    beforeEach(async () => {
+        createSingleIssueComment = jest.fn().mockResolvedValue({ id: 'c1' });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: {
+                        validateOrganizationLicense: jest
+                            .fn()
+                            .mockResolvedValue({
+                                valid: true,
+                                subscriptionStatus: 'active',
+                                planType: 'teams_byok',
+                            }),
+                    },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    it('answers on the PR with the agents it has, and skips the review', async () => {
+        const result = await stage.execute(
+            buildContext('ledgr', [
+                agent('1', 'Ledger Rules'),
+                agent('2', 'Data Contracts', false),
+            ]),
+        );
+
+        expect(createSingleIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: 'No custom agent named `ledgr` on this repository. Agents: `ledger-rules`, `data-contracts`.',
+            }),
+        );
+        expect(result.statusInfo).toEqual({
+            status: 'skipped',
+            message: 'No custom agent matches the @kody -v command.',
+        });
+    });
+
+    it('says so when the repository has no custom agents', async () => {
+        await stage.execute(buildContext('ledger', []));
+
+        expect(createSingleIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: 'No custom agent named `ledger` on this repository. It has no custom agents.',
+            }),
+        );
+    });
+
+    it('runs the review when the slug names an agent, enabled or not', async () => {
+        const result = await stage.execute(
+            buildContext('data-contracts', [
+                agent('2', 'Data Contracts', false),
+            ]),
+        );
+
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
+    });
+
+    it('leaves a review without -v alone', async () => {
+        await stage.execute(buildContext(undefined, []));
+
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+});
+
+describe('ValidateConfigStage — custom agents plan gate', () => {
+    let stage: ValidateConfigStage;
+    let createSingleIssueComment: jest.Mock;
+    let validateOrganizationLicense: jest.Mock;
+
+    const agent = {
+        id: 'a1',
+        name: 'Ledger Rules',
+        enabled: true,
+        instructions: '',
+        scope: { include: ['package.json'] },
+        tools: {},
+        presentation: {
+            tag: { color: 'blue' },
+            format: 'inline',
+            suggestedFix: 'when-confident',
+        },
+    };
+    const knowledge = [
+        { id: 'k1', kind: 'doc', path: 'docs/ledger.md', linkedTo: ['main'] },
+    ];
+
+    const FREE = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
+    const TEAMS = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'teams_byok',
+    };
+    const TRIAL = {
+        valid: true,
+        subscriptionStatus: 'trial',
+        planType: 'teams_managed',
+    };
+
+    const buildContext = (
+        onlyCustomAgent?: string,
+        customAgents: unknown[] = [agent],
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 7,
+                title: 'feat: ledger',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            onlyCustomAgent,
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                customAgents,
+                knowledge,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    beforeEach(async () => {
+        createSingleIssueComment = jest.fn().mockResolvedValue({ id: 'c1' });
+        validateOrganizationLicense = jest.fn();
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: { validateOrganizationLicense },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    it('on free, reviews without the custom agents and their skills and docs, keeping nothing to rescue', async () => {
+        validateOrganizationLicense.mockResolvedValue(FREE);
+
+        const result = await stage.execute(buildContext());
+
+        expect(result.codeReviewConfig.customAgents).toEqual([]);
+        expect(result.codeReviewConfig.knowledge).toEqual([]);
+        expect(
+            ignoredFilesForCustomAgents(result, [
+                { filename: 'package.json' } as any,
+            ]),
+        ).toEqual([]);
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('on free, answers @kody -v with the plan and skips the review', async () => {
+        validateOrganizationLicense.mockResolvedValue(FREE);
+
+        const result = await stage.execute(buildContext('ledger-rules'));
+
+        expect(createSingleIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 7,
+                body: `\`@kody -v ledger-rules\` did not run. ${CUSTOM_AGENTS_PLAN_REQUIRED}`,
+            }),
+        );
+        expect(result.statusInfo).toEqual({
+            status: 'skipped',
+            message: "Custom agents are not on this organization's plan.",
+        });
+    });
+
+    it.each([
+        ['Teams', TEAMS],
+        ['trial', TRIAL],
+    ])(
+        'on %s, keeps the custom agents and runs @kody -v',
+        async (_, license) => {
+            validateOrganizationLicense.mockResolvedValue(license);
+
+            const result = await stage.execute(buildContext('ledger-rules'));
+
+            expect(result.codeReviewConfig.customAgents).toEqual([agent]);
+            expect(result.codeReviewConfig.knowledge).toEqual(knowledge);
+            expect(createSingleIssueComment).not.toHaveBeenCalled();
+            expect(result.statusInfo?.status).not.toBe('skipped');
+        },
+    );
+
+    it('fails closed when the license cannot be read', async () => {
+        validateOrganizationLicense.mockRejectedValue(
+            new Error('billing down'),
+        );
+
+        const result = await stage.execute(buildContext());
+
+        expect(result.codeReviewConfig.customAgents).toEqual([]);
+        expect(result.codeReviewConfig.knowledge).toEqual([]);
+    });
+
+    it('does not read the license for a review with no custom agents', async () => {
+        const context = buildContext(undefined, []);
+        (context.codeReviewConfig as any).knowledge = [];
+
+        await stage.execute(context);
+
+        expect(validateOrganizationLicense).not.toHaveBeenCalled();
     });
 });

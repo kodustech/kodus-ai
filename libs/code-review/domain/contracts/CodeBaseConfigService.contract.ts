@@ -42,6 +42,11 @@ export interface ICodeBaseConfigService {
         affectedPath: string,
     ): Promise<string | undefined>;
 
+    getDefaultBranch(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: string },
+    ): Promise<string>;
+
     getKodusConfigFile(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };

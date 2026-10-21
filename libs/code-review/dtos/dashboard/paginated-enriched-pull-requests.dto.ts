@@ -14,6 +14,12 @@ export class PaginationMetadata {
     itemsPerPage: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
+    // Resume point for the next page: the last execution this response READ,
+    // which is past the last one it emitted whenever post-query filters dropped
+    // rows. Clients must send it back as `cursor` instead of incrementing
+    // `page` — see EnrichedPullRequestsQueryDto.cursor. Undefined when the
+    // source is exhausted.
+    nextCursor?: string;
 }
 
 export class PaginatedEnrichedPullRequestsResponse {

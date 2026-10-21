@@ -14,6 +14,7 @@ import {
 import { useGetTimezone } from "@services/organizationParameters/hooks";
 import {
     buildPullRequestUrl,
+    buildReviewDeepLinkUrl,
     usePrefetchPullRequestReview,
     type CodeReviewTimelineItem,
     type ReviewWarning,
@@ -451,6 +452,16 @@ export const PrListItem = ({ group }: PrListItemProps) => {
         () => new Set(executions.slice(1).map((_, i) => i + 1)),
     );
     const prUrl = buildPullRequestUrl(latest);
+    // The review screen already deep-links to a finding via
+    // `?file=<path>&suggestion=<id>` (scrolls to it and lights it up). The list
+    // only knows counts, so the backend tags each row with the delivered
+    // finding that most wants attention; pass it through so the count click
+    // lands on that comment instead of the top of a large diff.
+    const reviewHref = buildReviewDeepLinkUrl(
+        latest.repositoryId,
+        latest.prNumber,
+        latest.firstSentSuggestion,
+    );
 
     const toggleReview = (index: number) => {
         setCollapsedReviews((prev) => {
@@ -465,7 +476,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
     };
 
     return (
-        <div className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
+        <div
+            className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
             <div
                 role="button"
                 tabIndex={0}
@@ -558,7 +570,13 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                         </Tooltip>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <span className="flex max-w-[14rem] min-w-0 items-center gap-1">
+                                {/* A ceiling, not a width: `min-w-0` lets this
+                                    shrink and truncate exactly as before when
+                                    the row is tight, so the wider cap only
+                                    cashes out on screens that have the room.
+                                    14rem cut most branch names in half while
+                                    the column beside them sat empty. */}
+                                <span className="flex max-w-[26rem] min-w-0 items-center gap-1">
                                     <GitBranchIcon className="size-3 shrink-0" />
                                     <span className="truncate font-mono">
                                         {latest.headBranchRef}
@@ -633,7 +651,10 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     shown so "0 / 0" reads as "reviewed, nothing to send" — not
                     as missing data. */}
                 <NextLink
-                    href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
+                    href={reviewHref}
+                    // Icons and bare numbers give this link no accessible name
+                    // of its own; spell out where it goes.
+                    aria-label="Open review at the delivered suggestions"
                     onClick={(e) => e.stopPropagation()}
                     onMouseEnter={prefetchThisReview}
                     onFocus={prefetchThisReview}
@@ -1204,6 +1225,28 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     // Rendered by ProviderFallbackNotice, not the fidelity list — label kept
     // for exhaustiveness.
     PROVIDER_FALLBACK: "Main provider failed; ran on fallback",
+    RULE_CONTEXT_UNAVAILABLE:
+        "Kody Rules not evaluated (repository context unavailable)",
+    BAD_FIX_DOWNGRADED: "Unusable fixes posted as plain comments",
+    SANDBOX_UNAVAILABLE: "Reviewed the diff only (repository not checked out)",
+    CALLGRAPH_FAILED: "Call graph unavailable",
+    SUGGESTIONS_DROPPED_PATH_MISMATCH:
+        "Findings dropped (file not in the pull request)",
+    KODY_RULES_PARTIAL: "Some Kody Rules checks failed to run",
+    VERIFY_UNAVAILABLE: "Findings not posted (verification failed to run)",
+    SKILL_NOT_FOUND: "Linked skill not found on the target branch",
+    SKILL_INVALID: "Linked skill skipped (invalid skill format)",
+    SKILL_CHANGED_IN_PR:
+        "Skill or doc edited in this PR (target-branch version used)",
+    DOC_NOT_FOUND: "Linked doc not found on the target branch",
+    KNOWLEDGE_TRUNCATED: "Skills or docs cut to fit their budget",
+    KNOWLEDGE_UNAVAILABLE: "Reviewed without skills and docs (could not be read)",
+    SKILL_COMPATIBILITY: "Skill requirements may not be met by the reviewer",
+    CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
+    CROSS_REPO_UNAVAILABLE:
+        "Linked repositories not read (repository not checked out)",
+    AST_GREP_UNAVAILABLE: "Custom agent ran without ast-grep",
+    CONFIG_FILE_KEY_IGNORED: "kodus-config.yml key ignored (set in the app)",
 };
 
 /**
@@ -1217,12 +1260,21 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
  * the BYOK fallback because main failed) isn't mislabeled as a context-window
  * "fidelity reduced" degradation. Renders each category with its own framing.
  */
-const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
+export const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
     const fallbackWarnings = warnings.filter(
         (w) => w.kind === "PROVIDER_FALLBACK",
     );
+    // Only a small context window is a "fidelity" counter-measure; the other
+    // causes would otherwise render under "has a context window of 0 tokens".
     const fidelityWarnings = warnings.filter(
-        (w) => w.kind !== "PROVIDER_FALLBACK",
+        (w) =>
+            w.kind !== "PROVIDER_FALLBACK" &&
+            w.reason === "small_context_window",
+    );
+    const degradedWarnings = warnings.filter(
+        (w) =>
+            w.kind !== "PROVIDER_FALLBACK" &&
+            w.reason !== "small_context_window",
     );
     return (
         <>
@@ -1232,7 +1284,51 @@ const ReviewNotices = ({ warnings }: { warnings: ReviewWarning[] }) => {
             {fidelityWarnings.length > 0 && (
                 <ReviewFidelityNotice warnings={fidelityWarnings} />
             )}
+            {degradedWarnings.length > 0 && (
+                <ReviewDegradedNotice warnings={degradedWarnings} />
+            )}
         </>
+    );
+};
+
+/**
+ * The review succeeded but worked with less than it should have: no
+ * repository checkout, no call graph, findings or rules that were dropped.
+ * Each line names what was lost; none of it is shown on the pull request.
+ */
+const ReviewDegradedNotice = ({ warnings }: { warnings: ReviewWarning[] }) => {
+    const seen = new Set<string>();
+    const unique = warnings.filter((w) => {
+        const key = `${w.kind}::${w.detail ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    return (
+        <div className="border-warning/30 bg-warning/5 mb-4 rounded-lg border p-3">
+            <div className="mb-2 flex items-center gap-2">
+                <AlertTriangleIcon className="text-warning size-4 shrink-0" />
+                <span className="text-text-primary text-sm font-medium">
+                    Review ran with less context
+                </span>
+            </div>
+            <ul className="text-text-secondary space-y-1 text-xs">
+                {unique.map((w, idx) => (
+                    <li key={`${w.kind}-${idx}`} className="flex gap-1.5">
+                        <span className="text-text-tertiary">•</span>
+                        <span>
+                            {WARNING_KIND_LABEL[w.kind] ?? w.kind}
+                            {w.detail && (
+                                <span className="text-text-tertiary">
+                                    {" "}
+                                    ({w.detail})
+                                </span>
+                            )}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 };
 

@@ -1,9 +1,9 @@
 "use client";
 
 import type { ComponentProps, ReactNode } from "react";
+import Link from "next/link";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { cn } from "src/core/utils/components";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 import {
@@ -12,12 +12,14 @@ import {
     CoinsIcon,
     LinkIcon,
     PencilIcon,
+    TagIcon,
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
-import Link from "next/link";
+import { cn } from "src/core/utils/components";
 
-import { useCatalogModel } from "../_data/catalog-context";
+import { formatModelLabel } from "../_data/model-label";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type {
     BYOKConfig,
     BYOKModelConfig,
@@ -25,9 +27,18 @@ import type {
     ReasoningEffort,
 } from "../_types";
 import { TASK_LABELS } from "../_utils";
-import { PROVIDER_LABELS } from "./catalog/model-card";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 import { ProviderLogo } from "./provider-logo";
+
+export type CatalogPricing = {
+    inputPerMillion: number;
+    outputPerMillion: number;
+    cacheReadPerMillion?: number;
+    cacheWritePerMillion?: number;
+};
+
+const perMillion = (n: number) =>
+    `$${n.toLocaleString("en-US", { maximumFractionDigits: 3 })}`;
 
 const formatThinking = (effort?: ReasoningEffort): string | null => {
     if (!effort || effort === "none") return null;
@@ -60,7 +71,10 @@ function UsageChip({
         <Badge
             size="xs"
             variant={variant}
-            className={cn(className, onOpenRouting ? "cursor-pointer" : STATUS_CHIP)}>
+            className={cn(
+                className,
+                onOpenRouting ? "cursor-pointer" : STATUS_CHIP,
+            )}>
             {children}
         </Badge>
     );
@@ -98,6 +112,7 @@ export function ModelRow({
     onEdit,
     onDeleted,
     onOpenRouting,
+    catalog,
 }: {
     model: BYOKModelConfig;
     config?: BYOKConfig | null;
@@ -108,18 +123,20 @@ export function ModelRow({
     onDeleted?: () => void;
     /** Deep-link a "Used in" chip to its row on the Routing tab. */
     onOpenRouting?: (anchor: string) => void;
+    /** Catalog entry for this model id (Kodus provider): the curated name and
+     *  the list price the org is billed at. Absent for other providers. */
+    catalog?: { name: string; pricing?: CatalogPricing };
 }) {
-    const curated = useCatalogModel(model.model);
-    const displayName = curated?.displayName ?? model.model;
+    const displayName = catalog?.name ?? formatModelLabel(model.model);
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(
         (c) => c.id === model.credentialId,
     );
     const provider = credential?.provider;
-    const providerLabel =
-        curated?.providerDisplayName ??
-        (provider ? PROVIDER_LABELS[provider] ?? provider : undefined);
+    const providerLabel = provider
+        ? (PROVIDER_LABELS[provider] ?? provider)
+        : undefined;
     const settings = (credential?.settings ?? {}) as Record<string, unknown>;
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
@@ -154,14 +171,6 @@ export function ModelRow({
                         <div className="flex min-w-0 flex-col gap-1.5">
                             <span className="text-text-primary text-sm font-semibold text-balance">
                                 {displayName}
-                                {curated && (
-                                    <span className="text-text-tertiary ml-2 text-xs font-normal">
-                                        ★{" "}
-                                        <span className="tabular-nums">
-                                            {curated.benchmarkScore}
-                                        </span>
-                                    </span>
-                                )}
                             </span>
                             {providerLabel && (
                                 <span className="text-text-tertiary text-xs">
@@ -180,6 +189,27 @@ export function ModelRow({
                                     <span className="flex items-center gap-1.5">
                                         <BrainCircuitIcon size={12} /> Thinking:{" "}
                                         {thinking}
+                                    </span>
+                                )}
+                                {catalog?.pricing && (
+                                    <span
+                                        className="flex items-center gap-1.5 tabular-nums"
+                                        title="List price you are billed at, per 1M tokens"
+                                        data-testid="kodus-model-tariff">
+                                        <TagIcon size={12} />
+                                        {perMillion(
+                                            catalog.pricing.inputPerMillion,
+                                        )}{" "}
+                                        in ·{" "}
+                                        {perMillion(
+                                            catalog.pricing.outputPerMillion,
+                                        )}{" "}
+                                        out
+                                        {typeof catalog.pricing
+                                            .cacheReadPerMillion === "number"
+                                            ? ` · ${perMillion(catalog.pricing.cacheReadPerMillion)} cached`
+                                            : ""}{" "}
+                                        / 1M tokens
                                     </span>
                                 )}
                                 {model.temperature != null && (
@@ -213,7 +243,7 @@ export function ModelRow({
                                                     </span>
                                                 )}
                                                 <span className="text-primary-light inline-flex items-center gap-1 group-hover:underline">
-                                                    View breakdown
+                                                    Open Costs
                                                     <ArrowUpRightIcon
                                                         size={11}
                                                     />
@@ -242,14 +272,18 @@ export function ModelRow({
                                 Edit model
                             </Button>
                         )}
+                        {/* Icon-only, like every other destructive row action
+                            in the app: a labelled red "Remove" on each row pulled
+                            more attention than the edit next to it. */}
                         {onDeleted && (
                             <Button
-                                size="xs"
+                                size="icon-xs"
                                 variant="cancel"
-                                leftIcon={<TrashIcon />}
-                                className="text-danger [--button-foreground:var(--color-danger)]"
+                                aria-label="Remove model"
+                                title="Remove model"
+                                className="[--button-foreground:var(--color-danger)]"
                                 onClick={confirmAndDelete}>
-                                Remove
+                                <TrashIcon />
                             </Button>
                         )}
                     </div>

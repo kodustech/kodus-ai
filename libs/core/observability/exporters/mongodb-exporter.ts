@@ -955,14 +955,42 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             }
         }
 
-        // Ensure correlationId always exists (Index Key)
-        const correlationId =
-            (normalizedContext?.correlationId as string) || randomUUID();
+        // Ensure correlationId always exists (Index Key).
+        //
+        // A generated id keeps the index dense, but it is NOT a correlation:
+        // three log lines from one failure each got their own random UUID, so
+        // the cascade they describe could not be reassembled. Chasing the NUL
+        // outage, 51 events looked like 153 unrelated ones, and the only way to
+        // tell was to read the stack traces one by one.
+        //
+        // So the synthetic id stays — and now says that it is synthetic.
+        // `correlationIdSynthetic` is the difference between "these lines are
+        // unrelated" and "we do not know whether these lines are related",
+        // which are opposite conclusions to draw from the same query.
+        const providedCorrelationId = normalizedContext?.correlationId as
+            | string
+            | undefined;
+        const correlationId = providedCorrelationId || randomUUID();
 
-        // Ensure tenantId exists in metadata (common requirement)
-        if (!metadata.tenantId) {
+        // Ensure tenantId exists in metadata (common requirement).
+        //
+        // Nothing in the codebase ever SETS `tenantId`, so this bucket resolved
+        // to the literal string 'unknown' for every log line ever written: two
+        // hours of production put 23,420 error and warn rows, spanning 106
+        // components, into that single bucket. The field was populated and
+        // useless — no error could be attributed to a customer, which is the
+        // first question asked about any of them.
+        //
+        // `organizationId` is the tenant here, and it IS carried (lifted from
+        // `organizationAndTeamData` just above). Falling back to it turns the
+        // bucket into the grouping key it was meant to be. Kept as a fallback
+        // rather than a rename so an explicit `tenantId`, if a caller ever
+        // sends one, still wins.
+        if (!metadata.tenantId || metadata.tenantId === 'unknown') {
             metadata.tenantId =
-                (normalizedContext?.tenantId as string) || 'unknown';
+                (normalizedContext?.tenantId as string) ||
+                (normalizedContext?.organizationId as string) ||
+                'unknown';
         }
 
         // Callers frequently pass shapes with circular refs (Axios errors
@@ -981,6 +1009,11 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             message,
             component,
             correlationId, // Guaranteed UUID
+            // Present only when the id was invented here, so a query can
+            // exclude these rows instead of grouping on a value that means
+            // nothing. Absent (not `false`) on real ids — a time-series
+            // collection should not carry a field for the common case.
+            ...(providedCorrelationId ? {} : { correlationIdSynthetic: true }),
             tenantId: metadata.tenantId,
             executionId: normalizedContext?.executionId as string | undefined,
             sessionId: normalizedContext?.sessionId as string | undefined,

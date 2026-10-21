@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@components/ui/button";
 import { Calendar } from "@components/ui/calendar";
 import {
@@ -9,17 +9,11 @@ import {
     PopoverTrigger,
 } from "@components/ui/popover";
 import { Separator } from "@components/ui/separator";
-import { cn } from "src/core/utils/components";
-import {
-    formatDate,
-    parseISO,
-    subDays,
-    subMonths,
-    subWeeks,
-} from "date-fns";
+import { formatDate, parseISO, subDays, subMonths, subWeeks } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { CalendarIcon, XIcon } from "lucide-react";
 import { type DateRange } from "react-day-picker";
+import { cn } from "src/core/utils/components";
 
 // Decoupled sibling of the cockpit DateRangePicker: same Calendar + presets,
 // but instead of the cockpit cookie/URL param + full-page reload it just reports
@@ -35,8 +29,13 @@ type Props = {
 const dateToString = (date: Date) => formatDate(date, "yyyy-MM-dd");
 const stringToDate = (date: string) => new Date(parseISO(date));
 
-const today = new Date();
-const presets = [
+/**
+ * Built on demand rather than once at module scope. A module-level `new Date()`
+ * freezes "today" at the moment the chunk loads, so a screen left open across
+ * midnight would offer ranges ending yesterday and stop matching the active
+ * filter, dropping the trigger back to raw dates instead of the preset's name.
+ */
+const buildPresets = (today = new Date()) => [
     {
         label: "Last week",
         from: dateToString(subWeeks(today, 1)),
@@ -61,6 +60,11 @@ const presets = [
 
 export const PullRequestsDateRange = ({ from, to, onChange }: Props) => {
     const [open, setOpen] = useState(false);
+    // Recomputed whenever the popover opens, so the presets — and the upper
+    // bound on the calendar — are relative to the day the user is actually
+    // looking at them.
+    const today = useMemo(() => new Date(), [open]);
+    const presets = useMemo(() => buildPresets(today), [today]);
     // The range being picked while the popover is open; committed on close so a
     // start→end pick costs a single filter update.
     const [pending, setPending] = useState<DateRange | undefined>();

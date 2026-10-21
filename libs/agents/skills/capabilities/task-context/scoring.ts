@@ -110,8 +110,12 @@ export function looksLikeToolErrorCandidate(
     );
     const hasErrorStatus = typeof status === 'number' && status >= 400;
 
+    // `isError` is the MCP envelope's own flag: a failing tool answers with a
+    // normal response rather than throwing, so this is the only marker that a
+    // provider-shaped error payload carries.
     const hasErrorFlag =
         candidate.error === true ||
+        candidate.isError === true ||
         candidate.success === false ||
         candidate.ok === false;
 

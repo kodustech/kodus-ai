@@ -1,0 +1,16 @@
+name: "Preview: Bake base image"
+
+# Paused during the move to the isolated Ohio control plane.
+# Remote warm-bake callbacks are not supported; never fall back to old AWS keys.
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    paused:
+        if: ${{ false }}
+        runs-on: ubuntu-latest
+        steps:
+            - run: echo 'Warm bake is paused; previews use the Ohio Ubuntu AMI.'

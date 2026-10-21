@@ -51,8 +51,21 @@ describe('anthropicModule.reasoning — effort=none owns "thinking off"', () => 
         expect(off('claude-fable-5')).toEqual({});
     });
 
-    it('omits on anthropic_compatible (Kimi/Z.ai never think by default)', () => {
+    it('says `disabled` out loud on DISABLE-able compatible models (Kimi K2.6)', () => {
+        // K2.5/K2.6 enable thinking by DEFAULT and accept `{ type: 'disabled' }`.
+        // Omitting it left thinking ON, which 400s a forced-tool_choice call —
+        // the PR#144/#145/#146 Kody Rules failure. "Off" must be explicit.
+        expect(off('kimi-k2.6', 'anthropic_compatible')).toEqual({
+            anthropic: { thinking: { type: 'disabled' } },
+        });
+    });
+
+    it('OMITS the config on ALWAYS-thinking compatible models (Kimi k2.7-code, k3 — no disable)', () => {
+        // k2.7-code and k3 think permanently and expose no disable — sending
+        // `{ type: 'disabled' }` is invalid. Omitting IS the only "off"; the
+        // structured executor reroutes these to json (no forced tool_choice).
         expect(off('kimi-k2.7-code', 'anthropic_compatible')).toEqual({});
+        expect(off('kimi-k3', 'anthropic_compatible')).toEqual({});
     });
 });
 
@@ -121,6 +134,52 @@ describe('anthropicModule capability ↔ behavior (D-05)', () => {
             anthropicModule.capabilities(anthropicNativeCfg.model)
                 .structuredOutput,
         ).toBe('none');
+    });
+});
+
+describe('anthropicModule x-opencode-session header (issue #1880 — OpenCode Go also exposes /v1/messages)', () => {
+    const HEX32 = /^[0-9a-f]{32}$/;
+
+    it('anthropic_compatible pointed at opencode.ai/zen gets the header', () => {
+        const model = anthropicModule.build({
+            provider: 'anthropic_compatible',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go',
+            byokModelId: 'model-123',
+        } as any) as any;
+
+        expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
+    });
+
+    it('native anthropic pointed at opencode.ai/zen gets the header too (it also accepts a baseURL override)', () => {
+        const model = anthropicModule.build({
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://opencode.ai/zen/go/v1',
+            byokModelId: 'model-123',
+        } as any) as any;
+
+        expect(model.config.headers()['x-opencode-session']).toMatch(HEX32);
+    });
+
+    it('neither branch gets the header for a normal Anthropic/compatible baseURL', () => {
+        const compatible = anthropicModule.build({
+            provider: 'anthropic_compatible',
+            model: 'claude-sonnet-4-5-20250929',
+            apiKey: 'test-key',
+            baseURL: 'https://api.moonshot.ai/v1',
+            byokModelId: 'model-123',
+        } as any) as any;
+        expect(compatible.config.headers()).not.toHaveProperty(
+            'x-opencode-session',
+        );
+
+        const native = anthropicModule.build(anthropicNativeCfg) as any;
+        expect(native.config.headers()).not.toHaveProperty(
+            'x-opencode-session',
+        );
     });
 });
 

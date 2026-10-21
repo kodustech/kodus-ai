@@ -13,6 +13,8 @@
  * collaborator can depend on the narrow slice it needs (e.g.
  * `PrReviewContext & ReviewRuleConfig`) instead of the whole 34-field input.
  */
+import type { RunStatus } from '@libs/agent-harness/domain/contracts/run-state.contract';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     CodeReviewConfig,
@@ -20,21 +22,33 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { RepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
-import type { LanguageModel } from 'ai';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
-import { CoverageSummary, CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import {
+    CoverageSummary,
+    CoverageTier,
+} from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
+import type { VerdictParseMode } from '@libs/agent-harness/domain/contracts/verifier.contract';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import type { SkillRead } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import type { InstalledCustomAgentCli } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
+import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -88,7 +102,8 @@ export interface AgentProgressEvent {
      *  errorMessage for anything a user reads. */
     errorFriendlyMessage?: string;
     /** How the agent finished — helps surface timeouts and max-steps in the UI */
-    finishReason?: 'stop' | 'timeout' | 'max-steps' | 'error';
+    finishReason?:
+        'stop' | 'timeout' | 'max-steps' | 'truncated' | 'no-result' | 'error';
     /** How findings were obtained — 'json-parse' (normal), 'second-chance', 'generate-object' (fallback LLM), 'empty' */
     source?: string;
     suggestionsPreview?: Array<{
@@ -117,6 +132,18 @@ export interface PrReviewContext {
     prBody?: string;
     /** Base branch of the PR (e.g. "main"). Passed to tools for git diff. */
     baseBranch?: string;
+    /**
+     * CI results the repository's own pipeline reported for the head commit.
+     * Rendered as evidence so the agent does not re-derive — or re-report —
+     * what a deterministic tool already proved. Untrusted text: escape it.
+     */
+    ciEvidence?: CheckEvidence[];
+    /**
+     * Findings Kody's own scanners already produced for this change. Rendered
+     * so the agent does not re-report what is already being published as its
+     * own comment. Untrusted text: escape it.
+     */
+    analyzerFindings?: AnalyzerFinding[];
 }
 
 /** How the agent investigates: sandbox + auth + call graph. */
@@ -128,6 +155,20 @@ export interface ToolingContext {
      * is no sandbox available.
      */
     remoteCommands: RemoteCommands | undefined;
+    /**
+     * Repository lookup WITH an explicit capability signal (issue #1826).
+     *
+     * `remoteCommands` cannot answer "can I look?": the null sandbox implements
+     * it and returns '' successfully, so a consumer reads silence as evidence.
+     * `repoLookup.available` is that missing signal, derived from the sandbox
+     * handle's own `type`, and every accessor throws rather than answering
+     * empty when it is false.
+     *
+     * Absent means the same thing as unavailable — a consumer must fail closed,
+     * never assume a lookup it was not given. `buildOrchestratorInput` always
+     * populates it, including for a null sandbox.
+     */
+    repoLookup?: RepoLookup;
     gitHubToken?: string;
     /** Pre-computed call graph for changed functions. Generated once, shared across agents. */
     callGraph?: string;
@@ -142,6 +183,39 @@ export interface ToolingContext {
      * system prompt gains a boundary-check directive. Absent = feature off.
      */
     linkedRepoAccess?: LinkedRepoAccess;
+    /**
+     * Skills and docs linked to THIS agent's target (the main review, or one
+     * custom agent), read from the PR's target branch (#2172). Rendered into
+     * the system prompt; skills open through `loadSkill` / `readSkillFile`.
+     */
+    knowledge?: ResolvedKnowledge;
+    /** Target-branch reader the knowledge tools read through. */
+    knowledgeReader?: BaseBranchReader;
+    /** What a custom agent needs to build its own tools (astGrep, runCli). */
+    customAgentTooling?: CustomAgentTooling;
+}
+
+/** Review-scoped handles a custom agent builds its tools from (#2172). */
+export interface CustomAgentTooling {
+    /** The review's sandbox: astGrep writes its config there, runCli runs
+     *  there (E2B only). */
+    sandbox?: SandboxInstance;
+    /** CLIs installed and fenced for this review, by custom agent id. */
+    installedClis?: Record<string, InstalledCustomAgentCli[]>;
+    /** Told of every runCli call and what the agent read back (Try it). */
+    onCliRun?: (run: CustomAgentCliRun) => void;
+    /** Told of every skill opened and skill file read that returned
+     *  content (Try it). */
+    onSkillRead?: (read: SkillRead) => void;
+}
+
+/** One runCli call: the CLI, its arguments and the output the agent got. */
+export interface CustomAgentCliRun {
+    /** The custom agent that ran it. */
+    agentId: string;
+    cli: string;
+    args: string[];
+    output: string;
 }
 
 /** Review behavior + rules the agent applies. */
@@ -154,6 +228,10 @@ export interface ReviewRuleConfig {
      * current implementation is correct.
      */
     traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round, scoped
+     *  to the changed files (issue #1313). Historical evidence, never proof the
+     *  current code is correct — same discipline as `traceDecisions`. */
+    previousDecisions?: PrDecisionRecord[];
     /** Kody rules passed through so findings tagged with ruleUuid can be cross-referenced. */
     kodyRules?: Partial<IKodyRule>[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
@@ -251,7 +329,8 @@ export interface RuntimeMeta {
  * cohesive slices above so a consumer can depend on just what it needs.
  */
 export interface ReviewAgentInput
-    extends PrReviewContext,
+    extends
+        PrReviewContext,
         ToolingContext,
         ReviewRuleConfig,
         ModelConfig,
@@ -266,12 +345,15 @@ export interface ReviewAgentInput
      *  The pipeline/experiment sets it; everything below threads it down. */
     outlineFirst?: boolean;
     /**
-     * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
-     * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
-     * are judged against real commit boundaries instead of the aggregated diff.
-     * (PR #1412.)
+     * Commits that make up this PR (SHA + subject line + author date),
+     * oldest→newest. Threaded so commit-hygiene rules ("don't mix mechanical
+     * and behavioral changes") are judged against real commit boundaries
+     * instead of the aggregated diff (PR #1412), and so the finder/verifier
+     * can correlate a `<PreviousReviewDecision>`'s `DecidedAt` against what
+     * actually landed since (issue #1313 follow-up: a decision has no
+     * anchor to which round/commit produced it, only a timestamp).
      */
-    commits?: Array<{ sha: string; message: string }>;
+    commits?: Array<{ sha: string; message: string; date?: string }>;
     /**
      * Optional per-review steering directive supplied by the user at trigger
      * time (e.g. `@kody review focus on the auth logic`). Free text. When set,
@@ -289,6 +371,9 @@ export interface ReviewAgentOutput {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity?: Partial<CodeSuggestion>[];
     discardedByVerify?: Partial<CodeSuggestion>[];
+    /** Findings whose verify run failed, so nobody judged them. Never
+     *  published as checked; stored apart from refutations (#2171). */
+    discardedByVerifyError?: Partial<CodeSuggestion>[];
     agentName: string;
     agentCategory?: string;
     agentReplicaIndex?: number;
@@ -310,10 +395,14 @@ export interface ReviewAgentOutput {
      * a review that never completed (#1568).
      */
     hitHardLimit?: boolean;
-    /** Why the agent loop stopped — 'timeout' (budget), 'max-steps', or 'stop'
-     *  (ran to completion). Carried alongside hitHardLimit for telemetry and
-     *  for the user-facing "review was cut short" notice. */
-    finishReason?: 'timeout' | 'max-steps' | 'stop';
+    /** Why the agent loop stopped — 'max-steps' (ran out of steps without
+     *  submitting), 'truncated' (the provider cut its turn, so the requested
+     *  tools never ran), 'no-result' (a custom agent's run ended without
+     *  submitting a result, so its silence says nothing), or 'stop' (ran to
+     *  completion). A per-agent timeout is an abort, which fails the agent
+     *  instead. Carried alongside hitHardLimit for telemetry and for the
+     *  "review was cut short" notice. */
+    finishReason?: 'max-steps' | 'truncated' | 'no-result' | 'stop';
 }
 
 // ─── Agent-loop contracts (the low-level harness/agent boundary) ─────────────
@@ -371,6 +460,32 @@ export interface AgentLoopInput {
      *  agents where rules are explicit and synthesis just re-words the
      *  same findings, leading to dedup churn and duplicate comments. */
     skipSynthesisRescue?: boolean;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Threaded down to the verifier so it can refute a
+     *  finding that contradicts a decision already applied — the finder's
+     *  own system/user prompts already have their copy baked into
+     *  `systemPrompt`/`userPrompt` above (see `formatPreviousDecisions` in
+     *  prompt-builder.ts), so this field exists ONLY for the verifier hop. */
+    previousDecisions?: PrDecisionRecord[];
+    /** Custom agents only: the team guides linked to this agent (may be
+     *  empty). Set → findings may carry kind/source, and convention findings
+     *  take the quote check (target branch, via the sandbox) and the
+     *  convention verifier instead of HV2. Unset for every other agent. */
+    conventionGuides?: string[];
+    /** Custom agents only: the team's instructions, the text a rule cited
+     *  from `TeamInstructions` is quote-checked against. */
+    teamInstructions?: string;
+    /** Custom agents kept to their lane only: the focus (name, instructions,
+     *  linked guides) the verifier checks each finding against. A finding
+     *  outside it is dropped by the verification it already takes, and the
+     *  synthesis rescue asks only for missed findings within it. Unset for
+     *  every other agent and for a custom agent that also reports general
+     *  bugs. */
+    laneFocus?: string;
+    /** Custom agents only: the names of its team system (read-only MCP)
+     *  tools. Set → the recall pass also asks whether a system it consulted
+     *  states a requirement the change breaks. Unset for every other agent. */
+    teamSystemTools?: string[];
     /** Reasoning effort level from BYOK config. Mapped to provider-specific
      *  providerOptions (anthropic.thinking, google.thinkingConfig, etc). */
     reasoningEffort?: ReasoningEffort;
@@ -415,6 +530,9 @@ export interface AgentLoopSecrets {
      */
     remoteCommands: RemoteCommands | undefined;
     byokConfig?: NormalizedModel;
+    /** Slot the verify pass runs on when it differs from `byokConfig` (a
+     *  custom agent's check model, #2172). Unset: verify uses `byokConfig`. */
+    verifyByokConfig?: NormalizedModel;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;
@@ -446,6 +564,12 @@ export interface AgentLoopSecrets {
         provider: string;
         errorMessage: string;
     }) => void;
+    /**
+     * Extra finder tools for this run (a custom agent's astGrep and read-only
+     * MCP tools, from `buildCustomAgentTools`). Appended to the repository
+     * tools; the caller owns their lifecycle (closes MCP connections).
+     */
+    extraTools?: readonly AgentTool[];
 }
 
 export interface AgentLoopOutput {
@@ -458,7 +582,19 @@ export interface AgentLoopOutput {
         args: Record<string, unknown>;
         result?: string;
     }>;
-    finishReason: string;
+    /** The harness RunStatus of the finder run. Typed, not `string`: the
+     *  provider used to compare it against values the harness never emits, so
+     *  an unfinished run read as finished (#2171). */
+    finishReason: RunStatus;
+    /** Set when the finder ended without submitting a result: it ran out of
+     *  steps (`budget-exhausted`), or the provider cut its turn so the
+     *  requested tools never ran (`truncated`). Absent for a run that finished,
+     *  including one that answered in prose. */
+    incompleteReason?: 'budget-exhausted' | 'truncated';
+    /** Whether the finder published a whole submitResult. A run that answered
+     *  in prose has none; prose recovery owns it for the generalist, while a
+     *  custom agent reads it as stopped early. */
+    submittedResult?: boolean;
     /** Present only when finishReason === 'error': the underlying provider/model
      *  error surfaced by the harness. Used to classify the failure and surface a
      *  friendly reason in the end-review comment. */
@@ -489,6 +625,11 @@ export interface AgentLoopOutput {
     discardedBySeverity?: FindingsOutput['suggestions'];
     /** Suggestions discarded by the verifier. */
     droppedByVerify?: FindingsOutput['suggestions'];
+    /** Suggestions whose verify run failed — not refuted, not confirmed. */
+    unverifiedByVerify?: FindingsOutput['suggestions'];
+    /** Convention findings whose quoted rule is not in the cited guide on the
+     *  target branch (`quote-not-found`) — dropped before verify. */
+    droppedByQuoteCheck?: FindingsOutput['suggestions'];
     /** Token usage for the verification sub-step only (included in total usage). */
     verificationUsage?: {
         inputTokens: number;
@@ -523,7 +664,10 @@ export interface VerificationDecisionTrace {
     index: number;
     relevantFile: string;
     action: 'keep' | 'drop' | 'refine';
-    parseMode: 'direct' | 'fallback-llm' | 'default-keep';
+    /** How the verifier's verdict was read: `tool` = it called submitVerdict,
+     *  `text` = it answered in prose and the deterministic parser recovered the
+     *  verdict, `default-keep` = nothing parseable, fail-open (issue #1937). */
+    parseMode: VerdictParseMode;
     rationale: string;
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;
@@ -534,6 +678,10 @@ export interface VerificationTraceSummary {
     beforeCount: number;
     afterCount: number;
     droppedByVerifier: number;
+    /** Findings whose verify run failed (not judged, not published). */
+    unverified?: number;
+    /** Convention findings dropped by the quote check, before verify. */
+    droppedByQuoteCheck?: number;
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;

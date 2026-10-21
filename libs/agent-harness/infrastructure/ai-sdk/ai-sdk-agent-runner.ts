@@ -16,6 +16,7 @@
  */
 import { jsonSchema, tool as aiTool, type ModelMessage } from 'ai';
 import { LLM, type AgentLoopResult } from '@libs/llm/llm';
+import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type {
@@ -160,16 +161,25 @@ export class AiSdkAgentRunner implements AgentRunner {
                 out.activeTools = merged.activeTools;
             }
             // injectNote -> trailing message (cache-prefix friendly)
+            // The base conversation is the compressed window when a policy
+            // provided one (merged.messages); the steering note is APPENDED to
+            // it, never substituted for it. Previously the note branch rebuilt
+            // from the uncompressed original (msgs ?? messages), so a
+            // concurrent compression was discarded and the hard per-request
+            // context clamp was bypassed (#1808).
+            const baseMessages = merged.messages
+                ? merged.messages.map(toModelMessage)
+                : ((msgs ?? messages) as ModelMessage[]);
             if (merged.injectNote) {
                 out.messages = [
-                    ...(msgs ?? messages),
+                    ...baseMessages,
                     {
                         role: merged.injectNote.role,
                         content: merged.injectNote.content,
                     },
                 ];
             } else if (merged.messages) {
-                out.messages = merged.messages.map(toModelMessage);
+                out.messages = baseMessages;
             }
             // HARD invariant: the conversation array must NEVER contain a
             // system-role message — Google Gemini rejects any system message that
@@ -221,6 +231,12 @@ export class AiSdkAgentRunner implements AgentRunner {
             }
         };
 
+        // PR/team for cost attribution: the code-review finder opts these in via
+        // `runtimeContext`; other callers hand over raw `telemetryMetadata`.
+        const runMeta = (input.runtimeContext ?? input.telemetryMetadata) as
+            | { pullRequestId?: number; teamId?: string }
+            | undefined;
+
         try {
             // ── the model call: ONE door. LLM.run resolves the slot → model +
             // tuning + reasoning + prompt-cache, runs the loop from these seams,
@@ -240,6 +256,18 @@ export class AiSdkAgentRunner implements AgentRunner {
                     agentName: spec.agentName ?? spec.id,
                     ...(spec.phase ? { phase: spec.phase } : {}),
                     source: 'harness',
+                    // Per-PR / per-team cost attribution. organizationId reaches
+                    // the span via LLM.run's own param above, but prNumber/teamId
+                    // ride the cost attrs — without threading them the biggest
+                    // spans (the agent loop) record prNumber undefined, so per-PR
+                    // cost in the dashboard misses the finder/verify entirely.
+                    // The code-review finder opts these values in through
+                    // `runtimeContext` (via toAiSdkTelemetryArgs); other callers
+                    // pass raw `telemetryMetadata`. Read both.
+                    ...(runMeta?.pullRequestId != null
+                        ? { prNumber: runMeta.pullRequestId }
+                        : {}),
+                    ...(runMeta?.teamId ? { teamId: runMeta.teamId } : {}),
                 },
                 system: spec.systemPrompt,
                 messages,
@@ -262,7 +290,14 @@ export class AiSdkAgentRunner implements AgentRunner {
                     : {}),
                 // Cancellation / timeout composed by the caller (parent + hard timeout).
                 signal: ctx.signal,
-                telemetryMetadata: input.telemetryMetadata as any,
+                // Callers that pre-build the SDK payload (the code-review finder,
+                // its recall passes, every verify) put the Langfuse metadata in
+                // `runtimeContext`, not `telemetryMetadata`. LLM.run builds the
+                // telemetry from the latter only, so read both — or those runs
+                // reach Langfuse with no name, org or PR (lost in 9f634e93e).
+                telemetryMetadata: (input.telemetryMetadata ??
+                    input.runtimeContext ??
+                    (input.telemetry ? {} : undefined)) as any,
                 loop: {
                     tools: toolMap,
                     maxSteps: spec.maxSteps,
@@ -283,7 +318,14 @@ export class AiSdkAgentRunner implements AgentRunner {
             // actionable detail in the body, so a {message, name} trace is not
             // enough for the caller to classify the failure — it degrades to
             // "Unexpected error" in the PR comment and the UI (#1568).
-            const detail = err as Record<string, unknown> | undefined;
+            // When the SDK's own retries run out it throws a RetryError that
+            // has neither: both are on the attempt that ended the retries.
+            const outer = err as Record<string, unknown> | undefined;
+            const detail = (
+                outer?.lastError && typeof outer.lastError === 'object'
+                    ? outer.lastError
+                    : outer
+            ) as Record<string, unknown> | undefined;
             const status =
                 typeof detail?.statusCode === 'number'
                     ? detail.statusCode
@@ -470,8 +512,10 @@ function sanitizeNoSystem(messages: ModelMessage[]): ModelMessage[] {
  *  becomes an Artifact, in step order, so the LAST one is the run's final
  *  structured output. The domain reads RunState.artifacts instead of re-scanning
  *  steps by hand — this is the gap the Artifact type promised but never filled.
- *  No resultToolName (or no matching call) -> [] (honest: nothing to capture). */
-function materializeArtifacts(
+ *  No resultToolName (or no matching call) -> [] (honest: nothing to capture).
+ *  Exported, with eventToMessage, for the parse eval (evals/parse), which
+ *  rebuilds a run's state from recorded model responses. */
+export function materializeArtifacts(
     steps: readonly RunStep[],
     resultToolName: string | undefined,
     stage: string,
@@ -511,26 +555,11 @@ function parseArtifactInput(input: unknown): unknown {
     return input;
 }
 
-/**
- * Map AI SDK `LanguageModelUsage` onto our TokenUsage.
- *
- * ai@7 removed top-level `cachedInputTokens` / `reasoningTokens` in favour of
- * `inputTokenDetails.cacheReadTokens` / `outputTokenDetails.reasoningTokens`.
- * Keep the ai@6 field names as fallbacks so mixed-version / vendor shims still
- * report cache hits.
- */
-export function readAiSdkUsage(usage: any): TokenUsage {
-    return {
-        inputTokens: usage?.inputTokens,
-        outputTokens: usage?.outputTokens,
-        reasoningTokens:
-            usage?.outputTokenDetails?.reasoningTokens ??
-            usage?.reasoningTokens,
-        cacheReadTokens:
-            usage?.inputTokenDetails?.cacheReadTokens ??
-            usage?.cachedInputTokens,
-    };
-}
+// The AI SDK → usage mapping lives in ONE place (`@libs/llm/ai-sdk-usage`) so it
+// can never again be fixed in the harness but missed in observability.service
+// (the duplication that dropped cache tokens). Re-exported here (it is imported
+// above for internal use) for back-compat with existing importers.
+export { readAiSdkUsage };
 
 /** Best-effort token usage from the steps collected before a failure —
  *  the error path has no provider-level total to read. */
@@ -539,13 +568,21 @@ function aggregateUsage(steps: readonly RunStep[]): TokenUsage {
     let outputTokens = 0;
     let reasoningTokens = 0;
     let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
     for (const s of steps) {
         inputTokens += s.usage?.inputTokens ?? 0;
         outputTokens += s.usage?.outputTokens ?? 0;
         reasoningTokens += s.usage?.reasoningTokens ?? 0;
         cacheReadTokens += s.usage?.cacheReadTokens ?? 0;
+        cacheWriteTokens += s.usage?.cacheWriteTokens ?? 0;
     }
-    return { inputTokens, outputTokens, reasoningTokens, cacheReadTokens };
+    return {
+        inputTokens,
+        outputTokens,
+        reasoningTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+    };
 }
 
 // --- mappers (AI SDK <-> core contracts) ---
@@ -562,7 +599,7 @@ function toAgentMessage(m: ModelMessage): AgentMessage {
 function toModelMessage(m: AgentMessage): ModelMessage {
     return { role: m.role, content: m.content } as ModelMessage;
 }
-function eventToMessage(event: any): AgentMessage {
+export function eventToMessage(event: any): AgentMessage {
     return {
         role: 'assistant',
         content: typeof event?.text === 'string' ? event.text : '',

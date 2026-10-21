@@ -154,7 +154,7 @@ describe('SSODomainVerificationService.requestDomainVerification', () => {
             });
         });
 
-        it('accepts a contact email that does NOT belong to the domain (Dmitry/scorpion case)', async () => {
+        it('accepts a contact email that does NOT belong to the domain (customer case)', async () => {
             // The admin running self-hosted often wants to use their own
             // work email even if the SSO domain belongs to another brand
             // they manage. Cloud rejects this; self-hosted should allow.

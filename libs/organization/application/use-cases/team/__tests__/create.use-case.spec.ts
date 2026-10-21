@@ -41,7 +41,7 @@ describe('CreateTeamUseCase', () => {
             id: 'global',
             name: 'Global',
             isSelected: true,
-            configs: {},
+            configs: { kodyRulesGeneratorEnabled: false },
             repositories: [],
         });
     });

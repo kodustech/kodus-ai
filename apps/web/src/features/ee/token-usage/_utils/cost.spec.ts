@@ -50,6 +50,7 @@ describe("rowCost", () => {
         const cost = rowCost(flatRow({ input: 1000, output: 500 }), undefined);
         expect(cost).toEqual({
             uncachedInput: 0,
+            cacheWrite: 0,
             cacheRead: 0,
             output: 0,
             reasoning: 0,
@@ -80,6 +81,36 @@ describe("rowCost", () => {
         expect(cost.cacheRead).toBeCloseTo(400 * 0.2e-6, 12);
         // never charge the full input rate for cached tokens
         expect(cost.total).toBeCloseTo(600 * 2e-6 + 400 * 0.2e-6, 12);
+    });
+
+    it("excludes cache WRITES from the full-price pool so they are not billed twice", () => {
+        // ai@7 normalizes input(1000) = noCache(400) + cacheRead(400) +
+        // cacheWrite(200). The full-price pool must be the 400 noCache tokens at
+        // the input rate PLUS the 200 writes at the cache-write rate — never the
+        // 600 (noCache+writes) at the input rate, which double-bills the writes.
+        const cost = rowCost(
+            flatRow({
+                input: 1000,
+                cacheRead: 400,
+                cacheWrite: 200,
+                output: 0,
+            }),
+            pricing({
+                input: 2e-6,
+                output: 10e-6,
+                cacheRead: 0.2e-6,
+                cacheWrite: 2.5e-6,
+            }),
+        );
+        // uncached pool = the 400 noCache tokens at the input rate ONLY.
+        expect(cost.uncachedInput).toBeCloseTo(400 * 2e-6, 12);
+        // the 200 cache-write tokens priced on their OWN bucket at the write rate.
+        expect(cost.cacheWrite).toBeCloseTo(200 * 2.5e-6, 12);
+        expect(cost.cacheRead).toBeCloseTo(400 * 0.2e-6, 12);
+        expect(cost.total).toBeCloseTo(
+            400 * 2e-6 + 200 * 2.5e-6 + 400 * 0.2e-6,
+            12,
+        );
     });
 
     it("splits reasoning out of output so it is never double counted", () => {

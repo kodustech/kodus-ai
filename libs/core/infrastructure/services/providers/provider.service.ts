@@ -8,6 +8,7 @@ import { Injectable } from '@nestjs/common';
 // is exactly ONE place that decides key/base-URL/listing behavior.
 import { REGISTRY } from '@libs/llm/providers';
 import { describeAllProviderIds } from '@libs/llm/providers/provider-ui-descriptor';
+import { isProviderAvailableHere } from './kodus-provider-availability';
 
 export interface ProviderInfo {
     id: string;
@@ -23,6 +24,11 @@ export interface ProviderInfo {
      * whose URL is only known once the user types it, and for `manual` listings.
      */
     autoListModels: boolean;
+    /** The provider lists its models through a LIVE `/models` HTTP call needing
+     *  the org's key (e.g. OpenAI) — as opposed to a static/curated list. The
+     *  connect form uses this to fetch the real model list from the typed key
+     *  rather than showing a curated placeholder. */
+    listsModelsLive: boolean;
     /** Provider documentation URL (hardcoded on the module) — the UI links to it
      *  from the key field so the user can grab a key / find model ids. */
     doc?: string;
@@ -38,6 +44,10 @@ export class ProviderService {
     private static buildFromRegistry(): Record<string, ProviderInfo> {
         const out: Record<string, ProviderInfo> = {};
         for (const d of describeAllProviderIds(REGISTRY.all())) {
+            // Deployment-gated ids (the cloud-only `kodus` provider) are left
+            // out entirely, so `isProviderSupported` says no and every use-case
+            // behind it (listing, probe, save) refuses them on self-hosted.
+            if (!isProviderAvailableHere(d.id)) continue;
             out[d.id] = {
                 id: d.id,
                 name: d.label,
@@ -45,6 +55,7 @@ export class ProviderService {
                 requiresApiKey: d.requiresApiKey,
                 requiresBaseUrl: d.requiresBaseUrl,
                 autoListModels: d.autoListModels,
+                listsModelsLive: d.listsModelsLive,
                 doc: d.doc,
             };
         }

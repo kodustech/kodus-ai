@@ -21,10 +21,14 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/permissions.enum';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 
 import { NotificationQueryService } from '@libs/notifications/application/notification-query.service';
+import { GetKodyRulesIndexUseCase } from '@libs/kodyRules/application/use-cases/get-kody-rules-index.use-case';
 import { NotificationSseService } from '@libs/notifications/application/notification-sse.service';
 import {
     RoutingRuleService,
@@ -39,6 +43,9 @@ export class NotificationController {
         private readonly queryService: NotificationQueryService,
         private readonly sseService: NotificationSseService,
         private readonly routingRuleService: RoutingRuleService,
+        // Dev seeding only: lets the sample notifications name rules the
+        // organization actually has.
+        private readonly getKodyRulesIndexUseCase: GetKodyRulesIndexUseCase,
     ) {}
 
     // ── User endpoints ────────────────────────────────────────
@@ -52,10 +59,12 @@ export class NotificationController {
         @Query('unreadOnly') unreadOnly?: string,
     ) {
         const userId = (req as any).user?.uuid;
+        const organizationId = (req as any).user?.organization?.uuid;
         return this.queryService.list(userId, {
             page,
             limit: Math.min(limit, 100),
             unreadOnly: unreadOnly === 'true',
+            organizationId,
         });
     }
 
@@ -63,7 +72,11 @@ export class NotificationController {
     @ApiOperation({ summary: 'Get unread notification count' })
     async unreadCount(@Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        const count = await this.queryService.unreadCount(userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.unreadCount(
+            userId,
+            organizationId,
+        );
         return { count };
     }
 
@@ -79,8 +92,13 @@ export class NotificationController {
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
-        // Send initial unread count
-        const count = await this.queryService.unreadCount(userId);
+        // Send initial unread count, scoped like the list the drawer renders --
+        // a badge counting other organizations is the discrepancy users see.
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.unreadCount(
+            userId,
+            organizationId,
+        );
         res.write(
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
@@ -106,7 +124,8 @@ export class NotificationController {
     @ApiOperation({ summary: 'Mark a notification as read' })
     async markAsRead(@Param('id') id: string, @Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        await this.queryService.markAsRead(id, userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        await this.queryService.markAsRead(id, userId, organizationId);
         return { success: true };
     }
 
@@ -114,7 +133,11 @@ export class NotificationController {
     @ApiOperation({ summary: 'Mark all notifications as read' })
     async markAllAsRead(@Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        const count = await this.queryService.markAllAsRead(userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.markAllAsRead(
+            userId,
+            organizationId,
+        );
         return { marked: count };
     }
 
@@ -130,7 +153,16 @@ export class NotificationController {
         }
         const userId = (req as any).user?.uuid;
         const organizationId = (req as any).user?.organization?.uuid;
-        return this.queryService.seedFakeNotifications(userId, organizationId);
+        // Real rules make the seeded links resolve; an org with none still
+        // seeds (the service falls back to generated ids).
+        const sampleRules = await this.getKodyRulesIndexUseCase
+            .execute(organizationId)
+            .catch(() => []);
+        return this.queryService.seedFakeNotifications(
+            userId,
+            organizationId,
+            sampleRules,
+        );
     }
 
     // ── Admin endpoints (owner-only) ──────────────────────────
@@ -172,10 +204,7 @@ export class NotificationController {
         @Body() body: { rules: UpsertRuleDto[] },
     ) {
         const organizationId = (req as any).user?.organization?.uuid;
-        return this.routingRuleService.upsertRules(
-            organizationId,
-            body.rules,
-        );
+        return this.routingRuleService.upsertRules(organizationId, body.rules);
     }
 
     @Post('routing-rules/reset')

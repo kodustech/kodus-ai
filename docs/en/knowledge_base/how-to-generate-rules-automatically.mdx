@@ -1,0 +1,32 @@
+---
+title: "How to generate code review rules automatically"
+description: "Let AI analyze your code review history and suggest custom rules based on your team's actual patterns and standards."
+---
+
+Writing code review rules from scratch can be tedious. Kodus can analyze your team's review history and automatically suggest rules based on the patterns it finds.
+
+## How it works
+
+1. Pick the repository in the scope picker at the top of the **Code review** group in the sidebar, open **Kody Rules**, and click **Configuration**
+2. Turn on **Generate from past reviews**
+3. Kodus scans the last 3 months of closed PRs in your repository
+4. It identifies recurring feedback patterns and coding preferences
+5. Generates rules tailored to your team, listed on the Kody Rules page with the origin **Kody-generated**
+
+## What happens next
+
+- By default, generated rules are active right away and enforced during code reviews
+- To review them before they apply, turn on **Kody knowledge approval** in the same **Configuration** sheet: new rules then wait in the **Pending review** section until you **Approve** or **Discard** them
+- Edit, pause, or delete any generated rule like any other Kody Rule
+
+## Continuous learning
+
+After the initial setup, Kodus generates new rules **weekly** as your team's coding style evolves. Check back regularly for new rules.
+
+## Requirements
+
+- At least **3 months** of review history in the repository
+- Regular code review activity for better pattern detection
+- Repository access with proper permissions
+
+For details, see [Automatic Rules Generation](/en/how_to_use/code_review/learning/kody_rules_generation).

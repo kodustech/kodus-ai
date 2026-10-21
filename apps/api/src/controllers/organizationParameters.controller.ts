@@ -19,6 +19,10 @@ import {
     GetModelsByProviderUseCase,
     ModelResponse,
 } from '@libs/organization/application/use-cases/organizationParameters/get-models-by-provider.use-case';
+import {
+    GetModelCapabilitiesUseCase,
+    ModelUiCapabilities,
+} from '@libs/organization/application/use-cases/organizationParameters/get-model-capabilities.use-case';
 import { DeleteByokConfigUseCase } from '@libs/organization/application/use-cases/organizationParameters/delete-byok-config.use-case';
 import {
     GetLLMConfigStatusUseCase,
@@ -28,10 +32,6 @@ import {
     GetByokProvidersUseCase,
     ByokProvidersResult,
 } from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
-import {
-    GetByokCatalogUseCase,
-    ByokCatalogResult,
-} from '@libs/organization/application/use-cases/organizationParameters/get-byok-catalog.use-case';
 import {
     TestByokConnectionUseCase,
     TestByokResult,
@@ -54,6 +54,7 @@ import {
     Body,
     Controller,
     Delete,
+    ForbiddenException,
     Get,
     Inject,
     Post,
@@ -80,21 +81,40 @@ import {
     OrganizationProvidersResponseDto,
 } from '../dtos/organization-parameters-response.dto';
 import { ApiBooleanResponseDto } from '../dtos/api-response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
+/**
+ * Keys the generic create-or-update endpoint must refuse.
+ * These are privileged/system-managed and have their own controllers; the
+ * frontend never writes them here. A denylist (not an allowlist) is used so
+ * ordinary self-service config keys keep working — only these are blocked.
+ */
+const SENSITIVE_ORG_PARAM_KEYS = new Set<OrganizationParametersKey>([
+    OrganizationParametersKey.LICENSE_KEY,
+    OrganizationParametersKey.LICENSE_ASSIGNED_USERS,
+    OrganizationParametersKey.SPEND_LIMIT_CONFIG,
+    OrganizationParametersKey.FIRST_REVIEW_AT,
+]);
+
+// NOTE: class decorators must sit immediately above the class — a statement
+// between them (the const above used to live here) attaches the decorators to
+// the statement instead, silently dropping @UseGuards(TenantScopeGuard) and
+// the Swagger metadata on transpile-only builds.
 @ApiTags('Organization Parameters')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('organization-parameters')
 export class OrganizationParametersController {
     constructor(
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
         private readonly findByKeyOrganizationParametersUseCase: FindByKeyOrganizationParametersUseCase,
         private readonly getModelsByProviderUseCase: GetModelsByProviderUseCase,
+        private readonly getModelCapabilitiesUseCase: GetModelCapabilitiesUseCase,
         private readonly providerService: ProviderService,
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
         private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
-        private readonly getByokCatalogUseCase: GetByokCatalogUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -150,6 +170,17 @@ export class OrganizationParametersController {
             configValue: any;
         },
     ) {
+        // Privileged keys must not be writable through this generic endpoint —
+        // they are managed by dedicated controllers (license/billing) or set
+        // by the system. Without this, any member could e.g. zero the spend
+        // limit or inject a license key. The shared
+        // use case still lets those dedicated flows set them.
+        if (SENSITIVE_ORG_PARAM_KEYS.has(body.key)) {
+            throw new ForbiddenException(
+                `Parameter "${body.key}" cannot be set through this endpoint`,
+            );
+        }
+
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -212,6 +243,7 @@ export class OrganizationParametersController {
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
                 autoListModels: provider.autoListModels,
+                listsModelsLive: provider.listsModelsLive,
                 doc: provider.doc,
             })),
         };
@@ -231,6 +263,76 @@ export class OrganizationParametersController {
             provider,
             organizationId ? { organizationId } : undefined,
         );
+    }
+
+    @Post('/list-models')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiBody({
+        schema: {
+            type: 'object',
+            required: ['provider'],
+            properties: {
+                provider: { type: 'string' },
+                apiKey: { type: 'string' },
+                baseURL: { type: 'string' },
+                awsBearerToken: { type: 'string' },
+                awsRegion: { type: 'string' },
+            },
+        },
+    })
+    @ApiOperation({
+        summary: 'List models with a candidate key',
+        description:
+            "Live-list a provider's models using a just-typed (unsaved) credential — for the connect form, before it's saved. The credential travels in the body (never a query string): `apiKey`(+`baseURL`) for most providers, `awsBearerToken`(+`awsRegion`) for Amazon Bedrock, which never authenticates with an apiKey. Falls back to the org's saved credential when none is supplied. Strict: an http provider with a candidate credential does a live `/models` call and surfaces the error instead of a curated placeholder.",
+    })
+    @ApiOkResponse({ type: OrganizationProviderModelsResponseDto })
+    public async listModelsWithKey(
+        @Body()
+        body: {
+            provider: string;
+            apiKey?: string;
+            baseURL?: string;
+            awsBearerToken?: string;
+            awsRegion?: string;
+        },
+    ): Promise<ModelResponse> {
+        const organizationId = this.request?.user?.organization?.uuid;
+        return await this.getModelsByProviderUseCase.execute(
+            body.provider,
+            organizationId ? { organizationId } : undefined,
+            {
+                apiKey: body.apiKey,
+                baseURL: body.baseURL,
+                awsBearerToken: body.awsBearerToken,
+                awsRegion: body.awsRegion,
+            },
+        );
+    }
+
+    @Get('/model-capabilities')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Per-model UI capabilities',
+        description:
+            "Provider-owned hints for the connect form: whether a model accepts sampling params (Temperature) and whether it can reason (and at which levels). Read straight from the provider module in the registry — never hand-coded in the web — so a community-contributed provider change flows to the UI automatically. `model` is a plain model id (not a secret), so it travels in the query string.",
+    })
+    public async modelCapabilities(
+        @Query('provider') provider: string,
+        @Query('model') model: string,
+    ): Promise<ModelUiCapabilities> {
+        return this.getModelCapabilitiesUseCase.execute(provider, model ?? '');
     }
 
     @Delete('/delete-byok-config')
@@ -289,6 +391,15 @@ export class OrganizationParametersController {
                 apiKey: { type: 'string' },
                 baseURL: { type: 'string' },
                 model: { type: 'string' },
+                temperature: { type: 'number' },
+                reasoningEffort: { type: 'string' },
+                reasoningConfigOverride: { type: 'string' },
+                maxOutputTokens: { type: 'number' },
+                openrouterProviderOrder: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                openrouterAllowFallbacks: { type: 'boolean' },
                 vertexLocation: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsAccessKeyId: { type: 'string' },
@@ -301,7 +412,7 @@ export class OrganizationParametersController {
     @ApiOperation({
         summary: 'Test BYOK connection',
         description:
-            'Probe the provider with the supplied credentials to verify they work. Uses cheap metadata / identity calls (list-models for most providers, GoogleAuth token exchange for Vertex, STS GetCallerIdentity for Bedrock) — no LLM inference is performed.',
+            'Probe the provider with the supplied credentials to verify they work. Issues the same minimal call a review would make, through the same model resolver, so the configured model, temperature and reasoning are all exercised — a config that would fail at review time fails here instead. Vertex and Bedrock validate their auth material first (GoogleAuth token exchange / STS GetCallerIdentity).',
     })
     public async testByokConnection(
         @Body()
@@ -310,6 +421,12 @@ export class OrganizationParametersController {
             apiKey?: string;
             baseURL?: string;
             model?: string;
+            temperature?: number;
+            reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+            reasoningConfigOverride?: string;
+            maxOutputTokens?: number;
+            openrouterProviderOrder?: string[];
+            openrouterAllowFallbacks?: boolean;
             vertexLocation?: string;
             awsBearerToken?: string;
             awsAccessKeyId?: string;
@@ -318,7 +435,10 @@ export class OrganizationParametersController {
             awsSessionToken?: string;
         },
     ): Promise<TestByokResult> {
-        return await this.testByokConnectionUseCase.execute(body);
+        return await this.testByokConnectionUseCase.execute(
+            body,
+            this.request?.user?.organization?.uuid,
+        );
     }
 
     @Post('/test-byok-model')
@@ -336,6 +456,12 @@ export class OrganizationParametersController {
             properties: {
                 provider: { type: 'string' },
                 model: { type: 'string' },
+                // Optional SAFE non-secret overrides (region/location) so an edit
+                // that changed them is probed as it will be saved. baseURL is not
+                // accepted: the stored secret must not be sent to a caller-supplied
+                // host (see TestByokModelUseCase).
+                awsRegion: { type: 'string' },
+                vertexLocation: { type: 'string' },
             },
         },
     })
@@ -345,7 +471,13 @@ export class OrganizationParametersController {
             "Validate a model id against the org's SAVED BYOK provider (credentials resolved server-side). Surfaces the provider's real error (e.g. model-not-found) at config time instead of at review time.",
     })
     public async testByokModel(
-        @Body() body: { provider: string; model: string },
+        @Body()
+        body: {
+            provider: string;
+            model: string;
+            awsRegion?: string;
+            vertexLocation?: string;
+        },
     ): Promise<TestByokResult> {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
@@ -356,6 +488,8 @@ export class OrganizationParametersController {
         return await this.testByokModelUseCase.execute({
             provider: body.provider,
             model: body.model,
+            awsRegion: body.awsRegion,
+            vertexLocation: body.vertexLocation,
             organizationAndTeamData: { organizationId },
         });
     }
@@ -498,34 +632,11 @@ export class OrganizationParametersController {
             'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
     })
     public async getByokProviders(): Promise<ByokProvidersResult> {
-        return await this.getByokProvidersUseCase.execute();
+        return await this.getByokProvidersUseCase.execute(
+            this.request?.user?.organization?.uuid,
+        );
     }
 
-    @Get('/byok/catalog')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        // The curated model catalog is static + non-sensitive (Kodus's editorial
-        // picks, aggregated from the provider modules). Same read gate as
-        // /byok/providers — the connect picker needs it to render the models.
-        checkAnyPermission([
-            {
-                action: Action.Read,
-                resource: ResourceType.OrganizationSettings,
-            },
-            {
-                action: Action.Read,
-                resource: ResourceType.CodeReviewSettings,
-            },
-        ]),
-    )
-    @ApiOperation({
-        summary: 'List the curated BYOK model catalog',
-        description:
-            "Return the curated model catalog aggregated from every provider module's `catalog` (the single source of truth; replaces the frontend curated-models.json). Static and non-sensitive.",
-    })
-    public async getByokCatalog(): Promise<ByokCatalogResult> {
-        return await this.getByokCatalogUseCase.execute();
-    }
 
     @Get('/cockpit-metrics-visibility')
     @UseGuards(PolicyGuard)
@@ -641,8 +752,9 @@ export class OrganizationParametersController {
             organizationId?: string;
         },
     ) {
-        const organizationId =
-            body.organizationId || this.request?.user?.organization?.uuid;
+        // Always the caller's own organization. Preferring body.organizationId
+        // let any logged-in user write another org's auto-license settings.
+        const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
             throw new BadRequestException('Missing organizationId in request');

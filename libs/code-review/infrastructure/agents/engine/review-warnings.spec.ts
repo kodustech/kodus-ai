@@ -1,6 +1,16 @@
 import {
+    crossRepoUnavailableWarning,
     dedupReviewWarnings,
     buildProviderFallbackWarning,
+    buildRuleContextUnavailableWarning,
+    buildBadFixDowngradedWarning,
+    buildCallGraphFailedWarning,
+    buildConfigFileKeysIgnoredWarning,
+    buildKodyRulesPartialWarning,
+    formatConfigFileNotice,
+    buildPathMismatchWarning,
+    buildSandboxUnavailableWarning,
+    withFallbackWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
@@ -110,5 +120,220 @@ describe('buildProviderFallbackWarning', () => {
         expect(out).toHaveLength(1);
         expect(out[0].kind).toBe('PROVIDER_FALLBACK');
         expect(out[0].agentName).toBeUndefined();
+    });
+});
+
+describe('buildRuleContextUnavailableWarning', () => {
+    it('carries the skipped rule titles as structured data, not only inside `detail`', () => {
+        const warning = buildRuleContextUnavailableWarning({
+            skippedRuleTitles: ['No god objects', 'Repository per aggregate'],
+            modelName: 'gemini',
+            agentName: 'kody-rules',
+        });
+        expect(warning.kind).toBe('RULE_CONTEXT_UNAVAILABLE');
+        expect(warning.ruleTitles).toEqual([
+            'No god objects',
+            'Repository per aggregate',
+        ]);
+        expect(warning.detail).toContain('2 Kody Rule(s)');
+    });
+
+    it('unions rule titles when two emitters fold into one entry', () => {
+        const out = dedupReviewWarnings([
+            buildRuleContextUnavailableWarning({
+                skippedRuleTitles: ['A', 'B'],
+                modelName: 'gemini',
+                agentName: 'kody-rules',
+            }),
+            buildRuleContextUnavailableWarning({
+                skippedRuleTitles: ['B', 'C'],
+                modelName: 'gemini',
+                agentName: 'kody-rules-2',
+            }),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0].ruleTitles).toEqual(['A', 'B', 'C']);
+    });
+
+    it("does not alias the caller's array into the warning", () => {
+        const titles = ['A'];
+        const warning = buildRuleContextUnavailableWarning({
+            skippedRuleTitles: titles,
+            modelName: 'gemini',
+        });
+        titles.push('B');
+        expect(warning.ruleTitles).toEqual(['A']);
+    });
+});
+
+describe('buildBadFixDowngradedWarning', () => {
+    it('reports the downgraded count in `detail`', () => {
+        const warning = buildBadFixDowngradedWarning({
+            count: 3,
+            modelName: 'gemini',
+            agentName: 'bug',
+        });
+        expect(warning.kind).toBe('BAD_FIX_DOWNGRADED');
+        expect(warning.reason).toBe('unusable_fix');
+        expect(warning.detail).toContain('3 suggestion(s)');
+    });
+
+    it('merges counts from two agents into one dashboard entry via dedup', () => {
+        const out = dedupReviewWarnings([
+            buildBadFixDowngradedWarning({
+                count: 2,
+                modelName: 'gemini',
+                agentName: 'bug',
+            }),
+            buildBadFixDowngradedWarning({
+                count: 1,
+                modelName: 'gemini',
+                agentName: 'security',
+            }),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0].agentName).toBeUndefined();
+    });
+});
+
+describe('losses a review used to record only in its logs (#2066)', () => {
+    it('names each loss with its own cause, not a small context window', () => {
+        const all = [
+            buildSandboxUnavailableWarning({ modelName: 'gpt-4.1' }),
+            buildCallGraphFailedWarning({ modelName: 'gpt-4.1' }),
+            buildPathMismatchWarning({
+                count: 2,
+                modelName: 'gpt-4.1',
+                agentName: 'bug',
+            }),
+            buildKodyRulesPartialWarning({
+                failed: 1,
+                total: 3,
+                modelName: 'gpt-4.1',
+                agentName: 'kody-rules',
+            }),
+        ];
+
+        expect(all.map((x) => [x.kind, x.reason])).toEqual([
+            ['SANDBOX_UNAVAILABLE', 'sandbox_unavailable'],
+            ['CALLGRAPH_FAILED', 'callgraph_failed'],
+            ['SUGGESTIONS_DROPPED_PATH_MISMATCH', 'path_mismatch'],
+            ['KODY_RULES_PARTIAL', 'judge_shard_failed'],
+        ]);
+        expect(all.every((x) => x.contextWindowTokens === 0)).toBe(true);
+        expect(all[2].detail).toContain('bug: 2 finding(s)');
+        expect(all[3].detail).toContain('1 of 3 Kody Rules check(s)');
+    });
+
+    it("keeps each agent's path drops when they fold together", () => {
+        const [merged] = dedupReviewWarnings([
+            buildPathMismatchWarning({
+                count: 1,
+                modelName: 'gpt-4.1',
+                agentName: 'bug',
+            }),
+            buildPathMismatchWarning({
+                count: 1,
+                modelName: 'gpt-4.1',
+                agentName: 'security',
+            }),
+        ]);
+
+        expect(merged.detail).toContain('bug: 1');
+        expect(merged.detail).toContain('security: 1');
+    });
+});
+
+describe('withFallbackWarnings', () => {
+    it('leaves the warnings untouched when nothing failed over', () => {
+        const warnings = [w('PROMPT_COMPACTED')];
+        expect(withFallbackWarnings(warnings, [])).toBe(warnings);
+        expect(withFallbackWarnings(undefined, [])).toBeUndefined();
+    });
+
+    it('adds one fallback warning per model the review fell back to', () => {
+        const out = withFallbackWarnings(
+            [w('PROMPT_COMPACTED')],
+            [
+                { failedModel: 'claude-opus', usedModel: 'gpt-4.1' },
+                { failedModel: 'claude-opus', usedModel: 'gpt-4.1' },
+            ],
+        );
+
+        expect(out?.map((x) => x.kind)).toEqual([
+            'PROMPT_COMPACTED',
+            'PROVIDER_FALLBACK',
+        ]);
+        expect(out?.[1].detail).toBe(
+            'main provider claude-opus failed; review ran on fallback gpt-4.1',
+        );
+    });
+});
+
+describe('crossRepoUnavailableWarning', () => {
+    const base = {
+        configured: 2,
+        gateActive: true,
+        hasAccess: false,
+        hasCheckout: false,
+        modelName: 'm',
+    };
+
+    it('warns when the boundary gate armed linked repos but there is no checkout', () => {
+        const warning = crossRepoUnavailableWarning(base);
+        expect(warning?.kind).toBe('CROSS_REPO_UNAVAILABLE');
+        expect(warning?.detail).toContain('2 linked repositories');
+    });
+
+    it.each([
+        ['nothing is linked', { configured: 0 }],
+        ['the gate did not arm', { gateActive: false }],
+        ['the linked repos were read', { hasAccess: true }],
+        [
+            'a checkout existed (another cause, logged elsewhere)',
+            { hasCheckout: true },
+        ],
+    ])('stays silent when %s', (_label, over) => {
+        expect(
+            crossRepoUnavailableWarning({ ...base, ...over }),
+        ).toBeUndefined();
+    });
+});
+
+describe('kodus-config.yml keys set in the app', () => {
+    it('names customAgents and knowledge, in that order', () => {
+        const warning = buildConfigFileKeysIgnoredWarning([
+            'knowledge',
+            'version',
+            'customAgents',
+        ]);
+        expect(warning).toMatchObject({
+            kind: 'CONFIG_FILE_KEY_IGNORED',
+            reason: 'config_file',
+        });
+        expect(warning?.detail).toBe(
+            'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app. ' +
+                'kodus-config.yml: knowledge is not read from this file; link skills and docs to a custom agent in the app.',
+        );
+    });
+
+    it('says nothing for a file without them', () => {
+        expect(buildConfigFileKeysIgnoredWarning(undefined)).toBeUndefined();
+        expect(
+            buildConfigFileKeysIgnoredWarning(['version', 'legacyTeamFlag']),
+        ).toBeUndefined();
+    });
+
+    it('renders the notice for the PR and nothing for other warnings', () => {
+        const notice = formatConfigFileNotice([
+            buildConfigFileKeysIgnoredWarning(['customAgents'])!,
+        ]);
+        expect(notice).toBe(
+            '\n\n> ⚠️ kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+        );
+        expect(
+            formatConfigFileNotice([w('PROMPT_COMPACTED', { detail: 'x' })]),
+        ).toBe('');
+        expect(formatConfigFileNotice(undefined)).toBe('');
     });
 });

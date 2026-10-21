@@ -13,13 +13,13 @@ import { BYOKProvider } from '@libs/llm/model-providers';
  * detection, PR summary) references this instead of re-typing the id.
  */
 export const KODUS_DEFAULT_MODEL =
-    'accounts/fireworks/models/deepseek-v4-flash-0731';
+    'accounts/fireworks/models/deepseek-v4p1-flash';
 
 /**
  * Default model config when no BYOK is configured.
  */
 export const KODUS_TRIAL_MODEL =
-    'accounts/fireworks/models/deepseek-v4-flash-0731';
+    'accounts/fireworks/models/deepseek-v4p1-flash';
 
 export const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,

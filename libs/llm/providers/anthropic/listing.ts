@@ -1,3 +1,4 @@
+import { formatModelLabel } from '../kernel/model-label';
 import type { CatalogModel, ModelListing } from '../kernel/types';
 
 const httpListing: ModelListing = {
@@ -13,8 +14,13 @@ const httpListing: ModelListing = {
         const data =
             (body as { data?: Array<{ id: string; display_name?: string }> })
                 ?.data ?? [];
+        // Anthropic's API returns a real `display_name`; fall back to the derived
+        // label (never the raw id) when a response omits it.
         return data.map(
-            (m): CatalogModel => ({ id: m.id, name: m.display_name || m.id }),
+            (m): CatalogModel => ({
+                id: m.id,
+                name: m.display_name || formatModelLabel(m.id),
+            }),
         );
     },
 };

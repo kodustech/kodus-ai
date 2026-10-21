@@ -6,7 +6,7 @@ non-obvious failure modes that are easy to re-introduce.
 
 ## Why this exists
 
-The SSO cookie-domain regression (Dmitry's `*.web.scorpion.co` bug) is
+The SSO cookie-domain regression (a customer's `*.web.acme.co` bug) is
 guarded at three layers:
 
 1. **Unit tests** — `apps/api/src/utils/__tests__/derive-sso-cookie-domain.spec.ts` (16 cases)
@@ -43,7 +43,7 @@ mkcert, manual browser interaction, and ~5min wall time.
 | Shape | Hosts | Cookie domain | Real-world analog |
 |---|---|---|---|
 | `kodus.lvh.me` (default) | `api.kodus.lvh.me` ↔ `app.kodus.lvh.me` | `.kodus.lvh.me` | SaaS (`.kodus.io`) — 3-label common parent |
-| `web.scorpion.lvh.me` | `api.web.scorpion.lvh.me` ↔ `app.web.scorpion.lvh.me` | `.web.scorpion.lvh.me` | Dmitry self-hosted (`.web.scorpion.co`) — 4-label common parent |
+| `web.acme.lvh.me` | `api.web.acme.lvh.me` ↔ `app.web.acme.lvh.me` | `.web.acme.lvh.me` | Customer self-hosted (`.web.acme.co`) — 4-label common parent |
 
 Switch via `SSO_E2E_DOMAIN=<shape> ./scripts/sso-e2e/run.sh`.
 The mkcert wildcard cert covers both shapes in one SAN list, and Caddy

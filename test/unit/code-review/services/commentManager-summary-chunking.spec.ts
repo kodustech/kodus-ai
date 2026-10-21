@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
@@ -24,14 +25,25 @@ jest.mock('@libs/core/log/logger', () => ({
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a file with a patch of approximately `tokenCount` tokens.
- * estimateTokens uses Math.ceil(text.length / 3.5), so we need ~tokenCount * 3.5 chars.
+ * Generate a file whose patch actually MEASURES ~`patchTokens` tokens.
+ *
+ * This used to derive a char count from `estimateTokens`'s old chars/3.5 ratio
+ * and pad with `'x'.repeat(...)`. Both halves broke once the estimator started
+ * measuring: the ratio is no longer the implementation, and a run of identical
+ * characters is nothing like `length / 3.5` tokens — BPE folds it, so a "2000
+ * token" file measured a few dozen and nothing in this file ever exceeded a
+ * budget again.
+ *
+ * Varied text tokenizes the way a real patch does, and the loop grows it until
+ * the tokenizer agrees, so the fixture means what its name says regardless of
+ * what the estimator does next.
  */
 function makeFile(filename: string, patchTokens: number): Partial<FileChange> {
-    const charCount = Math.floor(patchTokens * 3.5);
-    const patch =
-        `${filename}_` +
-        'x'.repeat(Math.max(0, charCount - filename.length - 1));
+    const unit = `const ${filename.replace(/\W/g, '_')} = compute(value, index); // note\n`;
+    let patch = '';
+    while (estimateTokens(patch) < patchTokens) {
+        patch += unit;
+    }
     return {
         filename,
         patch,
@@ -385,6 +397,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
     const defaultSummaryConfig = {
         generatePRSummary: true,
+        customInstructions: 'Use a concise release-note style.',
         behaviourForExistingDescription: 'concatenate',
         behaviourForNewCommits: 'none',
     };
@@ -465,6 +478,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
     describe('without maxInputTokens (no chunking)', () => {
         it('should make a single LLM call', async () => {
+            const promptSpy = jest.spyOn(service as any, 'runSummaryPromptV5');
             const files = [makeFile('a.ts', 100), makeFile('b.ts', 100)];
 
             const result = await service.generateSummaryPR(
@@ -479,6 +493,11 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             expect(result).toContain('Full PR summary generated.');
             expect(llmCallCount).toBe(1);
+            const prompt = promptSpy.mock.calls[0][0] as any;
+            expect(prompt.userPrompt).toContain('generate a precise description');
+            expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
+            expect(prompt.userPrompt).toContain('<changedFilesContext>');
+            expect(prompt.systemPrompt).toContain('not questions');
         });
     });
 
@@ -506,6 +525,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
     describe('with maxInputTokens, files need 2 chunks', () => {
         it('should make 2 chunk calls + 1 consolidation call', async () => {
+            const promptSpy = jest.spyOn(service as any, 'runSummaryPromptV5');
             // Each file ≈ 2000 tokens, budget allows ~1 file per chunk
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
@@ -532,6 +552,16 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             expect(runNames).toContain('generateSummaryPR_chunk_1');
             expect(runNames).toContain('generateSummaryPR_chunk_2');
             expect(runNames).toContain('generateSummaryPR_consolidation');
+            for (const [prompt] of promptSpy.mock.calls as any) {
+                expect(prompt.userPrompt).toContain('generate a precise description');
+                expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
+                expect(prompt.systemPrompt).toContain('not questions');
+            }
+            const consolidation = (promptSpy.mock.calls as any).find(
+                ([prompt]: any) => prompt.runName.endsWith('_consolidation'),
+            )[0];
+            expect(consolidation.userPrompt).toContain('Merge them into a single');
+            expect(consolidation.userPrompt).toContain('<partialSummary');
         });
     });
 

@@ -9,7 +9,9 @@ import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SANDBOX_PROVIDER_TOKEN,
+    toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -20,7 +22,11 @@ import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
-import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
+import {
+    buildE2BRemoteCommands,
+    runE2BCommand,
+    syncE2BSandboxRepo,
+} from '../providers/e2b-sandbox.service';
 import {
     isLocalSandboxPath,
     deleteLocalSandbox,
@@ -44,6 +50,9 @@ const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
  * expiresAt has passed — this guards against crashed-worker leaks.
  */
 const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Grace window for in-flight tool calls before a detached sandbox is killed.
+const INVALIDATE_DRAIN_MS = 60_000;
 
 /**
  * How often to poll when waiting for a concurrent creator to finish.
@@ -260,6 +269,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 consumer,
                 doc.state,
                 doc.sandboxId,
+                cloneParams,
             );
         } catch (err) {
             if (err instanceof SandboxStaleConnectionError) {
@@ -503,7 +513,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             if (apiKey) {
                 try {
                     // Give in-flight tool calls 60 seconds to finish before the sandbox dies
-                    await Sandbox.setTimeout(doc.sandboxId, 60_000, { apiKey });
+                    await Sandbox.setTimeout(
+                        doc.sandboxId,
+                        INVALIDATE_DRAIN_MS,
+                        {
+                            apiKey,
+                        },
+                    );
                     this.logger.log({
                         message: `SandboxLeaseManager: soft-drain 60s applied sandboxId="${doc.sandboxId}" prKey="${prKey}"`,
                         context: SandboxLeaseManager.name,
@@ -519,9 +535,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
         }
 
-        await this.leaseRepo.delete(prKey);
+        // The 60s timeout above only PAUSES the sandbox (onTimeout: 'pause').
+        // Retire instead of delete so the idle-kill cron still kills it.
+        if (doc.sandboxId) {
+            // A consumer still mid-review keeps the sandbox until the lease
+            // TTL, the same ceiling the reaper enforces on any lease.
+            await this.leaseRepo.retire(prKey, doc.sandboxId, {
+                idleKillAt: new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                busyKillAt: new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
+            });
+        } else {
+            await this.leaseRepo.delete(prKey);
+        }
         this.logger.log({
-            message: `SandboxLeaseManager: lease deleted after invalidation prKey="${prKey}"`,
+            message: `SandboxLeaseManager: lease retired after invalidation prKey="${prKey}"`,
             context: SandboxLeaseManager.name,
             metadata: { prKey },
         });
@@ -530,6 +557,34 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
+
+    /**
+     * Kill a sandbox we are about to drop the lease for. If the kill fails,
+     * retire the lease so the idle-kill cron retries it — otherwise the
+     * paused sandbox has no lease left and nothing will ever kill it.
+     */
+    private async killOrRetire(
+        prKey: string,
+        sandboxId: string,
+        apiKey: string,
+    ): Promise<void> {
+        try {
+            await Sandbox.kill(sandboxId, { apiKey });
+        } catch (err) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: kill failed, retiring lease for cron retry sandboxId="${sandboxId}" prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                error: err,
+                metadata: { prKey, sandboxId },
+            });
+            await this.leaseRepo
+                .retire(prKey, sandboxId, {
+                    idleKillAt: new Date(),
+                    busyKillAt: new Date(),
+                })
+                .catch(() => {});
+        }
+    }
 
     private async handleCreatorPath(
         prKey: string,
@@ -558,7 +613,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             sandboxId = sandbox.sandboxId;
 
-            await this.leaseRepo.updateReady(prKey, sandboxId);
+            await this.leaseRepo.updateReady(
+                prKey,
+                sandboxId,
+                sandbox?.baseBranch,
+                sandbox?.privilegesDropped,
+            );
 
             // Check for mid-create invalidation (Pitfall 5)
             const latestDoc = await this.leaseRepo.findByPrKey(prKey);
@@ -590,9 +650,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         const apiKey =
                             this.configService.get<string>('API_E2B_KEY');
                         if (apiKey) {
-                            await Sandbox.kill(sandboxId, {
-                                apiKey,
-                            }).catch(() => {});
+                            await this.killOrRetire(prKey, sandboxId, apiKey);
                         }
                     }
                 }
@@ -656,7 +714,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         context: SandboxLeaseManager.name,
                         metadata: { prKey, sandboxId },
                     });
-                    await Sandbox.kill(sandboxId, { apiKey }).catch(() => {});
+                    await this.killOrRetire(prKey, sandboxId, apiKey);
                 }
             }
             // Remove lease doc only if local cleanup succeeded or E2B/null path
@@ -708,6 +766,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         consumer: string,
         state: string,
         sandboxId?: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
             // Finding 2 fix: do NOT delete the sandbox here — active leases
@@ -717,7 +776,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         if (state === 'READY' && sandboxId) {
-            return this.connectToExisting(prKey, leaseId, consumer, sandboxId);
+            return this.connectToExisting(
+                prKey,
+                leaseId,
+                consumer,
+                sandboxId,
+                cloneParams,
+            );
         }
 
         // state === 'CREATING' (or PAUSED without sandboxId): poll until READY
@@ -748,6 +813,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     leaseId,
                     consumer,
                     doc.sandboxId,
+                    cloneParams,
                 );
             }
         }
@@ -760,6 +826,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         leaseId: string,
         consumer: string,
         sandboxId: string,
+        cloneParams?: CreateSandboxParams,
     ): Promise<AcquireResult> {
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
@@ -794,7 +861,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Drop the in-memory lease tracking before delete (release()
             // would no-op without it; we want a clean slate)
             this.leaseIdToPrKey.delete(leaseId);
-            await this.leaseRepo.delete(prKey).catch(() => {});
+            // Retire, not delete: connect can fail transiently while the
+            // sandbox still exists (paused), and a dropped lease is the
+            // last trace the kill crons had of it. A co-tenant still using
+            // it (leaseCount beyond our own hold) keeps it until the lease
+            // TTL, when the reaper would have killed it anyway. If it really
+            // is gone, the kill 404s and the retired doc is removed.
+            await this.leaseRepo
+                .retire(prKey, sandboxId, {
+                    idleKillAt: new Date(Date.now() + INVALIDATE_DRAIN_MS),
+                    busyKillAt: new Date(Date.now() + DEFAULT_LEASE_TTL_MS),
+                    ownHolds: 1,
+                })
+                .catch(() => {});
             // Re-acquire from scratch. With doc deleted, upsertAcquire
             // will hit creator path and cold-create. cloneParams must be
             // passed by the original caller for cold-create to clone repo;
@@ -803,10 +882,73 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             throw new SandboxStaleConnectionError(prKey, sandboxId);
         }
 
+        // Bring a reused sandbox's git checkout up to date with the CURRENT
+        // commit before handing it back — see syncE2BSandboxRepo's docstring
+        // for the stale-checkout bug this closes (#1313 e2e validation,
+        // 2026-09-11). Best-effort: a sync failure falls back to whatever
+        // was already on disk (the pre-fix behavior), it never fails the
+        // acquire.
+        //
+        // Skip the sync entirely when another consumer currently holds this
+        // lease (leaseCount > 1, e.g. round N's AgentReviewStage still
+        // reading files while round N+1 joins after a fast follow-up push):
+        // `checkout -f` + `clean -fd` rewrite the sandbox's ONE shared
+        // working tree, so running it here would yank the tree out from
+        // under that other consumer's in-flight readFile/grep calls — the
+        // exact identical-context/working-tree contradiction this sync was
+        // added to fix, just caused by the fix itself. Re-reading the doc
+        // right before the destructive commands narrows the race to the gap
+        // between this read and the checkout, instead of leaving it open for
+        // the other consumer's entire pipeline run.
+        if (cloneParams) {
+            // Best-effort re-read: a transient failure here must fall back to
+            // running the sync (the pre-fix behavior), not fail the acquire.
+            const currentDoc = await this.leaseRepo
+                .findByPrKey(prKey)
+                .catch(() => null);
+            if (currentDoc && currentDoc.leaseCount > 1) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: skipping destructive git sync for sandboxId="${sandboxId}" prKey="${prKey}" — leaseCount=${currentDoc.leaseCount} other consumer(s) active`,
+                    context: SandboxLeaseManager.name,
+                    metadata: {
+                        organizationId: prKey.split(':')[0],
+                        prKey,
+                        sandboxId,
+                        leaseCount: currentDoc.leaseCount,
+                    },
+                });
+            } else {
+                try {
+                    await syncE2BSandboxRepo(e2bSandbox, cloneParams, {
+                        logger: this.logger,
+                        logContext: SandboxLeaseManager.name,
+                    });
+                } catch (err) {
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: syncE2BSandboxRepo threw for sandboxId="${sandboxId}" prKey="${prKey}" — sandbox keeps its previous checkout`,
+                        context: SandboxLeaseManager.name,
+                        error: err,
+                        metadata: { prKey, sandboxId },
+                    });
+                }
+            }
+        }
+
+        // The caller's value is authoritative for THIS review; the persisted
+        // one covers a joiner that arrived without clone params.
+        const leaseDoc = await this.leaseRepo
+            .findByPrKey(prKey)
+            .catch(() => null);
+        const baseBranch = cloneParams?.baseBranch ?? leaseDoc?.baseBranch;
+
         const sandbox: SandboxInstance = this.buildSandboxInstance(
             e2bSandbox,
             prKey,
             leaseId,
+            baseBranch,
+            // Only what creation recorded counts: dropping now would not undo
+            // what earlier rounds could do while the user still had sudo.
+            leaseDoc?.privilegesDropped === true,
         );
         this.leaseIdToPrKey.set(leaseId, prKey);
 
@@ -827,8 +969,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         e2bSandbox: Sandbox,
         prKey: string,
         leaseId: string,
+        baseBranch?: string,
+        privilegesDropped = false,
     ): SandboxInstance {
         return {
+            // Restored from the lease. The base ref is already on disk from
+            // creation, but without the NAME nothing can ask git for it, and a
+            // tool that needs the previous version of a file then silently has
+            // no baseline — the same creator/reconnect drift the shared
+            // remoteCommands above exists to prevent.
+            // Normalized here rather than at each call site: creator and
+            // joiner reach this from different places, and a joiner that
+            // re-introduced the host's raw `refs/heads/...` spelling would
+            // break `origin/<base>` for every consumer.
+            baseBranch: toBranchName(baseBranch),
             // Single shared implementation (see e2b-sandbox.service.ts) — resolves
             // paths against the repo root, surfaces errors, logs empty reads.
             // Sharing it prevents the creator/reconnect drift that blinded reviews.
@@ -846,20 +1000,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             type: 'e2b',
             sandboxId: e2bSandbox.sandboxId,
             repoDir: '/home/user/repo',
-            run: async (
-                command: string,
-                opts?: { timeoutMs?: number; envs?: Record<string, string> },
-            ) => {
-                const result = await e2bSandbox.commands.run(command, {
-                    timeoutMs: opts?.timeoutMs ?? 30_000,
-                    ...(opts?.envs && { envs: opts.envs }),
-                });
-                return {
-                    stdout: result.stdout || '',
-                    stderr: result.stderr || '',
-                    exitCode: result.exitCode,
-                };
-            },
+            privilegesDropped,
+            run: (command: string, opts?: SandboxRunOptions) =>
+                runE2BCommand(e2bSandbox, command, opts),
             readFile: async (path: string, opts?: { timeoutMs?: number }) => {
                 return e2bSandbox.files.read(path, {
                     requestTimeoutMs: opts?.timeoutMs ?? 600_000,

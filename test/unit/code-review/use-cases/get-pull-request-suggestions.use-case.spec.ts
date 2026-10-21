@@ -187,4 +187,56 @@ describe('GetPullRequestSuggestionsUseCase', () => {
         expect(result.response.markdown).toContain('src/index.ts');
         expect(result.suggestionsCount).toBe(1);
     });
+
+    it('gives agents the full explanation as Content, falling back to the body', async () => {
+        mockSuggestionService.filterActiveReviewSuggestions.mockResolvedValue([
+            {
+                id: 'with-full',
+                deliveryStatus: DeliveryStatus.SENT,
+                severity: 'high',
+                label: 'bug',
+                oneSentenceSummary: 'User can be null',
+                suggestionContent: 'Short body.',
+                fullExplanation: 'The whole explanation the finder wrote.',
+                filePath: 'src/a.ts',
+            },
+            {
+                id: 'legacy',
+                deliveryStatus: DeliveryStatus.SENT,
+                severity: 'high',
+                label: 'bug',
+                oneSentenceSummary: 'Old finding',
+                suggestionContent: 'Legacy body only.',
+                filePath: 'src/b.ts',
+            },
+        ]);
+
+        const result = await useCase.execute({
+            organizationId: 'org-123',
+            pr: {
+                number: 42,
+                provider: PlatformType.GITHUB,
+                repository: { id: 'repo-123', name: 'repo', fullName: 'org/repo' },
+                files: [],
+                prLevelSuggestions: [
+                    {
+                        id: 'pr-1',
+                        deliveryStatus: DeliveryStatus.SENT,
+                        severity: 'high',
+                        label: 'kody_rules',
+                        oneSentenceSummary: 'No ticket',
+                        suggestionContent: 'Short PR body.',
+                        fullExplanation: 'The whole PR-level explanation.',
+                    },
+                ],
+            },
+            format: 'markdown',
+        });
+
+        const md = result.response.markdown;
+        expect(md).toContain('The whole explanation the finder wrote.');
+        expect(md).not.toContain('Short body.');
+        expect(md).toContain('Legacy body only.');
+        expect(md).toContain('The whole PR-level explanation.');
+    });
 });

@@ -145,6 +145,49 @@ describe('KodyRulesValidationService', () => {
             expect(result.standardRules).toHaveLength(1);
             expect(result.standardRules[0].uuid).toBe('first');
         });
+
+        // The review-time guarantee for #1626: a rule PAUSED only by the free
+        // plan's quota must run once the org is paid, even when the plan-change
+        // write never reached Mongo.
+        describe('plan-locked rules', () => {
+            const rules = (): Partial<IKodyRule>[] => [
+                createRule({ uuid: 'active', rule: 'active rule' }),
+                {
+                    ...createRule({
+                        uuid: 'plan-locked',
+                        rule: 'plan-locked rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: true,
+                },
+                {
+                    ...createRule({
+                        uuid: 'user-paused',
+                        rule: 'user-paused rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: false,
+                },
+            ];
+
+            const uuids = (limited: boolean) =>
+                service
+                    .filterKodyRules(rules(), 'repo-1', undefined, limited)
+                    .standardRules.map((rule) => rule.uuid);
+
+            it('runs plan-locked rules on a paid plan', () => {
+                expect(uuids(false)).toEqual(['active', 'plan-locked']);
+            });
+
+            it('skips plan-locked rules on a free plan', () => {
+                expect(uuids(true)).toEqual(['active']);
+            });
+
+            it('never runs a rule the user paused, on any plan', () => {
+                expect(uuids(false)).not.toContain('user-paused');
+                expect(uuids(true)).not.toContain('user-paused');
+            });
+        });
     });
 
     describe('Inheritance behavior — proving the "INHERITED: DIRECTORY" leak', () => {
@@ -155,7 +198,7 @@ describe('KodyRulesValidationService', () => {
             createRule({
                 uuid: 'b207a89c-924b-4a0a-8070-2e860293b537',
                 title: 'Logging Best Practices',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 path: '**/*',
                 inheritance: {
@@ -170,7 +213,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -181,7 +224,7 @@ describe('KodyRulesValidationService', () => {
 
         it('FIX: rule scoped to one directoryId no longer leaks to a sibling directoryId', () => {
             // Reproduces the "INHERITED: DIRECTORY" complaint from
-            // quintoandar's David B. Before the fix, a rule attached to
+            // a customer. Before the fix, a rule attached to
             // cf5284b4 with the default `inheritance.include: []` was
             // matched by ANY other directoryId in the same repo because
             // the matcher reads "include is empty" as
@@ -192,7 +235,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.java',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -208,7 +251,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -224,7 +267,7 @@ describe('KodyRulesValidationService', () => {
             const repoLevel = createRule({
                 uuid: 'repo-level-rule',
                 title: 'Repo-level Lint',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 directoryId: undefined, // repo-level
                 path: '**/*.ts',
                 inheritance: { inheritable: true, include: [], exclude: [] },
@@ -234,7 +277,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.ts',
                 [repoLevel],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -258,7 +301,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [pinned],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -266,7 +309,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.java',
                 [pinned],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -280,7 +323,7 @@ describe('KodyRulesValidationService', () => {
     // combination so a future change to the matcher can't silently break
     // any of them. Each test asserts ONE behavior and is self-contained.
     describe('inheritance matrix — global / repo / dir × inheritable / include / exclude', () => {
-        const REPO = '769144833';
+        const REPO = '900000001';
         const DIR_A = 'cf5284b4-2510-464a-9eca-98efbf121d04';
         const DIR_B = '314f34ff-2d1e-47e0-8765-2bb3f1a8564d';
 
@@ -463,7 +506,7 @@ describe('KodyRulesValidationService', () => {
     });
 
     describe('Bug 1 regression — rule from .cursorrules in subdirectory does not leak to unrelated paths', () => {
-        // Reproduces quintoandar PR #24870 (backend-services repo 769144833):
+        // Reproduces a customer PR (backend-services repo 900000001):
         // rule 32dfa554-6238-4b19-84f8-17330f6abe94 was imported from
         // applications/backoffice-bff/.cursorrules and incorrectly applied to
         // applications/sales-flow/api/src/main/java/.../TaskRepository.java.
@@ -473,7 +516,7 @@ describe('KodyRulesValidationService', () => {
                 uuid: '32dfa554-6238-4b19-84f8-17330f6abe94',
                 title: 'Java/Spring Architectural, Naming, and Dependency Conventions',
                 rule: 'Enforce hexagonal architecture conventions from .cursorrules',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 path: pathValue,
                 // sourcePath tracks where the rule came from; today it is informational-only
                 // see libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts
@@ -481,7 +524,7 @@ describe('KodyRulesValidationService', () => {
             });
 
         const salesFlowFile =
-            'applications/sales-flow/api/src/main/java/br/com/quintoandar/salesflow/api/task/facade/TaskFacade.java';
+            'applications/sales-flow/api/src/main/java/com/example/salesflow/api/task/facade/TaskFacade.java';
         const backofficeBffFile =
             'applications/backoffice-bff/src/main/java/com/example/service/UserServiceImpl.java';
 
@@ -491,7 +534,7 @@ describe('KodyRulesValidationService', () => {
             const rules = [javaSpringArchRule('**/*')];
 
             const result = service.getKodyRulesForFile(salesFlowFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).toContain(
@@ -507,7 +550,7 @@ describe('KodyRulesValidationService', () => {
             ];
 
             const result = service.getKodyRulesForFile(salesFlowFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).not.toContain(
@@ -521,7 +564,7 @@ describe('KodyRulesValidationService', () => {
             ];
 
             const result = service.getKodyRulesForFile(backofficeBffFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).toContain(

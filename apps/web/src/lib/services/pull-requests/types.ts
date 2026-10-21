@@ -123,11 +123,43 @@ export type ReviewWarningKind =
     | "DIFF_TRUNCATED"
     | "LOW_SIGNAL_FILES_DROPPED"
     | "HEAVY_PASSES_SKIPPED"
-    | "PROVIDER_FALLBACK";
+    | "PROVIDER_FALLBACK"
+    | "RULE_CONTEXT_UNAVAILABLE"
+    | "BAD_FIX_DOWNGRADED"
+    | "SANDBOX_UNAVAILABLE"
+    | "CALLGRAPH_FAILED"
+    | "SUGGESTIONS_DROPPED_PATH_MISMATCH"
+    | "KODY_RULES_PARTIAL"
+    | "VERIFY_UNAVAILABLE"
+    | "SKILL_NOT_FOUND"
+    | "SKILL_INVALID"
+    | "SKILL_CHANGED_IN_PR"
+    | "DOC_NOT_FOUND"
+    | "KNOWLEDGE_TRUNCATED"
+    | "KNOWLEDGE_UNAVAILABLE"
+    | "SKILL_COMPATIBILITY"
+    | "CLI_INSTALL_FAILED"
+    | "CROSS_REPO_UNAVAILABLE"
+    | "AST_GREP_UNAVAILABLE"
+    | "CONFIG_FILE_KEY_IGNORED";
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
-    reason: "small_context_window" | "provider_failover";
+    reason:
+        | "small_context_window"
+        | "provider_failover"
+        | "lookup_unavailable"
+        | "unusable_fix"
+        | "sandbox_unavailable"
+        | "callgraph_failed"
+        | "path_mismatch"
+        | "judge_shard_failed"
+        | "large_pr"
+        | "verify_failed"
+        | "knowledge"
+        | "cli_install_failed"
+        | "tool_unavailable"
+        | "config_file";
     contextWindowTokens: number;
     modelName: string;
     detail?: string;
@@ -169,6 +201,10 @@ export interface PullRequestExecution {
         bySeverity?: Record<"critical" | "high" | "medium" | "low", number>;
         categories?: string[];
     };
+    // Deep-link target when the PR-list count is clicked: the delivered
+    // finding that most wants attention (unresolved first, then severity),
+    // picked by the backend. null when the PR has none.
+    firstSentSuggestion?: { id: string; filePath: string } | null;
     reviewedCommitSha?: string | null;
     reviewedCommitUrl?: string | null;
     compareUrl?: string | null;
@@ -184,6 +220,10 @@ export interface PullRequestExecutionsPagination {
     // DB-level filters (see the use-case), so the client trusts it as exact only
     // when no Mongo-side suggestion/author filter is active.
     distinctPrTotal?: number;
+    // Resume point for the next fetch. Absent once the scan is exhausted —
+    // that absence, not a short page, is what ends the infinite list.
+    nextCursor?: string;
+    hasNextPage?: boolean;
 }
 
 export type PullRequestExecutionsPayload =

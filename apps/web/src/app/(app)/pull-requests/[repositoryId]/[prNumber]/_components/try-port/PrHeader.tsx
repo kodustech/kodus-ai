@@ -32,16 +32,16 @@ export function PrHeader({
                     merged={pr.merged}
                     isDraft={pr.isDraft}
                 />
-                <span className="text-[13px] font-mono text-[var(--text-muted)]">
+                <span className="text-review font-mono text-[var(--text-muted)]">
                     {pr.owner}/{pr.repo} #{pr.prNumber}
                 </span>
             </div>
 
-            <h1 className="text-[20px] sm:text-[22px] leading-[1.2] tracking-tight font-medium text-[var(--text)] mb-3 max-w-4xl">
+            <h1 className="text-xl sm:text-2xl leading-[1.2] tracking-tight font-medium text-[var(--text)] mb-3 max-w-4xl">
                 {pr.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-[var(--text-muted)]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-review text-[var(--text-muted)]">
                 {pr.author && (
                     <a
                         href={pr.author.htmlUrl}
@@ -66,7 +66,7 @@ export function PrHeader({
                 )}
 
                 {pr.baseRef && pr.headRef && (
-                    <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
+                    <span className="inline-flex items-center gap-1.5 font-mono text-xs">
                         <BranchPill>{pr.baseRef}</BranchPill>
                         <Arrow />
                         <BranchPill>{pr.headRef}</BranchPill>
@@ -96,7 +96,7 @@ export function PrHeader({
                     href={pr.htmlUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-auto text-[12px] text-[var(--text-dim)] hover:text-[var(--text-muted)] inline-flex items-center gap-1"
+                    className="ml-auto text-xs text-[var(--text-dim)] hover:text-[var(--text-muted)] inline-flex items-center gap-1"
                 >
                     Open on GitHub <span aria-hidden>↗</span>
                 </a>
@@ -154,7 +154,7 @@ function Tabs({
                     <button
                         key={tab.id}
                         onClick={() => onTabChange(tab.id)}
-                        className={`relative cursor-pointer px-3 pb-2.5 pt-1 text-[13px] inline-flex items-center gap-1.5 rounded-t transition-colors ${
+                        className={`relative cursor-pointer px-3 pb-2.5 pt-1 text-review inline-flex items-center gap-1.5 rounded-t transition-colors ${
                             active
                                 ? "text-[var(--text)] font-medium"
                                 : "text-[var(--text)] hover:bg-[var(--bg-3)]/40"
@@ -171,7 +171,7 @@ function Tabs({
                         {tab.label}
                         {tab.count !== undefined && tab.count > 0 && (
                             <span
-                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors ${
+                                className={`text-3xs font-mono px-1.5 py-0.5 rounded transition-colors ${
                                     active
                                         ? "bg-[var(--accent)]/15 text-[var(--accent)]"
                                         : "bg-[var(--bg-3)] text-[var(--text-muted)]"
@@ -222,7 +222,7 @@ function StateBadge({
 
     return (
         <span
-            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full border ${cls}`}
+            className={`inline-flex items-center gap-1.5 text-2xs font-medium px-2 py-0.5 rounded-full border ${cls}`}
         >
             <Icon />
             {label}
@@ -245,7 +245,7 @@ function CopyShaButton({ sha }: { sha: string }) {
     return (
         <button
             onClick={onClick}
-            className="inline-flex items-center gap-1.5 font-mono text-[12px] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
             title="Copy commit SHA"
         >
             <span className="px-1.5 py-0.5 rounded bg-[var(--bg-3)] border border-[var(--border)]">

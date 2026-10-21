@@ -23,10 +23,10 @@
  *    also carries a signature in the native schema) is not patched. No compatible
  *    upstream is known to emit one, so this stays unhandled until one does.
  */
-type FetchFn = (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-) => Promise<Response>;
+// Match the ambient `fetch` signature rather than naming DOM types directly:
+// `RequestInfo` is absent in a Node/ts-node compile without the DOM lib (it broke
+// the structured-outputs repro), and the AI SDK expects a drop-in `fetch` anyway.
+type FetchFn = typeof fetch;
 
 export function withThinkingSignatureRepair(baseFetch: FetchFn): FetchFn {
     return async (input, init) => {

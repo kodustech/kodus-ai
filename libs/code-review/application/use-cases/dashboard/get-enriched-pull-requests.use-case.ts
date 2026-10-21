@@ -18,6 +18,8 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import {
     authorMatchesExact,
     isOpenPullRequest,
+    matchesPullRequestState,
+    deepLinkTargetRank,
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
 import {
@@ -57,6 +59,60 @@ import {
     shouldIncludeAuthorByPolicy,
 } from './utils/author-policy-filter.util';
 
+/**
+ * Where the last page stopped READING.
+ *
+ * Not the same as where it stopped emitting: this loop discards executions that
+ * fail a post-query filter, so the resume point sits past the final row the
+ * caller received. Encoding it (rather than a row index) keeps the repository's
+ * keyset scan intact — the same (createdAt, uuid) tuple it already paginates on.
+ */
+type ExecutionCursor = { createdAt: Date | string; uuid: string };
+
+const encodeExecutionCursor = (cursor?: ExecutionCursor): string | undefined => {
+    if (!cursor?.uuid || !cursor?.createdAt) {
+        return undefined;
+    }
+
+    const createdAt =
+        cursor.createdAt instanceof Date
+            ? cursor.createdAt.toISOString()
+            : new Date(cursor.createdAt).toISOString();
+
+    return Buffer.from(JSON.stringify({ createdAt, uuid: cursor.uuid })).toString(
+        'base64url',
+    );
+};
+
+const decodeExecutionCursor = (raw?: string): ExecutionCursor | undefined => {
+    if (!raw) {
+        return undefined;
+    }
+
+    try {
+        const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString());
+        const createdAt = new Date(parsed?.createdAt);
+
+        // A cursor that does not parse is treated as absent rather than fatal:
+        // it can only reach us from a stale client or a hand-edited URL, and
+        // restarting the list beats a 500 on the dashboard's main query.
+        if (!parsed?.uuid || Number.isNaN(createdAt.getTime())) {
+            return undefined;
+        }
+
+        return { createdAt, uuid: String(parsed.uuid) };
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * How many execution batches one request may scan before returning what it
+ * has. Bounds the worst case (a highly selective post-query filter) at a
+ * predictable number of round trips rather than the whole history.
+ */
+const MAX_BATCHES_PER_REQUEST = 10;
+
 @Injectable()
 export class GetEnrichedPullRequestsUseCase implements IUseCase {
     private readonly logger = createLogger(GetEnrichedPullRequestsUseCase.name);
@@ -90,6 +146,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             repositoryName,
             limit = 30,
             page = 1,
+            cursor,
             hasSentSuggestions,
             pullRequestTitle,
             pullRequestNumber,
@@ -102,6 +159,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             category,
             needsAttention,
             author,
+            prState,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -178,7 +236,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             }
 
             const enrichedPullRequests: EnrichedPullRequestResponse[] = [];
-            const initialSkip = (page - 1) * limit;
+            const resumeCursor = decodeExecutionCursor(cursor);
+            // A resume cursor positions the scan on its own. Keeping the page
+            // offset as well would skip a whole page of rows past it.
+            const initialSkip = resumeCursor ? 0 : (page - 1) * limit;
             let accumulatedExecutions = 0;
             let totalExecutions = 0;
             // Distinct PRs matching the DB-level filters — captured from the same
@@ -193,8 +254,16 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             // that, under aggressive filtering, walked thousands of rows per
             // request (the #1432 slowdown). After the first batch we continue via
             // the last row's (createdAt, uuid) instead — an indexed range scan.
-            let loopCursor:
-                { createdAt: Date | string; uuid: string } | undefined;
+            // The last execution this request actually LOOKED AT, emitted or
+            // discarded. It drives BOTH the next batch within this request and
+            // the cursor handed to the next request — one variable on purpose,
+            // because two would be free to drift and the bug would only show
+            // up across requests, where it is hardest to see.
+            //
+            // Deliberately not the last row of the batch: when the page fills
+            // mid-batch the remaining rows have not been served yet and must
+            // not be skipped.
+            let lastConsumed: ExecutionCursor | undefined = resumeCursor;
             const authorPolicyConfig = await this.getCompiledAuthorPolicyConfig(
                 authorPolicy,
                 organizationAndTeamData,
@@ -229,7 +298,26 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 prFilters = prNumbers;
             }
 
-            while (enrichedPullRequests.length < limit && hasMoreExecutions) {
+            // A page is filled by scanning executions and discarding the ones
+            // that fail a post-query filter, so a selective filter makes the
+            // loop issue batch after batch. Its only exits were "page full"
+            // and "history exhausted", which for something like `prState=open`
+            // deep in the list (old PRs are nearly all closed) means one
+            // request can walk the whole execution history in sequential round
+            // trips — the shape of the #1432 slowdown this file already
+            // carries scars from.
+            //
+            // Cap the scan instead. A capped request returns a SHORT page with
+            // `hasMoreExecutions` still true, so it hands back a cursor and the
+            // client fetches again; the list stays complete because the client
+            // continues on the cursor alone and never on page length.
+            let batchesRead = 0;
+            while (
+                enrichedPullRequests.length < limit &&
+                hasMoreExecutions &&
+                batchesRead < MAX_BATCHES_PER_REQUEST
+            ) {
+                batchesRead++;
                 const {
                     data: executionsBatch,
                     total,
@@ -249,8 +337,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                         createdAtTo,
                         // First batch: page offset. Subsequent batches:
                         // keyset cursor (no OFFSET over-scan).
-                        skip: loopCursor ? undefined : initialSkip,
-                        cursor: loopCursor,
+                        skip: lastConsumed ? undefined : initialSkip,
+                        cursor: lastConsumed,
                         take: limit,
                         order: 'DESC',
                         includeTotal: totalExecutions === 0,
@@ -267,12 +355,23 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                     break;
                 }
 
-                // Advance the cursor to the last row of this batch (same
-                // createdAt DESC, uuid ASC ordering the repository applies) so
-                // the next iteration continues right after it.
+                // A batch smaller than the page size means the scan reached
+                // the end of the matching set. That — not arithmetic over
+                // `totalExecutions` — is what tells a keyset scan it is done,
+                // and it is the only signal that stays correct once a resume
+                // cursor makes the page offset meaningless.
+                const batchWasFull = executionsBatch.length >= limit;
+                // True when the page filled before this batch was exhausted:
+                // the leftover rows are unserved, so there is definitely more.
+                let stoppedMidBatch = false;
+
+                // The end of this batch, in the same (createdAt DESC, uuid
+                // DESC) ordering the repository paginates on. Used only by the
+                // whole-batch rejection below; the per-execution loop records
+                // its own position row by row.
                 const lastBatchRow =
                     executionsBatch[executionsBatch.length - 1];
-                loopCursor = {
+                const batchTail: ExecutionCursor = {
                     createdAt: lastBatchRow.createdAt,
                     uuid: lastBatchRow.uuid,
                 };
@@ -343,11 +442,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                     allowedPrKeys.size === 0
                 ) {
                     accumulatedExecutions += executionsBatch.length;
+                    // Every row here was read and rejected, so the resume point
+                    // is the end of the batch.
+                    lastConsumed = batchTail;
 
-                    if (
-                        initialSkip + accumulatedExecutions >=
-                        totalExecutions
-                    ) {
+                    if (!batchWasFull) {
                         hasMoreExecutions = false;
                     }
 
@@ -440,6 +539,13 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 // Process executions
                 for (let i = 0; i < executionsBatch.length; i++) {
                     const execution = executionsBatch[i];
+
+                    // Recorded before any `continue`: a discarded execution was
+                    // still read, and the next page must not be handed it again.
+                    lastConsumed = {
+                        createdAt: execution.createdAt,
+                        uuid: execution.uuid,
+                    };
 
                     const prKey = `${execution.repositoryId}_${execution.pullRequestNumber}`;
                     const wasFetchedFromMongo = allFetchedPrKeys.has(prKey);
@@ -575,6 +681,13 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             continue;
                         }
 
+                        // The PR's own state, independent of how Kody's run
+                        // went. Same predicate `needsAttention` already uses,
+                        // so "open" means one thing across the whole screen.
+                        if (!matchesPullRequestState(pullRequest, prState)) {
+                            continue;
+                        }
+
                         const enrichedPR: EnrichedPullRequestResponse = {
                             prId: pullRequest.uuid!,
                             prNumber: pullRequest.number,
@@ -613,6 +726,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             codeReviewTimeline,
                             enrichedData,
                             suggestionsCount,
+                            // Deep-link target for the PR-list count
+                            // (?file=...&suggestion=...): the delivered finding
+                            // that most wants attention (unresolved first, then
+                            // severity). null when there is none.
+                            firstSentSuggestion:
+                                suggestionsCount.firstSentSuggestion ?? null,
                             // Adaptive-fit fidelity warnings (small
                             // context window forced a degraded path).
                             // Persisted by automationCodeReview's
@@ -638,13 +757,25 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                     }
 
                     if (enrichedPullRequests.length >= limit) {
+                        stoppedMidBatch = i < executionsBatch.length - 1;
                         break;
                     }
                 }
 
                 accumulatedExecutions += executionsBatch.length;
 
-                if (initialSkip + accumulatedExecutions >= totalExecutions) {
+                if (stoppedMidBatch) {
+                    // Rows of this batch were never served — there is more,
+                    // whatever the totals say.
+                    hasMoreExecutions = true;
+                } else if (!batchWasFull) {
+                    hasMoreExecutions = false;
+                } else if (
+                    !resumeCursor &&
+                    initialSkip + accumulatedExecutions >= totalExecutions
+                ) {
+                    // Offset callers (no cursor) can still finish early on the
+                    // execution total, which is exact for them.
                     hasMoreExecutions = false;
                 }
             }
@@ -677,8 +808,16 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 totalItems: totalExecutions,
                 distinctPrTotal,
                 itemsPerPage: limit,
-                hasNextPage: page < totalPages,
-                hasPreviousPage: page > 1,
+                // Whether the SCAN has more to give — not whether the page
+                // number is below a total counted in a different unit.
+                // `totalPages` divides executions by a page size measured in
+                // surviving rows, so `page < totalPages` promised pages that
+                // came back empty and, for the infinite list, never ended.
+                hasNextPage: hasMoreExecutions,
+                hasPreviousPage: page > 1 || Boolean(resumeCursor),
+                nextCursor: hasMoreExecutions
+                    ? encodeExecutionCursor(lastConsumed)
+                    : undefined,
             };
 
             this.logger.log({
@@ -956,6 +1095,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         let failed = 0;
         let replaced = 0;
         let unresolved = 0;
+        // Best deep-link target so far, plus the rank that won it — see
+        // deepLinkTargetRank: unresolved beats resolved, then severity, and
+        // document order only breaks ties.
+        let firstSentSuggestion: { id: string; filePath: string } | null = null;
+        let firstSentRank = -1;
 
         // Optimized: check if we have pre-computed counts
         if ((pullRequest as any).suggestionsCount) {
@@ -981,6 +1125,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 categories: Array.isArray(precomputed.categories)
                     ? precomputed.categories
                     : [],
+                firstSentSuggestion:
+                    precomputed.firstSentSuggestion ?? null,
             };
         }
 
@@ -996,6 +1142,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 unresolvedBySeverity,
                 bySeverity,
                 categories: [],
+                firstSentSuggestion: null,
             };
         }
 
@@ -1008,6 +1155,19 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 const status = suggestion.deliveryStatus;
                 if (status === DeliveryStatus.SENT) {
                     sent++;
+                    // Legacy docs may lack an id — a deep link without one
+                    // is useless, so those can't be the target.
+                    if (suggestion.id) {
+                        const rank = deepLinkTargetRank(suggestion as any);
+                        // Strictly greater: a tie keeps the earlier finding.
+                        if (rank > firstSentRank) {
+                            firstSentRank = rank;
+                            firstSentSuggestion = {
+                                id: suggestion.id,
+                                filePath: files[i].path,
+                            };
+                        }
+                    }
                     const severity = String(
                         (suggestion as any).severity ?? '',
                     ).toLowerCase();
@@ -1051,6 +1211,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             unresolvedBySeverity,
             bySeverity,
             categories: Array.from(categorySet),
+            firstSentSuggestion,
         };
     }
 }

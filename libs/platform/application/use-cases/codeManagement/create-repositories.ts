@@ -108,10 +108,35 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 configKey: IntegrationConfigKey.REPOSITORIES,
                 configValue: params.repositories,
                 type: params.type,
+                // Forwarded so the adapters can tell an intermediate chunk of
+                // a chunked save from an authoritative one. Absent means
+                // authoritative, which is what every other caller sends.
+                deferWebhooks: params.deferWebhooks,
                 organizationAndTeamData: {
                     teamId: teamId,
                     organizationId: organizationId,
                 },
+            });
+
+            // One event per save, beside the per-repo `repository_connected`
+            // ones: the setup funnel step is "picked repositories", not
+            // "picked the seventh repository". A chunked save reports each
+            // chunk, so `deferWebhooks` marks the non-authoritative ones.
+            const selectedRepoIds: string[] = (params.repositories ?? []).map(
+                (repo: { id: string | number }) => String(repo.id),
+            );
+            void this.telemetry.repositoriesSelected({
+                organizationId,
+                teamId,
+                actorUserId: this.request?.user?.uuid,
+                platform: params.type,
+                selectedCount: selectedRepoIds.length,
+                addedCount: selectedRepoIds.filter(
+                    (id) => !previouslyPersistedRepoIds.has(id),
+                ).length,
+                removedCount: [...previouslyPersistedRepoIds].filter(
+                    (id) => !selectedRepoIds.includes(id),
+                ).length,
             });
 
             if (

@@ -10,8 +10,14 @@ import { ConnectionString } from 'connection-string';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@libs/core/log/logger';
+import { withLangfuseObservation } from './langfuse';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import {
+    readAiSdkUsage,
+    readAiSdkUsageFromError,
+    type AiSdkUsage,
+} from '@libs/llm/ai-sdk-usage';
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -414,6 +420,10 @@ export class ObservabilityService implements OnModuleInit {
         credentialId?: string;
         route?: string;
         usedFallback?: boolean;
+        /** Model telemetry is on for this call. Only then is it wrapped in a
+         *  Langfuse observation: an untraced call sends Langfuse nothing, so
+         *  an observation around it would be an empty trace. */
+        traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T> {
@@ -425,64 +435,75 @@ export class ObservabilityService implements OnModuleInit {
         // Measure the call duration here (parity with the old recordAgentRunUsage
         // durationMs, which the agent loop used to record by hand).
         const startedAt = Date.now();
+        const usageAttrs = (usage: AiSdkUsage, finishReason?: string) =>
+            buildUsageSpanAttributes({
+                runName: params.runName,
+                model: params.model,
+                byokModelId: params.byokModelId,
+                credentialId: params.credentialId,
+                route: params.route,
+                usedFallback: params.usedFallback,
+                agentName: (a.agentName as string) ?? spanAgent,
+                phase: (a.phase as string) ?? spanPhase,
+                type: a.type as string | undefined,
+                organizationId: a.organizationId as string | undefined,
+                teamId: a.teamId as string | undefined,
+                prNumber: a.prNumber as number | undefined,
+                source: a.source as string | undefined,
+                durationMs: Date.now() - startedAt,
+                finishReason,
+                usage,
+            });
         return this.runInSpan(
             params.spanName,
             async (span) => {
-                const result = await params.exec();
-                const usage = result?.usage;
-                span?.setAttributes?.(
-                    buildUsageSpanAttributes({
-                        runName: params.runName,
-                        model: params.model,
-                        byokModelId: params.byokModelId,
-                        credentialId: params.credentialId,
-                        route: params.route,
-                        usedFallback: params.usedFallback,
-                        agentName: (a.agentName as string) ?? spanAgent,
-                        phase: (a.phase as string) ?? spanPhase,
-                        type: a.type as string | undefined,
-                        organizationId: a.organizationId as string | undefined,
-                        teamId: a.teamId as string | undefined,
-                        prNumber: a.prNumber as number | undefined,
-                        source: a.source as string | undefined,
-                        durationMs: Date.now() - startedAt,
-                        usage: {
-                            inputTokens: usage?.inputTokens,
-                            outputTokens: usage?.outputTokens,
-                            totalTokens: usage?.totalTokens,
-                            // ai@7: nested details; ai@6: top-level fields.
-                            reasoningTokens:
-                                (
-                                    usage as
-                                        | {
-                                              outputTokenDetails?: {
-                                                  reasoningTokens?: number;
-                                              };
-                                              reasoningTokens?: number;
-                                          }
-                                        | undefined
-                                )?.outputTokenDetails?.reasoningTokens ??
-                                usage?.reasoningTokens,
-                            cacheReadTokens:
-                                (
-                                    usage as
-                                        | {
-                                              inputTokenDetails?: {
-                                                  cacheReadTokens?: number;
-                                              };
-                                              cachedInputTokens?: number;
-                                          }
-                                        | undefined
-                                )?.inputTokenDetails?.cacheReadTokens ??
-                                (
-                                    usage as
-                                        | { cachedInputTokens?: number }
-                                        | undefined
-                                )?.cachedInputTokens,
-                        },
-                    }),
-                );
-                return result;
+                try {
+                    // One Langfuse trace per traced call, its id kept on the
+                    // usage row so the row leads straight to the trace.
+                    const result = await (params.traced
+                        ? withLangfuseObservation(
+                              params.runName ?? params.spanName,
+                              (traceId) => {
+                                  if (traceId) {
+                                      span?.setAttributes?.({
+                                          externalTraceId: traceId,
+                                      });
+                                  }
+                                  return params.exec();
+                              },
+                              {
+                                  correlationId:
+                                      this.getObsInstance().getContext()
+                                          ?.correlationId,
+                                  organizationId: a.organizationId as
+                                      string | undefined,
+                                  teamId: a.teamId as string | undefined,
+                                  prNumber: a.prNumber as number | undefined,
+                              },
+                          )
+                        : params.exec());
+                    span?.setAttributes?.(
+                        // Single shared reader — same mapping the agent harness
+                        // uses, so cache-read/write + reasoning can't be captured
+                        // in one path and dropped in the other.
+                        usageAttrs(readAiSdkUsage(result?.usage)),
+                    );
+                    return result;
+                } catch (err) {
+                    // A call that died AFTER the provider answered (structured
+                    // output parse / schema mismatch) was still billed, and the
+                    // SDK hands its usage back on the error. Record it before
+                    // rethrowing, else the span lands in Mongo with the error
+                    // flag and zero tokens while Langfuse shows the real spend.
+                    // runInSpan's own catch still stamps `error`/`exception.*`.
+                    const failed = readAiSdkUsageFromError(err);
+                    if (failed) {
+                        span?.setAttributes?.(
+                            usageAttrs(failed.usage, failed.finishReason),
+                        );
+                    }
+                    throw err;
+                }
             },
             params.attrs,
         );

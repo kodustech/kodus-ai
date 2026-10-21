@@ -1,0 +1,112 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "judgeReasoningEffort": null,
+  "reps": 3,
+  "engine": {
+    "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+    "sourceDigest": "3b409a719f077fff11ab4d17d1afee27fe9943ff3b13422cbaf3795144723628"
+  },
+  "startedAt": "2026-10-04T14:16:48.691Z",
+  "updatedAt": "2026-10-04T14:30:04.122Z",
+  "complete": true,
+  "selectedCases": [
+    "R4a-kodus2011-status-implemented"
+  ],
+  "summary": {
+    "measured": 1,
+    "infra": 2,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      }
+    },
+    "byCase": {
+      "R4a-kodus2011-status-implemented \u00b7 entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 1,
+        "n": 1,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 737485,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "error": "INFRA: agent did not run (finishReason=error, steps=0)"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "error": "INFRA: agent did not run (finishReason=error, steps=0)"
+    }
+  ],
+  "infraReasonNote": "Provider DNS resolution failed during this batch (api.fireworks.ai ENOTFOUND); one judge request exhausted fetch retries. Unmeasured rows remain infra."
+}

@@ -17,6 +17,13 @@ export interface ProviderUiDescriptor {
     requiresBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
     autoListModels: boolean;
+    /** The provider enumerates its models through a LIVE `/models` HTTP call
+     *  (needs the org's key), as opposed to a static/curated list served without
+     *  one. Drives the connect form: for these, the picker fetches the real list
+     *  from the typed key instead of showing a curated placeholder. True for a
+     *  custom endpoint too — its picker waits for the base URL. False for
+     *  `static`/`manual` listings and curated-only brands. */
+    listsModelsLive: boolean;
     /** Provider documentation URL (hardcoded on the module). The UI links to this
      *  when a curated model has no Kodus-specific docsUrl. */
     doc?: string;
@@ -29,8 +36,12 @@ export const isCustomEndpoint = (id: string): boolean =>
     id.endsWith('_compatible');
 
 const labelForId = (module: ProviderModule, id: string): string => {
-    if (id === module.id) return module.label;
-    if (isCustomEndpoint(id)) return `${module.label} Compatible`;
+    if (id === module.id) {
+        return module.label;
+    }
+    if (isCustomEndpoint(id)) {
+        return `${module.label} Compatible`;
+    }
     return module.label;
 };
 
@@ -41,13 +52,18 @@ const listingRequiresUserBaseUrl = (listing: ModelListing | null): boolean =>
     !listing.defaultBaseURL;
 
 const listingIsAutoListable = (listing: ModelListing | null): boolean => {
-    if (!listing) return false;
-    if (listing.kind === 'static') return true;
+    if (!listing) {
+        return false;
+    }
+    if (listing.kind === 'static') {
+        return true;
+    }
     // An HTTP listing is enumerable when its base URL resolves without the user
     // (a default, or none required); a curated default like a proxy fallback
     // does not count for custom endpoints (handled by the caller).
-    if (listing.kind === 'http')
+    if (listing.kind === 'http') {
         return !listing.requiresBaseURL || !!listing.defaultBaseURL;
+    }
     return false; // 'manual'
 };
 
@@ -76,13 +92,19 @@ export function describeProviderId(
             listingRequiresUserBaseUrl(listing) ||
             requiresField('baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
-        // A curated BRAND (its module ships a `catalog`) is enumerable even when
-        // its live listing is `manual` — the picker offers the curated models
-        // (e.g. Z.ai/GLM, whose Anthropic-protocol module has no `/models` call).
-        autoListModels:
-            !custom &&
-            (listingIsAutoListable(listing) ||
-                (module.catalog?.length ?? 0) > 0),
+        // A brand with a `manual` listing and no live `/models` call (e.g. Z.ai/GLM
+        // over the Anthropic protocol) is NOT auto-listable — the user types the
+        // model id manually.
+        autoListModels: !custom && listingIsAutoListable(listing),
+        // A LIVE `/models` call — an `http` listing. A native brand (OpenAI)
+        // resolves its base URL itself; a custom endpoint lists once the user
+        // has typed it (the picker waits for the URL, and the backend only
+        // sends a key to the host it belongs to). `static`/`manual` and
+        // curated-only brands are not live.
+        listsModelsLive:
+            !!listing &&
+            listing.kind === 'http' &&
+            (custom || !listing.requiresBaseURL || !!listing.defaultBaseURL),
         doc: module.doc,
     };
 }

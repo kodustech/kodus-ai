@@ -34,8 +34,8 @@ export default function SettingsError({
                 </div>
 
                 <Button
-                    size="lg"
-                    variant="primary"
+                    size="md"
+                    variant="primary-dark"
                     leftIcon={<RefreshCw />}
                     onClick={reset}>
                     Try again

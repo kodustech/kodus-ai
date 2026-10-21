@@ -301,3 +301,63 @@ describe('LicenseService.getAllUsersEverWithLicense', () => {
         expect(await service.getAllUsersEverWithLicense(orgTeam)).toEqual([]);
     });
 });
+
+describe('LicenseService — prepaid credits', () => {
+    const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const makeService = (get: jest.Mock = jest.fn(), post: jest.Mock = jest.fn()) => {
+        const service = new LicenseService();
+        (service as any).licenseRequest = { get, post };
+        return service;
+    };
+
+    it('getCreditBalance forwards org/team and returns the billing payload', async () => {
+        const payload = { balanceUsd: 42.5, lowThresholdUsd: 5, packsUsd: [20, 50] };
+        const get = jest.fn().mockResolvedValue(payload);
+        const service = makeService(get);
+        await expect(service.getCreditBalance(orgTeam)).resolves.toEqual(payload);
+        expect(get).toHaveBeenCalledWith('credits/balance', {
+            params: { organizationId: 'org-1', teamId: 'team-1' },
+        });
+    });
+
+    it('getCreditBalance returns null on transport failure (callers fail open)', async () => {
+        const service = makeService(jest.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+        await expect(service.getCreditBalance(orgTeam)).resolves.toBeNull();
+    });
+
+    it('listCreditLedger unwraps entries and joins the type filter', async () => {
+        const get = jest.fn().mockResolvedValue({ entries: [{ id: 'e1' }] });
+        const service = makeService(get);
+        await expect(
+            service.listCreditLedger(orgTeam, { limit: 10, types: ['debit', 'purchase'] }),
+        ).resolves.toEqual([{ id: 'e1' }]);
+        expect(get).toHaveBeenCalledWith('credits/ledger', {
+            params: expect.objectContaining({ limit: 10, types: 'debit,purchase' }),
+        });
+    });
+
+    it('debitCredits posts the batch and PROPAGATES a failure (the sweep retries)', async () => {
+        const result = { applied: 2, skipped: 0, appliedUsd: 0.5, balanceUsd: 9.5, lowBalance: false, exhausted: false };
+        const post = jest.fn().mockResolvedValue(result);
+        const service = makeService(jest.fn(), post);
+        const entries = [{ usageKey: 'span:1', amountUsd: 0.25 }, { usageKey: 'span:2', amountUsd: 0.25 }];
+        await expect(service.debitCredits(orgTeam, entries)).resolves.toEqual(result);
+        expect(post).toHaveBeenCalledWith('credits/debit', {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            entries,
+        });
+
+        const failing = makeService(jest.fn(), jest.fn().mockRejectedValue(new Error('503')));
+        await expect(failing.debitCredits(orgTeam, entries)).rejects.toThrow('503');
+    });
+
+    it('createCreditCheckout returns the quote+url, null on failure', async () => {
+        const quote = { url: 'https://checkout.stripe.com/x', creditUsd: 100, chargeUsd: 107, markupPct: 7 };
+        const service = makeService(jest.fn(), jest.fn().mockResolvedValue(quote));
+        await expect(service.createCreditCheckout(orgTeam, 100)).resolves.toEqual(quote);
+
+        const failing = makeService(jest.fn(), jest.fn().mockRejectedValue(new Error('400')));
+        await expect(failing.createCreditCheckout(orgTeam, 100)).resolves.toBeNull();
+    });
+});

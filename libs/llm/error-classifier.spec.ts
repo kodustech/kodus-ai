@@ -6,6 +6,9 @@ import {
     isTerminalCategory,
     llmErrorLogLevel,
 } from './error-classifier';
+import { APICallError } from '@ai-sdk/provider';
+import { RetryError } from 'ai';
+
 import {
     AgentContextWindowTooSmallError,
     AgentPromptTooLargeError,
@@ -74,9 +77,7 @@ describe('classifyLLMError', () => {
                 404,
             );
             const info = classifyLLMError(err, 'google_vertex');
-            expect(info.category).toBe(
-                LlmErrorCategory.MODEL_ACCESS_DENIED,
-            );
+            expect(info.category).toBe(LlmErrorCategory.MODEL_ACCESS_DENIED);
             expect(info.friendlyMessage).toMatch(/Model Garden/i);
         });
 
@@ -86,6 +87,20 @@ describe('classifyLLMError', () => {
                 429,
             );
             expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        // Read off production: Z.AI/GLM returns this exact prose with a 429.
+        // "balance" matched none of the quota vocabulary, so it landed on
+        // RATE_LIMIT -- retry-worthy -- and we kept retrying accounts that
+        // could only be fixed by paying. Four GLM scopes were stuck this way.
+        it.each([
+            'Insufficient balance or no resource package. Please recharge.',
+            'insufficient balance',
+            'Please recharge your account',
+        ])('reads a spent balance as quota, not rate limit: %s', (msg) => {
+            expect(classifyLLMError(errorWithStatus(msg, 429)).category).toBe(
                 LlmErrorCategory.QUOTA_EXCEEDED,
             );
         });
@@ -123,7 +138,152 @@ describe('classifyLLMError', () => {
         });
     });
 
+    // Production 2026-09-28: every provider failure that outlived the SDK's four
+    // attempts reached the customer as "Unexpected error". The SDK wraps the
+    // last attempt in a RetryError that carries no status of its own — the 503
+    // (or 404, or 429) lives on `lastError`.
+    describe('retries exhausted (AI_RetryError wrapping the provider error)', () => {
+        function exhausted(lastError: APICallError): RetryError {
+            return new RetryError({
+                message: `Failed after 4 attempts. Last error: ${lastError.message}`,
+                reason: 'maxRetriesExceeded',
+                errors: [lastError, lastError, lastError, lastError],
+            });
+        }
+
+        function apiError(
+            statusCode: number,
+            message: string,
+            responseBody?: string,
+        ) {
+            return new APICallError({
+                message,
+                url: 'https://llm.example.test/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+                responseBody,
+            });
+        }
+
+        it('a 503 on every attempt → TRANSIENT', () => {
+            const err = exhausted(apiError(503, 'Service Unavailable'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it('reads the HTTP status from the last attempt', () => {
+            const err = exhausted(apiError(503, 'Service Unavailable'));
+            expect(classifyLLMError(err).httpStatus).toBe(503);
+        });
+
+        it('a 404 on every attempt → MODEL_NOT_FOUND', () => {
+            const err = exhausted(apiError(404, 'Not Found'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
+
+        it("classifies from the last attempt's response body", () => {
+            const err = exhausted(
+                apiError(
+                    429,
+                    'Too Many Requests',
+                    '{"error":{"message":"Insufficient balance or no resource package. Please recharge."}}',
+                ),
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+    });
+
+    describe('error chains: cause and lastError', () => {
+        it('classifies from a cause when the outer message says nothing', () => {
+            const err = new Error('Bad request', {
+                cause: new Error('error code: insufficient_quota'),
+            });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        it('terminates on a cause cycle', () => {
+            const a = new Error('first') as Error & { cause?: unknown };
+            const b = new Error('second') as Error & { cause?: unknown };
+            a.cause = b;
+            b.cause = a;
+            expect(() => classifyLLMError(a)).not.toThrow();
+        });
+
+        it('terminates on a lastError cycle', () => {
+            const a = new Error('first') as Error & { lastError?: unknown };
+            const b = new Error('second') as Error & { lastError?: unknown };
+            a.lastError = b;
+            b.lastError = a;
+            expect(() => classifyLLMError(a)).not.toThrow();
+        });
+
+        it('terminates on an error that is its own lastError', () => {
+            const a = new Error('Service Unavailable') as Error & {
+                lastError?: unknown;
+            };
+            a.lastError = a;
+            expect(classifyLLMError(a).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+    });
+
     describe('message-string fallback (no HTTP status)', () => {
+        it.each([
+            'model_not_found',
+            'No such model: x',
+            'The model x does not exist',
+        ])('"%s" → MODEL_NOT_FOUND', (message) => {
+            expect(classifyLLMError(new Error(message)).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
+
+        // The review path rebuilds the error from the harness trace as a plain
+        // Error, so the status can be gone and only the SDK's text survives.
+        it('"Service Unavailable" in a retry message → TRANSIENT', () => {
+            const err = new Error(
+                'Failed after 4 attempts. Last error: AI_APICallError: Service Unavailable',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it('"Bad Gateway" / "Gateway Timeout" → TRANSIENT', () => {
+            expect(
+                classifyLLMError(new Error('AI_APICallError: Bad Gateway'))
+                    .category,
+            ).toBe(LlmErrorCategory.TRANSIENT);
+            expect(
+                classifyLLMError(new Error('AI_APICallError: Gateway Timeout'))
+                    .category,
+            ).toBe(LlmErrorCategory.TRANSIENT);
+        });
+
+        it('OpenAI "exceeds the context window" → CONTEXT_OVERFLOW', () => {
+            const err = new Error(
+                'Your input exceeds the context window of this model. Please adjust your input and try again.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        it('"Model does not support this protocol" → MODEL_NOT_FOUND', () => {
+            const err = new Error('Model does not support this protocol.');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.MODEL_NOT_FOUND,
+            );
+        });
+
         it('OpenAI insufficient_quota → QUOTA_EXCEEDED', () => {
             const err = new Error(
                 'You exceeded your current quota. error code: insufficient_quota',
@@ -208,6 +368,106 @@ describe('classifyLLMError', () => {
         ])('network/timeout pattern "%s" → TRANSIENT', (msg) => {
             const err = new Error(msg);
             expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it.each([
+            // An AI_RetryError (SDK retries exhausted) embeds the last attempt
+            // as text with NO status field — the default RetryError is a plain
+            // Error. These must still classify as transient so the configured
+            // BYOK fallback cascades instead of failing the whole review (#1875).
+            'Failed after 4 attempts. Last error: AI_APICallError: Bad Gateway',
+            'Last error: AI_APICallError: 502 Bad Gateway',
+            'Upstream error: service unavailable',
+            'Proxy returned 530 (Bad Gateway) from Cloudflare',
+            'An upstream error occurred: internal server error',
+            'gateway timeout while waiting for the model to respond',
+        ])('5xx phrasing without a status (%s) → TRANSIENT', (msg) => {
+            // No `status`/`statusCode` on the error — message-string fallback only.
+            const err = new Error(msg);
+            const info = classifyLLMError(err);
+            expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
+        });
+
+        it.each([
+            // A 5xx-like number embedded in a larger number is not a status:
+            // substring checks used to read "5032" as a 503 and flip a permanent
+            // failure to TRANSIENT, defeating the purpose of the fallback.
+            'The input token count (5032) exceeds the maximum allowed for this model',
+            'Request id req_5301 rejected by the gateway',
+            // A 5xx glued to arbitrary letters is a request id / hash / base64
+            // blob, not a status. Only an explicit status keyword (http/err/
+            // error/status/code) counts as adjacency; anything else must stay
+            // UNKNOWN so a permanent failure does not wrongly cascade to the
+            // paid fallback (#1898 review).
+            'Failed: request id req_a503b on the model call',
+            'the deployment 05d503ee45x is not reachable',
+            'blob payload ...d504e2f... failed to parse',
+            // Same class with a `_`, `-`, `.` or `/` in front: `req_503ab`,
+            // `trace-503x`, `blob_503f` and a URL path segment are id/hash
+            // fragments, not statuses. Only the explicit-keyword alternative
+            // (http/err/error/status/code) may read a status across a
+            // separator (#1898 review).
+            'Failed: request id req_503ab on the model call',
+            'trace-503x rejected the call',
+            'blob_503f could not be parsed',
+            'docs https://cdn.example.com/releases/503 failed to parse',
+            // Punctuation that only ever introduces a NUMBER or a base64 window:
+            // `1,503 tokens` is a count, and a standard-base64 blob carries
+            // `+`/`/`. Reading the triple as a status there would send a
+            // permanent failure down the paid fallback (#1898 review).
+            'the response mentioned 1,503 tokens before failing',
+            'payload QmFz+503 was rejected by the provider',
+            // `cloudflare: upstream_530` used to match only because the first
+            // alternative ignored the underscore. "upstream" is not a status
+            // keyword, so this must stay UNKNOWN rather than cascade.
+            'cloudflare: upstream_530 reported by the edge',
+            // Annotation punctuation in front is a number / id / issue, not a
+            // status: every one of these introduces a value, not an HTTP code,
+            // so the bare alternative must refuse them just like a separator
+            // (#1898 review).
+            'issue #503 is still open in the tracker',
+            'the ledger entry $503 was rejected by the parser',
+            'branch {503 is unreachable during the walk',
+            'vlan (503 on the edge switch is down',
+            'selector value =503 was not found',
+            'connection on port :503 refused',
+            // The #1898 review examples: a *standalone* 5xx in a permanent
+            // body is a value/count/limit, not a status — these must not bill
+            // the BYOK fallback.
+            'The request failed: max_tokens must be <= 503',
+            'retry in 503 ms and try again',
+            'you have 530 credits remaining',
+            'the model returned "limit": 504 in the payload',
+            'line 530 col 2 of the template',
+            'Request failed: id 503-abc is not a valid model',
+        ])('bare digit inside a larger number (%s) → not TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).not.toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
+        it.each([
+            // A 5xx in message text tied to a keyword or another word is no
+            // longer read as a status: the real status now rides in via
+            // lastError (#1875), and a message body can mention a 5xx number
+            // for other reasons. Only a genuine upstream *phrase* (bad gateway
+            // / service unavailable / …) or a real HTTP status reaches
+            // TRANSIENT — these must stay UNKNOWN so a permanent failure does
+            // not wrongly bill the BYOK fallback (#1898 review).
+            'upstream responded HTTP_503',
+            'proxy hop failed: ERR_502',
+            'gateway returned http504',
+            'connect failed with 502badgateway via the mesh proxy',
+            'the upstream returned code:503',
+            'the upstream returned status=503',
+            'a JSON body {"code":503} came back from the proxy',
+            'a JSON body {"statusCode":503} came back from the proxy',
+        ])('status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT', (msg) => {
+            const err = new Error(msg);
+            expect(classifyLLMError(err).category).not.toBe(
                 LlmErrorCategory.TRANSIENT,
             );
         });
@@ -307,7 +567,9 @@ describe('classifyLLMError', () => {
             });
             const msg = classifyLLMError(err).friendlyMessage;
             expect(msg).toContain('**To resolve, choose one:**');
-            expect(msg.split('\n').filter((l) => l.startsWith('- ')).length).toBe(3);
+            expect(
+                msg.split('\n').filter((l) => l.startsWith('- ')).length,
+            ).toBe(3);
         });
     });
 });
@@ -334,16 +596,18 @@ describe('isTerminalCategory', () => {
 
 describe('llmErrorLogLevel', () => {
     it('terminal BYOK billing (suspended account) → warn', () => {
-        const err = new Error('Account xxx is suspended, spending limit reached');
+        const err = new Error(
+            'Account xxx is suspended, spending limit reached',
+        );
         expect(llmErrorLogLevel(err)).toBe('warn');
     });
     it('auth-invalid → warn', () => {
         expect(llmErrorLogLevel(errorWithStatus('nope', 401))).toBe('warn');
     });
     it('unknown / genuine fault → error', () => {
-        expect(llmErrorLogLevel(new Error('TypeError: x is not a function'))).toBe(
-            'error',
-        );
+        expect(
+            llmErrorLogLevel(new Error('TypeError: x is not a function')),
+        ).toBe('error');
     });
 });
 

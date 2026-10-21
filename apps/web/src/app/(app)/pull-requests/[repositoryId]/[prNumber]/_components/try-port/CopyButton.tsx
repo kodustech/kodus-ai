@@ -42,7 +42,7 @@ export function CopyButton({
     };
 
     const sizeClasses =
-        size === "xs" ? "text-[10.5px] px-2 py-1" : "text-xs px-2.5 py-1.5";
+        size === "xs" ? "text-2xs px-2 py-1" : "text-xs px-2.5 py-1.5";
 
     return (
         <button

@@ -14,6 +14,8 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
+import { servedByOpenAi } from './providers/openai/endpoint';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -42,6 +44,13 @@ const GEMINI_MODEL_PATTERN = /^gemini[-_]/i;
  */
 export type ByokModelOptions = {
     structuredOutputs?: boolean;
+    /**
+     * Replacement transport for the built client, forwarded to the provider
+     * module's `build`. The connection probe passes a redirect-refusing fetch so
+     * a user-supplied endpoint can't 30x the request past the SSRF gate. Unset
+     * everywhere else — reviews use the default transport.
+     */
+    fetch?: typeof fetch;
 };
 
 /**
@@ -95,6 +104,14 @@ export type EnvProviderResolution =
           name: 'google_vertex';
           apiKey: string;
           vertexLocation?: string;
+      }
+    | {
+          // An OpenAI reasoning model on OpenAI's own endpoint (no
+          // API_OPENAI_FORCE_BASE_URL, or one on api.openai.com): the native SDK,
+          // so its tool calls reach /v1/responses (providers/openai/endpoint.ts).
+          kind: 'openai_native';
+          name: 'openai';
+          apiKey: string;
       }
     | {
           kind: 'openai_compat';
@@ -203,6 +220,15 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             };
         }
     }
+    // An OpenAI reasoning model on OpenAI's own endpoint → native OpenAI. Over
+    // chat completions the gpt-5.6 / gpt-6 line refuses an agent loop's tools
+    // together with reasoning_effort, so every review failed on it.
+    if (
+        openaiKey &&
+        servedByOpenAi(envMode, openaiBaseURL || 'https://api.openai.com/v1')
+    ) {
+        return { kind: 'openai_native', name: 'openai', apiKey: openaiKey };
+    }
     // Any other self-hosted model with an OpenAI-style key → OpenAI-compatible.
     if (openaiKey) {
         return {
@@ -213,6 +239,41 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
         };
     }
     return null;
+}
+
+/** The env kind → the BYOK provider id its model is built + reasoned under. Same
+ *  mapping `resolveManagedSlot`'s switch uses to pick the SDK/module, kept here as
+ *  the reasoning-only projection (no model build, no key). */
+const ENV_KIND_TO_PROVIDER: Record<
+    EnvProviderResolution['kind'],
+    BYOKProvider
+> = {
+    gemini_studio: BYOKProvider.GOOGLE_GEMINI,
+    gemini_vertex: BYOKProvider.GOOGLE_VERTEX,
+    claude_vertex: BYOKProvider.GOOGLE_VERTEX,
+    claude_anthropic: BYOKProvider.ANTHROPIC,
+    openai_native: BYOKProvider.OPENAI,
+    openai_compat: BYOKProvider.OPENAI_COMPATIBLE,
+    vertex_adc: BYOKProvider.GOOGLE_VERTEX,
+};
+
+/**
+ * The self-hosted env model as a `{ provider, model }` descriptor — the SAME
+ * provider+model `resolveManagedSlot` builds, minus the credential and the SDK
+ * build. `resolveModelConfig` uses it to compute reasoning for the env-managed
+ * path (where the routed slot is `undefined`), so an env-configured Opus/Kimi/GLM
+ * gets the identical family-default reasoning a connected BYOK slot of the same
+ * model would — the "uniform env + BYOK" the one funnel promises. `undefined` on
+ * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
+ */
+export function envManagedReasoningDescriptor():
+    | { provider: BYOKProvider; model: string }
+    | undefined {
+    const env = resolveEnvProvider();
+    if (!env) return undefined;
+    const model = process.env.API_LLM_PROVIDER_MODEL;
+    if (!model) return undefined;
+    return { provider: ENV_KIND_TO_PROVIDER[env.kind], model };
 }
 
 /**
@@ -252,6 +313,7 @@ function managedSlot(
  * `API_LLM_PROVIDER_MODEL` (or the default model) picks the SDK/auth/protocol:
  *   gemini-*  → google_gemini (AI Studio key) / google_vertex (SA JSON key)
  *   claude-*  → anthropic (native key) / google_vertex (Claude-on-Vertex SA JSON)
+ *   an OpenAI reasoning model on OpenAI's own endpoint → openai (native SDK)
  *   any other → OpenAI-compatible (self-hosted) — the one INLINE exception
  * Cloud (managed/trial) falls back to the kimi/moonshot trial default (the
  * `moonshot` provider module) or the bundled Gemini default (`google_gemini`) —
@@ -266,7 +328,7 @@ export function resolveManagedSlot(
 ): ManagedResolution {
     // Self-hosted: honor `API_LLM_PROVIDER_MODEL` (+ `API_OPEN_AI_API_KEY` /
     //   `API_OPENAI_FORCE_BASE_URL` / `API_VERTEX_AI_API_KEY`) so the customer's
-    //   own keys from .env drive the main model, the same way `getInternalModel`
+    //   own keys from .env drive the main model, the same way `buildModelFromSlot`
     //   does for helper calls.
     // Cloud (managed/trial): fall back to Kodus's bundled managed default
     //   (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL → Fireworks-hosted
@@ -303,11 +365,20 @@ export function resolveManagedSlot(
                         baseURL: env.baseURL,
                     },
                 );
+            case 'openai_native':
+                // The openai module's native build: no baseURL, so the SDK's own
+                // api.openai.com/v1 default, and /v1/responses.
+                return managedSlot(BYOKProvider.OPENAI, env.apiKey, envMode);
             case 'openai_compat':
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw
                 // structuredOutputs opt-in — the openai_compatible provider
                 // module can't reproduce this without changing its BYOK behavior.
+                // This is also the ONE config shape with no BYOK ids at all
+                // (no byokModelId, no credentialId), so a self-hosted install
+                // pointed at OpenCode Go (issue #1880) needs the same
+                // x-opencode-session header attached here — the provider
+                // module's build() never runs on this inline path.
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
@@ -316,6 +387,16 @@ export function resolveManagedSlot(
                         baseURL: env.baseURL,
                         supportsStructuredOutputs:
                             options.structuredOutputs === true,
+                        ...(isOpenCodeGoBaseUrl(env.baseURL)
+                            ? {
+                                  headers: {
+                                      'x-opencode-session': openCodeSessionId({
+                                          model: envMode,
+                                          baseURL: env.baseURL,
+                                      }),
+                                  },
+                              }
+                            : {}),
                     })(envMode),
                 };
             case 'vertex_adc': {
@@ -361,8 +442,13 @@ export function resolveManagedSlot(
         };
     }
 
-    // DeepSeek — legacy managed fallback, kept for any lingering explicit
-    // `deepseek-*` override still in flight. New default is Fireworks above.
+    // @deprecated DEAD BRANCH — unreachable in the current code. The managed
+    // default comes from `defaultModelOverride || DEFAULT_MODEL.model`, and both
+    // resolve to the Fireworks-prefixed `KODUS_TRIAL_MODEL` (handled above) —
+    // nothing produces a bare `deepseek-*` managed id anymore (BYOK DeepSeek goes
+    // through the registry, not here). Kept only as a legacy safety net; safe to
+    // remove together with API_DEEPSEEK_API_KEY / DEEPSEEK_API_KEY /
+    // API_DEEPSEEK_BASE_URL once we confirm no self-hosted install sets them.
     if (/^deepseek[-_.]/i.test(defaultModel)) {
         const deepseekKey =
             process.env.API_DEEPSEEK_API_KEY ||
@@ -380,9 +466,12 @@ export function resolveManagedSlot(
         };
     }
 
-    // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
-    // `kimi-*` override still in flight. New default is Fireworks above. Routes
-    // through the moonshot registry module (createOpenAICompatible under the hood).
+    // @deprecated DEAD BRANCH — unreachable in the current code (same reasoning as
+    // the DeepSeek branch above): the managed default is always the Fireworks
+    // `KODUS_TRIAL_MODEL`, and BYOK Kimi routes through the moonshot registry
+    // module with a DB credential — NOT this env path. Kept only as a legacy
+    // safety net; safe to remove together with API_MOONSHOT_API_KEY /
+    // MOONSHOT_API_KEY once we confirm no self-hosted install sets them.
     if (/^kimi[-_.]/i.test(defaultModel)) {
         const moonshotKey =
             process.env.API_MOONSHOT_API_KEY ||

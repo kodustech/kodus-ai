@@ -16,6 +16,14 @@
     }
   },
   {
+    "route": "/byok/provider",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "route": "/choose-plan",
     "expected": {
       "billing_manager": "allow",
@@ -48,11 +56,11 @@
     }
   },
   {
-    "route": "/helpdesk",
+    "route": "/dev/plan-status",
     "expected": {
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
     }
   },
   {
@@ -192,6 +200,14 @@
     }
   },
   {
+    "route": "/settings/code-review/x/agents/x",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/custom-messages",
     "expected": {
       "billing_manager": "allow",
@@ -240,6 +256,14 @@
     }
   },
   {
+    "route": "/settings/code-review/x/output",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/pr-summary",
     "expected": {
       "billing_manager": "allow",
@@ -249,6 +273,22 @@
   },
   {
     "route": "/settings/code-review/x/review-categories",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/review-scope",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/skills",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",

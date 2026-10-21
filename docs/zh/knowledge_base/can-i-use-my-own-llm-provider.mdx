@@ -1,0 +1,38 @@
+---
+title: "我可以使用自己的 LLM 提供商进行代码审查吗"
+description: "带上自己的 API 密钥,选择首选的 LLM 提供商用于 Kodus AI 代码审查。"
+---
+
+可以。Kodus 在所有套餐中都支持自带密钥(BYOK),让您使用首选的 LLM 提供商。您直接向提供商付费 — Kodus 从不对 token 加价,也不会以明文形式看到您的密钥。
+
+## 工作原理
+
+1. 在侧边栏中打开 **AI providers**([app.kodus.io/byok](https://app.kodus.io/byok))
+2. 在 **Providers** 选项卡上选择您的提供商 — 或者对于任意其他端点,选择 **Custom** 下的 **OpenAI-compatible** / **Anthropic-compatible**
+3. 粘贴您的 API 密钥,选择模型,然后点击 **Test & save** — Kodus 会在保存前测试连接
+
+## 支持的提供商
+
+网格中的 **Providers** 部分列出了一流提供商,例如 Anthropic、OpenAI、Google、OpenRouter、Novita、Moonshot 和 Z.ai。**Custom** 部分涵盖由您自行让 Kodus 指向的端点:OpenAI-compatible、Anthropic-compatible、Google Vertex AI、Amazon Bedrock 和 Azure OpenAI。
+
+当 Kodus 能够列出某个提供商的模型时,**Model** 选择器会显示这些模型(推荐模型排在前面,另有 **Type model manually** 选项);否则,您需要输入确切的模型 ID。思考/推理、温度、token 限制和最大并发请求数位于 **Advanced (optional)** 下。
+
+## 为什么使用自己的提供商
+
+- **数据控制** — 请求直接发送到您的提供商
+- **成本管理** — 使用您现有的计费关系,无加价
+- **模型选择** — 选择最适合您代码库的模型
+- **合规性** — 满足 AI 工具使用的内部要求
+- **故障转移韧性** — 在 **Routing** 选项卡上设置一个 **Fallback (optional)** 模型,在提供商中断期间保持审查运行
+
+## 自托管 LLM 提供商
+
+如果您自托管 Kodus,可以将 BYOK 指向自托管或聚合器端点,例如:
+
+- Novita、Groq、Together AI、Fireworks AI
+- Chutes、Synthetic
+- 您自己的 Ollama / vLLM / TGI 实例(通过 **OpenAI-compatible** 提供商)
+
+设置指南请参见 [Cookbook](/zh/cookbook/novita) 和知识库中各提供商的专门文档。
+
+完整的 BYOK 流程(提供商、路由、高级调优)请参见[自带密钥](/zh/how_to_use/byok)。

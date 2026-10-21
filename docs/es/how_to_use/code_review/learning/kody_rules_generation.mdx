@@ -1,0 +1,74 @@
+---
+title: "Generación Automática de Reglas"
+description: "Kody puede generar automáticamente reglas personalizadas analizando el historial de revisiones de código de tu equipo. Deja que aprenda de tus revisiones pasadas para crear estándares de codificación personalizados."
+---
+
+<Warning>
+  **Requiere al menos 3 meses de historial de revisiones de Kody en el repositorio.** Esta función deriva reglas de las revisiones pasadas de Kody en tus PRs, por lo que los repositorios que acaban de incorporarse no producirán sugerencias útiles. Si recientemente comenzaste a usar Kody, vuelve después de unos meses de revisiones reales.
+</Warning>
+
+## Resumen Rápido
+
+- **Generación Automática**: Kody analiza tu historial de revisiones para crear nuevas reglas
+- **Basado en Datos**: Usa 3 meses de datos de revisión para obtener insights inteligentes
+- **Sugerencias Inteligentes**: Genera reglas basadas en patrones reales del equipo
+- **Aprobación Opcional**: Las reglas generadas están activas por defecto; activa **Kody knowledge approval** para revisar cada una antes de que tenga efecto
+- **Aprendizaje Continuo**: Actualizaciones semanales de reglas a medida que tu equipo evoluciona
+
+<Frame caption="Generate from past reviews y Kody knowledge approval en el panel Configuration de Kody Rules">
+  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
+</Frame>
+
+## Cómo Funciona
+
+### 1. Activar la Generación de Reglas
+
+La generación de reglas se configura por repositorio:
+
+1. En la barra lateral, elige el repositorio en el selector de alcance en la parte superior del grupo **Code review** y luego abre **Kody Rules**
+2. Haz clic en **Configuration** para abrir el panel lateral
+3. Activa **Generate from past reviews**
+4. Opcionalmente, usa el selector de revisores debajo del interruptor (**Learning from all reviewers** por defecto) para excluir a los desarrolladores de cuyos comentarios de revisión Kody no debe aprender
+
+### 2. Proceso de Análisis
+
+La primera vez que activas **Generate from past reviews** para un repositorio, Kody:
+
+- **Escanea el Historial de Revisiones**: Analiza los PRs cerrados de los últimos 3 meses en tu repositorio
+- **Identifica Patrones**: Descubre temas comunes de feedback y preferencias de codificación
+- **Extrae Estándares**: Convierte patrones de revisión en reglas accionables
+- **Genera Reglas**: Crea reglas personalizadas adaptadas al estilo de tu equipo
+
+Esto puede tardar unos minutos. Luego, las reglas generadas aparecen en la página **Kody Rules** del repositorio.
+
+### 3. Revisar las Reglas Generadas
+
+Las reglas generadas se listan con el origen **Kody-generated** (usa **Filters → Origin → Kody-generated** para ver solo esas). Abre cualquiera de ellas para editarla, pausarla o eliminarla como cualquier otra regla.
+
+### 4. Aprobar Reglas Antes de que Tengan Efecto
+
+<Warning>
+  Por defecto, las reglas generadas están **activas en cuanto se crean** y se
+  aplican en la siguiente revisión de código.
+</Warning>
+
+Para revisar las reglas generadas antes de que tengan efecto, activa **Kody knowledge approval** en el mismo panel **Configuration**. Con la aprobación activada:
+
+- **Revisión Pendiente**: Las nuevas reglas generadas llegan a la sección **Pending review** en la parte superior de la página de Kody Rules en lugar de aplicarse
+- **Elige Selectivamente**: Usa **Approve** en las reglas que coincidan con las necesidades de tu equipo y **Discard** en el resto
+- **Activación**: Solo las reglas aprobadas se aplican durante las revisiones de código
+
+## Aprendizaje Continuo
+
+Después de la configuración inicial, Kody mantiene un ciclo de aprendizaje continuo:
+
+- **Actualizaciones Semanales**: Kody genera nuevas sugerencias de reglas cada semana
+- **Estándares en Evolución**: Las sugerencias de reglas se adaptan a medida que evoluciona el estilo de codificación de tu equipo
+- **Precisión Refinada**: Las sugerencias se vuelven más precisas con el tiempo
+- **Revisiones Regulares**: Nuevas reglas aparecen semanalmente (en **Pending review** cuando la aprobación está activada)
+
+## Requisitos
+
+- **Datos Mínimos**: Al menos 3 meses de historial de revisiones en el repositorio
+- **Revisiones Activas**: Actividad regular de revisión de código para una mejor detección de patrones
+- **Acceso al Repositorio**: Permisos adecuados para modificar las reglas del repositorio

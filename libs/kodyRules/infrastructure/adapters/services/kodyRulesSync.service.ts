@@ -1,13 +1,21 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+    forwardRef,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
+import {
+    createKodyLearningSettingsResolver,
+    resolveKodyLearningSettings,
+} from '@libs/common/utils/kody-rules/kody-learning-settings';
 import * as path from 'path';
 
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
@@ -32,6 +40,7 @@ import {
     KodyRuleSeverity,
 } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import {
+    IKodyRule,
     KodyRulesOrigin,
     KodyRulesScope,
     KodyRulesStatus,
@@ -121,6 +130,13 @@ type SyncTarget = {
         defaultBranch?: string;
     };
     path?: string;
+};
+
+export type IdeSyncRuleCounts = {
+    active: number;
+    paused: number;
+    deleted: number;
+    pinned: number;
 };
 
 @Injectable()
@@ -285,88 +301,128 @@ export class KodyRulesSyncService {
         }
     }
 
+    /**
+     * Every rule of `repositoryId` whose source file is `sourcePath`. A
+     * multi-rule file stores `path#anchor`, so match on the path part. A
+     * sourcePath can carry SEVERAL records (duplicates from concurrent
+     * syncs — observed live: two identical rules from one merge), which is
+     * why the passes below act on the whole list and never on `.find()`.
+     */
+    private rulesBySourcePath(
+        entity: { rules?: Partial<IKodyRule>[] } | null | undefined,
+        repositoryId: string,
+        sourcePath: string,
+    ): Partial<IKodyRule>[] {
+        return (entity?.rules ?? []).filter(
+            (r) =>
+                r?.uuid &&
+                r?.repositoryId === repositoryId &&
+                (r?.sourcePath || '').split('#')[0] === sourcePath,
+        );
+    }
+
     private async deleteRuleBySourcePath(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
     }): Promise<void> {
+        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        let toDelete: Partial<IKodyRule>[];
         try {
-            const { organizationAndTeamData, repositoryId, sourcePath } =
-                params;
             const entity = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            if (!entity) return;
-
-            const toDelete = entity.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    (r?.sourcePath || '').split('#')[0] === sourcePath,
-            );
-            if (!toDelete?.uuid) return;
-
-            // Soft-delete so the record can be restored if the source file
-            // reappears (or the @kody-ignore marker is removed).
-            await this.kodyRulesService.createOrUpdate(
-                organizationAndTeamData,
-                { ...toDelete, status: KodyRulesStatus.DELETED } as any,
-                this.systemUserInfo,
-            );
+            // Already-DELETED records are skipped: re-writing them is a
+            // no-op that only adds audit-log noise.
+            toDelete = this.rulesBySourcePath(
+                entity,
+                repositoryId,
+                sourcePath,
+            ).filter((r) => r.status !== KodyRulesStatus.DELETED);
         } catch (error) {
             this.logger.error({
-                message: 'Failed to soft-delete rule by sourcePath',
+                message: 'Failed to load rules for soft-delete by sourcePath',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
             });
+            return;
+        }
+
+        // Soft-delete so the record can be restored if the source file
+        // reappears (or the @kody-ignore marker is removed). Each write has
+        // its own catch: one failure must not strand the remaining records
+        // ACTIVE for a file that no longer exists.
+        for (const rule of toDelete) {
+            try {
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    { ...rule, status: KodyRulesStatus.DELETED } as any,
+                    this.systemUserInfo,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to soft-delete rule by sourcePath',
+                    context: KodyRulesSyncService.name,
+                    error,
+                    metadata: { ...params, ruleId: rule.uuid },
+                });
+            }
         }
     }
 
     /**
-     * Flips a rule's `pinnedSync` back to false. Mirrors
-     * `deleteRuleBySourcePath` but only touches the pin flag — used when
-     * the source file still exists but no longer carries `@kody-sync`
-     * (with `ideRulesSyncEnabled=false`, the force-sync path skips that
-     * file, so without this depin pass the rule would keep a stale
-     * `pinnedSync=true` and disappear from the orphan-chip count even
+     * Flips `pinnedSync` back to false on every pinned rule of the file.
+     * Used when the source file still exists but no longer carries
+     * `@kody-sync` (with `ideRulesSyncEnabled=false`, the force-sync path
+     * skips that file, so without this depin pass the rule would keep a
+     * stale `pinnedSync=true` and disappear from the orphan-chip count even
      * though the backend isn't maintaining it anymore).
      *
-     * No-op when the rule isn't found or already has `pinnedSync !== true`
-     * — avoids unnecessary writes and audit-log noise.
+     * No-op when no matching rule is still `pinnedSync === true` — avoids
+     * unnecessary writes and audit-log noise.
      */
     private async depinRuleBySourcePath(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
     }): Promise<void> {
+        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        let toDepin: Partial<IKodyRule>[];
         try {
-            const { organizationAndTeamData, repositoryId, sourcePath } =
-                params;
             const entity = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            if (!entity) return;
-
-            const toDepin = entity.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    (r?.sourcePath || '').split('#')[0] === sourcePath,
-            );
-            if (!toDepin?.uuid) return;
-            if (toDepin.pinnedSync !== true) return;
-
-            await this.kodyRulesService.createOrUpdate(
-                organizationAndTeamData,
-                { ...toDepin, pinnedSync: false } as any,
-                this.systemUserInfo,
-            );
+            toDepin = this.rulesBySourcePath(
+                entity,
+                repositoryId,
+                sourcePath,
+            ).filter((r) => r.pinnedSync === true);
         } catch (error) {
             this.logger.error({
-                message: 'Failed to depin rule by sourcePath',
+                message: 'Failed to load rules for depin by sourcePath',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
             });
+            return;
+        }
+
+        for (const rule of toDepin) {
+            try {
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    { ...rule, pinnedSync: false } as any,
+                    this.systemUserInfo,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to depin rule by sourcePath',
+                    context: KodyRulesSyncService.name,
+                    error,
+                    metadata: { ...params, ruleId: rule.uuid },
+                });
+            }
         }
     }
 
@@ -1450,7 +1506,7 @@ export class KodyRulesSyncService {
     /**
      * Fast, non-persisting sync used for onboarding.
      * - Scans only known rule patterns (same list as full sync)
-     * - Uses Groq (OpenAI-compatible) via the existing PromptRunner/BYOK wrapper
+     * - Uses Groq (OpenAI-compatible) through the AI SDK structured call (BYOK model)
      * - Persists parsed rules as global (repositoryId = "global") for onboarding review
      */
     async syncRepositoryMainFast(
@@ -1854,19 +1910,21 @@ export class KodyRulesSyncService {
                 organizationAndTeamData,
             );
 
-            // Must have repository context and repository-specific config
-            if (!repositoryId || !cfg?.configValue?.repositories) {
+            if (!repositoryId) {
                 return false;
             }
 
-            const repoConfig = cfg.configValue.repositories.find(
-                (repo: any) =>
-                    repo.id === repositoryId ||
-                    repo.id === repositoryId.toString(),
-            );
-
-            return repoConfig?.configs.ideRulesSyncEnabled === true;
-        } catch {
+            return resolveKodyLearningSettings(cfg?.configValue, repositoryId)
+                .ideRulesSyncEnabled;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve ideRulesSyncEnabled; treating IDE rules sync as off',
+                context: KodyRulesSyncService.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData, repositoryId },
+            });
             return false;
         }
     }
@@ -2071,8 +2129,6 @@ export class KodyRulesSyncService {
             };
         },
         options?: {
-            mainProvider?: LLMModelProvider;
-            fallbackProvider?: LLMModelProvider;
             runName?: string;
             defaultStatus?: KodyRulesStatus;
         },
@@ -2789,13 +2845,15 @@ export class KodyRulesSyncService {
                     },
                 );
 
-            if (contextReferenceId) {
-                await this.kodyRulesService.updateRuleReferences(
-                    organizationAndTeamData.organizationId,
-                    ruleId,
-                    { contextReferenceId },
-                );
-            }
+            // Detection returns no id for a rule that references nothing, and
+            // the pointer must then be cleared — the same as a save from the UI
+            // (create-or-update.use-case.ts). Null, not undefined: the
+            // repository skips undefined fields, which would keep the pointer.
+            await this.kodyRulesService.updateRuleReferences(
+                organizationAndTeamData.organizationId,
+                ruleId,
+                { contextReferenceId: contextReferenceId ?? null },
+            );
 
             this.logger.log({
                 message: 'Processed context references for synced kody rule',
@@ -3060,18 +3118,20 @@ export class KodyRulesSyncService {
      */
     private async transitionIdeSyncRulesStatus(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repositoryId: string;
+        repositoryIds: string[];
         targetStatus: KodyRulesStatus;
         onlyFromStatus?: KodyRulesStatus[];
         excludePinned?: boolean;
     }): Promise<number> {
         const {
             organizationAndTeamData,
-            repositoryId,
             targetStatus,
             onlyFromStatus,
             excludePinned = true,
         } = params;
+        const repositoryIds = new Set(params.repositoryIds);
+        if (repositoryIds.size === 0) return 0;
+
         const entity = await this.kodyRulesService.findByOrganizationId(
             organizationAndTeamData.organizationId,
         );
@@ -3082,7 +3142,7 @@ export class KodyRulesSyncService {
         // with a `sourcePath`, so checking for null alone would sweep them
         // up erroneously.
         const ideSyncRules = entity.rules.filter((r: any) => {
-            if (r?.repositoryId !== repositoryId) return false;
+            if (!repositoryIds.has(r?.repositoryId)) return false;
             if (!isIdeRuleSource(r?.sourcePath)) return false;
             if (excludePinned && r?.pinnedSync === true) return false;
             if (onlyFromStatus && !onlyFromStatus.includes(r?.status)) {
@@ -3100,16 +3160,11 @@ export class KodyRulesSyncService {
             if (!rule.uuid) continue;
 
             if (targetStatus === KodyRulesStatus.DELETED) {
-                await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                const deleted = await this.deleteSyncedRuleIfPresent(
+                    organizationAndTeamData,
                     rule.uuid,
-                    {
-                        source: 'web',
-                        organizationId: organizationAndTeamData.organizationId,
-                        teamId: organizationAndTeamData.teamId,
-                        userId: this.systemUserInfo.userId,
-                        userEmail: this.systemUserInfo.userEmail,
-                    },
                 );
+                if (!deleted) continue;
             } else {
                 await this.createOrUpdateKodyRulesUseCase.execute(
                     { ...rule, status: targetStatus } as any,
@@ -3134,6 +3189,17 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<void> {
+        await this.purgeAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /** Same as above for several repositories, loading the org's rules once. */
+    async purgeAllIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
                 ...params,
@@ -3141,7 +3207,7 @@ export class KodyRulesSyncService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Failed to purge IDE sync rules for repository',
+                message: 'Failed to purge IDE sync rules for repositories',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
@@ -3163,6 +3229,17 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<void> {
+        await this.pauseAllIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /** Same as above for several repositories, loading the org's rules once. */
+    async pauseAllIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
                 ...params,
@@ -3171,7 +3248,7 @@ export class KodyRulesSyncService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Failed to pause IDE sync rules for repository',
+                message: 'Failed to pause IDE sync rules for repositories',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
@@ -3191,7 +3268,8 @@ export class KodyRulesSyncService {
     }): Promise<void> {
         try {
             await this.transitionIdeSyncRulesStatus({
-                ...params,
+                organizationAndTeamData: params.organizationAndTeamData,
+                repositoryIds: [params.repositoryId],
                 targetStatus: KodyRulesStatus.ACTIVE,
                 onlyFromStatus: [KodyRulesStatus.PAUSED],
             });
@@ -3219,21 +3297,58 @@ export class KodyRulesSyncService {
     async countIdeSyncRulesForRepository(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
-    }): Promise<{
-        active: number;
-        paused: number;
-        deleted: number;
-        pinned: number;
-    }> {
-        const { organizationAndTeamData, repositoryId } = params;
+    }): Promise<IdeSyncRuleCounts> {
+        return this.countIdeSyncRulesForRepositories({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repositoryIds: [params.repositoryId],
+        });
+    }
+
+    /**
+     * Same counts, summed over the repositories that would stop syncing if the
+     * global IDE rules sync were turned off: those resolving to "on" without a
+     * value of their own. Drives the global toggle-off modal.
+     */
+    async countIdeSyncRulesInheritingGlobal(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IdeSyncRuleCounts> {
+        const cfg = await this.parametersService.findByKey(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = cfg?.configValue;
+        const resolveSettings = createKodyLearningSettingsResolver(configValue);
+
+        const repositoryIds = (configValue?.repositories ?? [])
+            .filter(
+                (repo) =>
+                    repo.configs?.ideRulesSyncEnabled === undefined &&
+                    resolveSettings(String(repo.id)).ideRulesSyncEnabled,
+            )
+            .map((repo) => String(repo.id));
+
+        return this.countIdeSyncRulesForRepositories({
+            organizationAndTeamData,
+            repositoryIds,
+        });
+    }
+
+    private async countIdeSyncRulesForRepositories(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+    }): Promise<IdeSyncRuleCounts> {
+        const { organizationAndTeamData } = params;
+        const repositoryIds = new Set(params.repositoryIds);
         const counts = { active: 0, paused: 0, deleted: 0, pinned: 0 };
+        if (repositoryIds.size === 0) return counts;
+
         const entity = await this.kodyRulesService.findByOrganizationId(
             organizationAndTeamData.organizationId,
         );
         if (!entity?.rules) return counts;
 
         for (const r of entity.rules as any[]) {
-            if (r?.repositoryId !== repositoryId) continue;
+            if (!repositoryIds.has(r?.repositoryId)) continue;
             if (!isIdeRuleSource(r?.sourcePath)) continue;
             if (r?.status === KodyRulesStatus.ACTIVE) counts.active += 1;
             else if (r?.status === KodyRulesStatus.PAUSED) counts.paused += 1;
@@ -3487,11 +3602,11 @@ export class KodyRulesSyncService {
                 // for this file.
                 if (this.shouldIgnoreFile(decoded)) {
                     if (existing?.uuid) {
-                        await this.deleteGlobalRuleByUuid({
+                        const deleted = await this.deleteGlobalRuleByUuid({
                             organizationAndTeamData,
                             uuid: existing.uuid,
                         });
-                        syncOutcome.removed.push(file.path);
+                        if (deleted) syncOutcome.removed.push(file.path);
                     }
                     continue;
                 }
@@ -3596,11 +3711,11 @@ export class KodyRulesSyncService {
                 if (rule?.status === KodyRulesStatus.DELETED) continue;
                 const sp = (rule?.sourcePath || '').split('#')[0];
                 if (sp && !seenSourcePaths.has(sp) && rule?.uuid) {
-                    await this.deleteGlobalRuleByUuid({
+                    const deleted = await this.deleteGlobalRuleByUuid({
                         organizationAndTeamData,
                         uuid: rule.uuid,
                     });
-                    syncOutcome.removed.push(sp);
+                    if (deleted) syncOutcome.removed.push(sp);
                 }
             }
 
@@ -3629,19 +3744,49 @@ export class KodyRulesSyncService {
         }
     }
 
+    /** A stale sync snapshot may contain a rule deleted by another operation. */
+    private async deleteSyncedRuleIfPresent(
+        organizationAndTeamData: OrganizationAndTeamData,
+        uuid: string,
+    ): Promise<boolean> {
+        if (!organizationAndTeamData.organizationId) {
+            throw new NotFoundException('Organization not found');
+        }
+        try {
+            const result =
+                await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                    uuid,
+                    {
+                        source: 'web',
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        userId: this.systemUserInfo.userId,
+                        userEmail: this.systemUserInfo.userEmail,
+                    },
+                );
+            return result !== false;
+        } catch (error) {
+            // Only a rule that is already gone is skipped; a team outside the
+            // organization (also a NotFoundException) must still surface.
+            if (
+                error instanceof NotFoundException &&
+                error.message === 'Rule not found'
+            ) {
+                return false;
+            }
+            throw error;
+        }
+    }
+
     /** Soft-delete a single global-synced rule via the centralized-aware path. */
-    private async deleteGlobalRuleByUuid(params: {
+    private deleteGlobalRuleByUuid(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         uuid: string;
-    }): Promise<void> {
-        const { organizationAndTeamData, uuid } = params;
-        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(uuid, {
-            source: 'web',
-            organizationId: organizationAndTeamData.organizationId,
-            teamId: organizationAndTeamData.teamId,
-            userId: this.systemUserInfo.userId,
-            userEmail: this.systemUserInfo.userEmail,
-        });
+    }): Promise<boolean> {
+        return this.deleteSyncedRuleIfPresent(
+            params.organizationAndTeamData,
+            params.uuid,
+        );
     }
 
     /**
@@ -3668,11 +3813,11 @@ export class KodyRulesSyncService {
                 if (!this.isGlobalSyncedRule(rule, sourceRepositoryId)) continue;
                 if (rule?.status === KodyRulesStatus.DELETED) continue;
                 if (!rule?.uuid) continue;
-                await this.deleteGlobalRuleByUuid({
+                const deleted = await this.deleteGlobalRuleByUuid({
                     organizationAndTeamData,
                     uuid: rule.uuid,
                 });
-                removed += 1;
+                if (deleted) removed += 1;
             }
 
             this.logger.log({

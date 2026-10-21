@@ -95,6 +95,11 @@ export interface ReviewSignal {
     };
 }
 
+export interface ReviewThread {
+    id: string;
+    body: string;
+}
+
 export interface WebhookInfo {
     id: string;
     url: string;
@@ -170,6 +175,20 @@ export interface Provider {
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
     ): Promise<{ id: string; body: string } | null>;
+    // Optional (#1946): the review threads Kody opened on a PR, a reply
+    // inside one as another identity, and the thread read back in order.
+    // Drive conversation-implicit-reply (answers without @kody).
+    listKodyThreads?(prNumber: number): Promise<ReviewThread[]>;
+    replyInThread?(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }>;
+    threadComments?(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]>;
     // Optional: merges a PR (falls back to close). Drives the closed/merged-PR
     // webhook that triggers kody-issues generation (v2/BYOK path).
     mergePR?(pr: OpenedPR): Promise<void>;
@@ -206,6 +225,27 @@ export interface Provider {
     // the diff there is nothing to validate a comment's anchor against.
     // Providers that don't implement it make the assertion self-skip.
     listChangedFiles?(pr: { number: number }): Promise<ChangedFile[]>;
+    // Optional: pushes a follow-up commit onto an ALREADY-OPEN PR's branch —
+    // used by scenarios that need a real 2nd review round (e.g. "the
+    // developer applies the suggestion for real", not just an `@kody
+    // review` re-trigger on the same diff). Optional because it needs a
+    // real git remote (cloneUrl), same constraint openPR already has.
+    pushFollowupCommit?(
+        pr: OpenedPR,
+        files: Record<string, string>,
+        commitMessage: string,
+    ): Promise<void>;
+    // Optional: raw bodies of Kody's real review comments (inline + PR-level,
+    // status/license-notice placeholders excluded) posted since `sinceIso`,
+    // optionally restricted to comments anchored to `path`. `pollForReview`
+    // only returns counts + one truncated sample — scenarios that need to
+    // pattern-match content across ALL of a round's comments (e.g. "did any
+    // comment re-raise the issue this file's fix already addressed") need
+    // this instead.
+    listReviewCommentBodies?(
+        pr: { number: number },
+        opts: { sinceIso: string; path?: string },
+    ): Promise<string[]>;
     // Idempotent pre-flight sweep — closes/abandons every PR (or MR) on
     // the fixture repo whose title starts with `[e2e]` and is still
     // open. Called once per (provider, target) pair at matrix start,

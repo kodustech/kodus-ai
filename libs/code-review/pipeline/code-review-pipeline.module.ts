@@ -15,9 +15,7 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { InitialCommentStage } from './stages/initial-comment.stage';
-import { ProcessFilesPrLevelReviewStage } from './stages/process-files-pr-level-review.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
-import { ProcessFilesReview } from './stages/process-files-review.stage';
 import { ResolveConfigStage } from './stages/resolve-config.stage';
 import { ValidateConfigStage } from './stages/validate-config.stage';
 import { ValidateNewCommitsStage } from './stages/validate-new-commits.stage';
@@ -61,6 +59,7 @@ import { PullRequestsModule } from '../modules/pull-requests.module';
 import { PullRequestMessagesModule } from '../modules/pullRequestMessages.module';
 import { CodeReviewJobProcessorService } from '../workflow/code-review-job-processor.service';
 import { ByokConcurrencyGateService } from '../workflow/byok-concurrency-gate.service';
+import { PrReviewDeferralService } from '../workflow/pr-review-deferral.service';
 import { GitHubRateLimitGateService } from '@libs/platform/infrastructure/adapters/services/github/github-rate-limit-gate.service';
 import { RATE_LIMIT_GATE_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import { ImplementationVerificationProcessor } from '../workflow/implementation-verification.processor';
@@ -72,6 +71,13 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 
 // V3 Agent-First
 import { CreateSandboxStage } from './stages/create-sandbox.stage';
+import { LoadCiEvidenceStage } from './stages/load-ci-evidence.stage';
+import { RunAnalyzersStage } from './stages/run-analyzers.stage';
+import { DeterministicEvidenceGate } from '@libs/code-review/infrastructure/analyzers/deterministic-evidence.gate';
+import { AnalyzerToolRouter } from '@libs/code-review/infrastructure/analyzers/analyzer-tool.router';
+import { ANALYZER_TOOLS_TOKEN } from '@libs/code-review/infrastructure/analyzers/tool.contract';
+import { SecretScanTool } from '@libs/code-review/infrastructure/analyzers/tools/secret-scan.tool';
+import { DependencyScanTool } from '@libs/code-review/infrastructure/analyzers/tools/dependency-scan.tool';
 import { AgentReviewStage } from './stages/agent-review.stage';
 import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
@@ -80,6 +86,7 @@ import { GeneralistAgentProvider } from '../infrastructure/agents/providers/gene
 import { DuplicateLogicAgentProvider } from '../infrastructure/agents/providers/duplicate-logic-agent.provider';
 import { DUPLICATE_LOGIC_AGENT_TOKEN } from '../infrastructure/agents/review-agent.contract';
 import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-rules-agent.provider';
+import { CustomAgentProviderFactory } from '../infrastructure/agents/providers/custom-agent.provider';
 // ReflectionAgentProvider removed — verify/discover was hurting recall
 import { ReviewOrchestratorService } from '../infrastructure/agents/review-orchestrator.service';
 
@@ -131,6 +138,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         // Job Processor
         CodeReviewJobProcessorService,
         ByokConcurrencyGateService,
+        PrReviewDeferralService,
         DistributedLockService,
         // GitHub rate-limit gate — pre-check before burning slot on a
         // job whose installation bucket is already exhausted. Same
@@ -153,9 +161,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ValidateConfigStage,
         FetchChangedFilesStage,
         InitialCommentStage,
-        ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
-        ProcessFilesReview,
         SandboxSyntaxValidator,
         GraphContentFormatter,
         SuggestionLLMValidator,
@@ -168,6 +174,22 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
         // V3 Agent-First stages + providers
         CreateSandboxStage,
+        LoadCiEvidenceStage,
+        RunAnalyzersStage,
+        DeterministicEvidenceGate,
+        AnalyzerToolRouter,
+        SecretScanTool,
+        DependencyScanTool,
+        {
+            // The registry the router walks. New tools are added here; the
+            // stage itself stays unchanged.
+            provide: ANALYZER_TOOLS_TOKEN,
+            useFactory: (
+                secrets: SecretScanTool,
+                dependencies: DependencyScanTool,
+            ) => [secrets, dependencies],
+            inject: [SecretScanTool, DependencyScanTool],
+        },
         AgentReviewStage,
         BugAgentProvider,
         SecurityAgentProvider,
@@ -179,6 +201,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
             useExisting: DuplicateLogicAgentProvider,
         },
         KodyRulesAgentProvider,
+        CustomAgentProviderFactory,
         // ReflectionAgentProvider removed
         ReviewOrchestratorService,
 
@@ -210,9 +233,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreateFileCommentsStage,
         CreatePrLevelCommentsStage,
         UpdateCommentsAndGenerateSummaryStage,
-        ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
-        ProcessFilesReview,
         ResolveConfigStage,
         ValidateConfigStage,
         ValidateNewCommitsStage,
@@ -225,6 +246,8 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ImplementationVerificationProcessor,
         // V3
         CreateSandboxStage,
+        LoadCiEvidenceStage,
+        RunAnalyzersStage,
         AgentReviewStage,
         ReviewOrchestratorService,
     ],

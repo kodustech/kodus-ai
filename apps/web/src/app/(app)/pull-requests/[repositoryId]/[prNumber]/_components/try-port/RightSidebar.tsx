@@ -73,7 +73,7 @@ export function RightSidebar({
                 <section
                     className="rounded-xl border border-[var(--green)]/25 bg-[var(--green)]/[0.05] px-3.5 py-4 text-center"
                     style={{ boxShadow: "var(--shadow-card)" }}>
-                    <p className="text-[13px] font-medium text-[var(--green)]">
+                    <p className="text-review font-medium text-[var(--green)]">
                         Nothing to flag.
                     </p>
                 </section>
@@ -109,10 +109,10 @@ function SeverityGroup({
                         className="w-1.5 h-1.5 rounded-full"
                         style={{ backgroundColor: color }}
                     />
-                    <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
+                    <span className="text-3xs uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
                         {label}
                     </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] text-[var(--text-muted)]">
+                    <span className="text-3xs font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] text-[var(--text-muted)]">
                         {items.length}
                     </span>
                 </span>
@@ -177,7 +177,7 @@ function LabelsCard({
                     <span
                         key={l.name}
                         title={l.description}
-                        className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border"
+                        className="inline-flex items-center text-2xs font-medium px-2 py-0.5 rounded-full border"
                         style={{
                             // Use the GitHub label color as a tinted
                             // background + matching border. Text stays
@@ -233,7 +233,7 @@ function ChecksCard({ checks }: { checks: NonNullable<PrInfo["checks"]> }) {
     return (
         <SidebarCard title="Checks">
             <div className="px-3.5 py-3 flex items-center justify-between">
-                <span className={`text-[13px] font-medium ${tone}`}>
+                <span className={`text-review font-medium ${tone}`}>
                     {label}
                 </span>
                 <span className="text-xs font-mono text-[var(--text-muted)]">
@@ -346,7 +346,7 @@ function IssueRow({
                         className="w-1.5 h-1.5 rounded-full"
                         style={{ backgroundColor: color }}
                     />
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-muted)]">
+                    <span className="text-3xs uppercase tracking-wider font-semibold text-[var(--text-muted)]">
                         {issue.severity || "info"}
                     </span>
                     {issue.category && (
@@ -363,7 +363,7 @@ function IssueRow({
                     }`}>
                     {issue.message}
                 </p>
-                <p className="text-[11px] font-mono text-[var(--text-dim)] mt-1 truncate">
+                <p className="text-2xs font-mono text-[var(--text-dim)] mt-1 truncate">
                     {basename(issue.file)}:{issue.line}
                 </p>
             </button>
@@ -390,7 +390,7 @@ function SidebarCard({
             style={{ boxShadow: "var(--shadow-card)" }}
         >
             <header className="px-3.5 py-2.5 border-b border-[var(--border)]/60 flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
+                <p className="text-3xs uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
                     {title}
                 </p>
                 {collapsible && onToggle && (

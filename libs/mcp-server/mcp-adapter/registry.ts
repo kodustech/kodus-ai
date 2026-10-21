@@ -387,6 +387,10 @@ export class MCPRegistry {
             candidateServers = this.toolIndex.get(toolName);
         }
 
+        // The last server that has the tool but failed to run it: reported
+        // instead of "not found", which reads as a wrong tool name.
+        let failure: { server: string; message: string } | undefined;
+
         if (candidateServers && candidateServers.size > 0) {
             for (const candidate of candidateServers) {
                 const client = this.clients.get(candidate);
@@ -398,6 +402,7 @@ export class MCPRegistry {
                 } catch (error) {
                     const execErrMsg =
                         error instanceof Error ? error.message : String(error);
+                    failure = { server: candidate, message: execErrMsg };
                     this.logger.warn({
                         message: `Failed to execute tool on server: ${execErrMsg}`,
                         context: this.constructor.name,
@@ -430,6 +435,11 @@ export class MCPRegistry {
             } catch {
                 /* ignora */
             }
+        }
+        if (failure) {
+            throw new Error(
+                `MCP server ${failure.server} is unavailable (${failure.message})`,
+            );
         }
         throw new Error(
             `Tool ${toolName} not found in any registered MCP server`,

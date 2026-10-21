@@ -1,7 +1,13 @@
 # Structured Outputs Repro
 
+> - **Answers:** Does each provider get structured output only where the provider actually honours it?
+> - **Runs:** on demand only.
+> - **Run it:** `pnpm run repro:structured-outputs`
+> - **Gate:** none (repro matrix).
+> - **Cost:** offline scenarios: none. `--live`: real provider calls.
+
 Matrix test for the structured-output capability gate in
-`libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts`.
+`libs/llm/structured-output-gate.ts` (applied from `libs/llm/byok-to-vercel.ts`).
 
 ## Why
 

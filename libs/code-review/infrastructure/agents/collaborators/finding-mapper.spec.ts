@@ -53,6 +53,32 @@ describe('mapAgentFindings', () => {
         ...over,
     });
 
+    it("keeps a convention finding's kind and source", () => {
+        // Lane credit in dedup and the rule citation in the comment read
+        // them from the suggestion; dropped here, neither ever applied.
+        const source = {
+            file: 'docs/ledger.md',
+            section: 'Posting',
+            quote: 'Debits equal credits.',
+        };
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        {
+                            relevantFile: 'src/a.ts',
+                            suggestionContent: 'x',
+                            kind: 'convention',
+                            source,
+                        } as any,
+                    ],
+                },
+            },
+            ctx(),
+        );
+        expect(r.suggestions[0]).toMatchObject({ kind: 'convention', source });
+    });
+
     it('drops suggestions with no content', () => {
         const r = mapAgentFindings(
             {
@@ -77,6 +103,24 @@ describe('mapAgentFindings', () => {
             ctx(),
         );
         expect(r.suggestions).toHaveLength(0);
+        expect(r.droppedForPath).toBe(1);
+    });
+
+    it('counts path drops, not findings dropped for other reasons (#2066)', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'other.ts' },
+                        { suggestionContent: 'y', relevantFile: 'src/a.ts' },
+                        { relevantFile: 'gone.ts' } as any,
+                    ],
+                },
+            },
+            ctx(),
+        );
+        expect(r.suggestions).toHaveLength(1);
+        expect(r.droppedForPath).toBe(1);
     });
 
     it('keeps + canonicalizes a matching finding (normalized path)', () => {
@@ -171,5 +215,24 @@ describe('mapAgentFindings', () => {
         expect(r.discardedBySeverity).toHaveLength(1);
         expect(r.discardedByVerify).toHaveLength(1);
         expect(r.discardedByVerify[0].label).toBe('bug');
+    });
+
+    it('counts a convention finding whose quote failed as discarded by verification', () => {
+        const r = mapAgentFindings(
+            {
+                findings: { suggestions: [] },
+                droppedByVerify: [
+                    { suggestionContent: 'b', relevantFile: 'src/a.ts' },
+                ],
+                droppedByQuoteCheck: [
+                    { suggestionContent: 'c', relevantFile: 'src/b.ts' },
+                ],
+            },
+            ctx(),
+        );
+        expect(r.discardedByVerify.map((s) => s.suggestionContent)).toEqual([
+            'b',
+            'c',
+        ]);
     });
 });

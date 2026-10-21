@@ -4,6 +4,7 @@
  * headers and parsed catalogs.
  */
 import { reasoningConfigForModel } from './model-reasoning';
+import { formatModelLabel } from './model-label';
 import type { CatalogModel } from './types';
 
 /** Catalog entry that derives reasoning support from the family owner (the single
@@ -11,7 +12,7 @@ import type { CatalogModel } from './types';
  *  `us.anthropic.*`) resolve reasoning by their bare model name. */
 export function catalogWithReasoning(
     id: string,
-    name: string = id,
+    name: string = formatModelLabel(id),
     capKey: string = id,
 ): CatalogModel {
     const reasoningConfig = reasoningConfigForModel(capKey);
@@ -34,11 +35,13 @@ export function bearerHeaders(apiKey?: string): Record<string, string> {
 }
 
 /** Parse an OpenAI-style `{ data: [{ id }] }` list into plain `{id, name}`
- *  entries (no reasoning derivation — used by gateways that just proxy ids). */
+ *  entries (no reasoning derivation — used by gateways that just proxy ids). The
+ *  OpenAI `/models` shape carries only ids, so the label is derived from the id
+ *  rather than shown raw. */
 export function parseOpenAiIds(body: unknown): CatalogModel[] {
     const data =
         (body as { data?: Array<{ id: string }> } | undefined)?.data ?? [];
-    return data.map((m) => ({ id: m.id, name: m.id }));
+    return data.map((m) => ({ id: m.id, name: formatModelLabel(m.id) }));
 }
 
 /** Build a `/models` URL from a self-hosted / proxy baseURL, mirroring the

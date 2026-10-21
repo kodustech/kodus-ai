@@ -19,7 +19,7 @@ import {
     IKodyRuleSummary,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { z } from 'zod';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     compileRuleDetector,
     compilerOutputSchema,
@@ -36,10 +36,9 @@ import {
  * bullets (examples untouched — ruleBlock renders them separately) nearly
  * doubled occurrence-recall on terse models (gpt-5.4-mini 32%→59% avg) with no
  * regression on strong ones (kimi peak 95%, glm stable). Validated on the
- * Rails convention analog cases; see docs/plans/
- * kody-rules-summary-productization.md — including the variants that were
- * tried and REJECTED (examples-first ordering, verdict checklists, a third
- * "when not to flag" section — all reduced recall; don't re-add them).
+ * Rails convention analog cases (#1567). Variants tried and REJECTED
+ * (examples-first ordering, verdict checklists, a third "when not to flag"
+ * section) all reduced recall; don't re-add them.
  *
  * The summary is consumed EXCLUSIVELY by the review path (resolveForReview);
  * UI/sync/export always see the full rule text. `sourceHash` (sha256 of the
@@ -292,7 +291,7 @@ export class KodyRuleSummaryService {
             const [byokConfig, subscriptionStatus] = await Promise.all([
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
-                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
                 this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
@@ -512,7 +511,7 @@ export class KodyRuleSummaryService {
             const [byokConfig, subscriptionStatus] = await Promise.all([
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
-                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
                 this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
@@ -579,9 +578,7 @@ export class KodyRuleSummaryService {
                     byokConfig,
                     organizationAndTeamData,
                 );
-            const verifiedAtoms = raw.filter(
-                (_, i) => !invalidIndexes.has(i),
-            );
+            const verifiedAtoms = raw.filter((_, i) => !invalidIndexes.has(i));
             if (invalidIndexes.size > 0) {
                 this.logger.warn({
                     message: `[kody-rule-atoms] dropped ${invalidIndexes.size}/${raw.length} atom(s) — inverted or not present in the parent rule`,
@@ -718,7 +715,7 @@ export class KodyRuleSummaryService {
     private async verifyAtoms(
         rule: Partial<IKodyRule>,
         atoms: DecomposedAtom[],
-        byokConfig: BYOKConfig | null | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<{
         invalidIndexes: Map<number, string>;
@@ -931,7 +928,10 @@ export class KodyRuleSummaryService {
         rules: Partial<IKodyRule>[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Partial<IKodyRule>[]> {
-        const withAtoms = await this.ensureAtoms(rules, organizationAndTeamData);
+        const withAtoms = await this.ensureAtoms(
+            rules,
+            organizationAndTeamData,
+        );
         return withAtoms.flatMap((r) => this.expandForReview(r));
     }
 }

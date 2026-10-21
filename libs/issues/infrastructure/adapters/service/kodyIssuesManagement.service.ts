@@ -218,7 +218,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                 id: suggestion.id,
                                 language: suggestion.language,
                                 relevantFile: suggestion.relevantFile,
-                                suggestionContent: suggestion.suggestionContent,
+                                suggestionContent:
+                                    suggestion.fullExplanation ||
+                                    suggestion.suggestionContent,
                                 existingCode: suggestion.existingCode,
                                 improvedCode: suggestion.improvedCode,
                                 oneSentenceSummary:
@@ -235,7 +237,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     id: suggestion.id,
                     language: suggestion.language,
                     relevantFile: suggestion.relevantFile,
-                    suggestionContent: suggestion.suggestionContent,
+                    suggestionContent:
+                        suggestion.fullExplanation ||
+                        suggestion.suggestionContent,
                     existingCode: suggestion.existingCode,
                     improvedCode: suggestion.improvedCode,
                     oneSentenceSummary: suggestion.oneSentenceSummary,
@@ -305,7 +309,11 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     createLimit(() =>
                         this.issuesService.create({
                             title: suggestion.oneSentenceSummary,
-                            description: suggestion.suggestionContent,
+                            // The issue outlives the PR comment: keep the whole
+                            // explanation, not the short body under the title.
+                            description:
+                                suggestion.fullExplanation ||
+                                suggestion.suggestionContent,
                             filePath: suggestion.relevantFile,
                             language: suggestion.language,
                             label: suggestion?.label as LabelType,
@@ -487,6 +495,10 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             PriorityStatus.DISCARDED_BY_SAFEGUARD,
             PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
             PriorityStatus.DISCARDED_BY_CODE_DIFF,
+            // An earlier comment on the PR already raised it (#2097).
+            PriorityStatus.DISCARDED_BY_REPEAT,
+            // Its verify run failed; nobody judged it (#2171).
+            PriorityStatus.DISCARDED_BY_VERIFY_ERROR,
         ];
 
         return prFiles.reduce((acc: any[], file) => {
@@ -702,7 +714,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             endLine: fullSuggestion.relevantLinesEnd,
                             oneSentenceSummary:
                                 fullSuggestion.oneSentenceSummary,
-                            suggestionContent: fullSuggestion.suggestionContent,
+                            suggestionContent:
+                                fullSuggestion.fullExplanation ||
+                                fullSuggestion.suggestionContent,
                             language: fullSuggestion.language,
                             label: fullSuggestion.label,
                             severity: fullSuggestion.severity,

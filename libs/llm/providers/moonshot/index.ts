@@ -18,93 +18,6 @@
 import { anthropicBrandModule } from '../anthropic/brand';
 import { registerProvider } from '../kernel/registry';
 import { moonshotModelListing } from './listing';
-import type { ProviderCatalogModel } from '../kernel/catalog';
-
-// Curated Kimi models (migrated from the web curated-models.json). No `provider`
-// override: the aggregator stamps the module id `moonshot` as BOTH the brand and
-// the stored transport, and the module's build() resolves the Anthropic protocol.
-const catalog: ProviderCatalogModel[] = [
-    {
-        id: 'kimi-k2.7-code',
-        displayName: 'Kimi K2.7 Code',
-        tier: 'recommended',
-        benchmarkScore: 86,
-        description:
-            "Moonshot's newest coding model (K2.7) with long thinking / deep reasoning. Developer API. (benchmarkScore is a placeholder pending a real run.)",
-        speed: 'medium',
-        contextWindow: '256K',
-        costTier: '$',
-        apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-        defaults: {
-            temperature: 1,
-            maxOutputTokens: 16384,
-            baseURL: 'https://api.moonshot.ai/anthropic',
-            reasoningEffort: 'medium',
-        },
-        docsUrl:
-            'https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus',
-        variants: [
-            {
-                id: 'developer',
-                label: 'Developer API',
-                description:
-                    'Pay-per-token, over the native Anthropic protocol (explicit prompt caching + native tool-use).',
-                baseURL: 'https://api.moonshot.ai/anthropic',
-                apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-            },
-            {
-                id: 'code-plan',
-                label: 'Kimi Code Plan',
-                description:
-                    'Flat-rate subscription (Anthropic endpoint). Capped at 30 concurrent requests — for heavy automated usage prefer the Developer API.',
-                baseURL: 'https://api.kimi.com/coding',
-                apiKeyUrl: 'https://www.kimi.com/code',
-                maxConcurrentRequests: 30,
-            },
-        ],
-        defaultVariantId: 'developer',
-    },
-    {
-        id: 'kimi-k2.6',
-        displayName: 'Kimi K2.6 Coding',
-        tier: 'other',
-        benchmarkScore: 86,
-        description:
-            'Previous Moonshot coding model. Superseded by Kimi K2.7 Code.',
-        speed: 'medium',
-        contextWindow: '256K',
-        costTier: '$',
-        apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-        defaults: {
-            temperature: 1,
-            maxOutputTokens: 16384,
-            baseURL: 'https://api.moonshot.ai/anthropic',
-            reasoningEffort: 'medium',
-        },
-        docsUrl:
-            'https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus',
-        variants: [
-            {
-                id: 'developer',
-                label: 'Developer API',
-                description:
-                    'Pay-per-token, over the native Anthropic protocol (explicit prompt caching + native tool-use).',
-                baseURL: 'https://api.moonshot.ai/anthropic',
-                apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-            },
-            {
-                id: 'code-plan',
-                label: 'Kimi Code Plan',
-                description:
-                    'Flat-rate subscription (Anthropic endpoint). Capped at 30 concurrent requests — for heavy automated usage prefer the Developer API.',
-                baseURL: 'https://api.kimi.com/coding',
-                apiKeyUrl: 'https://www.kimi.com/code',
-                maxConcurrentRequests: 30,
-            },
-        ],
-        defaultVariantId: 'developer',
-    },
-];
 
 export const moonshotModule = {
     ...anthropicBrandModule({
@@ -113,7 +26,7 @@ export const moonshotModule = {
         // Moonshot/Kimi developer docs — key setup + the Anthropic-compatible
         // endpoint (api.moonshot.ai/anthropic) this brand builds over.
         doc: 'https://platform.moonshot.ai/docs',
-        catalog,
+        defaultBaseURL: 'https://api.moonshot.ai/anthropic',
         uiFields: [
             {
                 key: 'apiKey',

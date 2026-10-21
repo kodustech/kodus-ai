@@ -8,6 +8,7 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import pLimit from 'p-limit';
 import { v4 as uuidv4 } from 'uuid';
 
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -53,8 +54,13 @@ import { ICodeManagementService } from '@libs/platform/domain/platformIntegratio
 import { createLogger } from '@libs/core/log/logger';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -78,6 +84,12 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestCodeReviewTime,
@@ -85,6 +97,12 @@ import {
     PullRequestReviewState,
     PullRequestWithFiles,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
@@ -96,6 +114,27 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from './code-management-defaults.constants';
+import {
+    isGitlabRateLimitError,
+    toGitlabRateLimitError,
+} from './gitlab-rate-limit.util';
+
+/**
+ * Award emojis are the one reaction source that costs a request per comment —
+ * GitLab has no inline count, unlike GitHub. A merge request with 40 Kody
+ * comments used to fire 40 simultaneous requests, and the reactions cron does
+ * that for every PR at once. Capped here so the per-PR burst is bounded
+ * regardless of how many comments Kody left.
+ */
+const AWARD_EMOJI_CONCURRENCY = 5;
+
+/**
+ * gitbeaker's `.all()` follows the `link` header until the collection is
+ * exhausted, and without `perPage` that walks GitLab's default of 20 per page
+ * — a merge request with 200 discussions costs 10 sequential round trips
+ * instead of 2. 100 is the ceiling GitLab accepts.
+ */
+const GITLAB_MAX_PER_PAGE = 100;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
@@ -263,6 +302,10 @@ export class GitlabService implements Omit<
                 merged_at: mergeRequest.merged_at,
                 head: {
                     ref: mergeRequest.source_branch,
+                    sha:
+                        mergeRequest.diff_refs?.head_sha ??
+                        mergeRequest.sha ??
+                        '',
                     repo: {
                         name: params.repository.name,
                         // Use source project ID so forked MRs can fetch files from the right project
@@ -312,9 +355,173 @@ export class GitlabService implements Omit<
         });
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            // One endpoint covers both pipeline jobs and externally posted
+            // commit statuses, so there is no second surface to merge here.
+            const statuses = await gitlabAPI.Commits.allStatuses(
+                projectId,
+                commitSha,
+            );
+
+            return (statuses ?? []).map((status) =>
+                this.mapGitlabCommitStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read GitLab commit statuses',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, commitSha },
+            });
+            return [];
+        }
+    }
+
+    /**
+     * Hunks GitLab collapsed out of the merge-request diff.
+     *
+     * `/diffs` serves a cached, size-limited view: past `diff_max_patch_bytes`
+     * an entry comes back with `collapsed` or `too_large` set and an EMPTY
+     * `diff`, which a lockfile bump reaches easily. `access_raw_diffs` reads
+     * from the database instead and returns the real hunks.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const projectId = repository.id
+            ? String(repository.id)
+            : `${repository.owner}/${repository.name}`;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(authDetail);
+            const mr = await gitlabAPI.MergeRequests.showChanges(
+                projectId,
+                prNumber,
+                { accessRawDiffs: true },
+            );
+
+            const wanted = new Set(paths);
+            const out: Array<{ path: string; patch: string }> = [];
+
+            for (const change of (mr as { changes?: unknown[] })?.changes ??
+                []) {
+                const typed = change as {
+                    new_path?: string;
+                    old_path?: string;
+                    diff?: string;
+                };
+                const path = typed.new_path ?? typed.old_path;
+                if (!path || !wanted.has(path) || !typed.diff?.trim()) {
+                    continue;
+                }
+                out.push({ path, patch: typed.diff });
+            }
+
+            return out;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read raw merge request diffs',
+                context: GitlabService.name,
+                error,
+                metadata: { projectId, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapGitlabCommitStatus(status: {
+        id: number;
+        name?: string;
+        status: string;
+        target_url?: string | null;
+        finished_at?: string | null;
+        allow_failure?: boolean;
+    }): CheckEvidence {
+        const state = this.mapGitlabStatusState(status.status);
+        const failedButAllowed =
+            status.status === 'failed' && status.allow_failure === true;
+
+        const conclusion: CheckEvidenceConclusion | null =
+            state !== 'completed'
+                ? null
+                : failedButAllowed
+                  ? 'neutral'
+                  : this.mapGitlabConclusion(status.status);
+
+        return {
+            id: String(status.id),
+            name: status.name ?? '',
+            status: state,
+            conclusion,
+            url: status.target_url ?? null,
+            completedAt:
+                state === 'completed' ? (status.finished_at ?? null) : null,
+            platform: PlatformType.GITLAB,
+        };
+    }
+
+    private mapGitlabStatusState(status: string): CheckEvidenceStatus {
+        if (
+            status === 'success' ||
+            status === 'failed' ||
+            status === 'canceled' ||
+            status === 'skipped'
+        ) {
+            return 'completed';
+        }
+        if (status === 'running') {
+            return 'in_progress';
+        }
+        // created / pending / manual / scheduled / waiting_for_resource /
+        // preparing all mean the job has not produced a result yet.
+        return 'queued';
+    }
+
+    private mapGitlabConclusion(
+        status: string,
+    ): CheckEvidenceConclusion | null {
+        switch (status) {
+            case 'success':
+                return 'success';
+            case 'failed':
+                return 'failure';
+            case 'canceled':
+                return 'cancelled';
+            case 'skipped':
+                return 'skipped';
+            default:
+                return null;
+        }
+    }
+
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const authDetail = await this.getAuthDetails(organizationAndTeamData);
@@ -336,9 +543,7 @@ export class GitlabService implements Omit<
             labels: filters.labels?.length
                 ? filters.labels.join(',')
                 : undefined,
-            assigneeUsername: filters.assignee
-                ? [filters.assignee]
-                : undefined,
+            assigneeUsername: filters.assignee ? [filters.assignee] : undefined,
             updatedAfter: filters.since,
             page: filters.page,
             perPage: Math.min(Math.max(1, filters.perPage ?? 30), 100),
@@ -880,9 +1085,16 @@ export class GitlabService implements Omit<
             // API process (observed on the Bitbucket twin of this call). The
             // failure still gets a loud error log from the method's own
             // catch; this catch only stops the crash.
-            void this.createMergeRequestWebhook({
-                organizationAndTeamData: params.organizationAndTeamData,
-            }).catch(() => undefined);
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createMergeRequestWebhook({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                }).catch(() => undefined);
+            }
         } catch (err) {
             throw new BadRequestException(err);
         }
@@ -2190,13 +2402,7 @@ export class GitlabService implements Omit<
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -2205,20 +2411,25 @@ export class GitlabService implements Omit<
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         return [
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
             this.formatSub(translations.feedback) +
@@ -2494,8 +2705,7 @@ export class GitlabService implements Omit<
                         },
                     };
                 } catch (attemptError: any) {
-                    const status = attemptError?.response?.status;
-                    const isNotFound = status === 404;
+                    const isNotFound = this.isGitlabNotFoundError(attemptError);
 
                     const logPayload = {
                         message: isNotFound
@@ -2546,9 +2756,8 @@ export class GitlabService implements Omit<
                                 },
                             };
                         } catch (defaultAttemptError: any) {
-                            const status =
-                                defaultAttemptError?.response?.status;
-                            const isNotFound = status === 404;
+                            const isNotFound =
+                                this.isGitlabNotFoundError(defaultAttemptError);
 
                             const logPayload = {
                                 message: isNotFound
@@ -2822,23 +3031,12 @@ export class GitlabService implements Omit<
 
         try {
             for (const repo of repositories) {
-                const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
-
-                const hookExists = existingHooks.some(
-                    (hook) => hook?.url === webhookUrl,
+                await this.ensureSingleKodusHook(
+                    gitlabAPI,
+                    repo.id,
+                    webhookUrl,
+                    organizationAndTeamData,
                 );
-
-                if (!hookExists) {
-                    await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
-                        mergeRequestsEvents: true,
-                        enableSslVerification: true,
-                        noteEvents: true,
-                        issuesEvents: true,
-                    });
-                    console.log(`Webhook added to project ${repo.id}`);
-                } else {
-                    console.log(`Webhook already exists in project ${repo.id}`);
-                }
             }
         } catch (error) {
             this.logger.error({
@@ -2851,6 +3049,110 @@ export class GitlabService implements Omit<
                 },
             });
             throw error;
+        }
+    }
+
+    /**
+     * Leaves one Kodus hook on the project: GitLab delivers every event once
+     * per hook. Passes running at once can each add a hook, so every pass
+     * keeps the same survivor and removes the rest; concurrent passes, on any
+     * instance, agree on it. This also clears older duplicates.
+     *
+     * Among duplicates, the survivor is the oldest hook GitLab still calls
+     * (not disabled after failures), preferring one with note and merge
+     * request events, so a disabled copy or one created by hand without those
+     * events is never kept over a working one; if the survivor lacks those
+     * events they are turned on. A single hook is left as it is.
+     */
+    private async ensureSingleKodusHook(
+        gitlabAPI: any,
+        projectId: string | number,
+        webhookUrl: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const listKodusHooks = async () =>
+            ((await gitlabAPI.ProjectHooks.all(projectId)) ?? []).filter(
+                (hook) => hook?.url === webhookUrl,
+            );
+
+        let hooks = await listKodusHooks();
+
+        if (hooks.length === 0) {
+            await gitlabAPI.ProjectHooks.add(projectId, webhookUrl, {
+                mergeRequestsEvents: true,
+                enableSslVerification: true,
+                noteEvents: true,
+                issuesEvents: true,
+            });
+            // Another pass may have added its own hook in the meantime.
+            hooks = await listKodusHooks();
+        }
+
+        if (hooks.length <= 1) {
+            return;
+        }
+
+        const isExecutable = (hook) =>
+            (hook?.alert_status ?? 'executable') === 'executable';
+        const hasEvents = (hook) =>
+            hook?.note_events !== false && hook?.merge_requests_events !== false;
+
+        // Executable first: GitLab never calls a disabled hook, while missing
+        // events on an executable one are fixed by the edit below.
+        const [kept, ...duplicates] = hooks.sort(
+            (a, b) =>
+                Number(isExecutable(b)) - Number(isExecutable(a)) ||
+                Number(hasEvents(b)) - Number(hasEvents(a)) ||
+                Number(a.id) - Number(b.id),
+        );
+
+        if (!hasEvents(kept)) {
+            try {
+                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
+                    noteEvents: true,
+                    mergeRequestsEvents: true,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
+                    context: GitlabService.name,
+                    error,
+                    metadata: { organizationAndTeamData, projectId },
+                });
+            }
+        }
+
+        // Best effort: a failed removal must not stop the pass from setting
+        // up the hooks of the repositories that come after this one.
+        const removedHookIds = [];
+        for (const hook of duplicates) {
+            try {
+                await gitlabAPI.ProjectHooks.remove(projectId, hook.id);
+                removedHookIds.push(hook.id);
+            } catch (error) {
+                // 404: a concurrent pass removed it first.
+                if (!this.isGitlabNotFoundError(error)) {
+                    this.logger.warn({
+                        message: `Could not remove duplicate Kodus webhook ${hook.id} from GitLab project ${projectId}`,
+                        context: GitlabService.name,
+                        error,
+                        metadata: { organizationAndTeamData, projectId },
+                    });
+                }
+            }
+        }
+
+        if (removedHookIds.length > 0) {
+            this.logger.warn({
+                message: `Removed ${removedHookIds.length} duplicate Kodus webhook(s) from GitLab project ${projectId}`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    projectId,
+                    keptHookId: kept.id,
+                    removedHookIds,
+                },
+            });
         }
     }
 
@@ -2867,6 +3169,7 @@ export class GitlabService implements Omit<
             const comments = await gitlabAPI.MergeRequestDiscussions.all(
                 filters.repository.id,
                 filters.pullRequestNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const originalCommit = comments?.find(
@@ -2914,6 +3217,15 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+
+            // Listing discussions is one call per PR, so a rate limit here is
+            // just as much a "back off" signal as one on the award emojis.
+            // Rethrowing it raw would leave the caller's breaker blind to it
+            // and it would count as an ordinary per-PR failure.
+            if (isGitlabRateLimitError(error)) {
+                throw toGitlabRateLimitError(error, organizationAndTeamData);
+            }
+
             throw error;
         }
     }
@@ -3000,42 +3312,97 @@ export class GitlabService implements Omit<
         );
         const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
+        const limit = pLimit(AWARD_EMOJI_CONCURRENCY);
+        let rateLimited = false;
+
         const commentsWithReactions = await Promise.all(
             comments
                 .filter((comment) => comment.notes?.length > 0)
-                .map(async (comment) => {
-                    try {
-                        const awards =
-                            await gitlabAPI.MergeRequestNoteAwardEmojis.all(
-                                comment.notes[0].project_id,
-                                comment.notes[0].noteable_iid,
-                                comment.notes[0].id,
-                            );
+                .map((comment) =>
+                    limit(async () => {
+                        // Whatever is still queued when the first rate-limit
+                        // lands would hit the same exhausted bucket, so it
+                        // drains without issuing a request.
+                        if (rateLimited) {
+                            return comment;
+                        }
 
-                        const thumbsUp = awards.filter((a) =>
-                            a.name.startsWith('thumbsup'),
-                        ).length;
-                        const thumbsDown = awards.filter((a) =>
-                            a.name.startsWith('thumbsdown'),
-                        ).length;
+                        try {
+                            const awards =
+                                await gitlabAPI.MergeRequestNoteAwardEmojis.all(
+                                    comment.notes[0].project_id,
+                                    comment.notes[0].noteable_iid,
+                                    comment.notes[0].id,
+                                );
 
-                        return {
-                            ...comment,
-                            notes: [
-                                {
-                                    ...comment.notes[0],
-                                    reactions: {
-                                        thumbsUp: thumbsUp,
-                                        thumbsDown: thumbsDown,
+                            const thumbsUp = awards.filter((a) =>
+                                a.name.startsWith('thumbsup'),
+                            ).length;
+                            const thumbsDown = awards.filter((a) =>
+                                a.name.startsWith('thumbsdown'),
+                            ).length;
+
+                            return {
+                                ...comment,
+                                notes: [
+                                    {
+                                        ...comment.notes[0],
+                                        reactions: {
+                                            thumbsUp: thumbsUp,
+                                            thumbsDown: thumbsDown,
+                                        },
                                     },
+                                ],
+                            };
+                        } catch (error) {
+                            // A rate limit is about the instance, not this
+                            // note — swallowing it here is what let the cron
+                            // keep hammering a GitLab that was already
+                            // refusing requests. Everything else stays
+                            // isolated to its own comment, as before.
+                            if (isGitlabRateLimitError(error)) {
+                                rateLimited = true;
+
+                                // The use case only knows the PR. The note and
+                                // project below are the last identifiers before
+                                // the error is translated and loses them.
+                                this.logger.warn({
+                                    message:
+                                        'GitLab refused the award emoji request rate',
+                                    context: GitlabService.name,
+                                    error,
+                                    metadata: {
+                                        organizationId:
+                                            organizationAndTeamData?.organizationId,
+                                        teamId: organizationAndTeamData?.teamId,
+                                        projectId: comment.notes[0]?.project_id,
+                                        noteId: comment.notes[0]?.id,
+                                        prNumber: pr?.pull_number,
+                                    },
+                                });
+
+                                throw toGitlabRateLimitError(
+                                    error,
+                                    organizationAndTeamData,
+                                );
+                            }
+
+                            this.logger.warn({
+                                message:
+                                    'Failed to fetch award emojis for note',
+                                context: GitlabService.name,
+                                error,
+                                metadata: {
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    noteId: comment.notes[0]?.id,
+                                    prNumber: pr?.pull_number,
                                 },
-                            ],
-                        };
-                    } catch (error) {
-                        console.error('Error fetching awards:', error);
-                        return comment;
-                    }
-                }),
+                            });
+                            return comment;
+                        }
+                    }),
+                ),
         );
 
         return commentsWithReactions
@@ -3391,7 +3758,8 @@ export class GitlabService implements Omit<
             }
         } catch (cacheError) {
             this.logger.warn({
-                message: 'Error reading project path from cache, continuing with API call',
+                message:
+                    'Error reading project path from cache, continuing with API call',
                 context: GitlabService.name,
                 serviceName: 'GitlabService resolveProjectPathWithNamespace',
                 error: cacheError,
@@ -3724,9 +4092,8 @@ export class GitlabService implements Omit<
                 });
             }
 
-            const listOfCriticalIssues = this.getListOfCriticalIssues(
-                criticalComments,
-            );
+            const listOfCriticalIssues =
+                this.getListOfCriticalIssues(criticalComments);
 
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
@@ -3758,9 +4125,7 @@ export class GitlabService implements Omit<
         }
     }
 
-    private getListOfCriticalIssues(
-        criticalComments: CommentResult[],
-    ): string {
+    private getListOfCriticalIssues(criticalComments: CommentResult[]): string {
         return criticalComments
             .map((comment) => {
                 const summary =
@@ -3787,6 +4152,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 repository.id,
                 prNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             return discussions.flatMap((discussion) => discussion.notes);
@@ -3813,13 +4179,32 @@ export class GitlabService implements Omit<
     ): Promise<any | null> {
         const { userName, email } = params;
 
-        // Chave de cache única para este usuário
-        const cacheKey = `gitlab-user-${email || 'no-email'}-${userName}`;
+        // Scoped by organization: each org resolves against its own GitLab
+        // (and credentials), so a user found for one must never answer another.
+        // The entry wraps the result so "not found" is cacheable too.
+        const cacheKey = `gitlab-user-${params.organizationAndTeamData?.organizationId}-${email || 'no-email'}-${userName}`;
+        const remember = async (user: any, ttl: number) => {
+            try {
+                await this.cacheService.addToCache(cacheKey, { user }, ttl);
+            } catch (cacheError) {
+                this.logger.warn({
+                    message: 'Error saving to cache',
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService getUserByEmailOrNameWithRetry',
+                    error: cacheError,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                    },
+                });
+            }
+        };
 
         try {
-            const cachedUser = await this.cacheService.getFromCache(cacheKey);
-            if (cachedUser) {
-                return cachedUser;
+            const cached = await this.cacheService.getFromCache<{
+                user: any;
+            }>(cacheKey);
+            if (cached) {
+                return cached.user ?? null;
             }
         } catch (cacheError) {
             this.logger.warn({
@@ -3839,7 +4224,7 @@ export class GitlabService implements Omit<
                     );
                 });
 
-                const userPromise = this.getUserByEmailOrName({
+                const userPromise = this.findUserByEmailOrName({
                     organizationAndTeamData: params.organizationAndTeamData,
                     email: params.email || '',
                     userName: params.userName,
@@ -3847,23 +4232,9 @@ export class GitlabService implements Omit<
 
                 const user = await Promise.race([userPromise, timeoutPromise]);
 
-                if (user) {
-                    try {
-                        await this.cacheService.addToCache(
-                            cacheKey,
-                            user,
-                            1800000,
-                        ); // 30 minutos
-                    } catch (cacheError) {
-                        this.logger.warn({
-                            message: 'Error saving to cache',
-                            context: GitlabService.name,
-                            serviceName:
-                                'GitlabService getUserByEmailOrNameWithRetry',
-                            error: cacheError,
-                        });
-                    }
-                }
+                // 30 min either way: an author missing from GitLab stays
+                // missing for the next review of the same PR.
+                await remember(user ?? null, 1800000);
 
                 return user;
             } catch (error) {
@@ -3884,6 +4255,9 @@ export class GitlabService implements Omit<
                         error: error,
                         metadata: params,
                     });
+                    // Shorter than a hit: the flow tolerates a null author, and
+                    // re-paying every timeout on each review is what it cost.
+                    await remember(null, 600000);
                     return null;
                 }
 
@@ -3902,43 +4276,7 @@ export class GitlabService implements Omit<
         userName: string;
     }): Promise<any | null> {
         try {
-            const { userName, email, organizationAndTeamData } = params;
-
-            if (!email && !userName) {
-                return null;
-            }
-
-            const gitlabAuthDetail = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
-
-            if (!gitlabAuthDetail) {
-                return null;
-            }
-
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-            if (email) {
-                const usersByEmail = await gitlabAPI.Users.all({
-                    search: email,
-                });
-                const exactMatchUserByEmail = usersByEmail.find(
-                    (user) => user.email === email,
-                );
-                if (exactMatchUserByEmail) {
-                    return exactMatchUserByEmail;
-                }
-            }
-
-            if (userName) {
-                const users = await gitlabAPI.Users.all({ search: userName });
-
-                const exactMatchUser = users.find(
-                    (user) => user.name === userName,
-                );
-
-                return exactMatchUser || null;
-            }
+            return await this.findUserByEmailOrName(params);
         } catch (error) {
             this.logger.error({
                 message: `Error retrieving user by email or name: ${params.email || params.userName}`,
@@ -3949,6 +4287,54 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * null only means "no such user"; a failed search throws, so a caller that
+     * caches the answer can tell the two apart.
+     */
+    private async findUserByEmailOrName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        email: string;
+        userName: string;
+    }): Promise<any | null> {
+        const { userName, email, organizationAndTeamData } = params;
+
+        if (!email && !userName) {
+            return null;
+        }
+
+        const gitlabAuthDetail = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+
+        if (!gitlabAuthDetail) {
+            return null;
+        }
+
+        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+        if (email) {
+            const usersByEmail = await gitlabAPI.Users.all({
+                search: email,
+            });
+            const exactMatchUserByEmail = usersByEmail.find(
+                (user) => user.email === email,
+            );
+            if (exactMatchUserByEmail) {
+                return exactMatchUserByEmail;
+            }
+        }
+
+        if (userName) {
+            const users = await gitlabAPI.Users.all({ search: userName });
+
+            const exactMatchUser = users.find((user) => user.name === userName);
+
+            return exactMatchUser || null;
+        }
+
+        return null;
     }
 
     async getUserByUsername(params: {
@@ -3979,7 +4365,7 @@ export class GitlabService implements Omit<
 
             return exactMatchUser || null;
         } catch (error) {
-            if (error?.response?.status === 404) {
+            if (this.isGitlabNotFoundError(error)) {
                 this.logger.warn({
                     message: `Gitlab user not found: ${username}`,
                     context: GitlabService.name,
@@ -4024,6 +4410,16 @@ export class GitlabService implements Omit<
 
             return user || null;
         } catch (error) {
+            // A deleted/blocked author is a normal answer, not a failure.
+            if (this.isGitlabNotFoundError(error)) {
+                this.logger.warn({
+                    message: `Gitlab user not found by ID: ${params.userId}`,
+                    context: GitlabService.name,
+                    metadata: params,
+                });
+                return null;
+            }
+
             this.logger.error({
                 message: `Error retrieving user by ID: ${params.userId}`,
                 context: GitlabService.name,
@@ -4171,6 +4567,14 @@ export class GitlabService implements Omit<
                             : pr.state === GitlabPullRequestState.CLOSED
                               ? PullRequestState.CLOSED
                               : PullRequestState.ALL,
+                    // GitLab's `iid` is the number a person sees on the merge
+                    // request. Emitted under BOTH keys because consumers are
+                    // split: `pull_number` is the legacy name this provider has
+                    // always used, `number` is what the GitHub adapter emits and
+                    // what shared code reads. Sending only `pull_number` made
+                    // every GitLab merge request arrive as `#undefined` in
+                    // anything written against the GitHub shape.
+                    number: pr.iid,
                     pull_number: pr.iid,
                     project_id: pr.project_id,
                     prURL: pr.web_url,
@@ -4218,6 +4622,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 projectId,
                 mergeRequestIid,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const validRequestReviews = discussions
@@ -4368,6 +4773,115 @@ export class GitlabService implements Omit<
         }
     }
 
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails) {
+                result.error = 'GitLab auth details not found';
+                return result;
+            }
+
+            const gitlabAPI = this.instanceGitlabApi(authDetails);
+
+            const repositoryId = params.repository.id;
+            const projectId =
+                typeof repositoryId === 'string' && /^\d+$/.test(repositoryId)
+                    ? Number(repositoryId)
+                    : repositoryId;
+
+            try {
+                await gitlabAPI.Commits.all(projectId, {
+                    perPage: 1,
+                    maxPages: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                const project = await gitlabAPI.Projects.show(projectId);
+                // Posting MR notes needs Reporter (20); creating the webhook
+                // needs Maintainer (40). Access may come from the project or
+                // from its group, so the higher of the two applies.
+                const projectAccess =
+                    project?.permissions?.project_access?.access_level;
+                const groupAccess =
+                    project?.permissions?.group_access?.access_level;
+                const levels = [projectAccess, groupAccess].filter(
+                    (level): level is number => typeof level === 'number',
+                );
+                const maxLevel = levels.length ? Math.max(...levels) : null;
+
+                if (maxLevel !== null && maxLevel >= 20) {
+                    result.write = 'ok';
+                } else if (levels.length === 2) {
+                    result.write = 'denied';
+                }
+
+                // The role allows it, but a `read_api` token still cannot
+                // post. Personal/project/group access tokens report their
+                // scopes; an OAuth token cannot call this, so the role stands.
+                if (result.write === 'ok') {
+                    try {
+                        const token: any =
+                            await gitlabAPI.PersonalAccessTokens.show();
+                        if (
+                            Array.isArray(token?.scopes) &&
+                            !token.scopes.includes('api')
+                        ) {
+                            result.write = 'denied';
+                        }
+                    } catch {
+                        // not an access token: keep the role-based answer
+                    }
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'API_GITLAB_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+            // Unset URL: nothing to match, so the hook stays unknown (the
+            // doctor reports the missing URL itself).
+            if (webhookUrl) {
+                try {
+                    const hooks = await gitlabAPI.ProjectHooks.all(projectId);
+                    result.hook = hooks.some((hook) => hook?.url === webhookUrl)
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs Maintainer on the project; without it
+                    // we cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
+    }
+
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<void> {
@@ -4470,7 +4984,7 @@ export class GitlabService implements Omit<
 
             const badges = [
                 getCodeReviewBadge(),
-                suggestion?.label ? getLabelShield(suggestion.label) : '',
+                getSuggestionShield(suggestion),
                 severityShield,
             ]
                 .filter(Boolean)
@@ -4480,6 +4994,7 @@ export class GitlabService implements Omit<
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -4488,9 +5003,12 @@ export class GitlabService implements Omit<
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {
@@ -4972,6 +5490,16 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
+                // `diff_refs` is typed loosely by the client; the head sha
+                // lives there on a merge-request payload and falls back to
+                // the MR's own sha.
+                sha:
+                    (
+                        mergeRequest?.diff_refs as
+                            { head_sha?: string } | undefined
+                    )?.head_sha ??
+                    mergeRequest?.sha ??
+                    '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',
@@ -5120,42 +5648,6 @@ export class GitlabService implements Omit<
         }
     }
 
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
-    }
-
     async getRepositoryContentBatch(
         _params: any,
     ): Promise<Map<string, any> | null> {
@@ -5164,9 +5656,7 @@ ${copyPrompt}
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for GitLab — callers fall back to per-user
         // `getUserByUsername`.
         return null;

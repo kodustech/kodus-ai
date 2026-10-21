@@ -1,0 +1,38 @@
+---
+title: "Posso usar meu próprio provedor de LLM para revisão de código"
+description: "Traga sua própria chave de API e escolha seu provedor de LLM preferido para revisão de código com IA no Kodus."
+---
+
+Sim. O Kodus suporta Bring Your Own Key (BYOK) em todos os planos, permitindo que você use seu provedor de LLM preferido. Você paga diretamente ao provedor — o Kodus nunca cobra margem sobre tokens e nunca vê sua chave em texto simples.
+
+## Como funciona
+
+1. Na barra lateral, abra **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok))
+2. Na aba **Providers**, escolha seu provedor — ou **OpenAI-compatible** / **Anthropic-compatible** em **Custom** para qualquer outro endpoint
+3. Cole sua chave de API, escolha o modelo e clique em **Test & save** — o Kodus testa a conexão antes de salvar
+
+## Provedores suportados
+
+A seção **Providers** da grade lista provedores de primeira linha como Anthropic, OpenAI, Google, OpenRouter, Novita, Moonshot e Z.ai. A seção **Custom** cobre endpoints para os quais você mesmo aponta o Kodus: OpenAI-compatible, Anthropic-compatible, Google Vertex AI, Amazon Bedrock e Azure OpenAI.
+
+Quando o Kodus consegue listar os modelos de um provedor, o seletor **Model** os exibe (os recomendados primeiro, além de **Type model manually**); caso contrário, você digita o ID exato do modelo. Thinking/reasoning, temperature, limites de tokens e max concurrent requests ficam em **Advanced (optional)**.
+
+## Por que usar seu próprio provedor
+
+- **Controle de dados** — as requisições vão diretamente para o seu provedor
+- **Gestão de custos** — use sua relação de cobrança existente, sem margem adicional
+- **Escolha de modelo** — selecione o modelo que funciona melhor para sua base de código
+- **Conformidade** — atenda aos requisitos internos para uso de ferramentas de IA
+- **Resiliência com Fallback** — defina um modelo **Fallback (optional)** na aba **Routing** para manter as revisões rodando durante indisponibilidades do provedor
+
+## Provedores de LLM self-hosted
+
+Se você hospeda o Kodus por conta própria, pode apontar o BYOK para endpoints self-hosted ou agregadores como:
+
+- Novita, Groq, Together AI, Fireworks AI
+- Chutes, Synthetic
+- Sua própria instância Ollama / vLLM / TGI (via o provedor **OpenAI-compatible**)
+
+Para guias de configuração, consulte o [Cookbook](/pt-BR/cookbook/novita) e a documentação específica de cada provedor na base de conhecimento.
+
+Para o fluxo completo de BYOK (provedores, roteamento, ajustes avançados), consulte [Bring Your Own Key](/pt-BR/how_to_use/byok).

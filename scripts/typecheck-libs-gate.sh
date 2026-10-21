@@ -31,4 +31,32 @@ if [ -n "$violations" ]; then
     exit 1
 fi
 
-echo "✅ No TS2304 (undeclared name) errors in libs/."
+# ── Clean zone ──────────────────────────────────────────────────────────────
+#
+# TS2304 alone is too narrow. Two type errors in libs/llm reached the author's
+# editor while this gate reported green: a `TemperaturePolicy` imported from a
+# module that only re-declares it (TS2459), and a `.min` read off a union whose
+# other arm is an array of levels (TS2339, a `thinkingBudget: NaN` on the wire).
+# Jest transpiles with SWC and never type-checks, so nothing else would catch
+# them.
+#
+# So libs/llm is a ZERO-ERROR zone. It is small, and it is where BYOK correctness
+# lives. There is no allowlist: the four pre-existing specs this gate started
+# with have been fixed, so the rule is simply that libs/ have no type errors.
+CLEAN_PATH='^libs/llm/'
+
+clean_zone="$(printf '%s\n' "$output" \
+    | grep -E "${CLEAN_PATH}.*\): error TS" || true)"
+
+if [ -n "$clean_zone" ]; then
+    count="$(printf '%s\n' "$clean_zone" | grep -c .)"
+    echo "❌ ${count} type error(s) in the libs/llm clean zone:"
+    echo ""
+    printf '%s\n' "$clean_zone"
+    echo ""
+    echo "libs/llm must type-check cleanly. (Gate scope: all TS codes under libs/llm,"
+    echo " plus TS2304 under libs/.)"
+    exit 1
+fi
+
+echo "✅ No TS2304 (undeclared name) errors in libs/, and libs/llm type-checks clean."

@@ -1,3 +1,4 @@
+import { extractProviderMessage } from './review-error-diagnostics';
 import {
     AgentContextWindowTooSmallError,
     AgentPromptTooLargeError,
@@ -39,6 +40,20 @@ export interface ClassifiedErrorInfo {
     httpStatus?: number;
     /** Short, human-readable message safe to surface to the end user. */
     friendlyMessage: string;
+    /**
+     * The provider's OWN sentence, already redacted and capped for a public
+     * comment. Carried separately from `friendlyMessage` because the two answer
+     * different questions — ours says what to do, theirs says what happened —
+     * and dropping theirs is what left a failed review with nothing to act on.
+     */
+    providerMessage?: string;
+    /**
+     * Set when a MODEL_NOT_FOUND is a routing refusal: the model exists, but
+     * the aggregator's allowed/pinned providers serve no upstream for it.
+     * Decided here, on the full error text, so every surface that words the
+     * failure (the PR comment, the dashboard banner) agrees.
+     */
+    routingRefusal?: boolean;
 }
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
@@ -98,7 +113,8 @@ export function classifyLLMError(
     // detail (e.g. Vertex's "your project does not have access to it") lives
     // in the upstream `responseBody`/`data`. Classifying on `message` alone
     // misses it and mislabels access-denied as a plain model-not-found.
-    const lower = extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
+    const lower =
+        extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
     let category = matchByHttpStatus(httpStatus, lower);
@@ -119,7 +135,12 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider),
+                : buildFriendlyMessage(category, provider, lower),
+        providerMessage: extractProviderMessage(err),
+        ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(lower)
+            ? { routingRefusal: true }
+            : {}),
     };
 }
 
@@ -137,6 +158,33 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     if ((err as { name?: string }).name === 'AbortError') return true;
     const text = err instanceof Error ? err.message : String(err ?? '');
     return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
+}
+
+/**
+ * True when the executor already spent ALL of its same-model retries on this
+ * error — the AI SDK's `RetryError` with `reason: 'maxRetriesExceeded'`.
+ *
+ * This is a fact the error CARRIES, not a reading of the vendor's prose, and
+ * that is the point. Classifying a 429 as rate-limit-vs-billing by matching
+ * English phrases means every vendor that words "you are out of money"
+ * differently is a fresh outage: Z.AI writes "Insufficient balance … Please
+ * recharge", which said neither quota nor credit, so a spent account was read
+ * as a rate limit and the org's configured fallback never ran while its
+ * reviews failed.
+ *
+ * Exhaustion answers the same question without the vocabulary. Exponential
+ * backoff is precisely the remedy for a real rate limit; if four spaced
+ * attempts did not clear it, the rate-limit reading is already disproven by
+ * evidence — it is a closed door, not a queue to wait out.
+ *
+ * `errorNotRetryable` is deliberately NOT exhaustion: the SDK declined to
+ * retry at all, so nothing about the failure has been tested by repetition.
+ * Pure — safe in any catch block.
+ */
+export function retriesWereExhausted(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const e = err as { name?: string; reason?: string };
+    return e.name === 'AI_RetryError' && e.reason === 'maxRetriesExceeded';
 }
 
 /**
@@ -162,7 +210,9 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
  * `error`. Pure — safe to call in any catch block.
  */
 export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
-    return isTerminalCategory(classifyLLMError(err).category) ? 'warn' : 'error';
+    return isTerminalCategory(classifyLLMError(err).category)
+        ? 'warn'
+        : 'error';
 }
 
 /**
@@ -171,7 +221,7 @@ export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
  * `cause` chain. The Vercel AI SDK in particular puts the upstream JSON error
  * body in `responseBody` while leaving `message` as a generic status phrase.
  */
-function extractErrorText(err: unknown, depth = 0): string {
+export function extractErrorText(err: unknown, depth = 0): string {
     if (!err || depth > 3) return '';
     if (typeof err === 'string') return err;
     if (typeof err !== 'object') return String(err);
@@ -191,16 +241,22 @@ function extractErrorText(err: unknown, depth = 0): string {
     if (e.cause && e.cause !== err) {
         parts.push(extractErrorText(e.cause, depth + 1));
     }
+    // The AI SDK's RetryError carries no body of its own: the provider's answer
+    // is on the last attempt.
+    if (e.lastError && e.lastError !== err) {
+        parts.push(extractErrorText(e.lastError, depth + 1));
+    }
     return parts.join(' ');
 }
 
-function extractHttpStatus(err: unknown): number | undefined {
-    if (!err || typeof err !== 'object') return undefined;
+export function extractHttpStatus(err: unknown, depth = 0): number | undefined {
+    if (!err || typeof err !== 'object' || depth > 3) return undefined;
     const e = err as {
         status?: number;
         statusCode?: number;
         response?: { status?: number };
         cause?: { status?: number; statusCode?: number };
+        lastError?: unknown;
     };
     return (
         e.status ??
@@ -208,7 +264,10 @@ function extractHttpStatus(err: unknown): number | undefined {
         e.response?.status ??
         e.cause?.status ??
         e.cause?.statusCode ??
-        undefined
+        // RetryError: the status is on the attempt that ended the retries.
+        (e.lastError !== err
+            ? extractHttpStatus(e.lastError, depth + 1)
+            : undefined)
     );
 }
 
@@ -246,12 +305,36 @@ function matchByHttpStatus(
     return LlmErrorCategory.UNKNOWN;
 }
 
+/**
+ * THE quota vocabulary. There used to be two: this one (quota/credit/billing/
+ * payment) decided the ambiguous 429, while `matchByMessage` carried a much
+ * richer list. Any wording only the richer list knew about was therefore read
+ * as RATE_LIMIT on a 429 -- retry-worthy -- instead of the terminal
+ * QUOTA_EXCEEDED, so we retried accounts that could only be fixed by paying.
+ *
+ * Z.AI/GLM is how it surfaced: "Insufficient balance or no resource package.
+ * Please recharge." says neither quota nor credit, and four GLM scopes in
+ * production were being retried against a spent balance.
+ *
+ * One list, both callers.
+ */
 function looksLikeQuota(lower: string): boolean {
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
         lower.includes('billing') ||
-        lower.includes('payment')
+        lower.includes('payment') ||
+        // "balance"/"recharge": Z.AI, GLM and other OpenAI-compatible vendors
+        // word a spent prepaid balance this way.
+        lower.includes('insufficient balance') ||
+        lower.includes('recharge') ||
+        // Account-level billing suspension, usually as prose without a
+        // billing-shaped status code.
+        lower.includes('suspended') ||
+        lower.includes('spending limit') ||
+        lower.includes('failure to pay') ||
+        lower.includes('past invoices') ||
+        lower.includes('past due')
     );
 }
 
@@ -271,23 +354,8 @@ function looksLikeModelAccessDenied(lower: string): boolean {
 }
 
 function matchByMessage(lower: string): LlmErrorCategory {
-    if (
-        lower.includes('insufficient_quota') ||
-        lower.includes('insufficient quota') ||
-        lower.includes('credit_balance_too_low') ||
-        lower.includes('insufficient credit') || // singular OR plural
-        lower.includes('quota exceeded') ||
-        lower.includes('billing') ||
-        lower.includes('payment required') ||
-        // Account-level billing suspension (Moonshot/Kimi & OpenAI-compatible
-        // return this as prose, often without a 402/403 status). Without these
-        // it classified as UNKNOWN and got re-logged as `error` at every stage.
-        lower.includes('suspended') ||
-        lower.includes('spending limit') ||
-        lower.includes('failure to pay') ||
-        lower.includes('past invoices') ||
-        lower.includes('past due')
-    ) {
+    // Same vocabulary the 429 branch uses -- see looksLikeQuota.
+    if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
     }
     if (
@@ -314,7 +382,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('model_not_found') ||
         lower.includes('model not found') ||
         lower.includes('no such model') ||
-        lower.includes('does not exist')
+        lower.includes('does not exist') ||
+        // An OpenAI-compatible gateway that does not serve this model over the
+        // chat-completions protocol it was called with.
+        lower.includes('does not support this protocol')
     ) {
         return LlmErrorCategory.MODEL_NOT_FOUND;
     }
@@ -323,7 +394,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('context_length') ||
         lower.includes('maximum context') ||
         lower.includes('token limit') ||
-        lower.includes('too many tokens')
+        lower.includes('too many tokens') ||
+        // OpenAI: "Your input exceeds the context window of this model."
+        lower.includes('exceeds the context window')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }
@@ -334,18 +407,66 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
         lower.includes('timeout') ||
-        lower.includes('aborted')
+        lower.includes('aborted') ||
+        // 502/503 status phrases: all that is left of the status once the
+        // review path has rebuilt the error from its text.
+        lower.includes('service unavailable') ||
+        lower.includes('bad gateway') ||
+        // More 5xx phrasings, the text-only safety net for an upstream outage
+        // whose HTTP status never reached the classifier (a passthrough or a
+        // RetryError whose embedded text carries no status field). The real
+        // status now rides in via lastError (#1875), so a *bare* 5xx digit in
+        // a message body is deliberately not read as a status: a permanent
+        // 400/422 body can carry one (`max_tokens must be <= 503`,
+        // `530 credits remaining`, `id 503-abc`) and must not bill the BYOK
+        // fallback (#1898 review).
+        lower.includes('gateway timeout') ||
+        lower.includes('internal server error')
     ) {
         return LlmErrorCategory.TRANSIENT;
     }
     return LlmErrorCategory.UNKNOWN;
 }
 
+/**
+ * A 404 that is about ROUTING, not about the model id.
+ *
+ * Aggregators (OpenRouter today) answer a perfectly valid model with a 404 when
+ * the account's allowed-providers list has no overlap with the upstreams serving
+ * it. The status is identical to "no such model"; only the body distinguishes
+ * them, so the body is what has to be read.
+ */
+function isRoutingRefusal(providerText?: string): boolean {
+    const said = (providerText ?? '').toLowerCase();
+    if (!said) return false;
+    return (
+        said.includes('allowed-providers') ||
+        said.includes('allowed providers') ||
+        (said.includes('no allowed') && said.includes('provider'))
+    );
+}
+
 function buildFriendlyMessage(
     category: LlmErrorCategory,
     provider?: string,
+    providerText?: string,
 ): string {
     const providerLabel = provider ? ` (${provider})` : '';
+
+    // A 404 can mean the model id is wrong, or that the model is fine and there
+    // is simply nowhere to send it. Aggregators separate those, and telling them
+    // apart is the difference between a fix and a wild goose chase: a customer
+    // spent a day rewriting a model name and regenerating keys because we said
+    // "verify the model name" while OpenRouter had replied that their account's
+    // allowed-providers setting permitted no upstream serving that model. The
+    // name was right. The key was right. Only the routing was closed.
+    if (
+        category === LlmErrorCategory.MODEL_NOT_FOUND &&
+        isRoutingRefusal(providerText)
+    ) {
+        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model, or pick a model your current ones serve.`;
+    }
+
     switch (category) {
         case LlmErrorCategory.AUTH_INVALID:
             return `The configured API key${providerLabel} appears invalid or lacks permission. Check the key in your settings.`;

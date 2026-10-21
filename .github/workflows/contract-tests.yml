@@ -27,12 +27,24 @@ name: "Contract tests: external APIs"
 
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     schedule:
         # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
         # workday starts in BRT.
         - cron: "0 6 * * *"
+        # Weekly Friday 03:00 UTC — the BYOK reasoning LIVE tier only, in the
+        # release train's slot so every per-model signal (this and the tier-0
+        # eval smoke) is in before the release meeting. Weekly,
+        # not daily, because unlike the near-free REST pings above this one
+        # spends real tokens on seven providers; the drift it catches (a model
+        # changing how it is configured) moves on a scale of weeks, not hours.
+        #
+        # THIS STRING APPEARS IN BOTH JOBS' `if:` BELOW. A spec invariant checks
+        # the three copies agree, because when they drift either both tiers run
+        # on Friday or neither does.
+        - cron: "0 3 * * 5"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
     # unrelated merge) — only PRs that touch the contract tests themselves
@@ -41,12 +53,17 @@ on:
     # never a false red. (Same-repo PRs see the `ci` environment's secrets;
     # tests.yml already runs on pull_request with `environment: ci`, and
     # the environment has no protection rules that would stall it.)
+    #
+    # This applies to the `contract` job only. `byok-live` opted OUT of the PR
+    # trigger — see its own `if` for why — so the live-spec path below now serves
+    # nothing but keeps the trigger honest if that decision is revisited.
     pull_request:
         paths:
             - ".github/workflows/contract-tests.yml"
             - "tests/e2e/contract/**"
             - "**/*.contract.spec.ts"
             - "**/*.contract.test.ts"
+            - "libs/llm/byok-reasoning.live.spec.ts"
 
 concurrency:
     group: contract-tests
@@ -55,6 +72,10 @@ concurrency:
 jobs:
     contract:
         name: Contract tests (GitLab / Bitbucket / Azure / Fireworks)
+        # Skipped on the weekly BYOK cron below — that schedule exists only to
+        # drive `byok-live`, and re-running the daily tier there would just be
+        # noise in the Actions tab.
+        if: github.event.schedule != '0 3 * * 5'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
@@ -132,6 +153,16 @@ jobs:
             # specs read it (one also accepts API_FIREWORKS_API_KEY, the name
             # the product itself reads, but this is the secret we actually
             # have wired).
+            # `repo-lookup.contract.spec.ts` drives the REAL LocalSandbox, which
+            # shells out to ripgrep the same way it does in production - the
+            # product image installs it (docker/Dockerfile). A runner without it
+            # fails the spec with `spawn rg ENOENT`, which says nothing about the
+            # contract under test. Installing it here keeps the spec measuring
+            # the lookup instead of the runner's package list.
+            - name: Install ripgrep (the local sandbox shells out to it)
+              if: always()
+              run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
             - name: LLM provider contracts
               id: llm
               # Run even if the previous step failed — the two tiers are
@@ -146,10 +177,190 @@ jobs:
               if: failure()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ Contract tests failed — an external API drifted"
                   description: |
                       Provider API-shape: ${{ steps.providers.outcome }} · LLM provider: ${{ steps.llm.outcome }}
                       A real GitLab/Bitbucket/Azure DevOps/Fireworks API no longer matches what our code assumes. This is NOT a release-gate failure — see the per-test assertion message for which assumption broke.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # ── Weekly: does the reasoning shape we emit still WORK upstream? ─────────
+    # `byok-config-matrix.spec.ts` (per PR, offline) proves a stored config
+    # produces the request body we intend. It cannot prove that body is still
+    # correct, because that fact lives on the provider's side. This job closes
+    # that gap by issuing one real minimal call per brand.
+    #
+    # It asserts the EFFECT, not the absence of an error: a vendor that renames
+    # `thinking` or stops honouring `reasoning_effort` still returns 200 and just
+    # stops reasoning, so the spec checks that the response actually billed
+    # reasoning tokens. A test that only looked for a 400 would stay green
+    # through precisely the regression it exists to catch.
+    #
+    # Credentials: one named repo secret per brand — see REPO_SECRET in the spec.
+    # Every brand without a key SKIPS, so a partial-secret run reports partial
+    # coverage instead of a false red, and fork PRs stay green.
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: contract.api
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
+    byok-live:
+        name: BYOK reasoning live contract (weekly)
+        # Weekly cron (Friday) and manual dispatch ONLY — deliberately not on pull_request.
+        # It used to run on PRs harmlessly, because the fallbacks named secrets
+        # that do not exist and every row skipped. Now that they name the secrets
+        # that DO, a PR touching this file would make real calls to ten vendors
+        # on every push, which is a cost nobody asked for on a code review.
+        #
+        # Nothing is lost by dropping it: the same file's OFFLINE cases — the
+        # token-budget ceiling and the coverage report — run in the normal test
+        # suite on every PR, so a row that blows the budget is still caught by
+        # the change that introduces it. What only the cron can do is spend real
+        # tokens, and that is exactly what should not happen per-push.
+        #
+        # `workflow_dispatch` stays, so a live check is one click away when a row
+        # changes and you want the answer before Friday.
+        if: >-
+            github.event.schedule == '0 3 * * 5' ||
+            github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        environment: ci
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "22"
+
+            - name: Install pnpm
+              run: npm i -g pnpm@11.9.0
+
+            - name: Cache pnpm store
+              uses: actions/cache@v5.0.5
+              with:
+                  path: ~/.local/share/pnpm/store
+                  key: ${{ runner.os }}-node22-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node22-pnpm-
+
+            - name: Install root deps
+              run: pnpm install --frozen-lockfile
+
+            # libs/ee's environment.ts is gitignored and some @libs imports reach
+            # it transitively — same shim tests.yml creates.
+            - name: Create environment.ts
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
+            # The context-window mirror is a snapshot, and a snapshot with no
+            # scheduled check is a snapshot that rots — it had already rotted by
+            # a full model generation, so models holding 1M tokens were chunked
+            # at 128k. This fails ONLY when a model the production corpus
+            # actually runs disagrees with upstream; the hundreds of models
+            # upstream adds every month are ignored on purpose, because a noisy
+            # weekly job gets muted and that is how the mirror rotted the first
+            # time. Needs no secret, so it reports even on a fork PR.
+            - name: Context-window mirror is current for production models
+              run: node scripts/refresh-model-context-windows.mjs --check
+
+            - name: BYOK reasoning live contract
+              id: byok
+              env:
+                  API_NODE_ENV: test
+                  # These four named secrets EXIST (verified with `gh secret
+                  # list`) and together make ten of the twenty rows runnable
+                  # before anyone goes looking for a key. The four API_* names
+                  # that used to be here — the product's env names — exist in no
+                  # repo secret, so every one resolved to an empty string and the
+                  # fallback path had never produced a key.
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
+                  BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # Derived names: any brand with no entry in REPO_SECRET reads
+                  # `BYOK_<BRAND>_API_KEY`, so these four need no code change —
+                  # one secret each, rotatable on its own and visible in
+                  # `gh secret list`, which a JSON blob is not.
+                  BYOK_OPEN_ROUTER_API_KEY: ${{ secrets.BYOK_OPEN_ROUTER_API_KEY }}
+                  BYOK_DEEPSEEK_API_KEY: ${{ secrets.BYOK_DEEPSEEK_API_KEY }}
+                  BYOK_AMAZON_BEDROCK_API_KEY: ${{ secrets.BYOK_AMAZON_BEDROCK_API_KEY }}
+                  # Vertex's credential is the service account JSON, base64 —
+                  # the provider decodes it out of `apiKey` itself.
+                  BYOK_GOOGLE_VERTEX_API_KEY: ${{ secrets.BYOK_GOOGLE_VERTEX_API_KEY }}
+                  # The Kodus provider reads the PLATFORM key from this env name
+                  # at build time (libs/llm/providers/kodus), not from the slot.
+                  # It is our Fireworks account, the same one BYOK_FIREWORKS holds.
+                  API_KODUS_PROVIDER_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  # Scheduled runs must not pass by checking nothing — see the
+                  # coverage case in the spec. A dispatch or a fork PR still can.
+                  BYOK_LIVE_EVENT: ${{ github.event_name }}
+              # The Vertex rows load @ai-sdk/google-vertex through a dynamic
+              # import, which Jest refuses without this flag — the row then
+              # fails with a TypeError about vm-modules, saying nothing about
+              # Vertex. Every other row is unaffected by it.
+              run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit --json --outputFile=byok-live-report.json
+
+            # Turn the run into something readable BEFORE it reaches Discord.
+            # The old notification was a fixed paragraph asserting drift, which
+            # was wrong for every failure of the last two months (dead keys, a
+            # GCP quota) and named no row either way. `if: always()` because the
+            # summary is only useful on the path where the job failed.
+            - name: Summarize the failing rows
+              id: byok_summary
+              if: always()
+              run: |
+                  {
+                      echo 'text<<SUMMARY_EOF'
+                      node scripts/ci/summarize-byok-live.mjs byok-live-report.json
+                      echo 'SUMMARY_EOF'
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Notify Discord on failure
+              if: failure()
+              uses: ./.github/actions/discord-notify
+              with:
+                  # The tests channel, not the general engineering one. A red
+                  # contract test is a note for whoever watches test health,
+                  # and posting it where every deploy and alert also lands is
+                  # how it gets scrolled past. Falls back to the old pair so a
+                  # missing DISCORD_WEBHOOK_TESTS degrades instead of going
+                  # silent — the action already no-ops on an empty webhook.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ BYOK reasoning live tier failed — drift, or a dead credential"
+                  description: |
+                      ${{ steps.byok_summary.outputs.text }}
+
+                      A `dead credential` line means the secret is expired, rotated or unpaid — the request shape was never tested, so rotate it rather than hunting a changelog. Anything else is the vendor refusing or ignoring what we send, and customer reviews on that provider are degrading now. Not a release gate either way.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: contract.byok_live
+                  status: ${{ job.status }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}

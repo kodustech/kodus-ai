@@ -55,6 +55,7 @@ export class ByokConcurrencyGateService {
         | { kind: 'unlimited' }
         | { kind: 'acquired'; lock: DistributedLock }
         | { kind: 'deferred'; delayMs: number; deferredCount: number }
+        | { kind: 'exhausted'; deferredCount: number }
     > {
         const slotConfig = await this.getLimitedMainConfig(job);
         if (!slotConfig) {
@@ -95,7 +96,7 @@ export class ByokConcurrencyGateService {
         if (deferredCount > ByokConcurrencyGateService.MAX_DEFERRALS) {
             this.logger.error({
                 message:
-                    '[BYOK-CONCURRENCY-GATE] max deferrals exceeded, forcing acquisition',
+                    '[BYOK-CONCURRENCY-GATE] max deferrals exceeded — forcing acquisition, then giving up if it fails',
                 context: ByokConcurrencyGateService.name,
                 metadata: {
                     jobId: job.id,
@@ -114,11 +115,21 @@ export class ByokConcurrencyGateService {
                 return { kind: 'acquired', lock };
             }
 
-            return {
-                kind: 'deferred',
-                delayMs: ByokConcurrencyGateService.MAX_DELAY_MS,
-                deferredCount,
-            };
+            // Deferring again here made MAX_DEFERRALS a label rather than a
+            // limit: the forced acquisition targets `slot:0`, so when that
+            // slot is the one that leaked, this branch could never succeed
+            // and the job came straight back to it. Production showed
+            // `deferredCount` at 452 against a cap of 10, across 315 jobs
+            // and 4 organizations -- 1416 error lines in 24h from one
+            // service, and four customers whose reviews never ran and who
+            // were never told.
+            //
+            // A cap that does not stop anything is worse than no cap: it
+            // spends the retry budget forever and reports the fact at
+            // `error` on every turn, which trains everyone to ignore the
+            // log. Give up instead, and let the caller answer the person
+            // who asked.
+            return { kind: 'exhausted', deferredCount };
         }
 
         const delayMs = this.calculateDelayMs(deferredCount);

@@ -1,0 +1,38 @@
+{
+    "__doc": [
+        "Floors per model for the share of reply checks right (run.js --gate), as ratios. A floor holds only under the judge that set it: gpt-5.6-luna at reasoning effort low, the nightly's (JUDGE_MODEL), reading assertsClaim in evals/investigation/recall-judge.js.",
+        "eval-fake (the wiring smoke, every PR): the scripted reply asserts nothing and declares no action, so only the no-action and language checks pass (a reply too short to tell its language passes, as in evals/format/checks.js): 16 of 24, the same on two runs. Deterministic. floor = observed rounded down to 3 decimals.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on the branch's base (main 4b5c881cd's conversation agent), 24 and 24 of 24, replies read by hand. A binomial SE is 0 at 100%, so the floor leaves room for 2 failed checks of 24. With the sandbox tools removed (the agent cannot read the code) the same run scored 17 of 24: 7 of the 8 cases went wrong.",
+        "2026-10-16: the context comes from production's reply-thread.ts (getOriginalKodyComment, getOthersReplies, prepareContext) over GitHub-shaped comments: Kody's comment carries the body the GitHub adapter posts, other humans' replies are in the thread (one new case), the org routes through PermissionValidationService. 9 cases, 27 checks. eval-fake 18 of 27. deepseek 26 and 27 of 27, judge gpt-5.6-luna low; floor 25/27 rounded down (room of 2 checks). Sandbox tools removed: 20 of 27, below it. Not covered: the org's MCP connections (the Kodus MCP server needs its tool services booted), so the agent runs without MCP tools.",
+        "2026-10-16, later: the agent gets what production gives an org with a connected GitHub. The sandbox is production's LocalSandboxService.createSandboxWithRepo fetching refs/pull/7/head and the base at depth 1 from a git remote (evals/shared/pr-remote.js); the org's MCP connections come from production's MCPManagerService, and the Kodus MCP server is production's (McpController, McpServerFactory, its tools and services) over in-memory stores, reaching the PR through GithubService (evals/shared/kodus-mcp.js, github-rest.js). The no-action check also fails when the agent wrote a rule, memory or issue. eval-fake 18 of 27. deepseek 27 and 27 of 27, judge gpt-5.6-luna low; floor kept at 0.92 (room of 2 checks). Sandbox tools removed: 26 of 27 (the agent read the code through the MCP's GitHub tools, so that alone is not a break). Sandbox tools and the MCP's code-management tools both removed: 19 of 27, below the floor.",
+        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it, judge gpt-5.6-luna low: 27 and 27 of 27. The floor stands.",
+        "gpt-6-sol: 20/27 and 23/27 (mean 0.796) in 2 local runs on a725253d6; the floor those give (0.64) is not above what the scripted model scores (0.6667), so it could not tell a broken stage from this model: no floor. In the cases it missed, the reply said it had not checked the commit, or answered with a condition, instead of reading the code. A fix to the model's behaviour recalibrates here.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 26/27 and 26/27, mean 0.963. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 27, rounded down: 0.89.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 26/27 and 25/27, mean 0.944. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 27, rounded down: 0.85.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 27/27 and 27/27, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 27, rounded down: 0.92.",
+        "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": {
+            "floor": 0.666,
+            "observed": 0.6667
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.92,
+            "observed": 1
+        },
+        "claude-sonnet-5-5": {
+            "floor": 0.89,
+            "observed": 0.963
+        },
+        "gpt-6-sol": {
+            "floor": null,
+            "observed": 0.796,
+            "noFloor": "Its replies said it had not checked the commit, or answered with a condition, instead of reading the code; a floor would not be above what the scripted model scores."
+        },
+        "kimi-k2.7-code@openrouter": {
+            "floor": 0.85,
+            "observed": 0.944
+        }
+    }
+}

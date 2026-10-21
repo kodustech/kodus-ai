@@ -8,61 +8,19 @@ import {
     type ListModelOverridesResult,
 } from "@services/organizationParameters/fetch";
 import {
+    BotIcon,
     Building2Icon,
     ChevronDownIcon,
     ChevronRightIcon,
     ExternalLinkIcon,
     FolderIcon,
 } from "lucide-react";
-import { cn } from "src/core/utils/components";
+
+import { SkeletonRows } from "@components/system/page-skeletons";
 
 import { providerFromModel } from "../_utils";
+import { groupOverrides } from "./per-repository-overrides";
 import { ProviderAvatar } from "./provider-avatar";
-
-type FolderOverride = { id: string; name: string; model: string };
-type RepoGroup = {
-    id: string;
-    name: string;
-    model?: string;
-    folders: FolderOverride[];
-};
-
-/** Group the flat override list into repositories with their per-folder children.
- *  A repo is a "monorepo" here when it carries folder-scoped overrides. `global`
- *  scope is the org default (shown elsewhere) and skipped. */
-const groupOverrides = (
-    result: ListModelOverridesResult | null,
-): RepoGroup[] => {
-    const byRepo = new Map<string, RepoGroup>();
-    for (const o of result?.overrides ?? []) {
-        if (o.scope === "global") continue;
-        const repoId = o.repositoryId ?? o.repositoryName ?? "unknown";
-        let repo = byRepo.get(repoId);
-        if (!repo) {
-            repo = {
-                id: repoId,
-                name: o.repositoryName ?? o.repositoryId ?? "repository",
-                folders: [],
-            };
-            byRepo.set(repoId, repo);
-        }
-        if (o.scope === "repository") {
-            repo.model = o.model;
-        } else if (o.scope === "directory") {
-            repo.folders.push({
-                // Index-suffixed fallback so two folders that both lack id AND
-                // name still get distinct React keys.
-                id:
-                    o.directoryId ??
-                    o.directoryName ??
-                    `${repoId}-dir-${repo.folders.length}`,
-                name: o.directoryName ?? o.directoryId ?? "folder",
-                model: o.model,
-            });
-        }
-    }
-    return [...byRepo.values()];
-};
 
 /** id -> friendly label/provider, so the read-only mirror shows the same model
  *  name the rest of the routing screen does (e.g. "Kimi K2.7 Code") instead of
@@ -113,15 +71,26 @@ export const PerRepositoryPanel = ({
     models?: PerRepositoryModelInfo[];
 }) => {
     const [data, setData] = useState<ListModelOverridesResult | null>(null);
+    // `data === null` means both "still fetching" and "came back empty", so an
+    // explicit flag keeps the empty state from flashing "nothing configured"
+    // over rows that are about to arrive.
+    const [loading, setLoading] = useState(!!teamId);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         if (!teamId) {
+            setLoading(false);
             return;
         }
+        let alive = true;
+        setLoading(true);
         void listModelOverrides(teamId)
-            .then(setData)
-            .catch(() => setData(null));
+            .then((result) => alive && setData(result))
+            .catch(() => alive && setData(null))
+            .finally(() => alive && setLoading(false));
+        return () => {
+            alive = false;
+        };
     }, [teamId]);
 
     const repos = useMemo(() => groupOverrides(data), [data]);
@@ -148,7 +117,8 @@ export const PerRepositoryPanel = ({
                         </span>
                         <span className="text-text-tertiary max-w-prose text-xs">
                             Models assigned per repository — and per folder for
-                            monorepos. Configure these in Code Review Settings;
+                            monorepos — plus the custom agents that pin their
+                            own model. Configure these in Code Review Settings;
                             this view reflects what&apos;s set there.
                         </span>
                     </div>
@@ -161,16 +131,22 @@ export const PerRepositoryPanel = ({
                 </Link>
             </div>
 
-            {repos.length === 0 ? (
+            {loading ? (
+                <SkeletonRows
+                    rows={3}
+                    className="border-card-lv3/40 overflow-hidden rounded-lg border"
+                />
+            ) : repos.length === 0 ? (
                 <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
                     No per-repository models yet — every repository uses the
-                    models above. Assign a model to a specific repository or
-                    folder in Code Review Settings to see it here.
+                    models above. Assign a model to a specific repository,
+                    folder or custom agent in Code Review Settings to see it
+                    here.
                 </div>
             ) : (
                 <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
                     {/* Header spine */}
-                    <div className="text-text-tertiary bg-card-lv2/40 grid grid-cols-[1fr_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase">
+                    <div className="text-text-tertiary bg-card-lv2/40 hidden grid-cols-[minmax(0,1fr)_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase sm:grid">
                         <span>Repository / Folder</span>
                         <span>Model</span>
                     </div>
@@ -180,7 +156,7 @@ export const PerRepositoryPanel = ({
                         const isOpen = expanded.has(repo.id);
                         return (
                             <div key={repo.id} className="flex flex-col">
-                                <div className="grid grid-cols-[1fr_16rem] items-center gap-4 px-3 py-2.5">
+                                <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 px-3 py-2.5">
                                     <span className="flex min-w-0 items-center gap-2">
                                         {isMonorepo ? (
                                             <button
@@ -221,7 +197,7 @@ export const PerRepositoryPanel = ({
                                         {repo.folders.map((f) => (
                                             <div
                                                 key={f.id}
-                                                className="grid grid-cols-[1fr_16rem] items-center gap-4 py-2 pr-3 pl-3">
+                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
                                                 <span className="flex min-w-0 items-center gap-2 pl-8">
                                                     <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
                                                     <span className="text-text-secondary truncate font-mono text-sm">
@@ -230,6 +206,41 @@ export const PerRepositoryPanel = ({
                                                 </span>
                                                 <ModelCell
                                                     model={f.model}
+                                                    models={models}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {repo.agents.length > 0 && (
+                                    <div className="border-card-lv3/30 flex flex-col border-t">
+                                        {repo.agents.map((a) => (
+                                            <div
+                                                key={a.id}
+                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
+                                                <span className="flex min-w-0 items-center gap-2 pl-8">
+                                                    <BotIcon className="text-text-tertiary size-3.5 shrink-0" />
+                                                    {a.href ? (
+                                                        <Link
+                                                            href={a.href}
+                                                            className="text-text-secondary hover:text-text-primary truncate text-sm">
+                                                            {a.agentName}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="text-text-secondary truncate text-sm">
+                                                            {a.agentName}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-text-tertiary shrink-0 text-xs">
+                                                        custom agent
+                                                        {a.folderName
+                                                            ? ` · ${a.folderName}`
+                                                            : ""}
+                                                    </span>
+                                                </span>
+                                                <ModelCell
+                                                    model={a.model}
                                                     models={models}
                                                 />
                                             </div>

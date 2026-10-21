@@ -1,8 +1,9 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
+import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -25,9 +26,37 @@ import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/nu
 // Shared with libs/code-review/.../commentAnalysis.service.ts so the
 // read-side filter that drops Kody's own past comments stays in sync
 // with what every provider emitter actually writes.
-import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
+import {
+    isKodyAuthoredBody,
+    KODY_IDENTIFIERS,
+} from '@libs/common/utils/kody-identifiers';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+
+import {
+    IMessageClaimService,
+    MESSAGE_CLAIM_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
+import {
+    ImplicitReplySilence,
+    implicitReplyGate,
+    ThreadMessage,
+} from './implicit-reply';
+import {
+    buildReplyThread,
+    classifyImplicitReply,
+    getOriginalKodyComment,
+    getOthersReplies,
+    prepareContext,
+    CONVERSATION_PLAN_GATE_MESSAGE,
+    isKodyComment,
+    KODY_ACKNOWLEDGMENT_MESSAGE,
+} from './reply-thread';
 
 // Constants
 const KODY_COMMANDS = {
@@ -37,21 +66,42 @@ const KODY_COMMANDS = {
 } as const;
 
 const ACKNOWLEDGMENT_MESSAGES = {
-    DEFAULT: 'Analyzing your request...',
+    DEFAULT: KODY_ACKNOWLEDGMENT_MESSAGE,
     MARKDOWN_SUFFIX: '<!-- kody-codereview -->\n&#8203;',
     BUSINESS_LOGIC_INVALID_CONTEXT:
         'The "@kody -v business-logic" command can only be used in the general PR conversation, not in code suggestions or inline comments. Please use it in the main PR discussion thread.',
+    // The agent returns NO_TASK_MCP_SENTINEL (an internal marker, never meant
+    // to reach a user) when no task-management MCP is connected. The
+    // AUTOMATIC pipeline path (BusinessLogicValidationStage) already checks
+    // for it and skips silently — this EXPLICIT command path has no silent
+    // option (an explicit ask deserves a visible reply, same reasoning as
+    // CONVERSATION_PLAN_GATE_MESSAGE below), so it must translate the
+    // sentinel into this message instead of ever posting it raw.
+    BUSINESS_LOGIC_NO_TASK_MCP:
+        'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
+        'ClickUp, etc.) is connected for this organization, so business ' +
+        'rules validation has nothing to compare the PR against. Connect ' +
+        'one in the Kodus settings to use this command.',
 } as const;
 
+const CONVERSATION_CLAIM_CONSUMER = 'chat-with-kody-from-git';
+
 /**
- * Posted instead of running the agent when the org may not use Kodus-funded
- * LLM calls (cloud, past trial, no BYOK). A visible pointer beats silence:
- * without it the dev reads the missing reply as Kody being broken.
+ * Returned by a flow that stopped without delivering anything because
+ * something failed (as opposed to deciding to stay quiet), so the comment's
+ * claim is released and a resent webhook can retry it.
  */
-const CONVERSATION_PLAN_GATE_MESSAGE =
-    "I can't reply right now: your organization's trial has ended and no " +
-    'LLM API key (BYOK) is configured. Connect your key in the Kodus ' +
-    'settings to keep chatting with Kody.';
+const RETRY = 'retry' as const;
+type FlowOutcome = typeof RETRY | void;
+
+interface CommentClaim {
+    key: string;
+    holder: string;
+}
+
+const KODY_CONVERSATION_MARKER =
+    '<!-- kody-codereview -->\n<!-- kody-conversation -->';
+
 
 enum CommandType {
     BUSINESS_LOGIC_VALIDATION = 'business_logic_validation',
@@ -154,12 +204,14 @@ interface Comment {
     };
     path?: string;
     deleted?: boolean;
-    user?: { login?: string; display_name?: string };
+    user?: { login?: string; display_name?: string; type?: string };
     author?: {
         name?: string;
         username?: string;
         display_name?: string;
         id?: string;
+        bot?: boolean;
+        type?: string;
     };
     diff_hunk?: string;
     /** Normalized provider discussion identifier (GitLab mapper output). */
@@ -171,6 +223,15 @@ interface Comment {
     threadId?: number;
     thread?: any;
     commentType?: string;
+    system?: boolean;
+    createdAt?: string;
+    created_at?: string;
+}
+
+interface OriginatingSuggestion {
+    suggestionId?: string;
+    label?: string;
+    brokenKodyRulesIds?: string[];
 }
 
 @Injectable()
@@ -186,6 +247,17 @@ export class ChatWithKodyFromGitUseCase {
 
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly leaseManager: ISandboxLeaseManager,
+
+        // Resolves the stored suggestion behind a Kody comment. Optional so
+        // lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequestsService?: IPullRequestsService,
+
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(MESSAGE_CLAIM_SERVICE_TOKEN)
+        private readonly messageClaimService?: IMessageClaimService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -195,10 +267,19 @@ export class ChatWithKodyFromGitUseCase {
             metadata: { eventName: params.event },
         });
 
+        let claim: CommentClaim | undefined;
+        let releaseClaim = false;
+
         try {
             if (!this.isRelevantAction(params)) {
                 return;
             }
+
+            const delivery = await this.claimDelivery(params);
+            if (delivery.duplicate) {
+                return;
+            }
+            claim = delivery.claim;
 
             const repository = this.getRepository(params);
             const integrationConfig = await this.getIntegrationConfig(
@@ -229,6 +310,9 @@ export class ChatWithKodyFromGitUseCase {
                         integrationConfig,
                     },
                 });
+                // Nothing was decided about the comment; once the integration
+                // is fixed, resending the webhook must still work.
+                releaseClaim = true;
                 return;
             }
 
@@ -254,9 +338,10 @@ export class ChatWithKodyFromGitUseCase {
 
             this.commandManager = new CommandManager();
             const commandType = this.detectCommandType(params);
+            let outcome: FlowOutcome;
 
             if (commandType === CommandType.BUSINESS_LOGIC_VALIDATION) {
-                await this.handleBusinessLogicFlow(
+                outcome = await this.handleBusinessLogicFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -268,7 +353,7 @@ export class ChatWithKodyFromGitUseCase {
             }
 
             if (commandType === CommandType.BUSINESS_LOGIC_INVALID_CONTEXT) {
-                await this.handleBusinessLogicInvalidContextFlow(
+                outcome = await this.handleBusinessLogicInvalidContextFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -277,7 +362,7 @@ export class ChatWithKodyFromGitUseCase {
             }
 
             if (commandType === CommandType.CONVERSATION) {
-                await this.handleConversationFlow(
+                outcome = await this.handleConversationFlow(
                     params,
                     repository,
                     pullRequestNumber,
@@ -288,13 +373,121 @@ export class ChatWithKodyFromGitUseCase {
                     defaultBranch,
                 );
             }
+
+            // No command in the body: the handler forwarded it as a reply in
+            // an existing thread (#1946). Kody answers only when it started
+            // that thread and the reply is directed at it.
+            if (commandType === CommandType.UNKNOWN) {
+                outcome = await this.handleConversationFlow(
+                    params,
+                    repository,
+                    pullRequestNumber,
+                    pullRequestDescription,
+                    organizationAndTeamData,
+                    headRef,
+                    baseRef,
+                    defaultBranch,
+                    true,
+                );
+            }
+
+            releaseClaim = outcome === RETRY;
         } catch (error) {
+            releaseClaim = true;
             this.logger.error({
                 message: 'Error while executing the git comment response agent',
                 context: ChatWithKodyFromGitUseCase.name,
                 serviceName: ChatWithKodyFromGitUseCase.name,
                 error,
             });
+        } finally {
+            if (claim) {
+                try {
+                    // A run that failed or decided nothing gives the comment
+                    // back, so resending the webhook from the platform retries.
+                    await (releaseClaim
+                        ? this.messageClaimService.release(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claim.key,
+                              claim.holder,
+                          )
+                        : this.messageClaimService.complete(
+                              CONVERSATION_CLAIM_CONSUMER,
+                              claim.key,
+                              claim.holder,
+                          ));
+                } catch {
+                    // Left PROCESSING, the claim still expires on its own.
+                }
+            }
+        }
+    }
+
+    /**
+     * One key per comment version: every hook delivers the same id and
+     * update time, while an edit changes the time and is answered again.
+     * The thread is in the key because Azure numbers comments per thread.
+     */
+    private getDeliveryKey(params: WebhookParams): string | undefined {
+        const commentId = this.getCommentId(params);
+        if (!commentId) {
+            return undefined;
+        }
+
+        const payload = params.payload;
+        const version =
+            payload?.comment?.updated_at ??
+            payload?.comment?.updated_on ??
+            payload?.object_attributes?.updated_at ??
+            payload?.resource?.comment?.lastContentUpdatedDate ??
+            '';
+
+        return [
+            params.platformType,
+            this.getRepository(params)?.id,
+            this.getPullRequestNumber(params),
+            this.getThreadIdFromAzurePayload(params) ?? '',
+            commentId,
+            version,
+        ].join(':');
+    }
+
+    /**
+     * Each webhook pointing at Kodus delivers the comment as its own job, so
+     * the first delivery claims it and the rest stop here. When the claim
+     * cannot be made the job answers anyway: a duplicate beats silence.
+     */
+    private async claimDelivery(
+        params: WebhookParams,
+    ): Promise<{ duplicate: boolean; claim?: CommentClaim }> {
+        const key = this.getDeliveryKey(params);
+        if (!key || !this.messageClaimService) {
+            return { duplicate: false };
+        }
+
+        try {
+            const holder = await this.messageClaimService.claim(
+                CONVERSATION_CLAIM_CONSUMER,
+                key,
+            );
+            if (holder) {
+                return { duplicate: false, claim: { key, holder } };
+            }
+
+            this.logger.log({
+                message: 'Comment already claimed by another delivery; skipping',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+            });
+            return { duplicate: true };
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not claim comment delivery; answering anyway',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: { deliveryKey: key },
+                error,
+            });
+            return { duplicate: false };
         }
     }
 
@@ -407,7 +600,7 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         headRef?: string,
         baseRef?: string,
-    ): Promise<void> {
+    ): Promise<FlowOutcome> {
         const sender = this.getSender(params);
         const commentBody =
             params.platformType === PlatformType.GITLAB
@@ -475,7 +668,7 @@ export class ChatWithKodyFromGitUseCase {
                         pullRequestNumber,
                     },
                 });
-                return;
+                return RETRY;
             }
 
             [ackResponseId, parentId] = this.getBusinessLogicAcknowledgmentIds(
@@ -494,7 +687,7 @@ export class ChatWithKodyFromGitUseCase {
                         platformType: params.platformType,
                     },
                 });
-                return;
+                return RETRY;
             }
         }
 
@@ -529,7 +722,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                 },
             });
-            return;
+            return RETRY;
         }
 
         try {
@@ -635,7 +828,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                 },
             });
-            return;
+            return RETRY;
         }
 
         this.logger.log({
@@ -657,7 +850,8 @@ export class ChatWithKodyFromGitUseCase {
         headRef?: string,
         baseRef?: string,
         defaultBranch?: string,
-    ): Promise<void> {
+        implicit = false,
+    ): Promise<FlowOutcome> {
         const allComments =
             await this.codeManagementService.getPullRequestReviewComment({
                 organizationAndTeamData,
@@ -704,10 +898,31 @@ export class ChatWithKodyFromGitUseCase {
                   );
 
         if (!comment) {
-            return;
+            return RETRY;
         }
 
-        if (this.shouldIgnoreComment(comment, params.platformType)) {
+        const silenceContext = {
+            organizationAndTeamData,
+            repository: repository.name,
+            pullRequestNumber,
+            commentId: comment.id,
+            platformType: params.platformType,
+        };
+
+        let replyThread: ThreadMessage[] | undefined;
+
+        if (implicit) {
+            replyThread = this.buildReplyThread(
+                comment,
+                normalizedComments,
+                params.platformType,
+            );
+            const silence = implicitReplyGate(replyThread);
+            if (silence) {
+                this.logImplicitReplySilence(silence, silenceContext);
+                return;
+            }
+        } else if (this.shouldIgnoreComment(comment, params.platformType)) {
             this.logger.log({
                 message:
                     'Comment made by Kody or does not mention Kody/Kodus. Ignoring.',
@@ -745,6 +960,13 @@ export class ChatWithKodyFromGitUseCase {
             !permission.allowed &&
             permission.errorType !== ValidationErrorType.NOT_ERROR;
 
+        // Nobody asked for Kody here, so the BYOK pointer would land on every
+        // reply of every thread. Stay quiet; the log carries the reason.
+        if (permissionBlocked && implicit) {
+            this.logImplicitReplySilence('plan_blocked', silenceContext);
+            return;
+        }
+
         if (permissionBlocked) {
             this.logger.warn({
                 message:
@@ -766,10 +988,20 @@ export class ChatWithKodyFromGitUseCase {
                     params.payload?.object_attributes?.discussion_id ??
                     comment.discussionId,
                 threadId: comment.threadId,
-                body: CONVERSATION_PLAN_GATE_MESSAGE,
+                body: this.withKodyMarker(
+                    CONVERSATION_PLAN_GATE_MESSAGE,
+                    params.platformType,
+                ),
                 repository,
                 prNumber: pullRequestNumber,
             });
+            return;
+        }
+
+        if (
+            implicit &&
+            !(await this.isReplyAddressedToKody(replyThread, silenceContext))
+        ) {
             return;
         }
 
@@ -825,7 +1057,7 @@ export class ChatWithKodyFromGitUseCase {
                         commentId: comment.id,
                     },
                 });
-                return;
+                return RETRY;
             }
 
             [ackResponseId, parentId] = this.getAcknowledgmentIds(
@@ -846,15 +1078,23 @@ export class ChatWithKodyFromGitUseCase {
                         commentId: comment.id,
                     },
                 });
-                return;
+                return RETRY;
             }
         }
 
         const gitUser = this.getGitUser(params);
 
+        const originalSuggestion = await this.resolveOriginatingSuggestion({
+            organizationAndTeamData,
+            repositoryId: repository.id,
+            pullRequestNumber,
+            originalKodyCommentId: originalKodyComment?.id,
+        });
+
         const prepareContext = this.prepareContext({
             comment,
             originalKodyComment,
+            originalSuggestion,
             gitUser,
             othersReplies,
             pullRequestNumber,
@@ -900,7 +1140,7 @@ export class ChatWithKodyFromGitUseCase {
                     commentId: comment.id,
                 },
             });
-            return;
+            return RETRY;
         }
 
         try {
@@ -912,7 +1152,7 @@ export class ChatWithKodyFromGitUseCase {
                         params.payload?.object_attributes?.discussion_id ??
                         comment.discussionId,
                     threadId: comment.threadId,
-                    body: response,
+                    body: this.withKodyMarker(response, params.platformType),
                     repository,
                     prNumber: pullRequestNumber,
                 });
@@ -966,7 +1206,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     parentId,
                     commentId: ackResponseId,
-                    body: response,
+                    body: this.withKodyMarker(response, params.platformType),
                     prNumber: pullRequestNumber,
                     repository,
                 });
@@ -996,6 +1236,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
+            return RETRY;
         }
     }
 
@@ -1004,7 +1245,7 @@ export class ChatWithKodyFromGitUseCase {
         repository: Repository,
         pullRequestNumber: number,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<FlowOutcome> {
         const allComments =
             await this.codeManagementService.getPullRequestReviewComment({
                 organizationAndTeamData,
@@ -1061,7 +1302,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
-            return;
+            return RETRY;
         }
 
         const response =
@@ -1089,7 +1330,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                 },
             });
-            return;
+            return RETRY;
         }
 
         this.logger.log({
@@ -1597,6 +1838,88 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
+    /** The reply's thread as the classifier reads it (reply-thread.ts). */
+    private buildReplyThread(
+        comment: Comment,
+        allComments: Comment[],
+        platformType: PlatformType,
+    ): ThreadMessage[] | undefined {
+        return buildReplyThread(comment, allComments, platformType);
+    }
+
+    /** Runs the classifier; any failure means silence (fail closed). */
+    private async isReplyAddressedToKody(
+        thread: ThreadMessage[],
+        silenceContext: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            pullRequestNumber: number;
+            platformType: PlatformType;
+        } & Record<string, unknown>,
+    ): Promise<boolean> {
+        try {
+            const addressed = await classifyImplicitReply({
+                thread,
+                permissionValidationService: this.permissionValidationService,
+                organizationAndTeamData: silenceContext.organizationAndTeamData,
+                prNumber: silenceContext.pullRequestNumber,
+                platformType: silenceContext.platformType,
+            });
+
+            if (!addressed) {
+                this.logImplicitReplySilence('classified_no', silenceContext);
+            }
+
+            return addressed;
+        } catch (error) {
+            this.logImplicitReplySilence(
+                'classifier_error',
+                silenceContext,
+                error,
+            );
+            return false;
+        }
+    }
+
+    /**
+     * One structured line per unanswered unmentioned reply, so a path that
+     * went quiet (classifier_error climbing for an org) can be queried.
+     */
+    private logImplicitReplySilence(
+        reason: ImplicitReplySilence,
+        silenceContext: Record<string, unknown>,
+        error?: unknown,
+    ): void {
+        const level =
+            reason === 'classifier_error' ? llmErrorLogLevel(error) : 'log';
+
+        this.logger[level]({
+            message: `Unmentioned reply left unanswered: ${reason}`,
+            context: ChatWithKodyFromGitUseCase.name,
+            metadata: { implicitReplySilence: reason, ...silenceContext },
+            error: error instanceof Error ? error : undefined,
+        });
+    }
+
+    /**
+     * Kody's answers carry the same hidden marker as its review comments, so
+     * the reply webhook they trigger is recognized as Kody's own without
+     * depending on the bot's login. The second marker tells an answer apart
+     * from a finding for anything reading the PR (the e2e harness does).
+     * Bitbucket renders raw HTML as text, so there the answer opens with the
+     * visible chip its findings already carry; without it, a later reply's
+     * thread would show Kody's earlier answer as written by the customer's
+     * account.
+     */
+    private withKodyMarker(body: string, platformType: PlatformType): string {
+        if (typeof body !== 'string' || isKodyAuthoredBody(body)) {
+            return body;
+        }
+        if (platformType === PlatformType.BITBUCKET) {
+            return `\`${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET}\` ${body}`;
+        }
+        return `${body}\n\n${KODY_CONVERSATION_MARKER}`;
+    }
+
     private shouldIgnoreComment(
         comment: any,
         platformType: PlatformType,
@@ -1612,47 +1935,7 @@ export class ChatWithKodyFromGitUseCase {
         allComments: Comment[],
         platformType: PlatformType,
     ): Comment | undefined {
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                if (
-                    !comment?.id &&
-                    !comment?.in_reply_to_id &&
-                    !comment?.subject_type
-                ) {
-                    return undefined;
-                }
-
-                return allComments.find(
-                    (originalComment) =>
-                        originalComment.id ===
-                        (comment?.in_reply_to_id ?? comment?.id),
-                );
-            case PlatformType.GITLAB:
-                return comment?.originalCommit;
-            case PlatformType.BITBUCKET: {
-                if (!comment?.parent?.id) {
-                    return undefined;
-                }
-
-                const originalComment = allComments.find(
-                    (c) => c.id === comment.parent.id,
-                );
-
-                return originalComment;
-            }
-            case PlatformType.AZURE_REPOS:
-                if (comment.threadId && comment.id !== comment.threadId) {
-                    const originalComment = comment.thread;
-                    return originalComment;
-                }
-                return undefined;
-            default:
-                this.logger.warn({
-                    message: `Unsupported platform type: ${platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return undefined;
-        }
+        return getOriginalKodyComment(comment, allComments, platformType);
     }
 
     private getOthersReplies(
@@ -1660,109 +1943,7 @@ export class ChatWithKodyFromGitUseCase {
         allComments: Comment[],
         platformType: PlatformType,
     ): Comment[] {
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                return allComments.filter(
-                    (reply) =>
-                        reply.in_reply_to_id === comment.in_reply_to_id &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            case PlatformType.BITBUCKET:
-                if (comment.parent?.id) {
-                    const originalComment = allComments.find(
-                        (c) => c.id === comment.parent.id,
-                    );
-
-                    if (!originalComment) {
-                        return [];
-                    }
-
-                    if (
-                        originalComment.replies &&
-                        Array.isArray(originalComment.replies)
-                    ) {
-                        const validReplies = [];
-
-                        for (const reply of originalComment.replies) {
-                            if (
-                                reply.content?.raw === '' ||
-                                reply.deleted === true
-                            ) {
-                                continue;
-                            }
-
-                            if (reply.id === comment.id) {
-                                continue;
-                            }
-                            if (
-                                this.isKodyComment(
-                                    {
-                                        body: reply.content?.raw,
-                                        id: reply.id,
-                                        author: {
-                                            name: reply.user?.display_name,
-                                        },
-                                    },
-                                    platformType,
-                                )
-                            ) {
-                                continue;
-                            }
-
-                            if (reply.content?.raw) {
-                                validReplies.push({
-                                    ...reply,
-                                    body: reply.content.raw,
-                                });
-                            } else {
-                                validReplies.push(reply);
-                            }
-                        }
-
-                        return validReplies;
-                    }
-                }
-                return [];
-            case PlatformType.AZURE_REPOS:
-                if (comment.threadId) {
-                    const thread = allComments.find(
-                        (c) => c.threadId === comment.threadId,
-                    );
-
-                    if (
-                        thread &&
-                        thread.replies &&
-                        Array.isArray(thread.replies)
-                    ) {
-                        return thread.replies.filter(
-                            (reply) =>
-                                reply.id !== comment.id &&
-                                !this.isKodyComment(reply, platformType),
-                        );
-                    }
-                    return [];
-                }
-
-                return allComments.filter(
-                    (reply) =>
-                        reply.in_reply_to_id === comment.in_reply_to_id &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            case PlatformType.GITLAB:
-                return allComments.filter(
-                    (reply) =>
-                        ((reply.in_reply_to_id !== undefined &&
-                            reply.in_reply_to_id === comment.in_reply_to_id) ||
-                            reply.discussionId === comment.discussionId) &&
-                        !this.isKodyComment(reply, platformType),
-                );
-            default:
-                this.logger.warn({
-                    message: `Plataforma nu00e3o suportada: ${platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return [];
-        }
+        return getOthersReplies(comment, allComments, platformType);
     }
 
     private getSender(params: WebhookParams): Sender {
@@ -1801,65 +1982,76 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
-    private prepareContext({
-        comment,
-        originalKodyComment,
-        gitUser,
-        othersReplies,
+    /**
+     * The stored suggestion the Kody comment came from — carries the rule ids a
+     * refinement needs, which the PR thread itself never exposes. Best-effort:
+     * a miss just means the agent works from the comment text alone.
+     */
+    private async resolveOriginatingSuggestion({
+        organizationAndTeamData,
+        repositoryId,
         pullRequestNumber,
-        repository,
-        pullRequestDescription,
-        platformType,
-        headRef,
-        baseRef,
-        defaultBranch,
-        customInstructions,
+        originalKodyCommentId,
     }: {
-        comment?: Comment;
-        originalKodyComment?: Comment;
-        gitUser?: { id: number; username: string };
-        othersReplies?: Comment[];
-        repository?: Repository;
-        platformType?: PlatformType;
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId?: string;
         pullRequestNumber?: number;
-        pullRequestDescription?: string;
-        headRef?: string;
-        baseRef?: string;
-        defaultBranch?: string;
-        customInstructions?: string;
-    }): any {
-        const userQuestion =
-            comment.body.trim() === '@kody'
-                ? 'The user did not ask any questions. Ask them what they would like to know about the codebase or suggestions for code changes.'
-                : comment.body;
+        originalKodyCommentId?: string | number;
+    }): Promise<OriginatingSuggestion | undefined> {
+        if (
+            !this.pullRequestsService ||
+            !repositoryId ||
+            pullRequestNumber == null ||
+            originalKodyCommentId == null
+        ) {
+            return undefined;
+        }
 
-        return {
-            gitUser,
-            userQuestion,
-            repository: {
-                ...repository,
-                defaultBranch: defaultBranch ?? baseRef,
-            },
-            pullRequestDescription,
-            platformType,
-            customInstructions,
-            pullRequest: {
-                pullRequestNumber,
-                headRef: headRef,
-                baseRef: baseRef,
-            },
-            codeManagementContext: {
-                originalComment: {
-                    suggestionCommentId: originalKodyComment?.id,
-                    suggestionFilePath: comment?.path,
-                    suggestionText: originalKodyComment?.body,
-                    diffHunk: originalKodyComment?.diff_hunk,
+        try {
+            const pullRequest =
+                await this.pullRequestsService.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repositoryId,
+                    organizationAndTeamData,
+                );
+
+            const commentId = String(originalKodyCommentId);
+            // Line-level findings hang off files[]; PR-level ones live in their
+            // own array. Both carry the rule ids, so search both.
+            const suggestion = [
+                ...(pullRequest?.files?.flatMap(
+                    (file) => file.suggestions ?? [],
+                ) ?? []),
+                ...(pullRequest?.prLevelSuggestions ?? []),
+            ].find((s) => String(s?.comment?.id) === commentId);
+
+            if (!suggestion) {
+                return undefined;
+            }
+
+            return {
+                suggestionId: suggestion.id,
+                label: suggestion.label,
+                brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the suggestion behind the Kody comment',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    organizationAndTeamData,
+                    pullRequestNumber,
+                    originalKodyCommentId,
                 },
-                othersReplies: othersReplies.map((reply) => ({
-                    historyConversationText: reply.body,
-                })),
-            },
-        };
+                error,
+            });
+            return undefined;
+        }
+    }
+
+    private prepareContext(params: Parameters<typeof prepareContext>[0]): any {
+        return prepareContext(params);
     }
 
     private mentionsKody(comment: Comment): boolean {
@@ -1873,21 +2065,7 @@ export class ChatWithKodyFromGitUseCase {
         comment: Comment,
         platformType: PlatformType,
     ): boolean {
-        const login =
-            platformType === PlatformType.GITHUB
-                ? comment.user?.login
-                : comment.author?.name;
-        const body = comment.body.toLowerCase();
-        const bodyWithoutMarkdown =
-            platformType !== PlatformType.BITBUCKET
-                ? KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.DEFAULT
-                : KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET;
-
-        return (
-            KODY_IDENTIFIERS.LOGIN_KEYWORDS.some((keyword) =>
-                login?.includes(keyword),
-            ) || body.includes(bodyWithoutMarkdown)
-        );
+        return isKodyComment(comment, platformType);
     }
 
     private getAcknowledgmentIds(
@@ -2000,7 +2178,20 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData;
         thread: any;
     }): Promise<string> {
-        return await this.businessRulesValidationAgentUseCase.execute(context);
+        const result =
+            await this.businessRulesValidationAgentUseCase.execute(context);
+
+        // NO_TASK_MCP_SENTINEL is an internal marker, never meant to reach a
+        // PR comment — the pipeline path guards it, this explicit-command
+        // path did not (#leak: it was reaching users verbatim as literal
+        // "__NO_TASK_MCP__" text). Translate it into a readable message.
+        if (
+            result === NO_TASK_MCP_SENTINEL
+        ) {
+            return ACKNOWLEDGMENT_MESSAGES.BUSINESS_LOGIC_NO_TASK_MCP;
+        }
+
+        return result;
     }
 
     private async handleConversation(context: {

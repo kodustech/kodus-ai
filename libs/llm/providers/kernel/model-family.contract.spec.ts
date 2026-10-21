@@ -1,0 +1,201 @@
+/**
+ * Contract: no family is known to HALF the system.
+ *
+ * "Does this model reason, and how" had two answers living in two dispatchers
+ * with disjoint family lists — `model-reasoning.ts` knew claude/gemini/openai,
+ * `reasoning-traits.ts` knew glm/kimi/deepseek — and each returned a perfectly
+ * valid-looking "no" for the other's families. Nothing failed. The UI simply
+ * told a customer their Kimi has no reasoning.
+ *
+ * Both now read `detectModelFamily`. This file is what keeps them reading it:
+ * every member of the `ModelFamily` union needs a row, and each row states BOTH
+ * answers. A family added to the union with no row fails the coverage test; a
+ * family added with a row that only one resolver can answer fails its own.
+ */
+import {
+    detectModelFamily,
+    isOpenAiReasonerId,
+    type ModelFamily,
+} from './model-family';
+import { reasoningConfigForModel } from './model-reasoning';
+import { resolveCompatibleReasoningTraits } from './reasoning-traits';
+import { isAnthropicModel } from './anthropic-cache';
+
+type Row = {
+    family: ModelFamily;
+    /** A representative REASONING id for the family (the point of the table). */
+    model: string;
+    /** The shape `reasoningConfigForModel` must return for it. */
+    config: 'level' | 'budget' | 'adaptive' | 'none';
+    /** Whether the SHARED compatible table owns this family's behavior facts.
+     *  False where a provider module owns them instead (claude/gemini/openai),
+     *  which is a real difference, not a gap — so it is stated per row. */
+    ownedByCompatibleTable: boolean;
+};
+
+const ROWS: Row[] = [
+    { family: 'anthropic', model: 'claude-opus-5', config: 'adaptive', ownedByCompatibleTable: false },
+    { family: 'gemini', model: 'gemini-3-pro-preview', config: 'level', ownedByCompatibleTable: false },
+    { family: 'openai', model: 'o3', config: 'level', ownedByCompatibleTable: false },
+    { family: 'glm', model: 'z-ai/glm-5.3', config: 'level', ownedByCompatibleTable: true },
+    { family: 'kimi', model: 'moonshotai.kimi-k2.5', config: 'level', ownedByCompatibleTable: true },
+    { family: 'deepseek', model: 'deepseek-v4-pro', config: 'level', ownedByCompatibleTable: true },
+    // Was the gap this file first caught: config known, facts not, because
+    // claiming `thinksByDefault` would have made every compatible transport emit
+    // a `thinking` toggle MiniMax does not have. `reasoningControl: 'effort-only'`
+    // is what let the facts be stated. 18 production slots.
+    { family: 'minimax', model: 'minimax.minimax-m2', config: 'level', ownedByCompatibleTable: true },
+    { family: 'unknown', model: 'prod-model-1', config: 'none', ownedByCompatibleTable: false },
+];
+
+/** Every value the union can take. Written out so adding a family to the type
+ *  without adding a row here is a failing test, not a silent half-integration. */
+const ALL_FAMILIES: ModelFamily[] = [
+    'anthropic', 'gemini', 'openai', 'glm', 'kimi', 'deepseek', 'minimax', 'unknown',
+];
+
+describe('model families are known to the WHOLE system, or to none of it', () => {
+    it('every family in the union has a row', () => {
+        expect(ALL_FAMILIES.filter((f) => !ROWS.some((r) => r.family === f))).toEqual([]);
+        expect(ROWS.length).toBe(ALL_FAMILIES.length);
+    });
+
+    for (const row of ROWS) {
+        it(`${row.family} (${row.model})`, () => {
+            expect({
+                family: detectModelFamily(row.model),
+                config: reasoningConfigForModel(row.model)?.type ?? 'none',
+                thinks: resolveCompatibleReasoningTraits(row.model).thinksByDefault,
+            }).toEqual({
+                family: row.family,
+                config: row.config,
+                // A family the shared table owns must be answered BY it. One it
+                // does not own falls to the conservative default, which never
+                // forces a parameter — the safe answer for a model whose facts
+                // live elsewhere (or nowhere, for a renamed proxy).
+                thinks: row.ownedByCompatibleTable,
+            });
+        });
+    }
+
+    it('minimax M3 stays unmapped ON PURPOSE, and it is not an oversight', () => {
+        // Verified against platform.minimax.io: M3 reasons intrinsically and the
+        // vendor documents no parameter that turns it off — `reasoning_split`
+        // only chooses how thinking is formatted in the RESPONSE. So the family
+        // detector knows M3 (it is a MiniMax), the reasoning config knows its
+        // scale, and the behavior facts stay at the conservative default, which
+        // is what makes every transport send nothing for it.
+        expect(detectModelFamily('MiniMax-M3')).toBe('minimax');
+        expect(resolveCompatibleReasoningTraits('MiniMax-M3').thinksByDefault).toBe(
+            false,
+        );
+        // The verified sibling is unaffected — the split is on the VERSION.
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M2').reasoningControl,
+        ).toBe('effort-only');
+    });
+
+    it('"is this a Claude" has ONE answer', () => {
+        // Seventh instance of the pattern. `isAnthropicModel` was
+        // `/claude|anthropic/i`, which matched none of the spellings its own doc
+        // lists that the family detector misses — every one contains "claude" —
+        // while matching ids that are not Claude at all. Model ids are free
+        // text, so these are reachable, and a false positive makes Bedrock
+        // resolve temperature and reasoning through the ANTHROPIC module and
+        // attach a cacheControl marker meant only for Claude.
+        for (const id of [
+            'claude-opus-5',
+            'anthropic.claude-sonnet-4-6',
+            'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            'claude-opus-4-5@20251101',
+            'anthropic/claude-opus-5',
+        ]) {
+            expect({ id, claude: isAnthropicModel(id) }).toEqual({
+                id,
+                claude: detectModelFamily(id) === 'anthropic',
+            });
+            expect(isAnthropicModel(id)).toBe(true);
+        }
+
+        for (const notClaude of [
+            'anthropic/nemotron',
+            'anthropic-proxy/llama-3',
+            'my-anthropic-gateway/qwen',
+            'us.anthropic.nova-pro',
+        ]) {
+            expect({ id: notClaude, claude: isAnthropicModel(notClaude) }).toEqual(
+                { id: notClaude, claude: false },
+            );
+        }
+    });
+
+    it('a renamed proxy is `unknown`, and unknown never forces a parameter', () => {
+        // The model id is a free-text field. A proxy serving a Kimi under its own
+        // name cannot be recognised, so the whole design has to be safe when it
+        // recognises nothing: withhold, never impose.
+        const traits = resolveCompatibleReasoningTraits('prod-model-1');
+        expect({
+            family: detectModelFamily('prod-model-1'),
+            thinksByDefault: traits.thinksByDefault,
+            config: reasoningConfigForModel('prod-model-1'),
+        }).toEqual({
+            family: 'unknown',
+            thinksByDefault: false,
+            config: undefined,
+        });
+    });
+
+    it('GLM-5.3 is matched on its version token, not on loose digits', () => {
+        // `includes('5.3')` pinned ANY id carrying those digits as always-thinking
+        // — which withholds a `thinking: disabled` the model does accept.
+        expect(resolveCompatibleReasoningTraits('glm-5.3').canDisableThinking).toBe(false);
+        expect(resolveCompatibleReasoningTraits('z-ai/glm-5.3').canDisableThinking).toBe(false);
+        expect(resolveCompatibleReasoningTraits('glm-5.2').canDisableThinking).toBe(true);
+        // A GLM whose id merely contains the digits elsewhere is NOT GLM-5.3.
+        expect(resolveCompatibleReasoningTraits('glm-4-turbo-r5.3x').canDisableThinking).toBe(true);
+    });
+
+    it('the OpenAI reasoner line excludes Azure\'s gpt-35-turbo alias but keeps two-digit ids', () => {
+        // Azure serves GPT-3.5 as `gpt-35-turbo`. A loose two-digit match reads
+        // that as a reasoner, which drops the user's temperature and renames
+        // max_tokens — but dropping two-digit support entirely would ALSO miss
+        // a real future id: Azure's own convention (dash-encoded minor version,
+        // `35` = "3.5") makes `gpt-55`/`gpt-65` (5.5/6.5) a realistic near-term
+        // shape, not a hypothetical one (kody-ai review, PR #1952).
+        expect(isOpenAiReasonerId('gpt-5.6-sol')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-6-astra')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-35-turbo')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-16k')).toBe(false);
+        expect(isOpenAiReasonerId('gpt-35-turbo-instruct')).toBe(false);
+        expect(reasoningConfigForModel('gpt-35-turbo')).toBeUndefined();
+        // Positive two-digit assertions — a bare `gpt-[5-9]` single-digit
+        // pattern would silently regress these without failing any existing
+        // test, since every prior assertion here is single-digit or negative.
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-65-preview')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-10')).toBe(true);
+        expect(reasoningConfigForModel('gpt-65-preview')).toEqual({
+            type: 'level',
+            options: ['low', 'medium', 'high'],
+        });
+    });
+
+    // Regression (kody-ai review, PR #1954): the fix above excluded ONLY
+    // `gpt-35-turbo` (the one Azure alias a prior test happened to name),
+    // but the comment's own rule — Azure dash-encodes the minor version, so
+    // `35` = 3.5 — implies the WHOLE pre-5 two-digit range is non-reasoning,
+    // not just 35. `gpt-40`/`gpt-41`/`gpt-45` (GPT-4.0/4.1/4.5) matched the
+    // old regex as reasoners, silently dropping temperature and renaming
+    // max_tokens for them — the exact failure this rule exists to prevent,
+    // just for a sibling id nobody happened to assert on.
+    it('excludes the whole pre-5 two-digit range (3x/4x), not just Azure\'s gpt-35 alias', () => {
+        for (const id of ['gpt-36', 'gpt-40', 'gpt-41', 'gpt-45', 'gpt-49-turbo']) {
+            expect(isOpenAiReasonerId(id)).toBe(false);
+        }
+        expect(reasoningConfigForModel('gpt-45-turbo')).toBeUndefined();
+        // Still recognizes real gpt-5-and-later two-digit ids — the fix must
+        // narrow the exclusion, not widen it into swallowing gpt-5x too.
+        expect(isOpenAiReasonerId('gpt-50')).toBe(true);
+        expect(isOpenAiReasonerId('gpt-55-turbo')).toBe(true);
+    });
+});

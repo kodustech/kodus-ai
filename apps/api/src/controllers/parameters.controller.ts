@@ -8,6 +8,7 @@ import {
     Res,
     UseGuards,
 } from '@nestjs/common';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { REQUEST } from '@nestjs/core';
 import {
     ApiBadRequestResponse,
@@ -22,6 +23,7 @@ import {
 import { Response } from 'express';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
+    ApiArrayResponseDto,
     ApiStringResponseDto,
     ApiYamlStringResponseDto,
 } from '../dtos/api-response.dto';
@@ -54,6 +56,7 @@ import { CentralizedConfigDownloadZipUseCase } from '@libs/centralized-config/ap
 import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
+import { GetCodeReviewScopesUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-scopes.use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '@libs/code-review/application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
 import { UpdateCodeReviewParameterRepositoriesUseCase } from '@libs/code-review/application/use-cases/configuration/update-code-review-parameter-repositories-use-case';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
@@ -70,10 +73,12 @@ import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/cr
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 
 @ApiTags('Parameters')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('parameters')
 export class ParametersController {
     constructor(
@@ -90,6 +95,7 @@ export class ParametersController {
         private readonly listCodeReviewAutomationLabelsWithStatusUseCase: ListCodeReviewAutomationLabelsWithStatusUseCase,
         private readonly getDefaultConfigUseCase: GetDefaultConfigUseCase,
         private readonly getCodeReviewParameterUseCase: GetCodeReviewParameterUseCase,
+        private readonly getCodeReviewScopesUseCase: GetCodeReviewScopesUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
@@ -159,27 +165,31 @@ export class ParametersController {
         }
 
         if (body.key === ParametersKey.CODE_REVIEW_CONFIG) {
-            return await this.updateOrCreateCodeReviewParameterUseCase.execute({
-                actor: {
-                    source: 'web',
-                    organizationId,
-                },
-                configValue: body.configValue,
-                organizationAndTeamData: {
+            return maskCliSecrets(
+                await this.updateOrCreateCodeReviewParameterUseCase.execute({
+                    actor: {
+                        source: 'web',
+                        organizationId,
+                    },
+                    configValue: body.configValue,
+                    organizationAndTeamData: {
+                        organizationId,
+                        teamId: body.organizationAndTeamData.teamId,
+                    },
+                    requestUser: toRequestUserContext(this.request?.user),
+                } as any),
+            );
+        }
+
+        return maskCliSecrets(
+            await this.createOrUpdateParametersUseCase.execute(
+                body.key,
+                body.configValue,
+                {
                     organizationId,
                     teamId: body.organizationAndTeamData.teamId,
                 },
-                requestUser: toRequestUserContext(this.request?.user),
-            } as any);
-        }
-
-        return await this.createOrUpdateParametersUseCase.execute(
-            body.key,
-            body.configValue,
-            {
-                organizationId,
-                teamId: body.organizationAndTeamData.teamId,
-            },
+            ),
         );
     }
 
@@ -209,10 +219,12 @@ export class ParametersController {
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
-        return await this.findByKeyParametersUseCase.execute(key, {
-            teamId,
-            organizationId,
-        });
+        return maskCliSecrets(
+            await this.findByKeyParametersUseCase.execute(key, {
+                teamId,
+                organizationId,
+            }),
+        );
     }
 
     //endregion
@@ -278,14 +290,16 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.updateOrCreateCodeReviewParameterUseCase.execute({
-            ...body,
-            organizationAndTeamData: {
-                ...body.organizationAndTeamData,
-                organizationId,
-            },
-            requestUser: toRequestUserContext(this.request?.user),
-        });
+        return maskCliSecrets(
+            await this.updateOrCreateCodeReviewParameterUseCase.execute({
+                ...body,
+                organizationAndTeamData: {
+                    ...body.organizationAndTeamData,
+                    organizationId,
+                },
+                requestUser: toRequestUserContext(this.request?.user),
+            }),
+        );
     }
 
     @Post('/update-code-review-parameter-repositories')
@@ -313,17 +327,26 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.updateCodeReviewParameterRepositoriesUseCase.execute({
-            ...body,
-            organizationAndTeamData: {
-                ...body.organizationAndTeamData,
-                organizationId,
-            },
-        });
+        return maskCliSecrets(
+            await this.updateCodeReviewParameterRepositoriesUseCase.execute({
+                ...body,
+                organizationAndTeamData: {
+                    ...body.organizationAndTeamData,
+                    organizationId,
+                },
+            }),
+        );
     }
 
     @Get('/code-review-parameter')
     @ApiQuery({ name: 'teamId', type: String, required: true })
+    @ApiQuery({
+        name: 'includeFileOverlay',
+        type: Boolean,
+        required: false,
+        description:
+            "Overlay each repository's kodus-config.yml, read live from the git provider. Defaults to true; pass false for a fast response backed only by stored configuration.",
+    })
     @UseGuards(PolicyGuard)
     @CheckPolicies(
         checkPermissions({
@@ -336,8 +359,36 @@ export class ParametersController {
         description: 'Return code review configuration for the team.',
     })
     @ApiOkResponse({ type: CodeReviewParameterResponseDto })
-    public async getCodeReviewParameter(@Query('teamId') teamId: string) {
-        return await this.getCodeReviewParameterUseCase.execute(
+    public async getCodeReviewParameter(
+        @Query('teamId') teamId: string,
+        @Query('includeFileOverlay') includeFileOverlay?: string,
+    ) {
+        return maskCliSecrets(
+            await this.getCodeReviewParameterUseCase.execute(
+                this.request.user,
+                teamId,
+                { includeFileOverlay: includeFileOverlay !== 'false' },
+            ),
+        );
+    }
+
+    @Get('/code-review-scopes')
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List code review scopes',
+        description:
+            'Repositories and configured directories as ids and names only, for scope pickers. Unlike /code-review-parameter it returns no configuration and never reads kodus-config.yml from the git provider.',
+    })
+    @ApiOkResponse({ type: ApiArrayResponseDto })
+    public async getCodeReviewScopes(@Query('teamId') teamId: string) {
+        return this.getCodeReviewScopesUseCase.execute(
             this.request.user,
             teamId,
         );
@@ -423,7 +474,9 @@ export class ParametersController {
         @Body()
         body: DeleteRepositoryCodeReviewParameterDto,
     ) {
-        return this.deleteRepositoryCodeReviewParameterUseCase.execute(body);
+        return maskCliSecrets(
+            await this.deleteRepositoryCodeReviewParameterUseCase.execute(body),
+        );
     }
     //#endregion
 
@@ -548,11 +601,10 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        const archive =
-            await this.centralizedConfigDownloadZipUseCase.execute(
-                this.request.user,
-                teamId,
-            );
+        const archive = await this.centralizedConfigDownloadZipUseCase.execute(
+            this.request.user,
+            teamId,
+        );
 
         response.set({
             'Content-Type': 'application/zip',

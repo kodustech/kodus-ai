@@ -1,13 +1,15 @@
 {
     "reviewComment": {
         "talkToKody": "Fale com o Kody mencionando @kody",
-        "feedback": "Essa sugestão foi útil? Reaja com 👍 ou 👎 para ajudar o Kody a aprender com essa interação."
+        "feedback": "Essa sugestão foi útil? Reaja com 👍 ou 👎 para ajudar o Kody a aprender com essa interação.",
+        "feedbackReply": "Essa sugestão foi útil? Responda com 👍 ou 👎 para ajudar o Kody a aprender com essa interação."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Revisão de Código Concluída! 🔥\n\nA revisão de código foi concluída com sucesso com base nas suas configurações atuais.\n\n",
         "withoutComments": "# Revisão da Kody Concluída\n**Boa notícia!** 🎉\nNenhum problema foi encontrado com base nas suas configurações de revisão.\n\nContinuem com o ótimo trabalho! 🚀",
         "withErrors": "## Revisão de Código Não Concluída ⚠️\n\nA revisão falhou antes que sugestões pudessem ser geradas.\n\n**Motivo:** {{errorMessage}}\n\nApós corrigir o problema, comente `@kody review` neste PR para refazer a revisão.\n\n",
-        "partialErrorsNotice": "\n\n> ⚠️ Observação: algumas etapas da revisão não puderam ser concluídas nesta execução, por isso a aprovação automática (quando ativa) foi pulada. Veja os detalhes em {{dashboardUrl}} e depois comente `@kody review` neste PR para tentar novamente após resolver o problema.\n"
+        "partialErrorsNotice": "\n\n> ⚠️ Observação: algumas etapas da revisão não puderam ser concluídas nesta execução, por isso a aprovação automática (quando ativa) foi pulada. Veja os detalhes em {{dashboardUrl}} e depois comente `@kody review` neste PR para tentar novamente após resolver o problema.\n",
+        "withUndeliveredComments": "## Code Review concluído, mas os comentários não puderam ser publicados ⚠️\n\nA revisão gerou {{count}} comentário(s), mas nenhum pôde ser publicado neste pull request (por exemplo, a plataforma os recusou por limite de requisições). Isto não é uma revisão sem problemas: comente `@kody review` neste PR para rodá-la de novo.\n\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "Resumo da PR (Comentário criado por [Kody](https://kodus.io) 🤖)",

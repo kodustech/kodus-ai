@@ -1,0 +1,144 @@
+---
+title: "Workspace Roles"
+description: "Learn about role-based access control (RBAC) in Kodus workspaces, including the different user roles and their permissions."
+---
+
+<Note>
+**Workspace Members vs. PR Licenses**: These are completely separate and don't affect each other.
+
+- **Workspace Members**: Admins who configure Kodus settings (unlimited)
+- **PR Licenses**: Developers from your Git organization who get Kody reviews (based on your plan)
+</Note>
+
+## Understanding PR Licenses
+
+PR licenses are automatically detected from your Git repositories based on developers who opened PRs in recent months. 
+
+**Why isn't a developer showing up?** If a developer isn't appearing in your PR license count, it means Kody isn't installed in a repository where that developer has opened PRs.
+
+**Example:** You can have 1 workspace admin managing settings, while 20 developers get automated reviews. All plans include unlimited PRs—your plan only determines which developers get review access.
+
+## Overview
+
+Kodus workspaces supports **Role-Based Access Control (RBAC)**, allowing you to manage user permissions and access levels within your organization. Each workspace member can be assigned one of four distinct roles, each with specific permissions and capabilities.
+
+## Available Roles
+
+Each role provides different levels of access and capabilities within the workspace:
+
+### Owner
+
+**Full administrative access** to the workspace and all its resources. Can view, edit, and delete all configurations across all repositories.
+
+
+
+### Billing Manager
+
+**Financial and billing management** access with access to billing/subscription management and view access to most configurations, but no edit access to code review settings.
+
+### Repository Admin
+
+**Repository management** access. Sees all configurations, pull requests, issues, cockpit, and plugins across the whole organization (read-only), and can edit code review configurations and Kody Rules for the repositories assigned to them.
+
+### Contributor
+
+**Read-only access** to the whole organization. Contributors can view configurations, Kody Rules, pull requests, and issues across all repositories — no repository assignment needed — but cannot edit anything. Cockpit, token usage, billing, and user management stay admin-only.
+
+## Role Permissions Matrix
+
+Here's a detailed breakdown of what each role can do, based on the actual permissions matrix:
+
+<Snippet file="rbac-matrix-generated.mdx" />
+
+## Managing Workspace Members
+
+Workspace members are managed on the **Workspace members** tab of **Organization → Subscription** — there is no separate members page. Only **Owners** can invite members, change roles, or remove members.
+
+### Adding New Members
+
+1. In the sidebar, open **Organization → Subscription** and pick the **Workspace members** tab
+2. Click **Invite member**
+3. In **Workspace member invitation**, type the member's email and click **Add to invite list** (repeat for more people)
+4. Click **Send invites**
+5. Invited members join as **Contributor**; change their role afterwards (see below)
+
+### Auto-Join for Workspace Members
+
+Enable auto-join to allow users with matching email domains to join your workspace automatically.
+
+**How to enable:**
+1. Go to **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. Under **Auto Join**, turn on **Enable Auto Join**, enter your domain, and save
+3. Currently works with your registered account email domain only
+4. Need a different domain? Contact us in the community
+
+**How it works:**
+- Users who sign up with your email domain can choose to join your organization
+- They must confirm their email after choosing to join
+- All auto-join users enter as **Contributor** role (read-only access to the whole organization)
+- As Owner, adjust their role if they need edit rights
+
+### Changing Member Roles
+
+1. Go to **Organization → Subscription → Workspace members**
+2. Find the member whose role you want to change
+3. Open the select in their **Role** column
+4. Select the new role (**Owner**, **Billing Manager**, **Repo Admin**, or **Contributor**)
+5. The change takes effect immediately
+
+For a **Repository Admin**, assign the repositories they can edit with the **+** button next to their role, which opens **Assign repositories**.
+
+### Removing Members
+
+1. In **Organization → Subscription → Workspace members**, locate the member to remove
+2. Open the **Actions** menu (three dots) in their row
+3. Select **Delete**
+4. Confirm with **Remove** in the dialog
+
+The same menu has **Approve** for members marked **Needs approval** and **Copy invite link** to share a member's invite link again.
+
+## Security Considerations
+
+1. **Principle of Least Privilege**: Always assign the role with the minimum necessary permissions
+2. **Regular Audits**: Periodically review member roles and adjust as needed
+3. **Access Reviews**: Conduct quarterly reviews of workspace access and permissions
+4. **Immediate Revocation**: Remove access immediately when a member leaves the organization
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="I can't invite new members to the workspace">
+    **Solutions:**
+    - Verify you have the Owner role — only Owners can invite members
+    - Check if your workspace has reached any system limits
+    - Ensure you have the correct permissions in your account
+  </Accordion>
+
+  <Accordion title="A member can't edit code review configurations">
+    **Solutions:**
+    - Confirm the member has Repository Admin or Owner role for the specific repository
+    - For a Repository Admin, check that the repository is assigned to them (**Assign repositories** in the **Role** column of **Workspace members**)
+    - Verify the member's role assignment is correct
+  </Accordion>
+
+  <Accordion title="Billing information is not visible to a team member">
+    **Solutions:**
+    - Ensure the member has Owner or Billing Manager role
+    - Check if billing features are enabled for your workspace
+    - Verify the member's access hasn't been restricted
+  </Accordion>
+
+  <Accordion title="A member can't access cockpit features">
+    **Solutions:**
+    - Confirm the member has Repository Admin or Owner role (cockpit is not visible to Contributors or Billing Managers)
+    - Verify the member's role assignment is correct
+  </Accordion>
+
+  <Accordion title="A developer isn't showing up in PR licenses">
+    **Solutions:**
+    - Verify Kody is installed in the repositories where this developer opens PRs
+    - Check if the developer has opened PRs in recent months
+    - Remember: PR licenses come from Git activity, not workspace members
+    - Ensure the repository webhook is properly configured
+  </Accordion>
+</AccordionGroup>

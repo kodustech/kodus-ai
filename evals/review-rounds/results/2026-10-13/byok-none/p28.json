@@ -1,0 +1,726 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:33:46.164Z",
+  "updatedAt": "2026-10-13T22:04:58.694Z",
+  "complete": true,
+  "selectedCases": [
+    "P28-retry-cap-next-run-now",
+    "P28-retry-cap-next-run-now-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P28-retry-cap-next-run-now · cap-returns-now-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P28-retry-cap-next-run-now-control · cap-returns-now-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 340923,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: the new jitter is drawn from the package-global `math/rand` source, which is never seeded anywhere in the repo (no `rand.Seed` call exists), so on Go < 1.20 the jitter sequence is identical on every process start. WHY: jobs that fail at the same attempt count receive a reproducible offset instead of being spread out, so retries can still collide in lockstep across restarts and the jitter fails to serve its purpose of de-synchronising the herd. HOW: seed once at startup (`rand.Seed(time.Now().UnixNano())`) or use a `*rand.Rand` built from `rand.NewSource(time.Now().UnixNano())` (or `math/rand/v2`, which is auto-seeded) and use that source here.",
+          "keep": true,
+          "rationale": "The factual basis is confirmed: schedule.go:29 draws jitter from the package-global math/rand via rand.Int63n, and a repo-wide grep finds no rand.Seed, no rand.NewSource, and no *rand.Rand source anywhere (only the single usage at line 29). No go.mod exists in the repo, so nothing demonstrates the module targets Go >= 1.20 where the global source is auto-seeded; on Go < 1.20 the global source is deterministically seeded with 1, making the jitter sequence reproducible across process restarts and defeating its de-synchronization purpose. The claim is conditionally stated and cannot be actively refuted with the available evidence, so it is kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rand\\.Seed|rand\\.NewSource|math/rand"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "go.mod"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": ".",
+                "maxDepth": 2
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rand\\.",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new jitter is drawn from the package-global `math/rand` source, which is never seeded anywhere in the repo, so on Go < 1.20 every process start produces the identical jitter sequence and jobs failing at the same attempt count get a reproducible offset, leaving retries to collide in lockstep across restarts instead of being spread out. Seed once at startup with `rand.Seed(time.Now().UnixNano())`, or use a `*rand.Rand` built from `rand.NewSource(time.Now().UnixNano())` (or `math/rand/v2`, which is auto-seeded) as the source here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 165112,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 140755,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 166777,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 132060,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P28-retry-cap-next-run-now-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 214064,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The added doc comment says a job that has failed MaxAttempts times 'waits an hour before its next run, so a job that keeps failing stops running on every tick', but the branch returns `now`, scheduling it immediately. WHY: Dispatcher.Tick (internal/jobs/dispatch.go:29) sets NextRunAt to this value and Store.Due returns every job whose NextRunAt is not after now (dispatch.go:9), so NextRunAt==now makes a permanently failing job due on every 5-second tick forever — the documented one-hour cooldown is never applied and the job never backs off. HOW: return now.Add(time.Hour) in the MaxAttempts branch to match the documented behavior.",
+          "keep": true,
+          "rationale": "Confirmed: the MaxAttempts branch returns `now` (schedule.go:26), contradicting the doc comment's one-hour wait. Dispatcher.Tick sets NextRunAt to this value (dispatch.go:29) and Store.Due selects jobs with NextRunAt <= now (dispatch.go:9), so a permanently failing job becomes due on every tick with no backoff. No other guard handles MaxAttempts (grep confirms). This is a real behavior bug, not documentation style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "MaxAttempts|nextAttemptAt|NextRunAt",
+                "path": "internal/jobs"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `nextAttemptAt` returns `now` in the `MaxAttempts` branch, `Dispatcher.Tick` (internal/jobs/dispatch.go:29) sets `NextRunAt` to that value and `Store.Due` (dispatch.go:9) returns the job on every 5-second tick, so a permanently failing job never gets the documented one-hour cooldown and never backs off. Return `now.Add(time.Hour)` from that branch so the behavior matches the doc comment."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P28-retry-cap-next-run-now-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 138751,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The newly added comment says a job that has failed MaxAttempts times \"waits an hour before its next run, so a job that keeps failing stops running on every tick\", but the code for that case still returns `now` (line 26), so NextRunAt is set to the current time. WHY: Store.Due (internal/jobs/dispatch.go:9) returns every job whose NextRunAt is not after now, and Tick runs every 5 seconds (dispatch.go:20), so a job that keeps failing is due on the very next tick and re-runs forever — the exact hot retry loop the comment claims is prevented. HOW: make the exhausted branch return the documented delay, e.g. `return now.Add(time.Hour)`.",
+          "keep": true,
+          "rationale": "Verified: schedule.go:25-27 returns `now` when Attempts >= MaxAttempts, so NextRunAt is set to the current time. dispatch.go:9 (Due returns jobs with NextRunAt not after now) plus Tick running every 5 seconds (dispatch.go:20) means the exhausted job is immediately due again on the next tick, producing the endless retry loop the comment (lines 21-23) claims is prevented. The described root cause and failure path are accurate and reachable; no prior decision concerns this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "The newly added comment promises an hour-long delay after `MaxAttempts`, but the exhausted branch still returns `now` (line 26), so `NextRunAt` is current time; because `Store.Due` (internal/jobs/dispatch.go:9) returns every job whose `NextRunAt` is not after now and `Tick` runs every 5 seconds (dispatch.go:20), a persistently failing job is due on the next tick and re-runs forever, the exact hot retry loop the comment says is prevented. Make that branch return the documented delay, e.g. `return now.Add(time.Hour)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P28-retry-cap-next-run-now-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 211725,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment claims that once a job has failed MaxAttempts times it 'waits an hour before its next run', but the branch returns `now`, so NextRunAt is set to the current time. WHY: Dispatcher.Tick (internal/jobs/dispatch.go:22) loads jobs via store.Due(ctx, now), which returns every job whose NextRunAt is not after now; with NextRunAt == now the exhausted job is due on the very next 5s tick, so a permanently failing job is re-run every tick forever instead of being throttled — the exact opposite of the documented 'stops running on every tick'. HOW: return now.Add(time.Hour) (or a named RetryCeiling constant) in the exhausted branch so the job actually backs off.",
+          "keep": true,
+          "rationale": "schedule.go:25-26 returns `now` when job.Attempts >= MaxAttempts, contradicting the doc comment on lines 21-23 which claims an hour wait. dispatch.go:29 assigns that to NextRunAt, and Store.Due (dispatch.go:9-10) returns jobs whose NextRunAt is not after now, so an exhausted job is immediately due again every 5s tick. The described failure path is real and unguarded; no prior review decision concerns this code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When a job has failed `MaxAttempts` times, the branch returns `now`, so `NextRunAt` is set to the current time and `store.Due(ctx, now)` in `Dispatcher.Tick` (`internal/jobs/dispatch.go:22`) makes the exhausted job due on the very next 5s tick, re-running a permanently failing job every tick forever instead of throttling it as the doc comment claims. Return `now.Add(time.Hour)` (or a named `RetryCeiling` constant) in the exhausted branch so the job actually backs off."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P28-retry-cap-next-run-now-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 187937,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment states that after MaxAttempts failures the job \"waits an hour before its next run,\" but the MaxAttempts branch still returns `now`, so NextRunAt equals now and the job is immediately due again. WHY: dispatch.go:22-29 re-selects any job whose NextRunAt is not after now, so a permanently failing job runs on every tick forever instead of backing off — exactly the busy loop the comment claims is prevented, wasting worker capacity indefinitely. HOW: return an hour in the future in that branch, e.g. `return now.Add(time.Hour)`.",
+          "keep": true,
+          "rationale": "Confirmed by source: schedule.go:25-27 returns `now` in the MaxAttempts branch, contradicting the doc comment's \"waits an hour.\" dispatch.go:29 stores that `now` as NextRunAt, and Store.Due (dispatch.go:9, invoked at line 22) selects jobs whose NextRunAt is not after now, so NextRunAt==now is immediately due every tick — a permanent busy loop for a permanently failing job. The described root cause and failure path are accurate and reachable; no prior review decision concerns this file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NextRunAt",
+                "path": "internal/jobs"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `dispatch.go:22-29` re-selects any job whose `NextRunAt` is not after now, a job with `Attempts >= MaxAttempts` becomes due on every tick and wastes worker capacity indefinitely, contradicting the doc comment's promised hour-long backoff. Return `now.Add(time.Hour)` in that branch so `NextRunAt` lies in the future."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P28-retry-cap-next-run-now-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 173497,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment (lines 21-23) claims a job that has failed MaxAttempts times 'waits an hour before its next run', but the MaxAttempts branch at line 26 returns `now`, so NextRunAt is set to the current time. WHY: Store.Due (internal/jobs/dispatch.go:9) returns every job whose NextRunAt is not after now, and Dispatcher.Tick runs every 5 seconds, so a persistently failing job is re-selected and re-run on every single tick forever — the opposite of the documented 'waits an hour' behavior, and a tight retry loop that hammers the job runner. HOW: Implement the documented behavior in the branch, e.g. `if job.Attempts >= MaxAttempts { return now.Add(MaxBackoff) }` with a named `MaxBackoff = time.Hour` constant (or, if immediate retry is intended, correct the comment instead so it no longer documents a guarantee the code does not provide).",
+          "keep": true,
+          "rationale": "Confirmed. schedule.go:25-26 returns `now` for jobs at/over MaxAttempts, and dispatch.go:29 sets NextRunAt=now. Store.Due (dispatch.go:9) returns jobs with NextRunAt not after now, so such a job is re-selected on every 5s tick, contradicting the new doc comment's \"waits an hour\" claim and producing a tight retry loop. No upstream guard prevents this, and no prior review decision concerns this file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/jobs/schedule.go",
+          "line": 21,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The documented hour-long wait is not implemented: lines 21-23 promise a job that has failed `MaxAttempts` times waits an hour, but the branch at line 26 returns `now`, and because `Store.Due` (`internal/jobs/dispatch.go:9`) returns every job whose `NextRunAt` is not after `now` while `Dispatcher.Tick` runs every 5 seconds, a persistently failing job is re-selected and re-run on every tick, creating a tight retry loop. Change the branch to `return now.Add(MaxBackoff)` with a named `MaxBackoff = time.Hour`, or correct the comment if immediate retry is intended."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cap-returns-now-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

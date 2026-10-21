@@ -24,6 +24,7 @@ describe('GetSSOConnectionTestResultUseCase', () => {
 
         ssoTestSessionService.getSession.mockResolvedValue({
             sessionId: 'session-1',
+            organizationId: 'org-1',
             status: SSOConnectionTestSessionStatus.SUCCESS,
             configFingerprint: 'fingerprint-1',
             testedAt: '2026-04-20T10:00:00.000Z',
@@ -31,7 +32,7 @@ describe('GetSSOConnectionTestResultUseCase', () => {
             failureMessage: undefined,
         });
 
-        await expect(useCase.execute('session-1')).resolves.toEqual({
+        await expect(useCase.execute('session-1', 'org-1')).resolves.toEqual({
             sessionId: 'session-1',
             status: SSOConnectionTestSessionStatus.SUCCESS,
             configFingerprint: 'fingerprint-1',
@@ -46,16 +47,30 @@ describe('GetSSOConnectionTestResultUseCase', () => {
 
         ssoTestSessionService.getSession.mockResolvedValue(null);
 
-        await expect(useCase.execute('missing')).rejects.toBeInstanceOf(
+        await expect(useCase.execute('missing', 'org-1')).rejects.toBeInstanceOf(
             NotFoundException,
         );
 
         try {
-            await useCase.execute('missing');
+            await useCase.execute('missing', 'org-1');
         } catch (error: any) {
             expect(error.getResponse()).toMatchObject({
                 code: 'SSO_TEST_SESSION_NOT_FOUND',
             });
         }
+    });
+
+    it('answers a session of another organization like a missing one', async () => {
+        const { useCase, ssoTestSessionService } = makeSut();
+
+        ssoTestSessionService.getSession.mockResolvedValue({
+            sessionId: 'session-1',
+            organizationId: 'org-other',
+            status: SSOConnectionTestSessionStatus.SUCCESS,
+        });
+
+        await expect(
+            useCase.execute('session-1', 'org-1'),
+        ).rejects.toBeInstanceOf(NotFoundException);
     });
 });

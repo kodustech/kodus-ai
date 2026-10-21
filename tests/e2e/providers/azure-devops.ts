@@ -5,6 +5,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from "../lib/types.js";
 import { randomUUID } from "node:crypto";
@@ -16,6 +17,7 @@ import {
     resolveTargetRepo,
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
+import { isKodyFinding, isKodyReviewOutput } from "../lib/kody-markers.js";
 import { prepareBranch } from "../lib/git.js";
 
 interface AzureThread {
@@ -25,6 +27,7 @@ interface AzureThread {
     isDeleted?: boolean;
     status?: string;
     comments?: AzureComment[];
+    threadContext?: { filePath?: string } | null;
 }
 
 interface AzureComment {
@@ -567,7 +570,7 @@ export class AzureDevOpsProvider extends BaseProvider {
                             continue;
                         const text = c.content ?? "";
                         if (text.toLowerCase().startsWith("@kody")) continue;
-                        if (text.includes("<!-- kody-codereview")) continue;
+                        if (isKodyReviewOutput(text)) continue;
                         if (!text.trim()) continue;
                         return { id: String(c.id), body: text.slice(0, 600) };
                     }
@@ -576,6 +579,67 @@ export class AzureDevOpsProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
         );
+    }
+
+    // Threads Kody opened: the first comment carries its marker and is not a
+    // conversation answer. Kody may post as the harness account.
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.threads(prNumber))
+            .filter(
+                (t) =>
+                    !t.isDeleted &&
+                    // A finding sits on a file; the status comment does not.
+                    !!t.threadContext?.filePath &&
+                    isKodyFinding(t.comments?.[0]?.content ?? ""),
+            )
+            .map((t) => ({
+                id: String(t.id),
+                body: t.comments?.[0]?.content ?? "",
+            }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const repoId = await this.resolveRepoId();
+        const auth = `Basic ${Buffer.from(`:${token}`).toString("base64")}`;
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/_apis/git/repositories/${repoId}/pullRequests/${prNumber}/threads/${threadId}/comments?api-version=${this.apiVersion}`,
+            {
+                method: "POST",
+                headers: { Authorization: auth, Accept: "application/json" },
+                body: { content: body, parentCommentId: 1, commentType: 1 },
+            },
+        );
+        ensureOk(resp, "azure:replyInThread");
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        const thread = (await this.threads(prNumber)).find(
+            (t) => String(t.id) === threadId,
+        );
+        return (thread?.comments ?? [])
+            .filter(
+                (c) => (c.commentType ?? "").toLowerCase() !== "system",
+            )
+            .map((c) => ({ id: String(c.id), body: c.content ?? "" }));
+    }
+
+    private async threads(prNumber: number): Promise<AzureThread[]> {
+        const repoId = await this.resolveRepoId();
+        const resp = await http<{ value: AzureThread[] }>(
+            `${this.apiBase}/_apis/git/repositories/${repoId}/pullRequests/${prNumber}/threads?api-version=${this.apiVersion}`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, "azure:threads");
+        return resp.body.value ?? [];
     }
 
     authMode(): "token" {

@@ -15,13 +15,21 @@ type License = {
 type UsersWithAssignedLicense = {
     usersWithAssignedLicense: AwaitedReturnType<typeof getUsersWithLicense>;
 };
+/** The org has a model routed by the Kodus provider ("Kodus as the
+ *  provider"), so its prepaid-credit balance is load-bearing. Derived by the
+ *  app layout from the LLM config status (local config is the source of
+ *  truth, not billing). */
+type KodusProviderFlag = { usesKodusProvider?: boolean };
 
-const SubscriptionContext = createContext<License & UsersWithAssignedLicense>({
+const SubscriptionContext = createContext<
+    License & UsersWithAssignedLicense & KodusProviderFlag
+>({
     usersWithAssignedLicense: [],
     license: {
         valid: true,
         subscriptionStatus: "self-hosted",
     },
+    usesKodusProvider: false,
 });
 
 export const useSubscriptionContext = () => {
@@ -33,9 +41,11 @@ export const SubscriptionProvider = ({
     children,
     license,
     usersWithAssignedLicense,
+    usesKodusProvider,
 }: React.PropsWithChildren & {
     license: AwaitedReturnType<typeof validateOrganizationLicense>;
     usersWithAssignedLicense: AwaitedReturnType<typeof getUsersWithLicense>;
+    usesKodusProvider?: boolean;
 }) => {
     // Skip provider only for unlicensed self-hosted (uses context default)
     if (isSelfHosted && license.subscriptionStatus === "self-hosted") {
@@ -44,7 +54,11 @@ export const SubscriptionProvider = ({
 
     return (
         <SubscriptionContext.Provider
-            value={{ license, usersWithAssignedLicense }}>
+            value={{
+                license,
+                usersWithAssignedLicense,
+                usesKodusProvider: usesKodusProvider ?? false,
+            }}>
             {children}
         </SubscriptionContext.Provider>
     );

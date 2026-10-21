@@ -37,7 +37,9 @@ export function anthropicCompatibleRootURL(baseURL: string): string {
  * Base64 of a JSON object always starts with `ey` (from `{"`), raw JSON with
  * `{`, so the leading char disambiguates. Returns null when neither yields JSON.
  */
-function parseSaCredentials(input: string): { project_id?: string } | null {
+export function parseSaCredentials(
+    input: string,
+): { project_id?: string } | null {
     const trimmed = (input || '').trim();
     if (!trimmed) return null;
     const jsonText = trimmed.startsWith('{')

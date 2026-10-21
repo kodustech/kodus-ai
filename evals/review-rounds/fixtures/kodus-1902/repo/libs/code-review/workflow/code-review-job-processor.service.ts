@@ -1,0 +1,838 @@
+import { createLogger } from '@libs/core/log/logger';
+import { Injectable, Inject, Optional } from '@nestjs/common';
+import os from 'os';
+
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import {
+    WORKFLOW_JOB_REPOSITORY_TOKEN,
+    IWorkflowJobRepository,
+} from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
+import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { RunCodeReviewAutomationUseCase } from '@libs/ee/automation/runCodeReview.use-case';
+import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
+import { EnqueueCodeReviewJobInput } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
+import { NotificationService } from '@libs/notifications/application/notification.service';
+import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
+import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { NotificationRecipient } from '@libs/notifications/domain/recipient';
+import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
+import { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import {
+    JOB_LEASE_TTL_MS,
+    startJobLeaseRenewal,
+} from '@libs/core/workflow/infrastructure/job-lease.renewer';
+import {
+    IRateLimitGateService,
+    RATE_LIMIT_GATE_SERVICE_TOKEN,
+} from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
+import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
+import { PrReviewDeferralService } from './pr-review-deferral.service';
+
+@Injectable()
+export class CodeReviewJobProcessorService implements IJobProcessorService {
+    private readonly logger = createLogger(CodeReviewJobProcessorService.name);
+    // Stamp for the job-ownership lease: distinguishes "this worker is alive
+    // and renewing" from "the worker died", letting the stale-job reaper
+    // reclaim by expired lease (#1830).
+    private readonly instanceId = os.hostname();
+
+    constructor(
+        @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
+        private readonly jobRepository: IWorkflowJobRepository,
+        private readonly runCodeReviewAutomationUseCase: RunCodeReviewAutomationUseCase,
+        private readonly byokConcurrencyGateService: ByokConcurrencyGateService,
+        private readonly notificationService: NotificationService,
+        private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
+        @Inject(RATE_LIMIT_GATE_SERVICE_TOKEN)
+        private readonly rateLimitGate: IRateLimitGateService,
+        private readonly prReviewDeferralService: PrReviewDeferralService,
+        private readonly codeReviewHandlerService: CodeReviewHandlerService,
+        @Optional()
+        private readonly metricsCollector?: MetricsCollectorService,
+    ) {}
+
+    async process(jobId: string, signal?: AbortSignal): Promise<void> {
+        const job = await this.jobRepository.findOne(jobId);
+
+        if (!job) {
+            throw new Error(`Job ${jobId} not found`);
+        }
+
+        const correlationId = job.correlationId;
+
+        this.logger.debug({
+            message: `Processing Code Review Job ${jobId}`,
+            context: CodeReviewJobProcessorService.name,
+            metadata: { jobId, correlationId },
+        });
+
+        if (signal?.aborted) {
+            throw new Error(`Job ${jobId} aborted before start`);
+        }
+
+        const startTime = Date.now();
+        let acquiredLock: DistributedLock | null = null;
+
+        // Set when the lease is lost mid-run so the catch below can avoid
+        // terminally failing a job that a transient renewal blip
+        // (connection-pool exhaustion, lock/statement timeout) caused to look
+        // dead — the reaper reclaims it for retry instead of permanently
+        // failing it (#1830). Declared in `process` scope (not the try): the
+        // `catch` is a sibling lexical scope and would not see a `let` from
+        // inside the try.
+        let leaseLost = false;
+
+        // Set once this run has actually claimed the lease (the PROCESSING +
+        // leaseOwner write below). The catch needs to tell "this run never held
+        // the lease" (payload validation, the rate-limit gate — both throw
+        // before the claim) from "this run lost it", because the ownership fence
+        // only answers for a run that had one: on a row nobody owns yet, a guard
+        // miss means "no lease to lose", not "another worker took it over"
+        // (#1830 review).
+        let leaseClaimed = false;
+
+        try {
+            const jobPayload = job.payload || {};
+            const {
+                codeManagementPayload,
+                event,
+                platformType,
+                organizationAndTeamData,
+                teamAutomationId,
+            } = jobPayload as EnqueueCodeReviewJobInput;
+
+            if (
+                !codeManagementPayload ||
+                !event ||
+                !platformType ||
+                !organizationAndTeamData ||
+                !teamAutomationId
+            ) {
+                throw new Error('Invalid payload: missing required fields');
+            }
+
+            // Short-circuit when the installation's GitHub bucket is
+            // already below the safety threshold. The gate throws
+            // RateLimitError(resetAt), and the consumer error handler
+            // republishes with a delay aligned to the bucket reset
+            // (instead of burning the full router timeout watching
+            // octokit sleep retry-after). Cheap call: /rate_limit does
+            // not consume quota.
+            await this.rateLimitGate.check(
+                organizationAndTeamData,
+                platformType,
+            );
+
+            const admission =
+                await this.byokConcurrencyGateService.tryEnter(job);
+
+            if (admission.kind === 'deferred') {
+                await this.byokConcurrencyGateService.deferJob(job, admission);
+                return;
+            }
+
+            // The gate gave up: no BYOK slot ever came free. Record it as a
+            // failure and tell the author. Returning quietly here would be
+            // indistinguishable from a review that ran and found nothing,
+            // which is exactly how four organizations went a full day
+            // without reviews and without an error.
+            if (admission.kind === 'exhausted') {
+                const error = new Error(
+                    `No BYOK concurrency slot became available after ${admission.deferredCount} attempts. ` +
+                        `Reviews for this model are queued behind a slot that is not being released.`,
+                );
+                error.name = 'ByokConcurrencySlotExhausted';
+
+                // Notify ONCE, keyed on the NOTIFICATION -- not on the job
+                // status.
+                //
+                // `process()` does not check status on entry, so a redelivery
+                // (a broker retry, or the stale-job reaper picking the row back
+                // up) runs this branch again and `notifyReviewFailed` reaches
+                // the pull request author a second time.
+                //
+                // Gating on `status === FAILED` looked like the fix and was a
+                // trap: `handleFailure` writes that status whether or not the
+                // author was ever told. A crash between the two, or a notify
+                // that failed inside its own catch, would leave the job FAILED
+                // and every later attempt skipping the notice -- recreating the
+                // "review failed and nobody was told" defect this branch exists
+                // to prevent. A marker written beside the notification cannot
+                // be set by the failure path.
+                //
+                // `job` is the row this method loaded at entry, so its metadata
+                // is current; no second read is needed.
+                const previousMetadata = (job.metadata ?? {}) as Record<
+                    string,
+                    any
+                >;
+                const alreadyNotified = Boolean(
+                    previousMetadata.byokSlotExhausted?.notifiedAt,
+                );
+
+                // No lease is held on this path, so the write cannot be fenced on
+                // one — but it must still not land over a worker that IS running
+                // the job: a redelivery of the same jobId can be consumed while
+                // another worker has already claimed the row (see the note on
+                // `requireNoLiveOwner`), and stamping FAILED there would kill that
+                // worker's completion, drop its review and send the author a
+                // failure notice for a review that is still running.
+                //
+                // So the write is conditional on nobody live owning the row. When
+                // it does not land, this delivery stops here: the review belongs
+                // to that worker, and the notice is its call to make.
+                const recorded = await this.handleFailure(jobId, error, {
+                    organizationId: this.organizationIdFor(job),
+                    requireNoLiveOwner: true,
+                });
+
+                if (!recorded) {
+                    this.logger.warn({
+                        message:
+                            'BYOK slot exhausted, but a live worker owns the job — leaving the outcome to it',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                    return;
+                }
+
+                if (alreadyNotified) {
+                    this.logger.debug({
+                        message:
+                            'BYOK slot exhausted on a job whose author was already told — not notifying again',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                    return;
+                }
+
+                await this.notifyReviewFailed(job, error, correlationId);
+
+                await this.jobRepository
+                    .update(jobId, {
+                        metadata: {
+                            ...previousMetadata,
+                            byokSlotExhausted: {
+                                notifiedAt: new Date().toISOString(),
+                                deferredCount: admission.deferredCount,
+                            },
+                        },
+                    })
+                    .catch((markError) => {
+                        // Failing to record it means a redelivery may notify
+                        // again. That is the direction to fail in -- a repeat
+                        // is a nuisance, silence is the original bug -- but it
+                        // is logged rather than swallowed so a persistent
+                        // failure is not mistaken for mysterious duplicates.
+                        this.logger.warn({
+                            message:
+                                'Could not record that the exhausted-slot notice was sent — a redelivery may repeat it',
+                            context: CodeReviewJobProcessorService.name,
+                            error:
+                                markError instanceof Error
+                                    ? markError
+                                    : undefined,
+                            metadata: {
+                                jobId,
+                                correlationId,
+                                // The tenant this failure belongs to. Without
+                                // it the line lands in the same unattributable
+                                // bucket this branch already fixed elsewhere.
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                            },
+                        });
+                    });
+                return;
+            }
+
+            if (admission.kind === 'acquired') {
+                acquiredLock = admission.lock;
+            }
+
+            await this.jobRepository.update(jobId, {
+                status: JobStatus.PROCESSING,
+                startedAt: new Date(),
+                // Acquire the job-ownership lease so the stale-job reaper can
+                // tell an actively-processing job (renewed lease) from a dead
+                // worker (expired lease → reclaimed in ~90s, #1830).
+                leaseOwner: this.instanceId,
+                leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
+                metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
+            });
+
+            // Past this line the row is ours: every failure from here on has a
+            // lease to lose, which is what the guarded failure write assumes.
+            leaseClaimed = true;
+
+            // A local controller mirrors the parent signal and can ALSO be
+            // aborted when the lease is lost: two consecutive renewal failures
+            // mean this worker may no longer own the job (the reaper is free to
+            // reclaim a lease older than the TTL), so we stop running it rather
+            // than race the reaper toward a double execution (#1830 review).
+            const runController = new AbortController();
+            const abortRun = () => runController.abort(signal?.reason);
+            if (signal) {
+                if (signal.aborted) {
+                    runController.abort(signal.reason);
+                } else {
+                    signal.addEventListener('abort', abortRun, { once: true });
+                }
+            }
+            const runSignal = runController.signal;
+
+            // Renew the lease on a ~30s cadence for as long as the review
+            // runs. A killed worker (OOM, ECS eviction, kill -9) cannot renew,
+            // so its lease lapses and the reaper reclaims instead of waiting
+            // out the 180-min in-process timeout that dies with the process.
+            const leaseRenewal = startJobLeaseRenewal({
+                signal: runSignal,
+                logger: this.logger,
+                jobId,
+                organizationId: organizationAndTeamData?.organizationId,
+                // Guarded on ownership: if the reaper already requeued this job
+                // and another worker picked it up, the renewal writes nothing
+                // and the renewer treats it as a lost lease rather than racing
+                // that worker toward the same review (#1830 review).
+                renew: () =>
+                    this.jobRepository.update(
+                        jobId,
+                        {
+                            leaseOwner: this.instanceId,
+                            leaseExpiresAt: new Date(
+                                Date.now() + JOB_LEASE_TTL_MS,
+                            ),
+                        },
+                        { leaseOwner: this.instanceId },
+                    ),
+                onRenewError: (error) =>
+                    this.logger.warn({
+                        message:
+                            'Could not renew workflow job lease — it will expire and be reclaimed if this worker is dead',
+                        context: CodeReviewJobProcessorService.name,
+                        error: error instanceof Error ? error : undefined,
+                        metadata: {
+                            jobId,
+                            instanceId: this.instanceId,
+                        },
+                    }),
+                onLeaseLost: (error) => {
+                    leaseLost = true;
+                    this.logger.error({
+                        message:
+                            'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
+                        context: CodeReviewJobProcessorService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: {
+                            jobId,
+                            instanceId: this.instanceId,
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                        },
+                    });
+                    runController.abort(new Error('Job lease lost'));
+                },
+            });
+
+            // Race the use-case against the parent's AbortSignal. The use
+            // case already receives `signal` (PR #1 wired it down to the
+            // LLM agent loop), but any link of the chain that does NOT
+            // honor it — an octokit sleep, a downstream service stuck on
+            // retry-after, a synchronous CPU section — keeps the promise
+            // pending past the 1h45min router timeout, holding the worker
+            // slot zombie. The race guarantees the processor unblocks
+            // when the signal fires regardless of how deep the stall is.
+            try {
+                await raceWithAbortSignal(
+                    this.runCodeReviewAutomationUseCase.execute(
+                        {
+                            codeManagementPayload,
+                            event,
+                            platformType,
+                            correlationId,
+                            organizationAndTeamData,
+                            teamAutomationId,
+                            workflowJobId: jobId,
+                        },
+                        runSignal,
+                    ),
+                    runSignal,
+                );
+            } finally {
+                leaseRenewal.stop();
+                if (signal) {
+                    signal.removeEventListener('abort', abortRun);
+                }
+            }
+
+            await this.markCompleted(jobId);
+
+            const durationMs = Date.now() - startTime;
+            this.metricsCollector?.recordHistogram(
+                'code_review_duration_ms',
+                durationMs,
+                { status: 'success' },
+            );
+        } catch (rawError) {
+            // Wrap octokit 403/429 in RateLimitError so the consumer
+            // error handler can apply the smart delay. If the error
+            // wasn't a GitHub rate-limit, classifyGitHubError returns
+            // it unchanged. We also defer-re-throw the classified
+            // version so the consumer (RabbitMQErrorHandler) sees the
+            // typed error, not the raw octokit shape.
+            const error = classifyGitHubError(rawError) as Error;
+
+            // The lease was lost mid-run (transient renewal failures). This is
+            // reclaimable, not terminal: leave the row PROCESSING for the lease
+            // reaper to requeue once the lease expires. We must NOT throw here —
+            // the router/consumer catch (job-processor-router.service.ts,
+            // workflow-job-consumer.service.ts) would overwrite the row with
+            // FAILED/PERMANENT, and the lease reaper only reclaims rows still in
+            // PROCESSING, so the intended salvage would never happen and the
+            // author would get a bogus failure notice. Returning resolves the
+            // consumer (which acks the message) with the row left untouched
+            // (#1830).
+            if (leaseLost) {
+                const orgId =
+                    (
+                        (job?.payload ?? {}) as {
+                            organizationAndTeamData?: {
+                                organizationId?: string;
+                            };
+                        }
+                    )?.organizationAndTeamData?.organizationId;
+                this.logger.warn({
+                    message:
+                        'Job lease lost after repeated renewal failures — leaving the row PROCESSING for the lease reaper to reclaim',
+                    context: CodeReviewJobProcessorService.name,
+                    error,
+                    metadata: { jobId, organizationId: orgId },
+                });
+                return;
+            }
+
+            // A user asked for this review and another run held the PR.
+            // Dropping it here is what made the request vanish (#1700), so
+            // wait for the holder and try again; only once the retry window
+            // is spent do we give up, and then we say so on the PR.
+            if (isPrReviewInProgressError(error)) {
+                const deferral = this.prReviewDeferralService.next(
+                    job,
+                    error.holderVisibleUntil,
+                );
+
+                if (deferral) {
+                    await this.prReviewDeferralService.defer(job, deferral);
+                    return;
+                }
+
+                await this.abandonBusyReview(job, error);
+                return;
+            }
+
+            if (error.name === 'WorkflowPausedError') {
+                // Same fence as the other writes reached from this catch: a
+                // worker that lost its lease mid-run must not move a row the
+                // reaper already handed to another worker.
+                const stillOwned = await this.jobRepository.update(
+                    jobId,
+                    {
+                        status: JobStatus.WAITING_FOR_EVENT,
+                        waitingForEvent: {
+                            eventType: (error as any).eventType,
+                            eventKey: (error as any).eventKey,
+                        },
+                    },
+                    { leaseOwner: this.instanceId },
+                );
+                if (stillOwned === false) {
+                    this.logger.warn({
+                        message:
+                            'Job lease no longer owned when pausing for an event — leaving the row to the worker that took it over',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, instanceId: this.instanceId },
+                    });
+                }
+                return;
+            }
+
+            this.logger.error({
+                message: `Job ${jobId} failed`,
+                error,
+                context: CodeReviewJobProcessorService.name,
+            });
+
+            const owned = await this.handleFailure(jobId, error, {
+                // Only a run that actually CLAIMED the lease can be reported as
+                // "no longer owned". A failure raised before the claim (the
+                // payload check, the rate-limit gate) runs the same guard against
+                // a row that is still PENDING with no leaseOwner, so it matches
+                // nothing and would be read as "another worker owns this" — while
+                // in fact nobody does. Passing ownedBy only when the lease was
+                // claimed keeps that case on the unguarded write, which is what
+                // stamps the FAILED status and lets the rethrow below reach the
+                // consumer's error handler for a republish (#1830 review).
+                ownedBy: leaseClaimed ? this.instanceId : undefined,
+                organizationId: this.organizationIdFor(job),
+            });
+
+            // The guarded write reports whether this worker still owned the
+            // row. If it did not, the job belongs to another worker now: there
+            // is nobody left to notify on this run, and rethrowing would make
+            // the catches above stamp FAILED/PERMANENT unguarded over the row
+            // that worker is running — the very state the fence refused to
+            // write (#1830 review). A run that never held the lease has nothing
+            // to have lost, so it keeps failing loudly and republishing.
+            if (leaseClaimed && !owned) {
+                return;
+            }
+
+            // Don't spam the author with a failure notification when we
+            // know the job is going to retry on its own (rate-limit will
+            // resolve when the GitHub bucket resets). They'd get one
+            // email per retry otherwise.
+            if (!isRateLimitError(error)) {
+                await this.notifyReviewFailed(job, error, correlationId);
+            }
+            throw error;
+        } finally {
+            if (acquiredLock && !acquiredLock.isReleased()) {
+                try {
+                    await acquiredLock.release();
+                    this.logger.log({
+                        message: `[BYOK-CONCURRENCY-GATE] released slot for job ${jobId}`,
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                } catch (releaseError) {
+                    this.logger.error({
+                        message:
+                            'Failed to release distributed BYOK concurrency slot',
+                        error: releaseError,
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * The PR never freed up within the retry window. Answer the person who
+     * asked — silence here is indistinguishable from a review that ran and
+     * found nothing — and record the job as failed rather than completed so
+     * the drop is visible to metrics instead of counting as a success.
+     */
+    private async abandonBusyReview(
+        job: IWorkflowJob,
+        error: Error & { target?: unknown; gate?: string },
+    ): Promise<void> {
+        this.logger.error({
+            message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
+            context: CodeReviewJobProcessorService.name,
+            error,
+            metadata: {
+                jobId: job.id,
+                correlationId: job.correlationId,
+                gate: error.gate,
+            },
+        });
+
+        // The guarded write runs FIRST, because its outcome decides whether the
+        // notice is honest. If the lease was reclaimed while this run was giving
+        // up (the renewer stalled long enough for the reaper to requeue and
+        // another worker to claim the job), the row belongs to that worker, which
+        // will re-drive and may complete the review — telling the author their
+        // request was dropped would contradict what actually happens, and the
+        // drop would be recorded on a row this run no longer owns. Gating the
+        // notice on the write is the same fence as everywhere else, applied to
+        // the notification instead of to the status (#1830 review).
+        const recorded = await this.handleFailure(job.id, error, {
+            ownedBy: this.instanceId,
+            organizationId: this.organizationIdFor(job),
+        });
+
+        if (!recorded) {
+            this.logger.warn({
+                message:
+                    'Skipping the refusal notice — the job was reclaimed by another worker before the drop was recorded',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId: job.id,
+                    instanceId: this.instanceId,
+                    organizationId: this.organizationIdFor(job),
+                },
+            });
+            return;
+        }
+
+        try {
+            await this.codeReviewHandlerService.notifyCommandReviewRefused(
+                error.target as never,
+            );
+        } catch (notifyError) {
+            this.logger.error({
+                message:
+                    'Failed to tell the user their review request was dropped',
+                context: CodeReviewJobProcessorService.name,
+                error:
+                    notifyError instanceof Error ? notifyError : undefined,
+                metadata: { jobId: job.id },
+            });
+        }
+    }
+
+    private organizationIdFor(job: any): string | undefined {
+        return (
+            (job?.payload as {
+                organizationAndTeamData?: { organizationId?: string };
+            })?.organizationAndTeamData?.organizationId
+        );
+    }
+
+    /**
+     * Marks a job FAILED. Returns whether the write landed, so a caller whose
+     * lease was reclaimed can stop instead of notifying the author and
+     * rethrowing into catches that stamp FAILED unguarded (#1830 review).
+     */
+    async handleFailure(
+        jobId: string,
+        error: Error,
+        options?: {
+            ownedBy?: string;
+            organizationId?: string;
+            /**
+             * For a caller that holds NO lease and must still not stamp over a
+             * live worker: the write lands only while no worker is running the
+             * job. `false` then means "a live worker owns it" rather than "the
+             * lease this run held is gone" (#1830 review).
+             */
+            requireNoLiveOwner?: boolean;
+        },
+    ): Promise<boolean> {
+        this.metricsCollector?.recordCounter('code_review_errors_total', 1, {
+            errorType: error.name || 'UnknownError',
+        });
+
+        // Surface RATE_LIMITED in the job row so the dashboard / DB
+        // queries can distinguish "stuck on GitHub quota, will retry"
+        // from a genuine permanent failure. The consumer error handler
+        // computes the smart delay from the error object itself; this
+        // classification on the job row is purely informational.
+        const classification = isRateLimitError(error)
+            ? ErrorClassification.RATE_LIMITED
+            : ErrorClassification.PERMANENT;
+
+        const failurePatch = {
+            status: JobStatus.FAILED,
+            errorClassification: classification,
+            lastError: error.message,
+            failedAt: new Date(),
+        };
+
+        if (options?.requireNoLiveOwner) {
+            // No lease of our own, but that does NOT mean nobody is running the
+            // job: a redelivery of the same jobId can reach this branch while
+            // another worker holds the row (the inbox dedupes on
+            // (consumerId, messageId), not jobId, and the reaper republishes
+            // with a fresh messageId). So the write asks whether a live worker
+            // owns it instead of assuming one does not.
+            const landed = await this.jobRepository.update(
+                jobId,
+                failurePatch,
+                {
+                    noLiveOwner: true,
+                },
+            );
+
+            if (!landed) {
+                this.logger.warn({
+                    message:
+                        'Not failing the job — a live worker owns the row, so the outcome is its to record',
+                    context: CodeReviewJobProcessorService.name,
+                    metadata: {
+                        jobId,
+                        organizationId: options.organizationId,
+                        errorClassification: classification,
+                    },
+                });
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!options?.ownedBy) {
+            // The router's exhausted-retry path: no worker owns the row any
+            // more, and this FAILED status is what stops the job being
+            // redelivered forever, so it must land unguarded.
+            await this.jobRepository.update(jobId, failurePatch);
+            return true;
+        }
+
+        // Same ownership fence as markCompleted: a worker whose lease lapsed
+        // must not stamp FAILED over the row the reaper already handed to
+        // another worker, whose own terminal write would then be blocked by a
+        // status it never wrote (#1830 review).
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            failurePatch,
+            { leaseOwner: options.ownedBy },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned when marking the failure — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: options.ownedBy,
+                    organizationId: options.organizationId,
+                    errorClassification: classification,
+                },
+            });
+            return false;
+        }
+
+        return true;
+    }
+
+    async markCompleted(jobId: string, result?: unknown): Promise<void> {
+        // Terminal transition, guarded the same way: a worker that lost its
+        // lease mid-run must not mark COMPLETED a job the reaper already handed
+        // to someone else, or that retry would be swallowed and the row would
+        // look finished while the other worker is still reviewing (#1830
+        // review).
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                result: result,
+            },
+            { leaseOwner: this.instanceId },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned at completion — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: this.instanceId,
+                },
+            });
+        }
+    }
+
+    private removeByokConcurrencyGateMetadata(
+        metadata?: Record<string, unknown>,
+    ): Record<string, unknown> | undefined {
+        if (!metadata?.byokConcurrencyGate) {
+            return metadata;
+        }
+
+        const nextMetadata = { ...metadata };
+        delete nextMetadata.byokConcurrencyGate;
+
+        return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
+    }
+
+    /**
+     * Best-effort notification for a terminally-failed code review.
+     * Targets the PR author (when extractable from the platform webhook
+     * payload and resolvable to an internal user) plus all org owners.
+     *
+     * Failures here never re-throw — the surrounding catch block already
+     * marked the job FAILED and is about to rethrow the original error.
+     */
+    private async notifyReviewFailed(
+        job: { payload?: unknown },
+        error: Error,
+        correlationId: string,
+    ): Promise<void> {
+        try {
+            const jobPayload = (job?.payload ??
+                {}) as Partial<EnqueueCodeReviewJobInput> & {
+                codeManagementPayload?: any;
+            };
+            const organizationId =
+                jobPayload.organizationAndTeamData?.organizationId;
+            if (!organizationId) return;
+
+            // Platform webhook payloads vary by provider — defensive
+            // extraction tries the most common shapes (GitHub
+            // `pull_request`, GitLab `object_attributes`/`merge_request`,
+            // Bitbucket `pullrequest`). Missing fields fall back to
+            // empty strings; the notification still goes out to owners.
+            const cm = jobPayload.codeManagementPayload ?? {};
+            const pr =
+                cm.pull_request ??
+                cm.pullrequest ??
+                cm.object_attributes ??
+                cm.merge_request ??
+                {};
+            const repo = cm.repository ?? pr.repository ?? {};
+
+            const prUrl: string = pr.html_url ?? pr.web_url ?? pr.url ?? '';
+            const repoName: string =
+                repo.full_name ?? repo.name ?? cm.repository?.full_name ?? '';
+            const author = pr.user ?? pr.author ?? cm.actor ?? cm.sender ?? {};
+            const authorEmail: string | undefined =
+                author?.email ?? author?.emailAddress;
+            const authorLogin: string | undefined =
+                author?.login ?? author?.username ?? author?.nickname;
+
+            // Owners are the config-driven audience (defaultRoles in the
+            // catalog); only the PR author is passed as a directed recipient.
+            const recipients: NotificationRecipient[] = [];
+            if (authorEmail) {
+                const prAuthor = await this.prAuthorRecipientResolver.resolve(
+                    { email: authorEmail, login: authorLogin },
+                    organizationId,
+                );
+                if (prAuthor) recipients.push(prAuthor);
+            }
+
+            const isAIEmptyBodyError =
+                error?.message?.includes('Last error: <none>');
+
+            const reason = isAIEmptyBodyError
+                ? `The configured AI provider returned empty responses for several requests in a row. This is usually a transient provider issue. You can re-run the review or switch to a different model in Settings → AI Provider. (${error?.message || ''})`
+                : (error?.message ?? 'unknown error');
+
+            await this.notificationService.emit({
+                event: NotificationEvent.REVIEW_FAILED,
+                payload: {
+                    prUrl,
+                    repoName,
+                    reason,
+                    correlationId,
+                },
+                organizationId,
+                recipients,
+                correlationId,
+            });
+        } catch (emitError) {
+            this.logger.error({
+                message: 'Failed to emit review.failed notification',
+                error:
+                    emitError instanceof Error
+                        ? emitError
+                        : new Error(String(emitError)),
+                context: CodeReviewJobProcessorService.name,
+            });
+        }
+    }
+}

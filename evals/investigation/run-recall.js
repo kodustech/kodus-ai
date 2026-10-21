@@ -1,21 +1,39 @@
 #!/usr/bin/env node
 // Direct finder-recall runner.
 //
-// This intentionally bypasses promptfoo so local and CI use the same Node
-// entrypoint without npx/network dependency. It runs the live generalist finder
-// through deterministic tool replay, then scores findings against golden bugs
-// with the same recall-assertion judge.
+// Runs production's review on each case (agent-provider.js → shared/review-stage.js:
+// the PR's platform data, the repository at its head, production's sandbox and
+// model route), then scores what the review ships against the PR's known bugs
+// with recall-assertion.js. One Node entry point for local runs and CI.
 const fs = require('fs');
 const path = require('path');
 
 const buildTests = require('./recall-tests');
 const { TIER0, defaultMatrix } = require('../shared/tier0-models');
+const { readTeamConfig } = require('../shared/team-config');
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
+const KNOWN_FLAGS = new Set([
+    'model',
+    'all',
+    'set',
+    'cases',
+    'limit',
+    'threshold',
+    'output',
+    'concurrency',
+    'list-models',
+    'listModels',
+    'gate',
+    'no-judge',
+    'team-config',
+]);
+
 function parseArgs(argv) {
     const out = {
-        model: process.env.FINDER_MODEL || process.env.RECALL_MODEL || 'gpt-5.4',
+        model:
+            process.env.FINDER_MODEL || process.env.RECALL_MODEL || 'gpt-5.4',
         all: process.env.RECALL_ALL === '1',
         set: process.env.RECALL_SET || 'pr',
         cases: process.env.RECALL_CASES || '',
@@ -27,7 +45,9 @@ function parseArgs(argv) {
         output: '',
         concurrency: Number(process.env.RECALL_CONCURRENCY) || 4,
         listModels: false,
+        noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
+        teamConfig: '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -36,15 +56,29 @@ function parseArgs(argv) {
         if (!m) continue;
 
         const key = m[1];
+        if (!KNOWN_FLAGS.has(key)) {
+            // A silent no-op here is how `--no-judge` did nothing on its first
+            // run, and how a mistyped `--set` would quietly measure the default
+            // set instead of the one asked for.
+            console.error(
+                `unknown flag --${key}. Known: ${[...KNOWN_FLAGS].map((f) => `--${f}`).join(' ')}`,
+            );
+            process.exit(2);
+        }
         const inlineValue = m[2];
         const value = inlineValue ?? argv[i + 1];
-        const consumesNext = inlineValue === undefined && value && !String(value).startsWith('--');
+        const consumesNext =
+            inlineValue === undefined &&
+            value &&
+            !String(value).startsWith('--');
 
         if (key === 'model') {
             out.model = value || out.model;
             if (consumesNext) i += 1;
         } else if (key === 'all') {
             out.all = true;
+        } else if (key === 'no-judge') {
+            out.noJudge = true;
         } else if (key === 'set') {
             out.set = value || out.set;
             if (consumesNext) i += 1;
@@ -63,10 +97,13 @@ function parseArgs(argv) {
         } else if (key === 'concurrency') {
             out.concurrency = Number(value);
             if (consumesNext) i += 1;
-        } else if (key === 'list-models') {
+        } else if (key === 'list-models' || key === 'listModels') {
             out.listModels = true;
         } else if (key === 'gate') {
             out.gate = true;
+        } else if (key === 'team-config') {
+            out.teamConfig = value || '';
+            if (consumesNext) i += 1;
         }
     }
 
@@ -74,7 +111,9 @@ function parseArgs(argv) {
 }
 
 function avg(values) {
-    const nums = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+    const nums = values.filter(
+        (value) => typeof value === 'number' && Number.isFinite(value),
+    );
     if (!nums.length) return null;
     return nums.reduce((sum, value) => sum + value, 0) / nums.length;
 }
@@ -89,63 +128,7 @@ function writeJson(file, payload) {
     fs.writeFileSync(file, JSON.stringify(payload, null, 2));
 }
 
-/**
- * Absolute per-model floors (evals/investigation/targets.json). Gate is on the
- * RUN MEAN across the case set — never per-PR (per-PR recall noise is ±20pp;
- * single PRs scoring 0 is normal). Besides recallFloor, two low-noise collapse
- * detectors trip when the engine breaks rather than when recall wobbles:
- * minMeanFindings (prompt lost / findings not parsed) and minMeanToolCalls
- * (tools dead / loop not engaging).
- */
-function evaluateGate(summary, rows, model) {
-    let targets;
-    try {
-        targets = require('./targets.json');
-    } catch (err) {
-        // Missing file → skip the gate. A malformed file must fail loudly
-        // rather than silently disabling the gate.
-        if (err.code === 'MODULE_NOT_FOUND') {
-            return { status: 'skipped', reason: 'targets.json missing' };
-        }
-        throw err;
-    }
-    const target = targets.models?.[model];
-    if (!target) {
-        return { status: 'skipped', reason: `no target for model ${model}` };
-    }
-
-    const meanFindings = avg(
-        rows.map((row) => {
-            const md = row.metadata || {};
-            const tp = md.tpFindings;
-            const fp = md.fpFindings;
-            if (typeof tp !== 'number' || typeof fp !== 'number') return null;
-            return tp + fp;
-        }),
-    );
-    const meanToolCalls = avg(rows.map((row) => row.metadata?.totalCalls));
-
-    const checks = [
-        {
-            name: 'recall_mean',
-            actual: summary.metrics.recall_mean,
-            floor: target.recallFloor,
-        },
-        { name: 'mean_findings', actual: meanFindings, floor: target.minMeanFindings },
-        { name: 'mean_tool_calls', actual: meanToolCalls, floor: target.minMeanToolCalls },
-    ].map((check) => ({
-        ...check,
-        pass:
-            typeof check.actual === 'number' &&
-            typeof check.floor === 'number' &&
-            check.actual >= check.floor,
-    }));
-
-    return {
-        status: checks.every((check) => check.pass) ? 'pass' : 'fail',
-        checks,
-    };
-}
+const { evaluateGate } = require('./gate');
 
 function tryParseJson(value) {
     if (typeof value !== 'string') return null;
@@ -174,25 +157,34 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
             // conceitual, ex.: padrao duplicado em outro arquivo, decorator).
             // Linha e 1-indexed, entao 0 nunca e valida — normaliza para null
             // em vez de deixar o schema rejeitar a submission inteira.
-            startLine: Number.isInteger(f.relevantLinesStart) && f.relevantLinesStart > 0 ? f.relevantLinesStart : null,
-            endLine: Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0 ? f.relevantLinesEnd : null,
+            startLine:
+                Number.isInteger(f.relevantLinesStart) &&
+                f.relevantLinesStart > 0
+                    ? f.relevantLinesStart
+                    : null,
+            endLine:
+                Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0
+                    ? f.relevantLinesEnd
+                    : null,
             severity: sev(f.severity),
-            ...(f.severity && !sev(f.severity) ? { severityRaw: String(f.severity) } : {}),
+            ...(f.severity && !sev(f.severity)
+                ? { severityRaw: String(f.severity) }
+                : {}),
             category: f.label ?? f.category ?? null,
-            description: [f.oneSentenceSummary, f.suggestionContent].filter(Boolean).join(' — '),
+            description: [f.oneSentenceSummary, f.suggestionContent]
+                .filter(Boolean)
+                .join(' — '),
         })),
         usage: {
             inputTokens: tokenUsage?.prompt ?? tokenUsage?.inputTokens ?? 0,
-            outputTokens: tokenUsage?.completion ?? tokenUsage?.outputTokens ?? 0,
+            outputTokens:
+                tokenUsage?.completion ?? tokenUsage?.outputTokens ?? 0,
             reasoningTokens: trace.usage?.reasoningTokens ?? null,
             cacheReadTokens: trace.usage?.cacheReadTokens ?? null,
         },
         trace: {
             finishReason: trace.finishReason ?? null,
             steps: typeof trace.steps === 'number' ? trace.steps : null,
-            replayCalls: typeof trace.replayCalls === 'number' ? trace.replayCalls : null,
-            unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
-                ? trace.unexpectedToolCalls.length : 0,
         },
     };
 }
@@ -200,22 +192,35 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
 function runMetaOf(args) {
     return {
         harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
+        // The team config saved over each case's (--team-config), by its hash.
+        teamConfig: args.team ? args.team.hash : null,
         model: {
             // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
-            id: (TIER0[args.model] && (TIER0[args.model].codexModel || TIER0[args.model].doModel)) || args.model,
-            provider: (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription' ? 'subscription' : 'api',
+            id:
+                (TIER0[args.model] &&
+                    (TIER0[args.model].codexModel ||
+                        TIER0[args.model].doModel)) ||
+                args.model,
+            provider:
+                (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
+            // How the finder reached it (model-route.js resolveRoute): a BYOK
+            // config, or none for `kodus-managed`.
+            // A subscription model never runs (main exits 2 before it).
+            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
-        executionMode: 'replay',
+        // Production's tools over the repository at the PR's head.
+        executionMode: 'live',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
-        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
-        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
-        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
+        // reasoningEffort (agent-provider.js resolveRoute), which production
+        // maps per provider; without it the BYOK slot sets none.
         reasoning: process.env.RECALL_REASONING_EFFORT
-            ? { config: 'explicit', effortRequested: process.env.RECALL_REASONING_EFFORT }
+            ? {
+                  config: 'explicit',
+                  effortRequested: process.env.RECALL_REASONING_EFFORT,
+              }
             : { config: 'vendor-default', effortRequested: null },
         runAt: new Date().toISOString(),
     };
@@ -264,10 +269,58 @@ async function main() {
         return;
     }
 
-    const { loadJudgeKey } = require('./recall-judge');
-    if (!loadJudgeKey()) {
+    if (args.teamConfig) {
+        try {
+            args.team = readTeamConfig(args.teamConfig);
+        } catch (error) {
+            console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+            process.exit(2);
+        }
+    }
+
+    // A subscription model has no production route: the finder would run
+    // another model under its name (agent-provider.js resolveRoute).
+    if (TIER0[args.model]?.provider === 'codex_subscription') {
         console.error(
-            'Missing judge key: set API_ANTHROPIC_API_KEY, ANTHROPIC_API_KEY, or BYOK_ANTHROPIC_API_KEY.',
+            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
+                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
+        );
+        process.exit(2);
+    }
+
+    // --no-judge: run the finder and SAVE its findings, score nothing. The finder
+    // is the expensive half (~$3.5 a night) and a dead judge key used to throw it
+    // away — the scoring exception escaped runOneCase before the submission was
+    // pushed, so a night that paid for 30 finder runs kept 3. The saved submission
+    // is what rejudge.js (or any external judge) re-scores afterwards. It is never
+    // a measurement: the run exits 2 with the reason.
+    const NO_JUDGE = !!args.noJudge;
+    const {
+        loadJudgeKey,
+        JUDGE_MODEL,
+        providerFor,
+        matchComment,
+    } = require('./recall-judge');
+    if (!NO_JUDGE && !loadJudgeKey()) {
+        const error = `Missing judge key for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): set JUDGE_API_KEY.`;
+        console.error(error);
+        // Still write a result, so the report says what was missing instead of
+        // "crashed before writing its result".
+        writeJson(
+            args.output ||
+                path.join(
+                    RESULTS_DIR,
+                    `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`,
+                ),
+            {
+                model: args.model,
+                cases: 0,
+                infraFailures: 0,
+                error,
+                metrics: {},
+                rows: [],
+                gate: { status: 'off' },
+            },
         );
         process.exit(2);
     }
@@ -287,7 +340,35 @@ async function main() {
 
     process.env.RECALL_MODEL = args.model;
 
-    const tests = await buildTests();
+    // The presence check above passed once while holding the FINDER's Fireworks
+    // key, and the 401 only surfaced after 30 paid finder runs. Presence is not validity: spend one
+    // judge call before spending the finder.
+    if (!NO_JUDGE) {
+        try {
+            await matchComment(
+                loadJudgeKey(),
+                'a null pointer when the map is read concurrently',
+                'possible NPE: the map is read without synchronisation',
+            );
+        } catch (error) {
+            const reason =
+                error instanceof Error ? error.message : String(error);
+            console.error(
+                `judge preflight failed for ${JUDGE_MODEL} (${providerFor(JUDGE_MODEL)}): ${reason.slice(0, 300)}\n` +
+                    'Not measured, and no finder run was paid for. Set JUDGE_API_KEY, or use --no-judge to save the findings for an external judge.',
+            );
+            process.exit(2);
+        }
+    }
+
+    let tests;
+    try {
+        tests = await buildTests();
+    } catch (error) {
+        // An unknown set, or a set naming a case with no dataset: nothing to measure.
+        console.error(`finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(2);
+    }
     let selectedTests = Number.isFinite(args.limit)
         ? tests.slice(0, args.limit)
         : tests;
@@ -299,13 +380,21 @@ async function main() {
 
     const InvestigationAgentProvider = require('./agent-provider');
     const recallAssertion = require('./recall-assertion');
+    // Tokens and time of every model call (finder loop, verify, recovery),
+    // read like billing: summary.usage (evals/shared/eval-kit.js tokensUsed).
+    // After agent-provider, so its TypeScript hook is the one loaded.
+    const { countTokens, tokensUsed } = require('../shared/eval-kit');
+    countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
+        teamConfig: args.team ? args.team.configs : null,
     });
 
     const rows = [];
     let infraFailures = 0;
     let qualityFailures = 0;
+    let unscored = 0;
+    const startedAt = new Date().toISOString();
 
     console.log(
         `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
@@ -319,7 +408,10 @@ async function main() {
     const checkpointBase = args.output
         ? path.basename(String(args.output)).replace(/\.json$/, '')
         : `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}`;
-    const checkpointPath = path.join(RESULTS_DIR, `${checkpointBase}.submission.partial.json`);
+    const checkpointPath = path.join(
+        RESULTS_DIR,
+        `${checkpointBase}.submission.partial.json`,
+    );
 
     const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
@@ -351,6 +443,39 @@ async function main() {
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
+            return;
+        }
+
+        if (NO_JUDGE) {
+            unscored += 1;
+            // Carry the trace summary even unscored: it holds the verify funnel
+            // (beforeCount / afterCount / droppedByVerifier and each decision's
+            // parseMode), which needs no judge and is the only way this mode can
+            // say whether the pipeline still works rather than just that it ran.
+            rows.push({
+                caseId,
+                status: 'unscored',
+                reason: 'judge skipped (--no-judge): findings saved for an external judge',
+                traceSummary: traceSummaryFromOutput(apiResult.output),
+            });
+            // Log what was SAVED, read off the saved record itself. Deriving the
+            // count separately is how this line came to print 0 while the
+            // submission held 4: the engine's output is a JSON string, not an
+            // object, so a second bespoke read of it silently found nothing.
+            const saved = submissionResultFromOutput(
+                caseId,
+                apiResult.output,
+                apiResult.tokenUsage,
+            );
+            submissionResults.push(saved);
+            writeJson(checkpointPath, {
+                benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
+                run: runMetaOf(args),
+                partial: true,
+                completedCases: submissionResults.length,
+                results: submissionResults,
+            });
+            console.log(`SAVED  ${caseId} findings=${saved.findings.length}`);
             return;
         }
 
@@ -389,24 +514,34 @@ async function main() {
             }
         }
         submissionResults.push(
-            submissionResultFromOutput(caseId, apiResult.output, apiResult.tokenUsage),
+            submissionResultFromOutput(
+                caseId,
+                apiResult.output,
+                apiResult.tokenUsage,
+            ),
         );
         // checkpoint por caso: passada longa que morre não pode perder o que já foi pago
         writeJson(checkpointPath, {
             benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
-            run: runMetaOf(args), partial: true,
-            completedCases: submissionResults.length, results: submissionResults,
+            run: runMetaOf(args),
+            partial: true,
+            completedCases: submissionResults.length,
+            results: submissionResults,
         });
 
         console.log(
-            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'}`,
+            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} loop-recall=${fmtPct(metadata.loopRecall)} findings=${metadata.findings ?? 'n/a'}`,
         );
     };
 
-    // Pool: casos são independentes (replay determinístico próprio), então
-    // sequencial era só desperdício de relógio.
-    const concurrency = Math.max(1, Math.min(Number(args.concurrency) || 4, selectedTests.length));
-    console.log(`(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`);
+    // Cases share nothing (each review has its own sandbox), so they run in a pool.
+    const concurrency = Math.max(
+        1,
+        Math.min(Number(args.concurrency) || 4, selectedTests.length),
+    );
+    console.log(
+        `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
+    );
     let cursor = 0;
     const worker = async () => {
         for (;;) {
@@ -415,47 +550,93 @@ async function main() {
             try {
                 await runOneCase(selectedTests[idx]);
             } catch (error) {
+                // Reaches here when scoring throws (e.g. the judge's key is
+                // rejected). It used to be counted without a word, so CI showed
+                // "INFRA failure(s): 8" for weeks and nobody could say why.
                 infraFailures += 1;
-                rows.push({
+                const row = {
                     caseId: selectedTests[idx]?.vars?.caseId || `idx-${idx}`,
                     status: 'infra',
-                    reason: error instanceof Error ? error.message : String(error),
-                });
+                    reason:
+                        error instanceof Error ? error.message : String(error),
+                };
+                rows.push(row);
+                console.log(`INFRA ${row.caseId} ${row.reason.slice(0, 300)}`);
             }
         }
     };
     await Promise.all(Array.from({ length: concurrency }, worker));
 
     // pool devolve fora de ordem: reordena pela ordem do dataset (artefato estável)
-    const orderOf = new Map(selectedTests.map((t, i) => [t.vars?.caseId || t.description || `idx-${i}`, i]));
-    const byOrder = (a, b) => (orderOf.get(a.caseId) ?? 1e9) - (orderOf.get(b.caseId) ?? 1e9);
+    const orderOf = new Map(
+        selectedTests.map((t, i) => [
+            t.vars?.caseId || t.description || `idx-${i}`,
+            i,
+        ]),
+    );
+    const byOrder = (a, b) =>
+        (orderOf.get(a.caseId) ?? 1e9) - (orderOf.get(b.caseId) ?? 1e9);
     rows.sort(byOrder);
     submissionResults.sort(byOrder);
 
+    const tokens = rows.reduce(
+        (sum, row) => ({
+            prompt: sum.prompt + (row.tokenUsage?.prompt || 0),
+            completion: sum.completion + (row.tokenUsage?.completion || 0),
+        }),
+        { prompt: 0, completion: 0 },
+    );
+    const infraBudget = Math.ceil(rows.length * 0.05);
+    // Not measured = no recall on the row, whatever the status says. A case
+    // whose output failed to parse is written as a 'fail' with empty metadata
+    // and never counted as infra, so counting only infra rows would let a run
+    // that scored a handful of PRs report itself as a full one.
+    // A control case (no known bug: recall-assertion.js) has no recall by design.
+    const unmeasured = rows.filter(
+        (row) =>
+            !Number.isFinite(row.metadata?.recall) && !row.metadata?.control,
+    ).length;
     const summary = {
         model: args.model,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        tokens,
+        usage: tokensUsed(),
         cases: rows.length,
+        // The model that scored every case: a number holds only under its judge.
+        judge: NO_JUDGE ? null : JUDGE_MODEL,
+        // What --team-config saved over each case's config, or null.
+        teamConfig: args.team
+            ? { hash: args.team.hash, configs: args.team.configs }
+            : null,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,
+        unmeasured,
+        infraBudget,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
             f1_mean: avg(rows.map((row) => row.metadata?.f1)),
-            fair_recall_mean: avg(rows.map((row) => row.metadata?.fairRecall)),
-            fidelity_mean: avg(rows.map((row) => row.metadata?.hitRate)),
+            // What the finder's loops returned, before the steps that follow
+            // them: reported next to the gated (shipped) recall, never gated.
+            loop_recall_mean: avg(rows.map((row) => row.metadata?.loopRecall)),
         },
         rows,
     };
 
+    const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model)
+        ? evaluateGate(summary, rows, args.model, setName)
         : { status: 'off' };
     summary.gate = gate;
 
     const outputPath =
         args.output ||
-        path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`);
+        path.join(
+            RESULTS_DIR,
+            `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`,
+        );
     writeJson(outputPath, summary);
 
     const submissionPath = outputPath.replace(/\.json$/, '.submission.json');
@@ -464,21 +645,35 @@ async function main() {
         run: runMetaOf(args),
         results: submissionResults,
     });
-    try { fs.unlinkSync(checkpointPath); } catch {}
+    try {
+        fs.unlinkSync(checkpointPath);
+    } catch {}
 
     console.log('\n════ finder-recall summary ════');
     console.log(`model: ${summary.model}`);
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
+    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
+    if (NO_JUDGE) {
+        // The percentages above are empty by construction, not a result. Say so
+        // next to them: a 0% that looks like a measurement is how a dead judge
+        // went unseen for weeks.
+        console.log(
+            `\n--no-judge: ${unscored} case(s) ran the finder and were NOT scored.` +
+                `\nfindings saved: ${path.relative(process.cwd(), outputPath).replace(/\.json$/, '.submission.json')}` +
+                `\nthe percentages above are empty by construction — score them with evals/investigation/rejudge.js or an external judge.`,
+        );
+    }
 
     if (gate.status === 'pass' || gate.status === 'fail') {
         console.log('\n════ model floor gate (targets.json) ════');
         for (const check of gate.checks) {
             const actual =
-                typeof check.actual === 'number' ? check.actual.toFixed(3) : 'n/a';
+                typeof check.actual === 'number'
+                    ? check.actual.toFixed(3)
+                    : 'n/a';
             console.log(
                 `${check.pass ? 'OK  ' : 'FAIL'}  ${check.name}: ${actual} (floor ${check.floor})`,
             );
@@ -487,23 +682,51 @@ async function main() {
         console.log(`\ngate skipped: ${gate.reason}`);
     }
 
-    if (infraFailures > 0) {
-        console.error(`\nINFRA failure(s): ${infraFailures}`);
+    // A flaky provider call on one PR out of thirty should not cost the whole
+    // night: at 1% per-case flake, refusing any infra failure throws away a
+    // quarter of the nights. Up to 5% of the set may go unmeasured; the run
+    // then gates on the PRs that did measure and says how many it had.
+    if (unmeasured > infraBudget) {
+        console.error(
+            `\n${unmeasured} PR(s) not measured (${infraFailures} infra${unscored ? `, ${unscored} unscored by --no-judge` : ''}), budget ${infraBudget}`,
+        );
+        process.exit(2);
+    }
+    if (unmeasured > 0)
+        console.log(
+            `\n${unmeasured} PR(s) not measured, within the budget of ${infraBudget}: gating on the ${rows.length - unmeasured} that were.`,
+        );
+
+    // --gate asked for a verdict against the floors; a gate that couldn't run
+    // (no targets, wrong judge) is not a pass. Exit 2 so the night is not
+    // recorded as green and never becomes the next night's baseline.
+    if (args.gate && gate.status === 'skipped') {
+        console.error(`\nGate requested but not evaluated: ${gate.reason}`);
         process.exit(2);
     }
 
-    if (qualityFailures > 0) {
-        console.error(`\nFinder recall gate failed in ${qualityFailures} case(s).`);
+    // With --gate the run mean decides (per-PR results are noise); without it,
+    // per-case failures (RECALL_THRESHOLD, unparsed output) fail the run.
+    if (!args.gate && qualityFailures > 0) {
+        console.error(
+            `\nFinder recall gate failed in ${qualityFailures} case(s).`,
+        );
         process.exit(1);
     }
 
     if (gate.status === 'fail') {
-        console.error('\nModel floor gate FAILED (run mean below targets.json floor).');
+        console.error(
+            '\nModel floor gate FAILED (run mean below targets.json floor).',
+        );
         process.exit(1);
     }
 }
 
-main().catch((error) => {
-    console.error(error);
-    process.exit(2);
-});
+// Exit explicitly: the engine can leave a handle open after the last case, and
+// a finished run that never exits holds its CI job until the timeout.
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(2);
+    });

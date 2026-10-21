@@ -108,3 +108,202 @@ describe("billingFetch dual-mode", () => {
         expect(options).toEqual({ internal: true });
     });
 });
+
+/**
+ * The signature on billing's money routes must cover the request that is
+ * actually sent — the query `typedFetch` appends from `params`, and the body
+ * bytes. Signing one thing and sending another answers 401, and `billingFetch`
+ * turns that into a silent `null`.
+ */
+describe("billingFetch signs what it sends", () => {
+    const SECRET = "shared-webhook-secret";
+    const ORIG = {
+        host: process.env.WEB_HOSTNAME_BILLING,
+        port: process.env.WEB_PORT_BILLING,
+        webhook: process.env.API_BILLING_WEBHOOK_SECRET,
+        dedicated: process.env.API_CREDITS_SERVICE_TOKEN,
+    };
+
+    beforeEach(() => {
+        jest.resetModules();
+        createUrlMock.mockClear();
+        typedFetchMock.mockReset();
+        typedFetchMock.mockResolvedValue({ ok: true });
+        process.env.WEB_HOSTNAME_BILLING = "billing.internal";
+        process.env.WEB_PORT_BILLING = "3992";
+        process.env.API_BILLING_WEBHOOK_SECRET = SECRET;
+        delete process.env.API_CREDITS_SERVICE_TOKEN;
+        setServer(true);
+    });
+
+    afterAll(() => {
+        process.env.WEB_HOSTNAME_BILLING = ORIG.host;
+        process.env.WEB_PORT_BILLING = ORIG.port;
+        if (ORIG.webhook === undefined)
+            delete process.env.API_BILLING_WEBHOOK_SECRET;
+        else process.env.API_BILLING_WEBHOOK_SECRET = ORIG.webhook;
+        if (ORIG.dedicated === undefined)
+            delete process.env.API_CREDITS_SERVICE_TOKEN;
+        else process.env.API_CREDITS_SERVICE_TOKEN = ORIG.dedicated;
+    });
+
+    const expectedSignature = async (
+        method: string,
+        signedPath: string,
+        rawBody: string,
+        timestamp: string,
+    ) => {
+        const { billingSignaturePayload } = await import("./signature");
+        const { createHmac } = await import("crypto");
+        return createHmac("sha256", SECRET)
+            .update(
+                billingSignaturePayload(method, signedPath, timestamp, rawBody),
+            )
+            .digest("hex");
+    };
+
+    it("covers the params typedFetch will append to the URL", async () => {
+        const { billingFetch } = await import("./utils");
+        await billingFetch("credits/balance", {
+            method: "GET",
+            params: { organizationId: "org-1", teamId: "team-9" },
+        } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        const timestamp = config.headers["x-kodus-timestamp"];
+        expect(timestamp).toMatch(/^\d+$/);
+        expect(config.headers["x-kodus-signature"]).toBe(
+            await expectedSignature(
+                "GET",
+                "credits/balance?organizationId=org-1&teamId=team-9",
+                "",
+                timestamp,
+            ),
+        );
+    });
+
+    it("serializes a non-string body and sends the bytes it signed", async () => {
+        const { billingFetch } = await import("./utils");
+        const body = { organizationId: "org-1", creditUsd: 20 };
+        await billingFetch("credits/checkout", {
+            method: "POST",
+            body,
+        } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        // The config that reaches fetch carries the serialized string, not the
+        // object — otherwise `fetch` would send "[object Object]".
+        expect(config.body).toBe(JSON.stringify(body));
+        expect(config.headers["x-kodus-signature"]).toBe(
+            await expectedSignature(
+                "POST",
+                "credits/checkout",
+                JSON.stringify(body),
+                config.headers["x-kodus-timestamp"],
+            ),
+        );
+    });
+
+    it("passes a form body through untouched, and unsigned, on an unsigned route", async () => {
+        const warn = jest
+            .spyOn(console, "warn")
+            .mockImplementation(() => undefined);
+        const { billingFetch } = await import("./utils");
+        const form = new URLSearchParams({ a: "1" });
+        await billingFetch("plans", { method: "POST", body: form } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        // Not replaced by "{}" — the payload survives.
+        expect(config.body).toBe(form);
+        // And no signature: one over "" would claim to cover bytes it never saw.
+        expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining("cannot be signed"),
+        );
+        warn.mockRestore();
+    });
+
+    it("serializes anything JSON can represent, including a class instance", async () => {
+        const { billingFetch } = await import("./utils");
+        class DebitRequest {
+            constructor(
+                public organizationId: string,
+                public creditUsd: number,
+            ) {}
+        }
+        const dto = new DebitRequest("org-1", 20);
+        await billingFetch("credits/checkout", {
+            method: "POST",
+            body: dto,
+        } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        expect(config.body).toBe(JSON.stringify(dto));
+        expect(config.headers["x-kodus-signature"]).toBe(
+            await expectedSignature(
+                "POST",
+                "credits/checkout",
+                JSON.stringify(dto),
+                config.headers["x-kodus-timestamp"],
+            ),
+        );
+    });
+
+    it("refuses a body it cannot sign on a credit route", async () => {
+        const { billingFetch } = await import("./utils");
+        await expect(
+            billingFetch("credits/checkout", {
+                method: "POST",
+                body: new URLSearchParams({ creditUsd: "20" }),
+            } as never),
+        ).rejects.toThrow(/cannot be signed/);
+        expect(typedFetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        {
+            name: "an async iterable (a stream, or cross-realm form-data)",
+            make: () => ({
+                async *[Symbol.asyncIterator]() {
+                    yield "chunk";
+                },
+            }),
+        },
+        {
+            // JSON.stringify answers undefined here: writing that back would
+            // drop the body while the signature covered "".
+            name: "a body JSON cannot represent",
+            make: () => () => undefined,
+        },
+    ])("never serializes $name away", async ({ make }) => {
+        const warn = jest
+            .spyOn(console, "warn")
+            .mockImplementation(() => undefined);
+        const { billingFetch } = await import("./utils");
+        const body = make();
+        await billingFetch("plans", { method: "POST", body } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        expect(config.body).toBe(body);
+        expect(config.headers?.["x-kodus-signature"]).toBeUndefined();
+        // Unsigned is allowed on an unauthenticated route, but never silent.
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining("cannot be signed"),
+        );
+        warn.mockRestore();
+    });
+
+    it("says so, loudly, when no secret is configured", async () => {
+        delete process.env.API_BILLING_WEBHOOK_SECRET;
+        const error = jest
+            .spyOn(console, "error")
+            .mockImplementation(() => undefined);
+        const { billingFetch } = await import("./utils");
+        await billingFetch("credits/balance", {
+            method: "GET",
+            params: { organizationId: "org-1" },
+        } as never);
+        const [, config] = typedFetchMock.mock.calls[0];
+        expect(config?.headers?.["x-kodus-signature"]).toBeUndefined();
+        expect(error).toHaveBeenCalledWith(
+            expect.stringContaining("API_BILLING_WEBHOOK_SECRET"),
+            expect.objectContaining({ method: "GET" }),
+        );
+        error.mockRestore();
+    });
+});

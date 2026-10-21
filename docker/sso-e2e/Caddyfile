@@ -23,7 +23,7 @@
 # the stack:
 #
 #   .kodus.lvh.me        → 3 labels common  (analog of SaaS .kodus.io)
-#   .web.scorpion.lvh.me → 4 labels common  (analog of Dmitry .web.scorpion.co)
+#   .web.acme.lvh.me → 4 labels common  (analog of a customer's .web.acme.co)
 
 (proxy_web) {
     reverse_proxy kodus-web:3000 {
@@ -44,12 +44,12 @@
     }
 }
 
-app.kodus.lvh.me:443, app.web.scorpion.lvh.me:443 {
+app.kodus.lvh.me:443, app.web.acme.lvh.me:443 {
     tls /tls/kodus.lvh.me.crt /tls/kodus.lvh.me.key
     import proxy_web
 }
 
-api.kodus.lvh.me:443, api.web.scorpion.lvh.me:443 {
+api.kodus.lvh.me:443, api.web.acme.lvh.me:443 {
     tls /tls/kodus.lvh.me.crt /tls/kodus.lvh.me.key
     import proxy_api
 }

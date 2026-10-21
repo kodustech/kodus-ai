@@ -58,6 +58,22 @@ export class SandboxLeaseModel extends CoreDocument {
     @Prop({ type: String, required: false })
     repositoryId?: string;
 
+    /**
+     * Base branch fetched into the sandbox at creation. Persisted so a joiner
+     * reconnecting to a READY sandbox gets it back — the ref is on disk either
+     * way, but without the name no tool can ask git for it.
+     */
+    @Prop({ type: String, required: false })
+    baseBranch?: string;
+
+    /**
+     * The review user lost every root path before the repository arrived
+     * (see SandboxInstance.privilegesDropped). Recorded at creation, where it
+     * is known, so a consumer that reconnects later gets the same answer.
+     */
+    @Prop({ type: Boolean, required: false })
+    privilegesDropped?: boolean;
+
     @Prop({ type: String, required: false })
     prNumber?: string;
 
@@ -98,6 +114,16 @@ export class SandboxLeaseModel extends CoreDocument {
      */
     @Prop({ type: Date, required: false })
     killAt?: Date;
+
+    /**
+     * Count of failed `Sandbox.kill` attempts by the reaper (timeout, upstream
+     * error — never "already gone", which deletes immediately). The reaper
+     * retains the doc for a retry on a real failure instead of orphaning the
+     * E2B sandbox, but that must not retry forever during an outage — this
+     * bounds it, see MAX_KILL_RETRIES in sandbox-lease-reaper.service.ts.
+     */
+    @Prop({ type: Number, required: false, default: 0 })
+    killRetryCount?: number;
 
     @Prop({
         type: String,

@@ -281,6 +281,12 @@ header a[href*="changelog"]:hover svg {
     margin-top: 2.5rem;
 }
 
+.kodus-changelog-copy + .kodus-changelog-title,
+.kodus-changelog-list + .kodus-changelog-title,
+.kodus-changelog-video + .kodus-changelog-title {
+    margin-top: 1.75rem;
+}
+
 .kodus-changelog-title {
     margin: 0;
     color: #ffffff;

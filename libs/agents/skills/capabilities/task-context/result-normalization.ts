@@ -89,10 +89,19 @@ function extractContextCandidates(payload: unknown): Record<string, unknown>[] {
         if (!Object.keys(record).length) {
             return;
         }
+
+        // An error envelope's own fields are not task content, and neither is
+        // anything nested under it — descending would mine the failure payload
+        // for a title and report it as the task.
+        if (looksLikeToolErrorCandidate(record)) {
+            return;
+        }
+
         addCandidate(record);
 
         const singletonKeys = [
             'result',
+            'structuredContent',
             'data',
             'payload',
             'item',

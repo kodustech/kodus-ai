@@ -1,0 +1,12 @@
+diff --git a/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts b/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
+index 098a0f7ea..8b274881a 100644
+--- a/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
++++ b/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
+@@ -100,7 +100,6 @@ ${files
+   </Mission>
+ 
+   <TeamInstructions>
+-${instructions}
+   </TeamInstructions>
+ 
+   <DoNotReport>

@@ -39,6 +39,9 @@ export type KodyRule = {
         status: KodyRuleCentralizedStatus;
     };
     origin: KodyRulesOrigin;
+    /** ISO timestamps from the API; "recent" sort and the table read them. */
+    createdAt?: string;
+    updatedAt?: string;
     requestType?: KodyRuleRequestType;
     targetRuleUuid?: string;
     resolvedAt?: string;
@@ -67,10 +70,7 @@ export type KodyRule = {
           }
     >;
     referenceProcessingStatus?:
-        | 'completed'
-        | 'processing'
-        | 'failed'
-        | 'pending';
+        'completed' | 'processing' | 'failed' | 'pending';
 };
 
 export type KodyRuleWithInheritanceDetails = KodyRule & {
@@ -188,8 +188,7 @@ export type KodyRulesCentralizedPrMetadata = {
 };
 
 export type KodyRulesMutationResponse =
-    | KodyRule[]
-    | KodyRulesCentralizedPrMetadata;
+    KodyRule[] | KodyRulesCentralizedPrMetadata;
 
 export type KodyRuleSuggestion = {
     id: string;

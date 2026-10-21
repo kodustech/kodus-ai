@@ -20,3 +20,12 @@ export interface ICodeReviewFeedback {
     };
     syncedEmbeddedSuggestions: boolean;
 }
+
+/**
+ * A reaction read from the git provider but not yet persisted — the shape
+ * `GetReactionsUseCase` produces and `SaveCodeReviewFeedbackUseCase` stores.
+ */
+export type ICollectedReaction = Omit<
+    ICodeReviewFeedback,
+    'uuid' | 'syncedEmbeddedSuggestions'
+>;

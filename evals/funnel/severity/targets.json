@@ -1,0 +1,35 @@
+{
+    "__doc": [
+        "Floors per set and model for the share of known bugs reaching this step kept, with the step's control checks (run.js --gate), as ratios. controlled: the snapshot's PRs of the finder's controlled set, the nightly and every tier-0 model's weekly run; full: every snapshot PR, on demand, no floor.",
+        "floor = min(mean - 2 binomial SE, (n - 2) / n) over the n checks of one run, rounded down: a pair of perfect runs still leaves room for 2 checks, like evals/conversation/targets.json.",
+        "deepseek-v4-flash@fireworks, controlled: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce): 27/32 and 27/32, mean 0.844. floor 0.71.",
+        "Superseded 2026-10-17 (the full set runs on demand, ungated; this was the managed route): deepseek-v4-flash@fireworks, full: calibrated 2026-10-17 from 2 local runs on a725253d6 (managed route, snapshot built on 57ef595ce): 39/45 and 38/45, mean 0.856. floor 0.75.",
+        "The relabeled dataset (#2114) changes the known bugs: a new snapshot and two runs per set recalibrate these floors in the same PR.",
+        "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 27/32 and 26/32, mean 0.828. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.69.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 26/32 and 26/32, mean 0.813. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.67.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 29/32 and 29/32, mean 0.906. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.8.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 27/32 and 28/32, mean 0.859. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.73."
+    ],
+    "sets": {
+        "controlled": {
+            "models": {
+                "deepseek-v4-flash@fireworks": {
+                    "floor": 0.73,
+                    "observed": 0.859
+                },
+                "gpt-6-sol": {
+                    "floor": 0.69,
+                    "observed": 0.828
+                },
+                "claude-sonnet-5-5": {
+                    "floor": 0.67,
+                    "observed": 0.813
+                },
+                "kimi-k2.7-code@openrouter": {
+                    "floor": 0.8,
+                    "observed": 0.906
+                }
+            }
+        }
+    }
+}

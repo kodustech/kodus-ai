@@ -1,6 +1,17 @@
 import { CloneParamsResolverService } from '../services/clone-params-resolver.service';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { FeatureGateService } from '@libs/feature-gate';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
+import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    CustomAgentCliProvisioning,
+    provisionCustomAgentClis,
+} from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 import {
     ISandboxLeaseManager,
@@ -45,6 +56,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly leaseManager: ISandboxLeaseManager,
         private readonly cloneParamsResolver: CloneParamsResolverService,
+        // Optional so specs that build the stage by hand keep compiling;
+        // without them no team CLI is installed.
+        @Optional()
+        private readonly featureGate?: FeatureGateService,
+        @Optional()
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService?: IOrganizationService,
     ) {
         super();
     }
@@ -77,8 +95,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
         // catch block below logs and falls through to self-contained
         // mode — same UX as before, just opt-in upgraded for public repos.
 
-        // Guard: skip if no changed files
-        if (!context?.changedFiles?.length) {
+        // Guard: skip if no changed files, counting the ignored ones a custom
+        // agent still reviews (#2172)
+        if (
+            !context?.changedFiles?.length &&
+            !ignoredFilesForCustomAgents(context, context?.ignoredFileChanges)
+                .length
+        ) {
             this.logger.log({
                 message: `Skipping sandbox creation: no changed files for ${label}`,
                 context: this.stageName,
@@ -167,8 +190,20 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 },
             });
 
+            // A Kodus CLI review reads local changes the sandbox does not
+            // hold (it checks out the pushed branch), so a CLI there would
+            // report on other code. Not run; the review says so.
+            const customAgentClis = await this.provisionCustomAgentClis(
+                context,
+                sandbox,
+                isCliMode
+                    ? 'not run on Kodus CLI reviews: the sandbox holds the pushed branch, not the local changes'
+                    : undefined,
+            );
+
             return this.updateContext(context, (draft) => {
                 draft.sandboxHandle = sandbox;
+                if (customAgentClis) draft.customAgentClis = customAgentClis;
                 draft.getFreshCloneParams = async () => {
                     const freshCloneInfo =
                         await this.cloneParamsResolver.resolve(
@@ -210,7 +245,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                         prNumber: context?.pullRequest?.number,
                     },
                 });
-                return context;
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxSuperseded = true;
+                });
             }
             this.logger.error({
                 message: `Failed to acquire sandbox lease for ${label} (all retries exhausted), continuing without it`,
@@ -222,6 +259,73 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 },
             });
             return context;
+        }
+    }
+
+    /**
+     * Install the team CLIs of the custom agents that will run (#2172), before
+     * any agent or secret touches the sandbox. Only E2B installs them; on the
+     * local sandbox the review gets a warning per CLI instead. A failure here
+     * never fails the review.
+     */
+    private async provisionCustomAgentClis(
+        context: CodeReviewPipelineContext,
+        sandbox: SandboxInstance,
+        skipReason?: string,
+    ): Promise<CustomAgentCliProvisioning | undefined> {
+        const agents = context.codeReviewConfig?.customAgents ?? [];
+        if (
+            !agents.some(
+                (agent) =>
+                    (agent?.enabled || context.onlyCustomAgent) &&
+                    agent?.tools?.cli?.length,
+            )
+        ) {
+            return undefined;
+        }
+
+        const org = context.organizationAndTeamData;
+        const logContext = {
+            organizationId: org?.organizationId,
+            teamId: org?.teamId,
+            repositoryId: context.repository?.id,
+            repositoryName: context.repository?.name,
+            prNumber: context.pullRequest?.number,
+        };
+        try {
+            const provisioning = await provisionCustomAgentClis({
+                logContext,
+                sandbox,
+                agents,
+                onlyCustomAgent: context.onlyCustomAgent,
+                skipReason,
+                changedFiles: (context.changedFiles ?? [])
+                    .map((file) => file?.filename)
+                    .filter(Boolean),
+                ignoredFiles: (context.ignoredFileChanges ?? [])
+                    .filter((file) => file?.status !== 'removed')
+                    .map((file) => file?.filename)
+                    .filter(Boolean),
+            });
+            this.logger.log({
+                message: `Custom agent CLIs ready: ${Object.values(
+                    provisioning.byAgentId,
+                ).reduce(
+                    (n, list) => n + list.length,
+                    0,
+                )} installed, ${provisioning.warnings.length} failed`,
+                context: this.stageName,
+                metadata: logContext,
+            });
+            return provisioning;
+        } catch (error) {
+            this.logger.error({
+                message: 'Custom agent CLI provisioning failed',
+                context: this.stageName,
+                error,
+                metadata: logContext,
+            });
+            return undefined;
         }
     }
 }

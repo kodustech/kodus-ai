@@ -61,9 +61,11 @@ import {
     CodeManagementRepositoryTreeResponseDto,
     CodeManagementWebhookStatusResponseDto,
 } from '../dtos/code-management.response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('code-management')
 export class CodeManagementController {
     constructor(
@@ -186,6 +188,12 @@ export class CodeManagementController {
             repositories: Repository[];
             teamId: string;
             type?: 'replace' | 'append';
+            /**
+             * Set by the chunked save on every request but the last, so
+             * webhooks are reconciled once against the complete selection
+             * instead of against each partially-persisted chunk.
+             */
+            deferWebhooks?: boolean;
         },
     ) {
         return this.createRepositoriesUseCase.execute(body);
@@ -464,7 +472,10 @@ export class CodeManagementController {
         },
     ) {
         return await this.searchCodeManagementUsersUseCase.execute({
-            organizationId: query.organizationId,
+            // Scope to the caller's own organization. Trusting
+            // query.organizationId let any logged-in user read another org's
+            // users.
+            organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
             query: query.q,
             userId: query.userId,
@@ -496,7 +507,8 @@ export class CodeManagementController {
         },
     ) {
         return await this.getCurrentCodeManagementUserUseCase.execute({
-            organizationId: query.organizationId,
+            // Scope to the caller's own organization, not a query-supplied one.
+            organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
         });
     }

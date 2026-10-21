@@ -3,6 +3,7 @@ import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     CodeSuggestion,
+    CustomAgentConfig,
     ReviewOptions,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -11,16 +12,48 @@ import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/p
 import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
 import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
+import { CustomAgentProviderFactory } from '@libs/code-review/infrastructure/agents/providers/custom-agent.provider';
+import {
+    customAgentSlug,
+    filesInAgentScope,
+    ignoredFilesInAgentScope,
+    scopeCallGraph,
+    selectCustomAgents,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import {
+    customAgentSlugClashMessage,
+    KNOWLEDGE_MAIN_REVIEW_TARGET,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { DUPLICATE_LOGIC_AGENT_TOKEN, ReviewAgentInput, ReviewAgentOutput } from './review-agent.contract';
 import { BaseCodeReviewAgentProvider } from './providers/base-code-review-agent.provider';
 import {
     dedupReviewWarnings,
+    warningsFromError,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
 export interface OrchestratorInput extends ReviewAgentInput {
     reviewOptions: ReviewOptions;
     kodyRules?: Partial<IKodyRule>[];
+    /** Team-defined agents (#2172), passed only when the org has the
+     *  `custom-agents` feature. Each runs on the changed files its globs match. */
+    customAgents?: CustomAgentConfig[];
+    /** `@kody -v <slug>`: run only that custom agent, nothing else. */
+    onlyCustomAgent?: string;
+    /** Changed files the review's ignore paths set aside (deleted files
+     *  excluded). Only a custom agent whose include globs name one
+     *  explicitly reviews it; no other agent sees them. */
+    ignoredChangedFiles?: ReviewAgentInput['changedFiles'];
+    /** Skills and docs per target: `main-review` for the built-in category
+     *  agents, a custom agent's id for that agent. Kody Rules takes none. */
+    knowledgeByTarget?: ReadonlyMap<string, ResolvedKnowledge>;
+}
+
+/** Which custom agent a failure, cut-short run or unverified set belongs to. */
+export interface OrchestratorCustomAgentRef {
+    id: string;
 }
 
 export interface OrchestratorAgentFailure {
@@ -28,20 +61,34 @@ export interface OrchestratorAgentFailure {
     category: string;
     error: Error;
     durationMs: number;
+    customAgent?: OrchestratorCustomAgentRef;
 }
 
 /**
- * An agent that returned, but was cut short by its time or step budget rather
- * than finishing its investigation. Not a failure (it may still have produced
+ * An agent that returned, but was cut short (out of steps, or its turn
+ * truncated by the provider) rather than finishing its investigation. Not a failure (it may still have produced
  * findings) — but its silence is not evidence of clean code, so the pipeline
  * must not read it as one.
  */
 export interface OrchestratorAgentIncomplete {
     agentName: string;
     category: string;
-    finishReason: 'timeout' | 'max-steps';
+    finishReason: 'max-steps' | 'truncated' | 'no-result';
     suggestionsFound: number;
     durationMs: number;
+    customAgent?: OrchestratorCustomAgentRef;
+}
+
+/**
+ * An agent whose findings could not all be verified: the verifier's model call
+ * failed, so those findings were not published (#2171). Like a cut-short
+ * agent, its review is not complete.
+ */
+export interface OrchestratorAgentUnverified {
+    agentName: string;
+    category: string;
+    unverifiedCount: number;
+    customAgent?: OrchestratorCustomAgentRef;
 }
 
 export interface OrchestratorOutput {
@@ -50,6 +97,10 @@ export interface OrchestratorOutput {
     failures: OrchestratorAgentFailure[];
     /** Agents that ran to their budget ceiling instead of to completion. */
     incomplete: OrchestratorAgentIncomplete[];
+    /** Agents that left findings unverified because the verify call failed. */
+    unverified?: OrchestratorAgentUnverified[];
+    /** One entry per custom agent selected for the review, run or not. */
+    customAgentRuns?: CustomAgentRun[];
     totalDurationMs: number;
     /** Fidelity warnings collected across all per-agent fan-out, deduped
      *  by (kind, modelName, contextWindowTokens). Empty array when no
@@ -74,6 +125,7 @@ export class ReviewOrchestratorService {
         'performance': 3,
         'duplicate_logic': 4,
         'kody-rules': 4,
+        'custom-agent': 4,
     };
     private static readonly NORMAL_MODE_MAX_STEPS: Record<string, number> = {
         'generalist': 20,
@@ -82,6 +134,7 @@ export class ReviewOrchestratorService {
         'performance': 12,
         'duplicate_logic': 12,
         'kody-rules': 20,
+        'custom-agent': 20,
     };
     private static readonly DEEP_MODE_MAX_STEPS = 100;
 
@@ -94,17 +147,52 @@ export class ReviewOrchestratorService {
         private readonly duplicateLogicAgent: BaseCodeReviewAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
+        @Optional()
+        private readonly customAgentFactory?: CustomAgentProviderFactory,
     ) {}
 
     async execute(input: OrchestratorInput): Promise<OrchestratorOutput> {
         const startTime = Date.now();
-        const { reviewOptions, kodyRules, ...agentInput } = input;
+        const {
+            reviewOptions,
+            kodyRules,
+            customAgents,
+            onlyCustomAgent,
+            knowledgeByTarget,
+            ignoredChangedFiles,
+            ...agentInput
+        } = input;
+        const mainKnowledge = knowledgeByTarget?.get(
+            KNOWLEDGE_MAIN_REVIEW_TARGET,
+        );
+        const reviewLogContext = {
+            organizationId: agentInput.organizationAndTeamData?.organizationId,
+            teamId: agentInput.organizationAndTeamData?.teamId,
+            repositoryId: agentInput.repositoryId,
+            repositoryName: agentInput.repositoryFullName,
+            prNumber: agentInput.prNumber,
+        };
 
         // Determine which agents to run based on review options
         const agentTasks: Array<{
             name: string;
             provider: { execute: (input: any) => Promise<ReviewAgentOutput> };
+            /** Step-budget key; `name` when unset. */
+            budgetKey?: string;
+            /** The files this agent reviews, when narrower than the PR. */
+            changedFiles?: ReviewAgentInput['changedFiles'];
+            customAgent?: OrchestratorCustomAgentRef;
+            /** Skills and docs linked to this agent's target. */
+            knowledge?: ResolvedKnowledge;
         }> = [];
+        const customAgentRuns: CustomAgentRun[] = [];
+        // `@kody -v <slug>` runs that agent alone: the built-in agents
+        // already reviewed this PR, the command asks for one more opinion.
+        // A PR whose changed files are all ignored has nothing for them
+        // either: only the custom agents naming some of those files review it.
+        const onlyIgnoredFiles =
+            !agentInput.changedFiles?.length && !!ignoredChangedFiles?.length;
+        const builtInAgents = !onlyCustomAgent && !onlyIgnoredFiles;
 
         const enabledCategories = [
             reviewOptions.bug !== false && 'bug',
@@ -113,23 +201,34 @@ export class ReviewOrchestratorService {
             reviewOptions.duplicate_logic === true && 'duplicate_logic',
         ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
 
-        if (agentInput.reviewMode === 'deep') {
+        if (!builtInAgents) {
+            // Only the requested custom agent runs (below).
+        } else if (agentInput.reviewMode === 'deep') {
             if (enabledCategories.includes('bug')) {
                 agentTasks.push({
                     name: 'bug',
                     provider: this.bugAgent,
+                    knowledge: mainKnowledge,
                 });
             }
             if (enabledCategories.includes('security')) {
                 agentTasks.push({
                     name: 'security',
                     provider: this.securityAgent,
+                    knowledge: mainKnowledge,
                 });
             }
             if (enabledCategories.includes('performance')) {
                 agentTasks.push({
                     name: 'performance',
                     provider: this.performanceAgent,
+                    knowledge: mainKnowledge,
+                });
+            }
+            if (enabledCategories.includes('duplicate_logic')) {
+                agentTasks.push({
+                    name: 'duplicate_logic',
+                    provider: this.duplicateLogicAgent,
                 });
             }
             if (enabledCategories.includes('duplicate_logic')) {
@@ -148,11 +247,17 @@ export class ReviewOrchestratorService {
                             requestedCategories: enabledCategories,
                         }),
                 },
+                knowledge: mainKnowledge,
             });
         }
 
         // Add Kody Rules agent if there are active standard rules
-        if (this.kodyRulesAgent && kodyRules && kodyRules.length > 0) {
+        if (
+            builtInAgents &&
+            this.kodyRulesAgent &&
+            kodyRules &&
+            kodyRules.length > 0
+        ) {
             agentTasks.push({
                 name: 'kody-rules',
                 provider: {
@@ -165,6 +270,71 @@ export class ReviewOrchestratorService {
             });
         }
 
+        // Custom agents run next to the built-in ones, each on the files its
+        // globs match. One whose globs match nothing is recorded, not run.
+        if (this.customAgentFactory) {
+            // A save refuses two agents sharing a slug; one saved before that
+            // check still loads, and only the first of the two runs.
+            const slugClash = customAgentSlugClashMessage(customAgents ?? []);
+            if (slugClash) {
+                this.logger.warn({
+                    message: `Custom agent slug clash, running the first only: ${slugClash}`,
+                    context: ReviewOrchestratorService.name,
+                    metadata: {
+                        organizationId:
+                            agentInput.organizationAndTeamData?.organizationId,
+                        teamId: agentInput.organizationAndTeamData?.teamId,
+                        repositoryId: agentInput.repositoryId,
+                        prNumber: input.prNumber,
+                    },
+                });
+            }
+            for (const agent of selectCustomAgents(
+                customAgents,
+                onlyCustomAgent,
+            )) {
+                const slug = customAgentSlug(agent.name);
+                const files = [
+                    ...filesInAgentScope(agent, agentInput.changedFiles ?? []),
+                    ...ignoredFilesInAgentScope(
+                        agent,
+                        ignoredChangedFiles ?? [],
+                    ),
+                ];
+                const run: CustomAgentRun = {
+                    id: agent.id,
+                    name: agent.name,
+                    slug,
+                    status: 'ran',
+                    droppedByVerify: 0,
+                };
+                customAgentRuns.push(run);
+                if (files.length === 0) {
+                    run.status = 'no-matching-files';
+                    this.logger.log({
+                        message: `[AGENT] Custom agent ${slug} not run for PR#${agentInput.prNumber}: no changed file in its scope`,
+                        context: ReviewOrchestratorService.name,
+                        metadata: {
+                            ...reviewLogContext,
+                            customAgentId: agent.id,
+                            customAgentSlug: slug,
+                            reason: 'no-matching-files',
+                        },
+                    });
+                    continue;
+                }
+                const provider = this.customAgentFactory.create(agent);
+                agentTasks.push({
+                    name: `custom-agent:${slug}`,
+                    budgetKey: 'custom-agent',
+                    provider,
+                    changedFiles: files,
+                    customAgent: { id: agent.id },
+                    knowledge: knowledgeByTarget?.get(agent.id),
+                });
+            }
+        }
+
         if (agentTasks.length === 0) {
             this.logger.log({
                 message: `[AGENT] No agent categories enabled, skipping agent review for PR#${agentInput.prNumber}`,
@@ -175,6 +345,8 @@ export class ReviewOrchestratorService {
                 agentResults: [],
                 failures: [],
                 incomplete: [],
+                unverified: [],
+                customAgentRuns,
                 totalDurationMs: Date.now() - startTime,
                 warnings: [],
             };
@@ -203,12 +375,51 @@ export class ReviewOrchestratorService {
         const runAgent = async (task: (typeof agentTasks)[0]) => {
             const agentStart = Date.now();
             try {
+                const changedFiles =
+                    task.changedFiles?.map(
+                        ({
+                            content: _content,
+                            fileContent: _fileContent,
+                            ...rest
+                        }) => rest as any,
+                    ) ?? agentInputWithoutContent.changedFiles;
+                // A scoped agent sees only its files: the PR-wide call graph
+                // and analyzer findings would send it after the rest.
+                const scopedPaths = task.changedFiles?.map((f) => f.filename);
+                const scopedContext = scopedPaths
+                    ? {
+                          callGraph: scopeCallGraph(
+                              agentInputWithoutContent.callGraph,
+                              scopedPaths,
+                          ),
+                          analyzerFindings:
+                              agentInputWithoutContent.analyzerFindings?.filter(
+                                  (f) => scopedPaths.includes(f.path),
+                              ),
+                      }
+                    : {};
+                // A custom agent weighs only the decisions on its own
+                // findings; the built-in agents' verdicts read to it as
+                // "already decided" and it reported nothing.
+                const ownDecisions = task.customAgent
+                    ? {
+                          previousDecisions:
+                              agentInputWithoutContent.previousDecisions?.filter(
+                                  (d) =>
+                                      d.customAgentId === task.customAgent!.id,
+                              ),
+                      }
+                    : {};
                 return await task.provider.execute({
                     ...agentInputWithoutContent,
+                    changedFiles,
+                    ...scopedContext,
+                    ...ownDecisions,
+                    knowledge: task.knowledge,
                     maxSteps: this.getMaxStepsForAgent(
-                        task.name,
+                        task.budgetKey ?? task.name,
                         agentInput.reviewMode,
-                        agentInput.changedFiles?.length ?? 0,
+                        changedFiles.length,
                     ),
                 });
             } catch (error) {
@@ -220,8 +431,11 @@ export class ReviewOrchestratorService {
                     context: ReviewOrchestratorService.name,
                     error,
                     metadata: {
+                        ...reviewLogContext,
                         agent: task.name,
-                        prNumber: agentInput.prNumber,
+                        customAgentId: task.customAgent?.id,
+                        organizationAndTeamData:
+                            agentInput.organizationAndTeamData,
                         durationMs: Date.now() - agentStart,
                     },
                 });
@@ -234,25 +448,42 @@ export class ReviewOrchestratorService {
         );
 
         const agentResults: ReviewAgentOutput[] = [];
+        const rejectedWarnings: ReviewWarning[] = [];
         const allSuggestions: Partial<CodeSuggestion>[] = [];
         const failures: OrchestratorAgentFailure[] = [];
         const incomplete: OrchestratorAgentIncomplete[] = [];
+        const unverified: OrchestratorAgentUnverified[] = [];
 
         for (let i = 0; i < results.length; i++) {
             const result = results[i];
             const agentName = agentTasks[i].name;
+            const customAgent = agentTasks[i].customAgent;
+            const customRun = customAgent
+                ? customAgentRuns.find((r) => r.id === customAgent.id)
+                : undefined;
 
             if (result.status === 'fulfilled') {
                 agentResults.push(result.value);
                 allSuggestions.push(...result.value.suggestions);
 
+                if (customRun) {
+                    customRun.droppedByVerify =
+                        (result.value.discardedByVerify?.length ?? 0) +
+                        (result.value.discardedByVerifyError?.length ?? 0);
+                    if (result.value.hitHardLimit) {
+                        customRun.status = 'incomplete';
+                    }
+                }
+
                 if (result.value.hitHardLimit) {
                     incomplete.push({
+                        ...(customAgent && { customAgent }),
                         agentName,
                         category: result.value.agentCategory ?? agentName,
                         finishReason:
-                            result.value.finishReason === 'timeout'
-                                ? 'timeout'
+                            result.value.finishReason === 'truncated' ||
+                            result.value.finishReason === 'no-result'
+                                ? result.value.finishReason
                                 : 'max-steps',
                         suggestionsFound: result.value.suggestions.length,
                         durationMs: result.value.durationMs,
@@ -262,10 +493,32 @@ export class ReviewOrchestratorService {
                         message: `[AGENT] ${agentName} stopped at its ${result.value.finishReason} limit for PR#${agentInput.prNumber} with ${result.value.suggestions.length} suggestions — review is incomplete`,
                         context: ReviewOrchestratorService.name,
                         metadata: {
+                            ...reviewLogContext,
                             agent: agentName,
-                            prNumber: agentInput.prNumber,
+                            customAgentId: customAgent?.id,
                             finishReason: result.value.finishReason,
                             durationMs: result.value.durationMs,
+                        },
+                    });
+                }
+
+                const unverifiedCount =
+                    result.value.discardedByVerifyError?.length ?? 0;
+                if (unverifiedCount > 0) {
+                    unverified.push({
+                        ...(customAgent && { customAgent }),
+                        agentName,
+                        category: result.value.agentCategory ?? agentName,
+                        unverifiedCount,
+                    });
+                    this.logger.warn({
+                        message: `[AGENT] ${agentName} dropped ${unverifiedCount} finding(s) it could not verify for PR#${agentInput.prNumber}`,
+                        context: ReviewOrchestratorService.name,
+                        metadata: {
+                            ...reviewLogContext,
+                            agent: agentName,
+                            customAgentId: customAgent?.id,
+                            unverifiedCount,
                         },
                     });
                 }
@@ -273,6 +526,15 @@ export class ReviewOrchestratorService {
                 this.logger.log({
                     message: `[AGENT] ${agentName} returned ${result.value.suggestions.length} suggestions in ${result.value.durationMs}ms`,
                     context: ReviewOrchestratorService.name,
+                    metadata: {
+                        ...reviewLogContext,
+                        agent: agentName,
+                        ...(customAgent && {
+                            customAgentId: customAgent.id,
+                            droppedByVerify:
+                                result.value.discardedByVerify?.length ?? 0,
+                        }),
+                    },
                 });
             } else {
                 const err =
@@ -284,12 +546,28 @@ export class ReviewOrchestratorService {
                     category: agentName,
                     error: err,
                     durationMs: 0,
+                    ...(customAgent && { customAgent }),
                 });
+                if (customRun) {
+                    customRun.status = 'failed';
+                }
+
+                // A thrown agent is dropped by allSettled, and with it anything
+                // it wanted the PR to say. Harvest the warnings it carried so a
+                // degrade that escalates still reports WHAT degraded.
+                rejectedWarnings.push(...warningsFromError(err));
 
                 this.logger[llmErrorLogLevel(err)]({
                     message: `[AGENT] ${agentName} failed: ${err.message || 'Unknown error'}`,
                     context: ReviewOrchestratorService.name,
                     error: err,
+                    metadata: {
+                        ...reviewLogContext,
+                        agent: agentName,
+                        customAgentId: customAgent?.id,
+                        organizationAndTeamData:
+                            agentInput.organizationAndTeamData,
+                    },
                 });
             }
         }
@@ -310,7 +588,9 @@ export class ReviewOrchestratorService {
         });
 
         const warnings = dedupReviewWarnings(
-            agentResults.flatMap((r) => r.warnings ?? []),
+            agentResults
+                .flatMap((r) => r.warnings ?? [])
+                .concat(rejectedWarnings),
         );
 
         return {
@@ -318,6 +598,8 @@ export class ReviewOrchestratorService {
             agentResults,
             failures,
             incomplete,
+            unverified,
+            customAgentRuns,
             totalDurationMs,
             warnings,
         };

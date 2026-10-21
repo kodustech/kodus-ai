@@ -1,5 +1,6 @@
 import { createOpenAI, OpenAIProvider } from '@ai-sdk/openai';
-import { embed, EmbeddingModel } from 'ai';
+import { EmbeddingModel } from 'ai';
+import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import 'dotenv/config';
 
 /**

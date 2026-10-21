@@ -17,6 +17,7 @@
  * untouched (it only redacts sensitive keys), so `attributes.tu.model` is a real
  * indexable path — not a flattened dotted key.
  */
+import { canonicalModelId } from '@libs/common/utils/canonical-model';
 
 /**
  * Canonical shape mirrored onto every LLM-usage span. `isByok` / `sys` encode
@@ -172,6 +173,7 @@ export const ROUTING_TASKS: ReadonlySet<string> = new Set([
     'businessValidation',
     'prSummary',
     'conversation',
+    'customAgent',
 ]);
 
 export function routeFromArea(area: TokenUsageArea): string {
@@ -191,6 +193,30 @@ export function routeFromArea(area: TokenUsageArea): string {
 }
 
 /**
+ * Run-name prefix of a custom review agent's model calls (#2172):
+ * `code-review-custom-<slug>` for the finder (plus `-recovery`), and
+ * `…-verify` / `…-convention-verify` for its check. Mirrored in the backfill.
+ */
+export const CUSTOM_AGENT_RUN_PREFIX = 'code-review-custom-';
+
+/**
+ * The routing task a custom agent's call served, read from its run name, or
+ * '' for any other run. Needed because a custom agent on the managed model has
+ * no routed slot, so nothing stamps `route`, and its `code-review*` run name
+ * would otherwise land in `codeReview`. Its verify runs on the same model and
+ * counts in the same task.
+ */
+export function routeFromCustomAgentRun(runName: unknown): string {
+    if (
+        typeof runName !== 'string' ||
+        !runName.startsWith(CUSTOM_AGENT_RUN_PREFIX)
+    ) {
+        return '';
+    }
+    return 'customAgent';
+}
+
+/**
  * Derives `tu` from a span's flat dotted-key attribute object. Returns `null`
  * for spans with no LLM usage (wrapper/parent spans) so callers can no-op.
  */
@@ -206,11 +232,13 @@ export function deriveTu(
     }
 
     const rawModel = attrs['gen_ai.response.model'];
-    // Canonical name collapses `google_gemini:gemini-2.5-pro` → `gemini-2.5-pro`
-    // (last segment after ':'), identical to the read pipeline.
+    // Canonical name collapses a `provider:` prefix (`google_gemini:gemini-2.5-pro`
+    // → `gemini-2.5-pro`) while PRESERVING a Bedrock `:<version>` suffix's model
+    // (`...haiku-...-v1:0` → `...haiku-...-v1`, not `0`), identical to the read
+    // pipeline and the BYOK cost join — one shared primitive so the three agree.
     const model =
         typeof rawModel === 'string' && rawModel
-            ? rawModel.split(':').pop() || ''
+            ? canonicalModelId(rawModel)
             : '';
 
     const input = n(attrs['gen_ai.usage.input_tokens']);
@@ -237,8 +265,11 @@ export function deriveTu(
         // resolveTaskSlot). A VALID task wins; otherwise (absent, or a stale
         // tier string from a pre-realignment span) fall back to the area→task
         // de-para — so old/garbage never shows as a bogus task bucket.
-        route: ROUTING_TASKS.has(attrs['route'])
-            ? attrs['route']
-            : routeFromArea(area),
+        // A custom agent's run name decides first (see routeFromCustomAgentRun).
+        route:
+            routeFromCustomAgentRun(runName) ||
+            (ROUTING_TASKS.has(attrs['route'])
+                ? attrs['route']
+                : routeFromArea(area)),
     };
 }

@@ -19,9 +19,9 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 import {
     AlertTriangleIcon,
+    BotIcon,
     ChevronsUpDownIcon,
     FileTextIcon,
     GitPullRequestIcon,
@@ -30,11 +30,10 @@ import {
     ShieldCheckIcon,
     type LucideIcon,
 } from "lucide-react";
-
 import { cn } from "src/core/utils/components";
 
 import type { LlmTask } from "../../_types";
-import { modelLabelFor, TASK_DESCRIPTIONS, TASK_LABELS } from "../../_utils";
+import { modelLabelFor, TASK_DESCRIPTIONS } from "../../_utils";
 import { ProviderAvatar } from "../provider-avatar";
 import { capabilityGate, type SurfacedCapabilities } from "./capability-gate";
 
@@ -46,41 +45,6 @@ export type PoolModel = {
     /** Provider id (from the model's credential) — drives the provider avatar. */
     provider?: string;
     capabilities?: SurfacedCapabilities;
-    /** Curated quality/perf signal (joined by model id in routing-tab). This is
-     *  where the "which model?" decision actually happens, so the score/speed/
-     *  context/cost live HERE — pre-formatted strings so this stays decoupled
-     *  from the curated catalog. Absent for non-curated models. */
-    score?: number;
-    speedLabel?: string;
-    contextLabel?: string;
-    costLabel?: string;
-};
-
-/** The compact perf strip under a model name in the routing picker (speed +
- *  context). The quality score (★) and relative cost ($) were intentionally
- *  removed from the UI — Kodus's proprietary "model intelligence" signal, held
- *  back for a future paid feature (data still joined in routing-tab, so re-adding
- *  is just restoring the two rows). Renders nothing without curated metadata. */
-const ModelMetrics = ({ model }: { model: PoolModel }) => {
-    const parts: React.ReactNode[] = [];
-    if (model.speedLabel) parts.push(<span key="sp">{model.speedLabel}</span>);
-    if (model.contextLabel)
-        parts.push(
-            <span key="c" className="tabular-nums">
-                {model.contextLabel}
-            </span>,
-        );
-    if (parts.length === 0) return null;
-    return (
-        <span className="text-text-tertiary flex items-center gap-1.5 text-[11px]">
-            {parts.map((p, i) => (
-                <span key={i} className="flex items-center gap-1.5">
-                    {i > 0 && <span className="opacity-40">·</span>}
-                    {p}
-                </span>
-            ))}
-        </span>
-    );
 };
 
 /**
@@ -136,7 +100,9 @@ export const ModelCombobox = ({
                         if (itemValue === "__default__") return 1;
                         const model = models.find((m) => m.id === itemValue);
                         if (!model) return 0;
-                        return model.label
+                        // A stored model can reach the pool without a label;
+                        // filter on its id then rather than throw mid-keystroke.
+                        return (model.label || model.id || "")
                             .toLowerCase()
                             .includes(term.toLowerCase())
                             ? 1
@@ -174,15 +140,43 @@ export const ModelCombobox = ({
                         {models.map((model) => {
                             const gate = gateTask
                                 ? capabilityGate(
-                                    gateTask,
-                                    model.capabilities,
-                                    model.label,
-                                )
+                                      gateTask,
+                                      model.capabilities,
+                                      model.label,
+                                  )
                                 : { ok: true as const };
                             const selected = model.id === value;
 
-                            const item = (
+                            const label = (
+                                <span
+                                    dir="rtl"
+                                    title={model.label}
+                                    style={{ textAlign: "left" }}
+                                    className={cn(
+                                        "min-w-0 truncate",
+                                        !gate.ok
+                                            ? "text-text-tertiary"
+                                            : selected
+                                              ? "text-primary font-medium"
+                                              : undefined,
+                                    )}>
+                                    {model.label || model.id}
+                                </span>
+                            );
+
+                            // The CommandItem must be a DIRECT child of the
+                            // list: on every keystroke cmdk re-sorts by moving
+                            // each item with `appendChild(item.closest(
+                            // "[cmdk-group-items] > *"))`, which is null for an
+                            // item wrapped in an element outside a group, and
+                            // appendChild(null) threw on the first character.
+                            // So the tooltip of a disabled (incompatible)
+                            // option lives INSIDE the item, on a span that
+                            // opts back into pointer events (the disabled item
+                            // itself has none).
+                            return (
                                 <CommandItem
+                                    key={model.id}
                                     value={model.id}
                                     disabled={!gate.ok}
                                     onSelect={() => {
@@ -190,58 +184,29 @@ export const ModelCombobox = ({
                                         onSelect(model.id);
                                         setOpen(false);
                                     }}>
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        {gate.ok ? (
+                                    {gate.ok ? (
+                                        <span className="flex min-w-0 items-center gap-2">
                                             <ProviderAvatar
                                                 provider={model.provider}
                                             />
-                                        ) : (
-                                            <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
-                                        )}
-                                        <span className="flex min-w-0 flex-col gap-0.5">
-                                            <span
-                                                dir="rtl"
-                                                title={model.label}
-                                                style={{ textAlign: "left" }}
-                                                className={cn(
-                                                    "truncate",
-                                                    !gate.ok
-                                                        ? "text-text-tertiary"
-                                                        : selected
-                                                            ? "text-primary font-medium"
-                                                            : undefined,
-                                                )}>
-                                                {model.label}
-                                            </span>
-                                            {gate.ok && (
-                                                <ModelMetrics model={model} />
-                                            )}
+                                            {label}
                                         </span>
-                                    </span>
+                                    ) : (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="pointer-events-auto flex min-w-0 items-center gap-2">
+                                                    <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
+                                                    {label}
+                                                </span>
+                                            </TooltipTrigger>
+                                            {gate.reason && (
+                                                <TooltipContent className="max-w-64">
+                                                    {gate.reason}
+                                                </TooltipContent>
+                                            )}
+                                        </Tooltip>
+                                    )}
                                 </CommandItem>
-                            );
-
-                            // Disabled (incompatible) options carry a tooltip
-                            // with the human reason — the LIVE pre-save warning.
-                            if (!gate.ok && gate.reason) {
-                                return (
-                                    <Tooltip key={model.id}>
-                                        <TooltipTrigger asChild>
-                                            <span className="block">
-                                                {item}
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="max-w-64">
-                                            {gate.reason}
-                                        </TooltipContent>
-                                    </Tooltip>
-                                );
-                            }
-
-                            return (
-                                <span key={model.id} className="block">
-                                    {item}
-                                </span>
                             );
                         })}
                     </CommandList>
@@ -251,25 +216,12 @@ export const ModelCombobox = ({
     );
 };
 
-// child → parent inheritance map, shared with the backend resolver (one source
-// of truth for the whole feature).
-const TASK_INHERITS = TASK_ROUTING_FALLBACK;
-
-// Parent task → the tasks that inherit it (inverse of TASK_INHERITS), for the
-// "changing this also updates …" ripple note. Derived once.
-const CHILDREN_OF: Partial<Record<LlmTask, LlmTask[]>> = Object.entries(
-    TASK_INHERITS,
-).reduce<Partial<Record<LlmTask, LlmTask[]>>>((acc, [child, parent]) => {
-    (acc[parent as LlmTask] ??= []).push(child as LlmTask);
-    return acc;
-}, {});
-
 /**
  * One task's model control: a dropdown whose trigger carries state — the
  * resolved model's provider avatar + a solid model name when overridden, or a
- * muted "Same as Code Review · X" / "Use default · X" when it inherits. Reused by
- * the single-agent cards AND the Kody Rules sub-rows, so the picker logic lives
- * in one place.
+ * muted "Use default · X" when it inherits. Routing is FLAT: an un-overridden
+ * agent always uses the org DEFAULT (no task→task chaining), so the inherited
+ * state is uniformly "Use default". Reused by every agent card.
  */
 const TaskModelControl = ({
     task,
@@ -284,13 +236,11 @@ const TaskModelControl = ({
     taskOverrides: Partial<Record<LlmTask, string>>;
     onChange: (task: LlmTask, modelId: string | undefined) => void;
 }) => {
-    const inheritsFrom = TASK_INHERITS[task];
-    const inheritedId = inheritsFrom
-        ? (taskOverrides[inheritsFrom] ?? defaultModelId)
-        : defaultModelId;
+    // Flat inheritance: with no override of its own, the task runs the org default.
+    const inheritedId = defaultModelId;
     const rawOverrideId = taskOverrides[task];
-    // An override equal to what the row would inherit anyway is redundant —
-    // treat it as inherited so the two states never look identical.
+    // An override equal to the default is redundant — treat it as inherited so
+    // "override" and "use default" never look identical (and never re-pins).
     const overrideId =
         rawOverrideId && rawOverrideId !== inheritedId
             ? rawOverrideId
@@ -306,22 +256,12 @@ const TaskModelControl = ({
     const effectiveId = overrideId ?? inheritedId;
     const effectiveModel = models.find((m) => m.id === effectiveId);
     const inheritedLabel = modelLabelFor(models, inheritedId);
-    const inheritedOptionLabel = inheritsFrom
-        ? `Same as ${TASK_LABELS[inheritsFrom]} · ${inheritedLabel}`
-        : `Use default · ${inheritedLabel}`;
+    const inheritedOptionLabel = `Use default · ${inheritedLabel}`;
 
-    // Ripple note: children that currently follow this task move when its model
-    // changes.
-    const followingChildren = (CHILDREN_OF[task] ?? []).filter((child) => {
-        const own = taskOverrides[child];
-        return !own || own === effectiveId;
-    });
-    const note =
-        followingChildren.length > 0
-            ? `Changing this also updates ${followingChildren
-                .map((c) => TASK_LABELS[c])
-                .join(", ")}, which follow it.`
-            : undefined;
+    // The default model is already reachable via the "Use default" row — don't
+    // ALSO list it as a standalone pick (picking it explicitly just collapses
+    // back to inherited anyway).
+    const pickableModels = models.filter((m) => m.id !== defaultModelId);
 
     return (
         <div className="flex shrink-0 items-center gap-2">
@@ -338,10 +278,9 @@ const TaskModelControl = ({
                 </Tooltip>
             )}
             <ModelCombobox
-                models={models}
+                models={pickableModels}
                 value={overrideId}
                 gateTask={task}
-                note={note}
                 onSelect={(id) => onChange(task, id)}
                 defaultOption={{
                     label: inheritedOptionLabel,
@@ -353,7 +292,7 @@ const TaskModelControl = ({
                         variant="helper"
                         size="xs"
                         role="combobox"
-                        className="min-w-64 justify-between gap-2"
+                        className="w-full justify-between gap-2 sm:w-auto sm:min-w-64"
                         rightIcon={
                             <ChevronsUpDownIcon className="-mr-1 opacity-50" />
                         }>
@@ -428,6 +367,13 @@ const AGENT_CARDS: AgentCard[] = [
         task: "businessValidation",
         Icon: ShieldCheckIcon,
         title: "Business Rules",
+    },
+    {
+        // Each custom agent can still pin its own model on its page; these
+        // cards are the default every agent without one uses.
+        task: "customAgent",
+        Icon: BotIcon,
+        title: "Custom Agents",
     },
 ];
 

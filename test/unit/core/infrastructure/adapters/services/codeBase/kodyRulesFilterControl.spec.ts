@@ -15,6 +15,7 @@ import { SuggestionService } from '@libs/core/infrastructure/adapters/services/c
 import { SeverityLevel } from '@libs/common/enums/severityLevel.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CacheService } from '@libs/core/cache/cache.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 describe('SuggestionService - Kody Rules Filter Control', () => {
     let service: SuggestionService;
@@ -78,6 +79,12 @@ describe('SuggestionService - Kody Rules Filter Control', () => {
                     useValue: {
                         getFromCache: jest.fn(),
                         addToCache: jest.fn(),
+                    },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
                     },
                 },
             ],

@@ -9,6 +9,11 @@ jest.mock('@libs/ee/configs/environment', () => ({
     },
 }));
 
+
+const joinableOrganizations = (orgs: { uuid: string }[]) => ({
+    execute: jest.fn().mockResolvedValue(orgs),
+});
+
 describe('JoinOrganizationUseCase', () => {
     let originalCloudMode: boolean;
 
@@ -110,13 +115,15 @@ describe('JoinOrganizationUseCase', () => {
             deps.authService as any,
             deps.parametersService as any,
             deps.notificationService as any,
+            { organizationJoined: jest.fn() } as any,
+            joinableOrganizations([{ uuid: 'org-new' }]) as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 
-        const result = await useCase.execute({
-            userId: 'user-1',
-            organizationId: 'org-new',
-        });
+        const result = await useCase.execute(
+            { userId: 'user-1', organizationId: 'org-new' },
+            { uuid: 'user-1', email: 'dev@acme.dev' },
+        );
 
         expect(deps.userService.update).toHaveBeenCalledWith(
             { uuid: 'user-1' },
@@ -151,13 +158,15 @@ describe('JoinOrganizationUseCase', () => {
             deps.authService as any,
             deps.parametersService as any,
             deps.notificationService as any,
+            { organizationJoined: jest.fn() } as any,
+            joinableOrganizations([{ uuid: 'org-new' }]) as any,
         );
         jest.spyOn(useCase, 'cleanUp').mockResolvedValue(undefined);
 
-        const result = await useCase.execute({
-            userId: 'user-1',
-            organizationId: 'org-new',
-        });
+        const result = await useCase.execute(
+            { userId: 'user-1', organizationId: 'org-new' },
+            { uuid: 'user-1', email: 'dev@acme.dev' },
+        );
 
         expect(deps.userService.update).toHaveBeenCalledWith(
             { uuid: 'user-1' },

@@ -219,11 +219,14 @@ describe('ReviewOrchestratorService', () => {
     // that separately or the pipeline auto-approves an unfinished review
     // (#1568).
     describe('incomplete agents (budget/step ceiling)', () => {
-        it('reports a timed-out agent as incomplete, not as a failure', async () => {
+        // A per-agent timeout aborts the run, which fails the agent (covered
+        // by the failure tests above). A turn the provider truncated is the
+        // other way an agent returns without finishing (#2171).
+        it('reports a truncated agent as incomplete, not as a failure', async () => {
             mockGeneralistAgent.execute.mockResolvedValue({
                 ...makeOutput('generalist', []),
                 hitHardLimit: true,
-                finishReason: 'timeout',
+                finishReason: 'truncated',
             });
 
             const result = await orchestrator.execute({
@@ -235,8 +238,31 @@ describe('ReviewOrchestratorService', () => {
             expect(result.incomplete).toEqual([
                 expect.objectContaining({
                     agentName: 'generalist',
-                    finishReason: 'timeout',
+                    finishReason: 'truncated',
                     suggestionsFound: 0,
+                }),
+            ]);
+        });
+
+        it('reports an agent that left findings unverified (#2171)', async () => {
+            mockGeneralistAgent.execute.mockResolvedValue({
+                ...makeOutput('generalist', []),
+                discardedByVerifyError: [
+                    { relevantFile: 'src/index.ts' },
+                    { relevantFile: 'src/other.ts' },
+                ],
+            });
+
+            const result = await orchestrator.execute({
+                ...baseInput,
+                reviewOptions: { bug: true, security: true, performance: true },
+            });
+
+            expect(result.failures).toHaveLength(0);
+            expect(result.unverified).toEqual([
+                expect.objectContaining({
+                    agentName: 'generalist',
+                    unverifiedCount: 2,
                 }),
             ]);
         });

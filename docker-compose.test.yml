@@ -10,9 +10,19 @@ services:
             POSTGRES_DB: ${API_PG_DB_DATABASE}
         networks:
             - kodus-backend-services-test
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'pg_isready -U ${API_PG_DB_USERNAME} -d ${API_PG_DB_DATABASE}',
+                ]
+            interval: 5s
+            timeout: 3s
+            retries: 5
+            start_period: 30s
 
     db_mongodb:
-        image: docker.io/mongo:8
+        image: docker.io/mongo:8.2.11
         container_name: mongodb
         ports:
             - '27017:27017'
@@ -22,6 +32,20 @@ services:
             MONGO_INITDB_DATABASE: ${API_MG_DB_DATABASE}
         networks:
             - kodus-backend-services-test
+        # Nothing here declares `depends_on`, so this healthcheck exists for the
+        # caller: `docker compose up --wait` blocks on it, and a mongod that
+        # exits on startup is reported as unhealthy instead of leaving a test
+        # suite to fail later against a name that no longer resolves.
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+            start_period: 40s
 
 networks:
   kodus-backend-services-test:

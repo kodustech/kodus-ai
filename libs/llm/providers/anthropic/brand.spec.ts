@@ -9,13 +9,16 @@
  * `@ai-sdk/anthropic` is mocked so we can capture the exact baseURL the module
  * hands the SDK without a live call (the conformance specs cover the real path).
  */
-const createAnthropicMock = jest.fn((_cfg: { baseURL?: string }) => {
-    const factory = (_model: string) => ({ id: 'stub-model' });
-    return factory;
-});
+const createAnthropicMock = jest.fn(
+    (_cfg: { baseURL?: string; headers?: Record<string, string> }) => {
+        const factory = (_model: string) => ({ id: 'stub-model' });
+        return factory;
+    },
+);
 
 jest.mock('@ai-sdk/anthropic', () => ({
-    createAnthropic: (cfg: { baseURL?: string }) => createAnthropicMock(cfg),
+    createAnthropic: (cfg: { baseURL?: string; headers?: Record<string, string> }) =>
+        createAnthropicMock(cfg),
 }));
 
 import { moonshotModule } from '../moonshot/index';
@@ -23,6 +26,9 @@ import { zaiModule } from '../zai/index';
 
 const baseURLOf = (): string =>
     createAnthropicMock.mock.calls.at(-1)?.[0]?.baseURL ?? '';
+
+const headersOf = (): Record<string, string> | undefined =>
+    createAnthropicMock.mock.calls.at(-1)?.[0]?.headers;
 
 describe('anthropicBrandModule — baseURL fallback for a key-only connect', () => {
     beforeEach(() => createAnthropicMock.mockClear());
@@ -60,5 +66,24 @@ describe('anthropicBrandModule — baseURL fallback for a key-only connect', () 
         } as any);
 
         expect(baseURLOf()).toBe('https://api.kimi.com/coding/v1');
+    });
+
+    // A brand credential (Moonshot/Z.ai) explicitly re-pointed at OpenCode Go's
+    // baseURL is an unlikely setup (nobody normally aims a "Kimi" connection at
+    // a different provider's endpoint), but `asCompatible` spreads the WHOLE cfg
+    // through unchanged before delegating to `anthropicModule.build` — so the
+    // #1880 x-opencode-session gate should still fire here exactly as it does
+    // for a plain anthropic_compatible slot, purely from that composition.
+    it('a brand config explicitly re-pointed at OpenCode Go still gets x-opencode-session (composition through asCompatible)', () => {
+        moonshotModule.build({
+            provider: 'moonshot',
+            model: 'kimi-k2.7-code',
+            apiKey: 'k',
+            baseURL: 'https://opencode.ai/zen/go',
+            byokModelId: 'model-123',
+        } as any);
+
+        expect(baseURLOf()).toBe('https://opencode.ai/zen/go/v1');
+        expect(headersOf()?.['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
     });
 });

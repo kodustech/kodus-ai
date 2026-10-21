@@ -9,6 +9,8 @@
  * strategy fires. PR2/PR3 wire emission per strategy.
  */
 
+import type { ModelFailoverEvent } from '@libs/llm/model-failover';
+
 export type ReviewWarningKind =
     /** Compact system prompt was used (workflow/rules trimmed). */
     | 'PROMPT_COMPACTED'
@@ -23,12 +25,81 @@ export type ReviewWarningKind =
     /** Verifier / second-chance / rescue passes skipped. */
     | 'HEAVY_PASSES_SKIPPED'
     /** The BYOK main provider failed and the review ran on the fallback. */
-    | 'PROVIDER_FALLBACK';
+    | 'PROVIDER_FALLBACK'
+    /** Kody Rules were not judged because the context they declared they need
+     *  could not be retrieved from the repository. */
+    | 'RULE_CONTEXT_UNAVAILABLE'
+    /** A finding's `improvedCode` was empty, identical to `existingCode`, or
+     *  syntactically truncated, so it was published as a plain comment with
+     *  no code block instead of the (unusable) fix. */
+    | 'BAD_FIX_DOWNGRADED'
+    /** No repository checkout: the agents reviewed the diff alone, with no
+     *  tools and no call graph. */
+    | 'SANDBOX_UNAVAILABLE'
+    /** The repository was checked out, but building the call graph failed. */
+    | 'CALLGRAPH_FAILED'
+    /** Findings were dropped because the file they named is not in the PR. */
+    | 'SUGGESTIONS_DROPPED_PATH_MISMATCH'
+    /** Some Kody Rules checks failed to run; the others still posted. */
+    | 'KODY_RULES_PARTIAL'
+    /** A finding's verify run failed, so it was not published (#2171). */
+    | 'VERIFY_UNAVAILABLE'
+    /** A linked skill has no SKILL.md on the PR's target branch. */
+    | 'SKILL_NOT_FOUND'
+    /** A linked skill breaks the skill format, so it was not loaded. */
+    | 'SKILL_INVALID'
+    /** The PR edits a linked skill or doc; the target-branch version was used. */
+    | 'SKILL_CHANGED_IN_PR'
+    /** A linked doc is absent on the PR's target branch. */
+    | 'DOC_NOT_FOUND'
+    /** A skill body or the linked docs were cut to fit their budget. */
+    | 'KNOWLEDGE_TRUNCATED'
+    /** No linked skill or doc could be read; the review ran without them. */
+    | 'KNOWLEDGE_UNAVAILABLE'
+    /** A skill declares requirements the reviewer may not meet. */
+    | 'SKILL_COMPATIBILITY'
+    /** A custom agent's CLI could not be installed or fenced in the sandbox,
+     *  so the agent ran without that tool. */
+    | 'CLI_INSTALL_FAILED'
+    /** Linked repositories were armed for this PR but there was no checkout
+     *  to read them from, so the review stayed single-repo. */
+    | 'CROSS_REPO_UNAVAILABLE'
+    /** A custom agent would have had astGrep, but the sandbox has no ast-grep
+     *  binary, so the agent ran without structural search. */
+    | 'AST_GREP_UNAVAILABLE'
+    /** kodus-config.yml has a key that is configured only in the app
+     *  (customAgents, knowledge); the review ignored it. */
+    | 'CONFIG_FILE_KEY_IGNORED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
     /** The configured main provider errored, so the review used the fallback. */
-    | 'provider_failover';
+    | 'provider_failover'
+    /** The repository could not be looked at, so a declared context need went
+     *  unmet. */
+    | 'lookup_unavailable'
+    /** `improvedCode` failed the publication gate (issue #1833). */
+    | 'unusable_fix'
+    /** The sandbox could not be created for this review. */
+    | 'sandbox_unavailable'
+    /** The call graph build threw during the review. */
+    | 'callgraph_failed'
+    /** A finding named a file outside the PR's changed files. */
+    | 'path_mismatch'
+    /** A Kody Rules judge shard errored. */
+    | 'judge_shard_failed'
+    /** The prompt did not fit the single-batch budget on a large PR. */
+    | 'large_pr'
+    /** The verifier's model call failed (provider error, 429, abort). */
+    | 'verify_failed'
+    /** A linked skill or doc could not be used as configured. */
+    | 'knowledge'
+    /** A custom agent CLI failed its install or network fence. */
+    | 'cli_install_failed'
+    /** A review tool the agent is configured for is missing from the sandbox. */
+    | 'tool_unavailable'
+    /** The repository's kodus-config.yml holds a key the review does not read. */
+    | 'config_file';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -39,6 +110,10 @@ export interface ReviewWarning {
     modelName: string;
     /** Optional free-form context (e.g. "3 files dropped: foo.test.ts, ..."). */
     detail?: string;
+    /** Titles of the Kody Rules this warning is about, kept structured so the
+     *  end-review PR comment can render them without parsing `detail`. Only
+     *  `RULE_CONTEXT_UNAVAILABLE` populates it. */
+    ruleTitles?: string[];
     /** Agent that emitted the warning. Cleared on dedup when multiple agents
      *  emit the same warning, since the underlying cause is pipeline-wide. */
     agentName?: string;
@@ -67,6 +142,205 @@ export function buildProviderFallbackWarning(params: {
 }
 
 /**
+ * One PROVIDER_FALLBACK warning per model the review fell back to, merged into
+ * the run's warnings. Leaves `warnings` untouched when nothing failed over.
+ */
+export function withFallbackWarnings(
+    warnings: ReviewWarning[] | undefined,
+    failovers: Array<Pick<ModelFailoverEvent, 'failedModel' | 'usedModel'>>,
+): ReviewWarning[] | undefined {
+    if (!failovers.length) {
+        return warnings;
+    }
+    return dedupReviewWarnings([
+        ...(warnings ?? []),
+        ...failovers.map((f) =>
+            buildProviderFallbackWarning({
+                failedModel: f.failedModel,
+                usedModel: f.usedModel,
+            }),
+        ),
+    ]);
+}
+
+/**
+ * Losses a review used to record only in its logs (#2066): the review still
+ * succeeds, so without these it reads exactly like a full one. Admin-facing
+ * (dashboard, doctor); none of them is rendered in the PR comment.
+ */
+export function buildSandboxUnavailableWarning(params: {
+    modelName: string;
+}): ReviewWarning {
+    return {
+        kind: 'SANDBOX_UNAVAILABLE',
+        reason: 'sandbox_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: 'the repository could not be checked out, so the review read only the diff (no tools, no call graph)',
+    };
+}
+
+/** Only when the boundary gate armed the linked repositories and the review
+ *  had no checkout to read them: a gate that did not arm is not a loss. */
+export function crossRepoUnavailableWarning(params: {
+    configured: number;
+    gateActive: boolean;
+    hasAccess: boolean;
+    hasCheckout: boolean;
+    modelName: string;
+}): ReviewWarning | undefined {
+    if (
+        params.configured === 0 ||
+        !params.gateActive ||
+        params.hasAccess ||
+        params.hasCheckout
+    ) {
+        return undefined;
+    }
+    return {
+        kind: 'CROSS_REPO_UNAVAILABLE',
+        reason: 'sandbox_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.configured} linked repositories were not read: the review had no repository checkout`,
+    };
+}
+
+export function buildCallGraphFailedWarning(params: {
+    modelName: string;
+}): ReviewWarning {
+    return {
+        kind: 'CALLGRAPH_FAILED',
+        reason: 'callgraph_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: 'the call graph could not be built, so the review ran without knowing who calls the changed code',
+    };
+}
+
+export function buildPathMismatchWarning(params: {
+    count: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+        reason: 'path_mismatch',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.agentName}: ${params.count} finding(s) dropped because the file they named is not in the pull request`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildVerifyUnavailableWarning(params: {
+    count: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'VERIFY_UNAVAILABLE',
+        reason: 'verify_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.agentName}: ${params.count} finding(s) not posted because their verification failed to run`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildCliInstallFailedWarning(params: {
+    agentName: string;
+    cliName: string;
+    reason: string;
+}): ReviewWarning {
+    return {
+        kind: 'CLI_INSTALL_FAILED',
+        reason: 'cli_install_failed',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: CLI "${params.cliName}" unavailable (${params.reason}); the agent ran without it`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildAstGrepUnavailableWarning(params: {
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'AST_GREP_UNAVAILABLE',
+        reason: 'tool_unavailable',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: ast-grep is not installed in the sandbox; the agent ran without astGrep (structural search and its rules)`,
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * Keys a team may write in kodus-config.yml that the review does not read
+ * there: custom agents and their skills and docs are configured in the app
+ * only. The file loader drops every unknown key; these two are named back to
+ * the team, because an agent written in the file and never run reads exactly
+ * like an agent that found nothing.
+ */
+const CONFIG_FILE_KEYS_SET_IN_APP: Record<string, string> = {
+    customAgents:
+        'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+    knowledge:
+        'kodus-config.yml: knowledge is not read from this file; link skills and docs to a custom agent in the app.',
+};
+
+/** The warning for the app-only keys among `fileKeys`; undefined when the
+ *  file has none of them. */
+export function buildConfigFileKeysIgnoredWarning(
+    fileKeys: readonly string[] | undefined,
+): ReviewWarning | undefined {
+    const inFile = new Set(fileKeys ?? []);
+    const lines = Object.keys(CONFIG_FILE_KEYS_SET_IN_APP)
+        .filter((key) => inFile.has(key))
+        .map((key) => CONFIG_FILE_KEYS_SET_IN_APP[key]);
+    if (!lines.length) return undefined;
+    return {
+        kind: 'CONFIG_FILE_KEY_IGNORED',
+        reason: 'config_file',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: lines.join(' '),
+    };
+}
+
+/**
+ * The end-review comment's line for an ignored kodus-config.yml key. Unlike
+ * the fidelity warnings it goes on the pull request: whoever edits the file
+ * reads the review there, not in the dashboard.
+ */
+export function formatConfigFileNotice(
+    warnings: readonly ReviewWarning[] | undefined,
+): string {
+    const details = (warnings ?? [])
+        .filter((w) => w?.kind === 'CONFIG_FILE_KEY_IGNORED' && w.detail)
+        .map((w) => w.detail!);
+    if (!details.length) return '';
+    return `\n\n> ⚠️ ${details.join(' ')}`;
+}
+
+export function buildKodyRulesPartialWarning(params: {
+    failed: number;
+    total: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'KODY_RULES_PARTIAL',
+        reason: 'judge_shard_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.failed} of ${params.total} Kody Rules check(s) failed to run; the rules on them were not applied`,
+        agentName: params.agentName,
+    };
+}
+
+/**
  * Fold duplicate warnings across the per-agent fan-out. Without this the
  * end-review comment would render the same `PROMPT_COMPACTED` notice 4
  * times (bug + security + performance + kody-rules).
@@ -90,7 +364,10 @@ export function dedupReviewWarnings(
         const key = `${w.kind}::${w.modelName}::${w.contextWindowTokens}`;
         const existing = byKey.get(key);
         if (!existing) {
-            byKey.set(key, { ...w });
+            byKey.set(key, {
+                ...w,
+                ...(w.ruleTitles ? { ruleTitles: [...w.ruleTitles] } : {}),
+            });
             if (w.detail) detailsByKey.set(key, [w.detail]);
             continue;
         }
@@ -103,6 +380,15 @@ export function dedupReviewWarnings(
                 detailsByKey.set(key, seen);
             }
         }
+        // Titles union, not overwrite: a rule skipped by a second emitter has
+        // to stay named in the PR comment.
+        if (w.ruleTitles?.length) {
+            const merged = existing.ruleTitles ?? [];
+            for (const title of w.ruleTitles) {
+                if (!merged.includes(title)) merged.push(title);
+            }
+            existing.ruleTitles = merged;
+        }
     }
 
     // Stitch comma-joined details back onto the surviving entries.
@@ -114,4 +400,80 @@ export function dedupReviewWarnings(
     }
 
     return Array.from(byKey.values());
+}
+
+/**
+ * Build the notice for Kody Rules that were NOT judged because the repository
+ * context they declared they need could not be retrieved (issue #1826).
+ *
+ * A skipped rule has to be visible: silence here reads exactly like "your rule
+ * found nothing", which is the failure the whole feature exists to remove. Like
+ * the provider-failover notice this is a capability signal, not a
+ * context-window fidelity drop, so `contextWindowTokens` is 0 and per-agent
+ * duplicates fold to one entry.
+ */
+export function buildRuleContextUnavailableWarning(params: {
+    skippedRuleTitles: string[];
+    modelName: string;
+    agentName?: string;
+}): ReviewWarning {
+    const titles = params.skippedRuleTitles.join(', ');
+    return {
+        kind: 'RULE_CONTEXT_UNAVAILABLE',
+        reason: 'lookup_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.skippedRuleTitles.length} Kody Rule(s) were not evaluated because the repository context they need could not be retrieved: ${titles}`,
+        ruleTitles: [...params.skippedRuleTitles],
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * Build the notice for findings dropped by the `improvedCode` publication
+ * gate (issue #1833) — empty, identical to `existingCode`, prose-only, or
+ * truncated fixes. A silent drop here would look like the review found less
+ * than it did; this makes the count visible instead of just quietly shrinking
+ * the suggestion list. `contextWindowTokens` is 0 for the same reason as the
+ * other capability-signal warnings above: it is not a fidelity trade-off.
+ */
+export function buildBadFixDowngradedWarning(params: {
+    count: number;
+    modelName: string;
+    agentName?: string;
+}): ReviewWarning {
+    return {
+        kind: 'BAD_FIX_DOWNGRADED',
+        reason: 'unusable_fix',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.count} suggestion(s) were published without their code suggestion because the proposed fix was empty, identical to the existing code, or truncated`,
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * An agent that degrades so badly it cannot report a result still has something
+ * the PR must say. `Promise.allSettled` keeps only a fulfilled agent's
+ * `warnings`, so a thrown agent used to lose them: the Kody Rules all-skipped
+ * escalation named every skipped rule in its message, and that message is
+ * rendered only for a FAILED review — kody-rules is not critical, so the review
+ * is partial and the names never reached the PR (Verifier round 2, gap 2).
+ * Carrying them on the error lets the orchestrator harvest them on rejection,
+ * so the escalation and the notice say the same thing.
+ */
+export class AgentDegradedError extends Error {
+    constructor(
+        message: string,
+        readonly warnings: ReviewWarning[],
+    ) {
+        super(message);
+        this.name = 'AgentDegradedError';
+    }
+}
+
+/** The warnings an agent attached to whatever it threw, if any. */
+export function warningsFromError(err: unknown): ReviewWarning[] {
+    const carried = (err as { warnings?: unknown } | null)?.warnings;
+    return Array.isArray(carried) ? (carried as ReviewWarning[]) : [];
 }

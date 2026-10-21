@@ -33,12 +33,15 @@ describe('azure provider module', () => {
     });
 
     it('best-effort disables temperature for a reasoning-named deployment', () => {
-        expect(azureModule.capabilities('o1-mini').supportsTemperature).toBe(
-            false,
-        );
-        expect(azureModule.capabilities('gpt-4o').supportsTemperature).toBe(
-            true,
-        );
+        // Asked of `temperaturePolicy`, which is now the only place that answers
+        // (the `supportsTemperature` capability that used to state it a second
+        // time is gone).
+        expect(
+            azureModule.temperaturePolicy({ model: 'o1-mini' } as any),
+        ).toEqual({ kind: 'unsupported' });
+        expect(
+            azureModule.temperaturePolicy({ model: 'gpt-4o' } as any),
+        ).toEqual({ kind: 'adjustable' });
     });
 
     it('does NOT emit a system cache hint (Azure caches implicitly, like OpenAI)', () => {

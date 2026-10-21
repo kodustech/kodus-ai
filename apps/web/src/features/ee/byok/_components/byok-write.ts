@@ -60,6 +60,9 @@ export type BuildV2Edit =
           kind: "add-existing-provider";
           credentialId: string;
           model: BYOKModelFields;
+          /** Provider-scoped settings for the REUSED credential. Omit to keep
+           *  the stored ones; pass an object (possibly empty) to REPLACE them. */
+          credentialSettings?: Record<string, unknown>;
       }
     | {
           kind: "rotate";
@@ -68,12 +71,59 @@ export type BuildV2Edit =
           apiKey: string;
           settings?: Record<string, unknown>;
       }
-    | { kind: "edit-model"; modelId: string; model: BYOKModelFields }
+    | {
+          kind: "edit-model";
+          modelId: string;
+          model: BYOKModelFields;
+          /** Provider-scoped settings for the edited model's credential. Omit to
+           *  keep the stored ones; pass an object (possibly empty) to REPLACE. */
+          credentialSettings?: Record<string, unknown>;
+      }
     | { kind: "routing"; routing: BYOKRouting };
 
 /**
- * Split the legacy {@link BYOKConnectInput} that `CuratedConnectPanel` emits
- * into the v2 halves: the CREDENTIAL settings (provider-scoped:
+ * The credential a save should write into, or `undefined` when it has to
+ * create one.
+ *
+ * Provider alone is not identity. `openai_compatible`, `anthropic_compatible`
+ * and Azure all point at an endpoint the org supplies, so Together AI and
+ * Fireworks are both `openai_compatible` — with different base URLs, different
+ * keys and different bills. Matching on provider alone meant the second one
+ * rewrote the first one's endpoint and hung its model off that credential, so
+ * an org could never hold two gateways at once.
+ *
+ * The endpoint only enters the comparison when the incoming save carries one.
+ * A provider whose endpoint is fixed sends no `baseURL` and keeps reusing its
+ * single credential, exactly as before.
+ */
+export const findReusableCredential = (
+    credentials: BYOKCredential[] | undefined,
+    next: { provider: string; settings?: Record<string, unknown> },
+): BYOKCredential | undefined => {
+    const wanted = normalizeEndpoint(next.settings?.baseURL);
+
+    return (credentials ?? []).find((credential) => {
+        if (credential.managed || credential.provider !== next.provider) {
+            return false;
+        }
+        if (!wanted) return true;
+        return normalizeEndpoint(credential.settings?.baseURL) === wanted;
+    });
+};
+
+/**
+ * Two spellings of one endpoint — a trailing slash, a capitalised host — are
+ * the same upstream, and treating them as different would quietly split one
+ * gateway's models across two credentials.
+ */
+const normalizeEndpoint = (value: unknown): string =>
+    typeof value === "string"
+        ? value.trim().replace(/\/+$/, "").toLowerCase()
+        : "";
+
+/**
+ * Split the {@link BYOKConnectInput} the connect/edit form emits into the v2
+ * halves: the CREDENTIAL settings (provider-scoped:
  * baseURL, vertexLocation, aws*, openrouter*) and the per-MODEL fields. The key
  * itself stays on the form's `apiKey` and is passed to the builder separately.
  */
@@ -216,7 +266,9 @@ export const buildByokBlob = (
 
         case "add-existing-provider": {
             const credentials = (existing?.credentials ?? []).map((c) =>
-                keepCredential(c),
+                c.id === edit.credentialId
+                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    : keepCredential(c),
             );
             const models = [...(existing?.models ?? [])];
 
@@ -239,8 +291,20 @@ export const buildByokBlob = (
         }
 
         case "edit-model": {
+            // Provider-scoped settings (baseURL, openrouter*, …) live on the
+            // CREDENTIAL, but the form that edits them is this model's form. So
+            // an edit-model save has to be able to write them through to the
+            // model's credential — without that, the fields render, validate and
+            // report success while the value is dropped client-side, which is
+            // exactly how a pinned OpenRouter provider order could never be
+            // changed once its credential existed.
+            const edited = (existing?.models ?? []).find(
+                (m) => m.id === edit.modelId,
+            );
             const credentials = (existing?.credentials ?? []).map((c) =>
-                keepCredential(c),
+                edited && c.id === edited.credentialId
+                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    : keepCredential(c),
             );
             const models = (existing?.models ?? []).map((m) =>
                 m.id === edit.modelId

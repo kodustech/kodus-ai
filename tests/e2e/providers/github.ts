@@ -6,6 +6,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from '../lib/types.js';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +19,8 @@ import {
     resolveTargetRepo,
 } from './base.js';
 import { ensureOk, http } from '../lib/http.js';
-import { prepareBranch } from '../lib/git.js';
+import { isKodyFinding, isKodyReviewOutput } from '../lib/kody-markers.js';
+import { prepareBranch, pushFollowupCommit } from '../lib/git.js';
 import { logger } from '../lib/log.js';
 
 const log = logger('provider:github');
@@ -47,9 +49,8 @@ function classifyLicenseNotice(
 export function classifyKodyComment(
     body: string,
 ): 'started' | 'license-block' | 'review' {
-    if (!body.includes('<!-- kody-codereview')) return 'review';
-    if (body.includes('kody-codereview-completed'))
-        return 'review';
+    if (!isKodyReviewOutput(body)) return 'review';
+    if (body.includes('kody-codereview-completed')) return 'review';
     // A severity badge means this is a FINDING, whatever words
     // it happens to contain. License notices never carry one.
     //
@@ -67,7 +68,7 @@ export function classifyKodyComment(
     // your plan" / "BYOK" wording. Loose match so minor
     // copy edits don't silently flip the classification.
     if (
-        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
+        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders|kodus credits/i.test(
             body,
         )
     ) {
@@ -250,6 +251,63 @@ export class GitHubProvider extends BaseProvider {
         } finally {
             prepared.cleanup();
         }
+    }
+
+    async pushFollowupCommit(
+        pr: OpenedPR,
+        files: Record<string, string>,
+        commitMessage: string,
+    ): Promise<void> {
+        await pushFollowupCommit({
+            cloneUrl: this.cloneUrl(),
+            branch: pr.branch,
+            files,
+            commitMessage,
+        });
+    }
+
+    async listReviewCommentBodies(
+        pr: { number: number },
+        opts: { sinceIso: string; path?: string },
+    ): Promise<string[]> {
+        await this.refreshInstallationTokenIfNeeded();
+        const since = encodeURIComponent(opts.sinceIso);
+        const [reviewComments, issueComments] = await Promise.all([
+            this.conditionalGet<{ id: number; body: string; path?: string }[]>(
+                `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
+            ),
+            this.conditionalGet<{ id: number; body: string }[]>(
+                `${this.apiBase}/repos/${this.repoFullName}/issues/${pr.number}/comments?since=${since}`,
+            ),
+        ]);
+        const isRealReview = (body: string) =>
+            !body.toLowerCase().startsWith('@kody') &&
+            classifyKodyComment(body) === 'review';
+
+        const inline = this.listOrThrow(
+            reviewComments,
+            'github:listReviewCommentBodies:reviewComments',
+        ).filter(
+            (c) =>
+                (opts.path === undefined || c.path === opts.path) &&
+                isRealReview(c.body ?? ''),
+        );
+        // Issue/PR-level comments are never anchored to a file — when the
+        // caller scopes the query to a path, only inline comments can match
+        // it, so issue-level comments (things like the generic "Code Review
+        // Completed!" wrap-up, which classifyKodyComment reads as 'review')
+        // must be excluded entirely rather than always tagging along. Without
+        // this, a scenario asserting "no contradiction on file X" could be
+        // failed by an unrelated PR-level comment wrongly attributed to X.
+        const issueLevel =
+            opts.path === undefined
+                ? this.listOrThrow(
+                      issueComments,
+                      'github:listReviewCommentBodies:issueComments',
+                  ).filter((c) => isRealReview(c.body ?? ''))
+                : [];
+
+        return [...inline, ...issueLevel].map((c) => c.body ?? '');
     }
 
     async openPRFromBranches(args: OpenPRFromBranchesArgs): Promise<OpenedPR> {
@@ -452,9 +510,8 @@ export class GitHubProvider extends BaseProvider {
     private async refreshInstallationTokenIfNeeded(): Promise<void> {
         if (!this.token.startsWith('ghs_')) return;
         try {
-            const { githubAppToken } = await import(
-                '../lib/github-app-token.js'
-            );
+            const { githubAppToken } =
+                await import('../lib/github-app-token.js');
             const fresh = await githubAppToken();
             if (fresh) this.token = fresh;
         } catch {
@@ -602,10 +659,16 @@ export class GitHubProvider extends BaseProvider {
                     return { reviews, licenseNotice };
                 };
                 const rcRes = filterNonTrigger(
-                    this.listOrThrow(reviewComments, 'github:pollForReview:reviewComments'),
+                    this.listOrThrow(
+                        reviewComments,
+                        'github:pollForReview:reviewComments',
+                    ),
                 );
                 const icRes = filterNonTrigger(
-                    this.listOrThrow(issueComments, 'github:pollForReview:issueComments'),
+                    this.listOrThrow(
+                        issueComments,
+                        'github:pollForReview:issueComments',
+                    ),
                 );
                 const reviewsList = this.listOrThrow(
                     reviews,
@@ -846,7 +909,7 @@ export class GitHubProvider extends BaseProvider {
                     if (body.toLowerCase().startsWith('@kody')) continue;
                     // Skip code-review status/findings — conversation replies
                     // don't carry the review discriminator.
-                    if (body.includes('<!-- kody-codereview')) continue;
+                    if (isKodyReviewOutput(body)) continue;
                     if (!body.trim()) continue;
                     return { id: String(c.id), body: body.slice(0, 600) };
                 }
@@ -854,6 +917,66 @@ export class GitHubProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
         );
+    }
+
+    // Review threads Kody opened: root review comments carrying its marker,
+    // minus conversation answers. GitHub points every reply at the root.
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.reviewComments(prNumber))
+            .filter((c) => !c.in_reply_to_id && isKodyFinding(c.body ?? ''))
+            .map((c) => ({ id: String(c.id), body: c.body ?? '' }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/comments/${threadId}/replies`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                },
+                body: { body },
+            },
+        );
+        ensureOk(resp, 'github:replyInThread');
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        return (await this.reviewComments(prNumber))
+            .filter(
+                (c) =>
+                    String(c.id) === threadId ||
+                    String(c.in_reply_to_id) === threadId,
+            )
+            .sort((a, b) => a.created_at.localeCompare(b.created_at))
+            .map((c) => ({ id: String(c.id), body: c.body ?? '' }));
+    }
+
+    private async reviewComments(prNumber: number) {
+        const resp = await http<
+            {
+                id: number;
+                in_reply_to_id?: number;
+                body: string;
+                created_at: string;
+            }[]
+        >(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/comments?per_page=100`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, 'github:reviewComments');
+        return resp.body ?? [];
     }
 
     // Merges a PR (kody-issues generation and rule-file sync fire off the

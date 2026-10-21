@@ -39,5 +39,11 @@ export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandler({
         "/metrics",
         "/debug",
         "/health/raw",
+        // The MCP controllers (/mcp, /mcp/issues) authenticate their own
+        // callers (McpAuthGuard: service token or Team API key), not the web
+        // session this proxy injects. Legit callers reach the API origin
+        // directly (API_KODUS_MCP_SERVER_URL / API_MCP_MANAGER_BACKEND_URL),
+        // so there is nothing to forward here.
+        "/mcp",
     ],
 });

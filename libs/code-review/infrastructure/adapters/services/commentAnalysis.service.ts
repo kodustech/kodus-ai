@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM_ERROR_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
@@ -177,7 +178,7 @@ export class CommentAnalysisService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Error categorizing comments',
+                message: `${LLM_ERROR_TAG} Error categorizing comments`,
                 context: CommentAnalysisService.name,
                 error,
                 metadata: params,

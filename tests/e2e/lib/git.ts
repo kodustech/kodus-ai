@@ -29,7 +29,12 @@ export async function run(
         proc.on('close', (code) => {
             if (code === 0) resolve(stdout.trim());
             else {
-                const message = `${cmd} ${args.join(' ')} exited with code ${code}${stderr ? `\n${stderr}` : ''}`;
+                // Clone URLs carry credentials; never let them reach a log.
+                const redact = (text: string) =>
+                    text.replace(/\/\/[^/@\s]+@/g, '//***@');
+                const message = redact(
+                    `${cmd} ${args.join(' ')} exited with code ${code}${stderr ? `\n${stderr}` : ''}`,
+                );
                 reject(new Error(message));
             }
         });
@@ -141,4 +146,79 @@ export async function prepareBranch(
             }
         },
     };
+}
+
+export interface FollowupCommitOptions {
+    cloneUrl: string;
+    /** Branch that ALREADY exists remotely — checked out via FETCH_HEAD,
+     *  never created with `checkout -b` (that's prepareBranch's job). */
+    branch: string;
+    files: Record<string, string>;
+    commitMessage: string;
+    authorName?: string;
+    authorEmail?: string;
+}
+
+/**
+ * Pushes a second (or Nth) commit onto a branch a PR is already open on.
+ * Scenarios that need a real 2nd review round (e.g. "the developer applies
+ * the suggestion for real") use this instead of prepareBranch, which only
+ * knows how to create a brand-new branch.
+ */
+export async function pushFollowupCommit(
+    opts: FollowupCommitOptions,
+): Promise<void> {
+    const workDir = mkdtempSync(join(tmpdir(), 'kodus-e2e-followup-'));
+    log.info(`Cloning into ${workDir} for a follow-up commit on ${opts.branch}`);
+
+    try {
+        await run('git', ['clone', '--depth=1', opts.cloneUrl, workDir], {
+            capture: true,
+        });
+
+        await run('git', ['fetch', '--depth=1', 'origin', opts.branch], {
+            cwd: workDir,
+            capture: true,
+        });
+        await run('git', ['checkout', '-B', opts.branch, 'FETCH_HEAD'], {
+            cwd: workDir,
+            capture: true,
+        });
+
+        for (const [path, contents] of Object.entries(opts.files)) {
+            const absPath = join(workDir, path);
+            mkdirSync(dirname(absPath), { recursive: true });
+            writeFileSync(absPath, contents);
+        }
+
+        await run('git', ['add', '.'], { cwd: workDir, capture: true });
+
+        const authorName = opts.authorName ?? 'Kodus E2E';
+        const authorEmail = opts.authorEmail ?? 'e2e@kodus.test';
+        await run(
+            'git',
+            [
+                '-c',
+                `user.name=${authorName}`,
+                '-c',
+                `user.email=${authorEmail}`,
+                'commit',
+                '-m',
+                opts.commitMessage,
+            ],
+            { cwd: workDir, capture: true },
+        );
+
+        log.info(`Pushing follow-up commit on ${opts.branch}`);
+        await run('git', ['push', 'origin', opts.branch], {
+            cwd: workDir,
+            capture: true,
+        });
+    } finally {
+        try {
+            rmSync(workDir, { recursive: true, force: true });
+        } catch {
+            /* best effort */
+        }
+    }
 }

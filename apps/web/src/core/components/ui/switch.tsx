@@ -14,7 +14,7 @@ const switchVariants = cva(
         "switch-checked:bg-primary-light",
         "switch-unchecked:bg-text-placeholder/50",
         "switch-disabled:bg-text-placeholder/50 switch-disabled:cursor-not-allowed",
-        "switch-focused:ring-3 switch-focused:ring-card-lv3",
+        "switch-focused:ring-3 switch-focused:ring-ring",
         "switch-hover:brightness-120",
         "switch-loading:cursor-wait!",
     ),

@@ -1,0 +1,109 @@
+/**
+ * code-review — PrDecisionStore: read seam over suggestions already posted on
+ * THIS pull request in a previous review round (issue #1313).
+ *
+ * PR-shaped by design, so it lives in `code-review`, not `agent-harness` (the
+ * harness must never depend on review/PR types — see review-agent.contract.ts).
+ * Modeled after the `traceDecisions` context block: historical evidence
+ * injected into agent prompts, never proof the current code is correct, never
+ * a filter applied before the agent runs.
+ *
+ * Read-only in this phase. `append` (capturing a developer's reply or a
+ * resolved review thread — issue #1670) is intentionally NOT part of this
+ * contract yet; when it lands, it is additive here, not a breaking change.
+ */
+
+/**
+ * What happened to a previously-posted suggestion, derived from
+ * `CodeSuggestion.implementationStatus`.
+ *
+ * `not_implemented` and `pending` are weak signals — they mean "the developer
+ * hasn't applied this (yet)", NOT "the developer rejected this". There is no
+ * rejection/explanation signal in this phase (that requires reading developer
+ * replies or thread resolution — issue #1670, deferred).
+ */
+export type PrDecisionOutcome =
+    'implemented' | 'partially_implemented' | 'not_implemented' | 'pending';
+
+export interface PrDecisionRecord {
+    /** Opaque reference to one posted suggestion. PR-level legacy storage can
+     *  reuse a rule id, so its reference is derived from the comment instead. */
+    readonly suggestionId: string;
+    /** Absent for a PR-LEVEL decision — a kody-rules PULL_REQUEST-scope
+     *  finding, which judges the diff as a whole and is never anchored to one
+     *  file (`ISuggestionByPR`, stored in `prLevelSuggestions`, has no file
+     *  field at all). A PR-level record has no `implementationStatus` either
+     *  (that check only diffs file patches), so it always carries
+     *  `outcome: 'pending'` — descriptive context, never refutation evidence. */
+    readonly relevantFile?: string;
+    readonly relevantLinesStart?: number;
+    readonly relevantLinesEnd?: number;
+    readonly suggestionContent: string;
+    /** 'bug' | 'security' | 'performance' | 'kody_rules' | ... — surfaced to the
+     *  verifier so a security-labeled prior decision can be weighed differently
+     *  than a style one. Always 'kody_rules' for a rule-based finding — does
+     *  NOT say which rule; see `brokenKodyRulesIds` below. */
+    readonly label: string;
+    /** UUID(s) of the Kody Rule(s) this decision violated, when `label` is
+     *  'kody_rules' (absent for general bug/security/performance findings).
+     *  Without this, the kody-rules-sharded judge cannot tell a decision made
+     *  about THIS rule from one made about a different rule (or the general
+     *  review) at the same file/lines — a resolved decision for rule A could
+     *  then wrongly excuse a fresh violation of rule B. A consumer that can
+     *  resolve these to rule titles (the sharded judge, which already holds
+     *  the rule catalog) should do so before rendering; one that cannot
+     *  (the generic finder/verifier) can ignore this field — `label` alone
+     *  is enough context there. */
+    readonly brokenKodyRulesIds?: readonly string[];
+    /** The custom agent (#2172) whose finding this was. A custom agent weighs
+     *  only its own earlier decisions: another reviewer's verdicts are not
+     *  about what its instructions ask, and read as "already decided" they
+     *  silenced it. */
+    readonly customAgentId?: string;
+    /** The code the suggestion pointed at, as stored. Lets the repeat check
+     *  (`engine/repeat-check.ts`) recognize the same occurrence without a
+     *  model call. Absent on PR-level records. */
+    readonly existingCode?: string;
+    readonly outcome: PrDecisionOutcome;
+    /** `createdAt` of the original suggestion. */
+    readonly decidedAt: string;
+}
+
+export interface LoadPrDecisionsParams {
+    readonly organizationId: string;
+    readonly prNumber: number;
+    readonly repositoryFullName: string;
+    /** Most recent entries to return. Defaults to {@link MAX_PR_DECISIONS}. */
+    readonly limit?: number;
+}
+
+/**
+ * How many earlier suggestions a review is shown — the most recent, across
+ * the WHOLE PR. Not scoped to the files of the current diff: a finding can
+ * repeat one anchored on another file once the code moves (#2020, and a
+ * production report of a declined suggestion reposted on another file). One
+ * cap for the whole history keeps every prompt that renders it bounded.
+ */
+export const MAX_PR_DECISIONS = 40;
+
+/**
+ * How many earlier suggestions the repeat check reads (#2097). It is not
+ * rendered into any prompt, so it is the whole PR in practice; the bound only
+ * keeps one runaway PR from loading an unbounded array.
+ */
+export const MAX_REPEAT_CHECK_DECISIONS = 500;
+
+/**
+ * Read port for prior-round decisions on a PR. Implementations are infra
+ * (Mongo today); the pipeline/agents only know this seam. A failing/erroring
+ * implementation must never be turned into a dropped finding by a caller —
+ * callers are expected to fail open (treat an error as "no history").
+ */
+export interface PrDecisionStore {
+    load(params: LoadPrDecisionsParams): Promise<readonly PrDecisionRecord[]>;
+}
+
+/** DI token, kept alongside the contract — same placement as
+ *  `PULL_REQUESTS_REPOSITORY_TOKEN` in its domain contract — so a consumer
+ *  depends on the domain seam, never on the infra class that implements it. */
+export const PR_DECISION_STORE_TOKEN = Symbol('PrDecisionStore');

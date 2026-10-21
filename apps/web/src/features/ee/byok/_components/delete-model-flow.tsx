@@ -8,8 +8,7 @@ import { deleteBYOK } from "@services/organizationParameters/fetch";
 import { AlertTriangleIcon } from "lucide-react";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
-import { useCatalog } from "../_data/catalog-context";
-import type { CuratedModel } from "../_data/curated-models.types";
+import { formatModelLabel } from "../_data/model-label";
 import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
 
@@ -97,7 +96,7 @@ export function deleteConfirmCopy(
 ): DeleteConfirmCopy {
     if (isLast) {
         return {
-            title: "Disconnect BYOK entirely?",
+            title: "Disconnect your last model?",
             description:
                 "This removes your only connected model. Kodus falls back to " +
                 "your environment-configured LLM if one exists, or stops running " +
@@ -180,9 +179,7 @@ export function useDeleteModel({
 }): { confirmAndDelete: () => void; rejectionReasons: string[] } {
     const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
 
-    const catalog = useCatalog();
-    const name =
-        catalog.find((m) => m.id === model.model)?.displayName ?? model.model;
+    const name = formatModelLabel(model.model);
     const copy = deleteConfirmCopy(isLastModel(config, model.id), name);
 
     const confirmAndDelete = () => {

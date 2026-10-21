@@ -61,6 +61,36 @@ describe('ProviderService — registry-driven', () => {
             expect(b.autoListModels).toBe(true);
         });
 
+        describe('listsModelsLive — the live `/models` (candidate-key) flag', () => {
+            it('OpenAI: native http listing with a default URL → lists live', () => {
+                const o = byId('openai');
+                expect(o.autoListModels).toBe(true);
+                expect(o.listsModelsLive).toBe(true);
+            });
+
+            it('Bedrock: http listing (ListInferenceProfiles) with a resolvable base URL → lists live', () => {
+                // Bedrock enumerates system-defined profiles over a live AWS
+                // endpoint; `fallbackModels` only cover the degraded path. That
+                // makes it a live listing like OpenAI, not a static catalog.
+                expect(byId('amazon_bedrock').listsModelsLive).toBe(true);
+            });
+
+            it('Vertex: static catalog is auto-listable but NOT live (no live /models endpoint)', () => {
+                expect(byId('google_vertex').listsModelsLive).toBe(false);
+            });
+
+            // Live once its base URL is typed: the picker waits for the URL,
+            // and the backend only sends a key to the host it belongs to.
+            it('openai_compatible: custom endpoint → live (lists once the URL is typed)', () => {
+                expect(byId('openai_compatible').listsModelsLive).toBe(true);
+                expect(byId('openai_compatible').autoListModels).toBe(false);
+            });
+
+            it('anthropic_compatible: manual listing → not live', () => {
+                expect(byId('anthropic_compatible').listsModelsLive).toBe(false);
+            });
+        });
+
         it('Vertex: static catalog is listable', () => {
             expect(byId('google_vertex').autoListModels).toBe(true);
         });

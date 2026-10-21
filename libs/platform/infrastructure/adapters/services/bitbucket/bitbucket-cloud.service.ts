@@ -62,6 +62,11 @@ import {
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import {
     OneSentenceSummaryItem,
     PullRequest,
     PullRequestAuthor,
@@ -74,6 +79,12 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { AuthorContribution } from '@libs/platformData/domain/pullRequests/interfaces/authorContributor.interface';
 import { IRepository } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -90,6 +101,13 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { attachRepliesToComments } from './bitbucket-comment-threads';
+import {
+    getTranslationsForLanguageByCategory,
+    TranslationsCategory,
+} from '@libs/common/utils/translations/translations';
+import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 
 @Injectable()
 export class BitbucketCloudService implements Omit<
@@ -116,6 +134,51 @@ export class BitbucketCloudService implements Omit<
     | 'minimizeComment'
 > {
     private readonly logger = createLogger(BitbucketCloudService.name);
+
+    /**
+     * Resolved head commit per (repo, ref), so reading N files costs N+1 API
+     * calls instead of 2N.
+     *
+     * `getRepositoryContentFile` resolved the branch's commit with
+     * `repositories.listCommits` before every single `source.read` — same
+     * repo, same ref, same answer, once per file. A 200-file pull request
+     * spent 400 calls where 201 were needed, and Bitbucket answered
+     * `429 Too Many Requests`: 67 of them in three hours of production, all
+     * concentrated on this one method, which is the shape of a loop without
+     * spacing rather than of an abusive tenant.
+     *
+     * A short TTL is the whole point — long enough to cover one review's file
+     * fan-out, short enough that a push landing mid-review is picked up by the
+     * next one. Capped so a long-lived worker cannot grow it without bound.
+     */
+    private readonly headCommitMemo = new Map<
+        string,
+        { hash: string; at: number }
+    >();
+    private static readonly HEAD_COMMIT_TTL_MS = 60_000;
+    private static readonly HEAD_COMMIT_MEMO_MAX = 500;
+
+    private rememberHeadCommit(key: string, hash: string): void {
+        if (
+            this.headCommitMemo.size >=
+            BitbucketCloudService.HEAD_COMMIT_MEMO_MAX
+        ) {
+            // Drop the oldest insertion; Map preserves insertion order.
+            const oldest = this.headCommitMemo.keys().next().value;
+            if (oldest !== undefined) this.headCommitMemo.delete(oldest);
+        }
+        this.headCommitMemo.set(key, { hash, at: Date.now() });
+    }
+
+    private recallHeadCommit(key: string): string | undefined {
+        const hit = this.headCommitMemo.get(key);
+        if (!hit) return undefined;
+        if (Date.now() - hit.at > BitbucketCloudService.HEAD_COMMIT_TTL_MS) {
+            this.headCommitMemo.delete(key);
+            return undefined;
+        }
+        return hit.hash;
+    }
 
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
@@ -2174,43 +2237,19 @@ export class BitbucketCloudService implements Omit<
         return `\`\`\`${language}\n${code}\n\`\`\``;
     }
 
-    private formatBodyForBitbucket(lineComment: any, repository: any) {
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
-        const actionStatement = lineComment?.body?.actionStatement
-            ? `${lineComment.body.actionStatement}\n\n`
-            : '';
-
-        const severityText = lineComment?.suggestion
-            ? lineComment.suggestion.severity
-            : '';
-        const labelText = lineComment?.suggestion
-            ? lineComment.suggestion.label
-            : '';
-
-        const header = `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n`;
-
-        const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
-        const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
-
-        const footer = `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`;
-
-        return [
-            header,
-            suggestionContent,
-            actionStatement,
-            codeBlock,
-            footer,
-            thumbsUpBlock,
-            thumbsDownBlock,
-        ]
-            .join('\n')
-            .trim();
+    private formatBodyForBitbucket(lineComment: any, language?: string) {
+        const translations = getTranslationsForLanguageByCategory(
+            language as LanguageValue,
+            TranslationsCategory.ReviewComment,
+        );
+        return formatBitbucketSuggestionBody({
+            label: lineComment?.suggestion?.label,
+            severity: lineComment?.suggestion?.severity,
+            title: lineComment?.suggestion?.oneSentenceSummary,
+            body: lineComment?.body?.suggestionContent,
+            actionStatement: lineComment?.body?.actionStatement,
+            feedback: translations.feedbackReply || translations.feedback,
+        });
     }
 
     async createReviewComment(params: {
@@ -2248,7 +2287,7 @@ export class BitbucketCloudService implements Omit<
 
             const bodyFormatted = this.formatBodyForBitbucket(
                 lineComment,
-                repository,
+                language,
             );
 
             // added ts-ignore because _body expects a type property but Bitbucket rejects it
@@ -2396,22 +2435,31 @@ export class BitbucketCloudService implements Omit<
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
 
-            const commits = await bitbucketAPI.repositories.listCommits({
-                repo_slug: `{${repo.id}}`,
-                workspace: `{${repo.workspaceId}}`,
-                pagelen: 1,
-                include: pullRequest.head?.ref || pullRequest.base?.ref || '',
-            });
+            const ref = pullRequest.head?.ref || pullRequest.base?.ref || '';
+            const memoKey = `${repo.id}:${repo.workspaceId}:${ref}`;
 
-            const commit = commits?.data?.values?.[0];
+            let commitHash = this.recallHeadCommit(memoKey);
 
-            if (!commit) {
-                return null;
+            if (!commitHash) {
+                const commits = await bitbucketAPI.repositories.listCommits({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    pagelen: 1,
+                    include: ref,
+                });
+
+                commitHash = commits?.data?.values?.[0]?.hash;
+
+                if (!commitHash) {
+                    return null;
+                }
+
+                this.rememberHeadCommit(memoKey, commitHash);
             }
 
             const fileContent = await bitbucketAPI.source
                 .read({
-                    commit: commit.hash,
+                    commit: commitHash,
                     path: file.filename,
                     repo_slug: `{${repo.id}}`,
                     workspace: `{${repo.workspaceId}}`,
@@ -2425,6 +2473,28 @@ export class BitbucketCloudService implements Omit<
                 },
             };
         } catch (error) {
+            // A missing file (no kodus-config.yml, a stale reference) is a
+            // normal answer, not a failure.
+            if (error?.status === 404) {
+                this.logger.warn({
+                    message: 'Repository content file not found',
+                    context: BitbucketCloudService.name,
+                    serviceName:
+                        'BitbucketCloudService getRepositoryContentFile',
+                    metadata: {
+                        organizationAndTeamData:
+                            params?.organizationAndTeamData,
+                        repositoryId: params?.repository?.id,
+                        repositoryName: params?.repository?.name,
+                        filePath: params?.file?.filename,
+                        ref:
+                            params?.pullRequest?.head?.ref ||
+                            params?.pullRequest?.base?.ref,
+                    },
+                });
+                return null;
+            }
+
             this.logger.error({
                 message: 'Error to get repository content file',
                 context: BitbucketCloudService.name,
@@ -2878,24 +2948,10 @@ export class BitbucketCloudService implements Omit<
                 })
                 .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
-            // Adds a replies field to each comment.
-            const commentMap = comments.reduce((acc, comment) => {
-                // Initialize the replies field and map the comment by ID
-                comment.replies = [];
-                acc[comment.id] = comment;
-
-                // If the comment has a parent, add it to the parent's replies array
-                if (comment.parent) {
-                    const parentId = comment.parent.id;
-                    if (acc[parentId]) {
-                        acc[parentId].replies.push(comment);
-                    }
-                }
-
-                return acc;
-            }, {});
-
-            const organizedComments: any = Object.values(commentMap);
+            // A thread's root lists every reply under it, replies to replies
+            // included, so feedback and conversation under Kody's prompt
+            // reply belong to the finding's thread.
+            const organizedComments: any = attachRepliesToComments(comments);
 
             return organizedComments
                 .map((comment) => ({
@@ -2909,6 +2965,9 @@ export class BitbucketCloudService implements Omit<
                         id: this.sanitizeUUID(comment?.user?.uuid),
                         username: comment?.user?.nickname,
                         name: comment?.user?.display_name,
+                        // `app_user` for app and access-token users: lets the
+                        // conversation gate tell another agent from a person.
+                        type: comment?.user?.type,
                     },
                 }))
                 .sort(
@@ -3190,6 +3249,12 @@ export class BitbucketCloudService implements Omit<
         configKey: IntegrationConfigKey;
         configValue: any;
         type?: 'replace' | 'append';
+        /**
+         * Set by the chunked repository save on every request but the last, so
+         * webhooks are reconciled once against the complete selection instead
+         * of against each partially-persisted chunk.
+         */
+        deferWebhooks?: boolean;
     }): Promise<void> {
         try {
             const integration = await this.integrationService.findOne({
@@ -3219,9 +3284,16 @@ export class BitbucketCloudService implements Omit<
             // here escalated to an unhandledRejection that crashed the whole
             // API process. The failure still gets a loud error log from
             // createWebhook's own catch; this catch only stops the crash.
-            void this.createWebhook(params.organizationAndTeamData).catch(
-                () => undefined,
-            );
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createWebhook(params.organizationAndTeamData).catch(
+                    () => undefined,
+                );
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error to create or update integration config',
@@ -3322,9 +3394,81 @@ export class BitbucketCloudService implements Omit<
         }
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        try {
+            const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+            const { data } = await bitbucketAPI.repositories.listCommitStatuses(
+                {
+                    workspace: repository.owner,
+                    repo_slug: repository.name,
+                    commit: commitSha,
+                    pagelen: 100,
+                },
+            );
+
+            return (data?.values ?? []).map((status) =>
+                this.mapBitbucketBuildStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Bitbucket commit statuses',
+                context: BitbucketCloudService.name,
+                error,
+                metadata: { repository: repository.name, commitSha },
+            });
+            return [];
+        }
+    }
+
+    private mapBitbucketBuildStatus(status: {
+        key?: string;
+        name?: string;
+        state?: string;
+        url?: string;
+        updated_on?: string;
+    }): CheckEvidence {
+        const inProgress = status.state === 'INPROGRESS';
+
+        return {
+            id: status.key ?? '',
+            // `name` is optional; the key is the only field always present.
+            name: status.name ?? status.key ?? '',
+            status: inProgress ? 'in_progress' : 'completed',
+            conclusion: inProgress
+                ? null
+                : this.mapBitbucketConclusion(status.state),
+            url: status.url ?? null,
+            completedAt: inProgress ? null : (status.updated_on ?? null),
+            platform: PlatformType.BITBUCKET,
+        };
+    }
+
+    private mapBitbucketConclusion(
+        state: string | undefined,
+    ): CheckEvidenceConclusion | null {
+        switch (state) {
+            case 'SUCCESSFUL':
+                return 'success';
+            case 'FAILED':
+                return 'failure';
+            case 'STOPPED':
+                return 'cancelled';
+            default:
+                return null;
+        }
+    }
+
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const authDetail = await this.getAuthDetails(organizationAndTeamData);
@@ -4686,17 +4830,10 @@ export class BitbucketCloudService implements Omit<
                 return false;
             }
 
-            const existingHooks = await bitbucketAPI.webhooks
-                .listForRepo({
-                    repo_slug: `{${this.sanitizeUUID(targetRepo.id)}}`,
-                    workspace: `{${this.sanitizeUUID(targetRepo.workspaceId)}}`,
-                    pagelen: 50,
-                })
-                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
-
-            return existingHooks.some(
-                (hook: any) =>
-                    hook?.url === webhookUrl && hook?.active !== false,
+            return await this.hasActiveWebhook(
+                bitbucketAPI,
+                targetRepo,
+                webhookUrl,
             );
         } catch (error) {
             this.logger.error({
@@ -4712,6 +4849,134 @@ export class BitbucketCloudService implements Omit<
 
             return false;
         }
+    }
+
+    private async hasActiveWebhook(
+        bitbucketAPI: InstanceType<typeof Bitbucket>,
+        targetRepo: Repositories,
+        webhookUrl: string,
+    ): Promise<boolean> {
+        const existingHooks = await bitbucketAPI.webhooks
+            .listForRepo({
+                repo_slug: `{${this.sanitizeUUID(targetRepo.id)}}`,
+                workspace: `{${this.sanitizeUUID(targetRepo.workspaceId)}}`,
+                pagelen: 50,
+            })
+            .then((res) => this.getPaginatedResults(bitbucketAPI, res));
+
+        return existingHooks.some(
+            (hook: any) => hook?.url === webhookUrl && hook?.active !== false,
+        );
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails) {
+                result.error = 'Bitbucket credential not found';
+                return result;
+            }
+
+            const repositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
+
+            const targetRepo = repositories?.find(
+                (repo) =>
+                    this.sanitizeUUID(repo.id) ===
+                    this.sanitizeUUID(params.repository.id),
+            );
+
+            if (!targetRepo?.workspaceId) {
+                result.error = 'Repository not found in the configured list';
+                return result;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(authDetails);
+            const repoSlug = `{${this.sanitizeUUID(targetRepo.id)}}`;
+            const workspace = `{${this.sanitizeUUID(targetRepo.workspaceId)}}`;
+
+            try {
+                await bitbucketAPI.commits.list({
+                    repo_slug: repoSlug,
+                    workspace,
+                    pagelen: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                // Permission the provider reports for the authenticated user.
+                // A credential that is not a user (or lacks the account
+                // scope) cannot call this, so failure leaves `write` unknown.
+                const fullName =
+                    params.repository.fullName ?? targetRepo.full_name;
+                const q = fullName
+                    ? `repository.full_name="${fullName}"`
+                    : `repository.uuid="{${this.sanitizeUUID(targetRepo.id)}}"`;
+                const { data } =
+                    await bitbucketAPI.user.listPermissionsForRepos({
+                        q,
+                        pagelen: 1,
+                    });
+                const permission = data?.values?.[0]?.permission;
+                // `read` can still comment on pull requests, so only `none`
+                // is a definite no.
+                if (permission === 'write' || permission === 'admin') {
+                    result.write = 'ok';
+                } else if (permission === 'none') {
+                    result.write = 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+
+            if (webhookUrl) {
+                try {
+                    result.hook = (await this.hasActiveWebhook(
+                        bitbucketAPI,
+                        targetRepo,
+                        webhookUrl,
+                    ))
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repo; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {
@@ -5656,6 +5921,7 @@ export class BitbucketCloudService implements Omit<
             sourceRefName: pullRequest?.source?.branch?.name ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pullRequest?.source?.branch?.name ?? '',
+                sha: pullRequest?.source?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(
@@ -5713,9 +5979,7 @@ export class BitbucketCloudService implements Omit<
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for Bitbucket Cloud — callers fall back to
         // per-user `getUserByUsername`.
         return null;

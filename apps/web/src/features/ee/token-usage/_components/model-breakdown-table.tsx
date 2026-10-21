@@ -205,7 +205,10 @@ function ModelBlock({
     row: EnrichedModelUsage;
     pricingInfo: ModelPricingInfo | undefined;
 }) {
-    const uncachedInput = Math.max(0, row.input - (row.cacheRead ?? 0));
+    const uncachedInput = Math.max(
+        0,
+        row.input - (row.cacheRead ?? 0) - (row.cacheWrite ?? 0),
+    );
     const isTiered = !!row.byTier && !!row.costByTier;
 
     // The cost pipeline is N-tier internally; the table collapses it to two
@@ -221,10 +224,17 @@ function ModelBlock({
     const inputThreshold = pricingInfo?.pricing?.input?.tiers?.[0]?.threshold;
     const showCacheWrite = (row.cacheWrite ?? 0) > 0;
 
-    const totalUncached =
-        (le ? le.input - le.cacheRead : 0) + (gt ? gt.input - gt.cacheRead : 0);
-    const leUncached = le ? Math.max(0, le.input - le.cacheRead) : 0;
-    const gtUncached = gt ? Math.max(0, gt.input - gt.cacheRead) : 0;
+    // Uncached = total input minus BOTH cacheRead and cacheWrite (ai@7:
+    // input = noCache + cacheRead + cacheWrite); the cacheWrite tokens are
+    // priced on their own Cache-write row, so leaving them in here would
+    // double-count them.
+    const leUncached = le
+        ? Math.max(0, le.input - le.cacheRead - le.cacheWrite)
+        : 0;
+    const gtUncached = gt
+        ? Math.max(0, gt.input - gt.cacheRead - gt.cacheWrite)
+        : 0;
+    const totalUncached = leUncached + gtUncached;
 
     return (
         <Card className="p-0">

@@ -1,0 +1,785 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "6839eb92aa6ee4b3fcbd7cc377dec4b558d6ebd7377b6d94ec098b0729e00139"
+  },
+  "startedAt": "2026-10-03T13:04:40.391Z",
+  "updatedAt": "2026-10-03T13:36:48.346Z",
+  "complete": true,
+  "selectedCases": [
+    "R5-unrelated-same-area",
+    "R6-incomplete-fix",
+    "R7-refines-prior"
+  ],
+  "summary": {
+    "measured": 9,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 6,
+        "violations": 6,
+        "rate": 1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "R6-incomplete-fix · credit-negative-repeat [not_deliver, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R7-refines-prior · signal-not-passed-repeat [not_deliver, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 250119,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: `new FailedError(String(err), chargeId)` passes the arguments to FailedError in the wrong order — errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, so the first arg must be the charge id and the second the underlying error. WHY: FailedError.chargeId (and the message set by `super(chargeId)`) now holds the stringified gateway error while the real charge id is stored in `cause`, so any caller using `err.chargeId` to identify the failed charge — or logging the message — gets the wrong value. HOW: restore the correct order, passing chargeId first and the raw error as the cause: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "errors.ts:4 confirms the constructor signature is (chargeId, cause?) with super(chargeId). status.ts:11 calls new FailedError(String(err), chargeId), swapping the arguments so chargeId stores the stringified error and cause stores the real charge id. The claim's root cause and failure path are correct and reachable whenever a non-NotReadyError is thrown.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "chargeId",
+                "path": "src",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`new FailedError(String(err), chargeId)` passes arguments in the wrong order against errors.ts:4's `constructor(readonly chargeId: string, readonly cause?: unknown)`, so `FailedError.chargeId` and the message from `super(chargeId)` hold the stringified gateway error while the real charge id is in `cause`, making `err.chargeId` and logs wrong. Restore the order by passing `chargeId` first and the raw error as the cause: `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 371773,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError arguments are swapped — `new FailedError(String(err), chargeId)` passes the stringified error as the `chargeId` parameter and the real charge id as the `cause`. WHY: `FailedError`'s constructor is `(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4), so `err.chargeId` now holds the error text instead of the charge id, `err.cause` holds the charge id instead of the original error, and the Error message becomes the error text rather than the charge id — breaking the error contract and losing the original error for every non-transient failure. HOW: Restore the correct argument order.",
+          "keep": true,
+          "rationale": "Confirmed by direct evidence: FailedError's constructor signature is (chargeId: string, cause?: unknown) (src/billing/errors.ts:4), but src/billing/status.ts:11 calls new FailedError(String(err), chargeId), so chargeId holds the stringified error and cause holds the real charge id, and super(chargeId) produces an Error message of the error text rather than the charge id. The arguments are genuinely swapped, breaking the error contract and discarding the original error for non-transient failures. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `FailedError` arguments are swapped: `new FailedError(String(err), chargeId)` passes the stringified error as `chargeId` and the real charge id as `cause`, so `err.chargeId` holds the error text, `err.cause` holds the charge id, and the message becomes the error text, breaking the error contract and losing the original error for non-transient failures. Restore the correct argument order to match the `(chargeId: string, cause?: unknown)` constructor in src/billing/errors.ts:4."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 227387,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The FailedError constructor arguments are swapped — it is declared as `constructor(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4) but is called as `new FailedError(String(err), chargeId)`. WHY: The `chargeId` field now stores the stringified error and `cause` stores the charge id (and the Error message becomes the error string), so any consumer reading `FailedError.chargeId`/`.cause` gets the wrong values — a regression from the previous correct `new FailedError(chargeId, err)`. HOW: Restore the correct order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed by reading both files. errors.ts:4 declares `constructor(readonly chargeId: string, readonly cause?: unknown)`, while status.ts:11 calls `new FailedError(String(err), chargeId)`, passing the stringified error as chargeId and the charge id as cause. The arguments are genuinely swapped, so `FailedError.chargeId` and `.cause` hold the wrong values. The root cause described is factually accurate and the failure path is real, not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The FailedError constructor arguments are swapped — it is declared as `constructor(chargeId: string, cause?: unknown)` (src/billing/errors.ts:4) but is called as `new FailedError(String(err), chargeId)`, so `chargeId` stores the stringified error and `cause` stores the charge id (and the Error message becomes the error string), a regression from the previous `new FailedError(chargeId, err)`. Restore the correct order: `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 141401,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The positivity guard added to `debit` (line 5) was not added to `credit`, so `credit` still accepts zero or negative amounts. WHY: A negative `credit` silently debits the account (and a zero `credit` is a silent no-op), so the balance invariant this PR enforces on `debit` is not enforced on the symmetric operation, letting callers corrupt balances. HOW: Apply the same guard at the top of `credit`.",
+          "keep": true,
+          "rationale": "Confirmed: debit (line 5) has the `if (!(amount > 0)) throw new RangeError` guard, but credit (lines 9-11) has no guard and directly adds `amount`, so zero/negative credits are accepted. A negative credit silently debits and a zero credit is a no-op. The PreviousDecision (partially_implemented) shows the guard was applied to debit only, leaving this exact asymmetry — the current code still exhibits it, so the claim is technically accurate and not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The positivity guard added to `debit` (line 5) was not added to `credit`, so `credit` still accepts zero or negative amounts; a negative `credit` silently debits the account and zero is a no-op, leaving the balance invariant enforced on `debit` unenforced on its symmetric operation. Apply the same guard at the top of `credit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 180702,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: debit now rejects non-positive amounts but credit (line 9-11) still accepts them, so a negative or zero credit is applied unguarded. WHY: The sign-flip bug this guard was added to prevent stays reachable via credit — `credit(acct, -100)` reduces the balance, silently debiting and bypassing the new check. HOW: Mirror the same guard in credit: `if (!(amount > 0)) throw new RangeError('amount must be positive');`.",
+          "keep": true,
+          "rationale": "Confirmed: line 5 guards debit with `if (!(amount > 0)) throw`, but credit at lines 9-11 has no such guard and does `balance + amount`, so a negative or zero credit silently debits / no-ops and bypasses the new check. This is exactly the sign-flip bug the guard addresses, still reachable via credit. Prior decision was only partially_implemented (debit fixed, credit not), so it does not resolve this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "debit now rejects non-positive amounts, but credit (line 9-11) still accepts them, so `credit(acct, -100)` reduces the balance and bypasses the new guard via the sign-flip bug. Mirror the same guard in credit with `if (!(amount > 0)) throw new RangeError('amount must be positive');`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 273527,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/ledger/ledger.ts",
+          "claim": "WHAT: The new positivity guard was added only to `debit`, so `credit` still accepts zero/negative amounts, and a negative credit silently performs a debit instead of being rejected. WHY: The two sibling operations now enforce inconsistent contracts — `debit(account, -x)` throws while `credit(account, -x)` silently subtracts, so callers passing a signed amount to `credit` can invert the intended money movement with no error. HOW: Apply the same guard in `credit`.",
+          "keep": true,
+          "rationale": "Code confirms the guard exists only in debit (line 5); credit (lines 9-11) still adds an unvalidated amount, so credit(account, -x) silently debits. The prior review decision was only partially_implemented (debit got the guard, credit did not), and the current source shows credit still unguarded — this is the unresolved remainder, not a contradiction of an applied fix.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "ledger.ts",
+          "claim": "The `credit` method (lines 9-11) still accepts zero and negative amounts, allowing a negative credit to bypass the validation guard newly added to `debit` at line 5. This asymmetry means balances can be manipulated through `credit` even though `debit` is now guarded. Note: the reviewer identifies this as an already-known issue — it is reported here only because it is explicitly described as a remaining defect; the reviewer dismisses it as a duplicate of the earlier PreviousDecision (partially_implemented) and the existing CurrentFindings entry. Add a symmetric guard so `credit` rejects non-positive amounts before mutating the Map.",
+          "keep": true,
+          "rationale": "Verified against src/ledger/ledger.ts: debit (line 5) guards with `if (!(amount > 0)) throw`, while credit (lines 9-11) has no guard and directly adds amount to the balance. A negative amount to credit subtracts from the balance, bypassing the positivity check enforced on debit, so the asymmetry and the resulting balance-manipulation path are real and reproducible. No evidence refutes the claim; the note about duplication is not a technical refutation.",
+          "tools": [
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "ledger.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "credit|debit",
+                "glob": "ledger.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/ledger/ledger.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/ledger/ledger.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new positivity guard was added only to `debit`, so `credit` still accepts zero or negative amounts and a negative credit silently performs a debit instead of being rejected, leaving the two sibling operations with inconsistent contracts. Apply the same guard in `credit`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "ledger.ts",
+          "line": 9,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "duplicate",
+          "marked": false,
+          "text": "The `credit` method (lines 9-11) still accepts zero and negative amounts, allowing a negative credit to bypass the validation guard newly added to `debit` at line 5, so balances can be manipulated through `credit`. Add a symmetric guard so `credit` rejects non-positive amounts before mutating the Map."
+        }
+      ],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 164183,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The `AbortController` created on line 2 is never connected to the request — `fetch(url)` on line 5 is called without `{ signal: controller.signal }`, so `controller.abort()` never cancels anything. WHY: The 5000ms timer fires and aborts a controller no request is listening to, so a server that never responds still hangs the caller indefinitely — the timeout this change was meant to add is a no-op, and the `finally` block's `clearTimeout` never runs in the hang case (the timer leaks). HOW: Pass the signal to fetch, e.g. `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "The cited code is verbatim as described: line 2 creates `const controller = new AbortController()`, line 3 sets a 5000ms timer that calls `controller.abort()`, but line 5 calls `await fetch(url)` with no options object, so `controller.signal` is never passed to fetch. An AbortController only affects a request if its `signal` is wired in; here nothing listens to it, so the abort is a no-op and a non-responding server still hangs the caller. This is concrete, verifiable evidence the finding's root cause is correct. It is also not superseded by the previous review decision: that decision (index 1) merely asked to add a timeout and is marked implemented, but the current diff shows the implementation is incomplete — the timeout does not actually cancel anything, which is exactly the concrete new evidence that the applied change is wrong. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `AbortController` created on line 2 is never connected to the request — `fetch(url)` on line 5 omits `{ signal: controller.signal }`, so `controller.abort()` never cancels anything and the 5000ms timer leaks because `clearTimeout` in the `finally` block never runs when a server hangs. Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 198475,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController created on line 2 is aborted after 5s, but fetch on line 5 is called as `fetch(url)` without `{ signal: controller.signal }`, so the abort never cancels the request. WHY: The timeout is a no-op — a server that never responds still hangs the caller indefinitely, defeating the entire purpose of this change (and leaving the previously reported hang unfixed). HOW: Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/http/client.ts: line 2 creates the AbortController, line 3 aborts it after 5s, but line 5 calls `fetch(url)` with no signal option, and grep shows the controller is never referenced elsewhere. The abort therefore cannot cancel the request, making the timeout a real no-op and leaving the original hang unfixed. This is a concrete behavior bug, not style, and the prior 'implemented' decision only covers adding a timeout — it does not make the added timeout actually functional.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "AbortController|globalThis.fetch|window.fetch",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The AbortController created on line 2 is aborted after 5s, but fetch on line 5 is called as `fetch(url)` without `{ signal: controller.signal }`, so the timeout is a no-op and a server that never responds still hangs the caller indefinitely. Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 107322,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is created and aborted by the 5s timer, but its `signal` is never passed to `fetch`, so `controller.abort()` cancels nothing. WHY: The intended timeout is a no-op — `fetch(url)` still hangs forever against a server that never responds, exactly the failure the timeout was meant to prevent. HOW: Pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "The cited code confirms the claim verbatim: line 5 is `const res = await fetch(url);` with no second argument, so `controller.signal` is never passed. The AbortController created on line 2 and aborted by the 5s timer on line 3 therefore cancels nothing — the timeout is a no-op and a server that never responds still hangs the caller indefinitely. The previous review decision only asked for a timeout to be added; it does not cover this bug (the applied change is ineffective), so it is not a refutation. Root cause is factually correct and the failure path is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/http/client.ts",
+          "line": 2,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The AbortController is created and aborted by the 5s timer, but its `signal` is never passed to `fetch`, so `controller.abort()` cancels nothing and `fetch(url)` still hangs forever against a server that never responds. Pass `controller.signal` to fetch so the intended timeout actually takes effect."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

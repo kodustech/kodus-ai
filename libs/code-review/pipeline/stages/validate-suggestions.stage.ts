@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     SUPPORTED_LANGUAGES,
     ValidationCandidate,
@@ -20,6 +21,7 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { SandboxSyntaxValidator } from '@libs/code-review/infrastructure/adapters/services/sandboxSyntaxValidator.service';
 import { SuggestionLLMValidator } from '@libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 @Injectable()
 export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -42,14 +44,13 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         try {
-            if (!(await this.shouldRunStage(context))) return context;
+            const changedFiles = this.reviewedFiles(context);
+            if (!(await this.shouldRunStage(context, changedFiles))) {
+                return context;
+            }
 
-            const {
-                validSuggestions,
-                changedFiles,
-                organizationAndTeamData,
-                pullRequest,
-            } = context;
+            const { validSuggestions, organizationAndTeamData, pullRequest } =
+                context;
             const prNumber = pullRequest.number;
 
             const filtered = await this.filterSuggestions(
@@ -93,6 +94,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                 candidates,
                 organizationAndTeamData,
                 prNumber,
+                context.codeReviewConfig?.resolvedModelSlot,
             );
 
             const updatedSuggestions = this.mapValidationResults(
@@ -121,14 +123,25 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         }
     }
 
-    private async shouldRunStage(context: CodeReviewPipelineContext) {
+    /** The changed files plus the ignored ones a custom agent reviewed
+     *  (#2172), whose findings are validated like any other. */
+    private reviewedFiles(context: CodeReviewPipelineContext): FileChange[] {
+        return [
+            ...(context.changedFiles ?? []),
+            ...ignoredFilesForCustomAgents(context, context.ignoredFileChanges),
+        ];
+    }
+
+    private async shouldRunStage(
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+    ) {
         const {
             organizationAndTeamData,
             pullRequest,
             platformType,
             codeReviewConfig,
             validSuggestions,
-            changedFiles,
         } = context;
 
         const prNumber = pullRequest.number;
@@ -181,6 +194,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         candidates: ValidationCandidate[],
         orgData: OrganizationAndTeamData,
         prNumber: number,
+        byokConfig?: NormalizedModel,
     ): Promise<Set<string>> {
         // Step 1: Syntax validation via kodus-graph parse in a dedicated sandbox
         const syntaxValidIds =
@@ -199,6 +213,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                     candidate,
                     orgData,
                     prNumber,
+                    byokConfig,
                 );
                 return isValid ? candidate.id : null;
             }),
@@ -216,6 +231,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         candidate: ValidationCandidate,
         orgData: OrganizationAndTeamData,
         prNumber: number,
+        byokConfig?: NormalizedModel,
     ): Promise<boolean> {
         try {
             const code = Buffer.from(candidate.encodedData, 'base64').toString(
@@ -230,6 +246,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                 },
                 orgData,
                 prNumber,
+                byokConfig,
             );
             return !!res?.isValid;
         } catch (error) {
@@ -420,6 +437,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
                             context.organizationAndTeamData,
                             context.pullRequest.number,
                             suggestion,
+                            context.codeReviewConfig?.resolvedModelSlot,
                         );
 
                     if (isSimple) return suggestion;

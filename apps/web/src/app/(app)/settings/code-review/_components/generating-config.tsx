@@ -12,7 +12,7 @@ export default function GeneratingConfig() {
                     "xl:flex-row xl:items-center xl:justify-start xl:gap-6 xl:px-0",
                 )}>
                 <div className="w-64 shrink-0">
-                    <Image src="/assets/images/kody/chemicals.png" />
+                    <Image alt="" src="/assets/images/kody/chemicals.png" />
                 </div>
 
                 <div className={cn("flex flex-col gap-4 px-6", "xl:px-0")}>

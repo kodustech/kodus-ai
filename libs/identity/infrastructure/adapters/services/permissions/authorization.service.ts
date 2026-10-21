@@ -8,9 +8,10 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
+import { IAuthorizationService } from '@libs/identity/domain/permissions/contracts/authorization.service.contract';
 
 @Injectable()
-export class AuthorizationService {
+export class AuthorizationService implements IAuthorizationService {
     constructor(
         private readonly permissionsAbilityFactory: PermissionsAbilityFactory,
     ) {}

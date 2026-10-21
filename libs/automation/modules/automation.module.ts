@@ -42,6 +42,9 @@ import { TeamMembersCoreModule } from '@libs/organization/modules/teamMembers-co
 
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
+import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
+import { JOB_QUEUE_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/job-queue.service.contract';
+import { WorkflowJobQueueService } from '@libs/core/workflow/infrastructure/workflow-job-queue.service';
 
 @Module({
     imports: [
@@ -115,6 +118,16 @@ import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core
             inject: [AutomationCodeReviewService],
         },
         AutomationRegistry,
+
+        // Job queue provided locally: importing WorkflowModule.register()
+        // here would close a cycle (WorkflowModule imports this module) and
+        // duplicate its providers. Repositories come from the global
+        // WorkflowCoreModule.
+        {
+            provide: JOB_QUEUE_SERVICE_TOKEN,
+            useClass: WorkflowJobQueueService,
+        },
+        EnqueueImplementationCheckUseCase,
     ],
     exports: [
         // --- Automation Exports ---

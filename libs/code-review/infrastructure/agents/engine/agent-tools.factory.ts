@@ -4,6 +4,13 @@ import { createLogger } from '@libs/core/log/logger';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import {
+    findProjectLevelTypeScriptErrors,
+    hasLocatedTypeScriptDiagnostic,
+    isProjectLevelTypeScriptLine,
+    UNVERIFIED_TYPES_MARKER,
+} from '@libs/code-review/infrastructure/agents/engine/unverified-typecheck';
 
 const logger = createLogger('AgentTools');
 
@@ -47,6 +54,13 @@ export interface DocumentationSearchAdapter {
             }>
         >
     >;
+    /**
+     * True when the search backend is actually usable (e.g. an Exa API key is
+     * configured). Lets the agent-visible tool distinguish "no docs exist"
+     * from "search is not available right now" instead of silently reporting
+     * the former for the latter (#1762).
+     */
+    isSearchAvailable?: () => boolean;
 }
 
 /**
@@ -82,6 +96,11 @@ function shellQuote(value: string): string {
 
 function normalizeRepoPath(value: string): string {
     return value.replace(/^\/+/, '').replace(/\/+/g, '/').replace(/\/$/, '');
+}
+
+/** A repo path starting with "-" is anchored so `find` reads it as a path. */
+function anchorRepoPath(value: string): string {
+    return value.startsWith('-') ? `./${value}` : value;
 }
 
 function truncateShellOutput(output: string): string {
@@ -141,6 +160,30 @@ function filterDiagnosticsToTarget(
  * (lazy clone on first access). Path traversal outside the linked root is
  * rejected.
  */
+/**
+ * Does this tool answer say "there is nothing here"?
+ *
+ * Shared by every caller that decides whether to attach the
+ * uninitialized-submodule note, so a new call site cannot cover a subset and
+ * silently reproduce #1939 on the shapes it missed. `remoteCommands.grep`
+ * RETURNS `Error: <stderr>` for a missing path rather than throwing
+ * (`e2b-sandbox.service.ts`), which is how a `node_modules` lookup fails, so
+ * that shape counts as nothing found too.
+ *
+ * Narrow on purpose: grepping for "No such file or directory" while reviewing
+ * error handling must get its real matches back, not a note telling the agent
+ * the result is not evidence.
+ */
+function answersNothing(result: string): boolean {
+    return (
+        !result.trim() ||
+        result === 'No matches found.' ||
+        result.startsWith('No files matching') ||
+        (result.startsWith('Error') &&
+            /no such file or directory|os error 2/i.test(result))
+    );
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -153,6 +196,53 @@ export function buildAgentTools(
     if (!remoteCommands) {
         return {};
     }
+
+    // The sandbox checkout never runs `git submodule update`, so every path a
+    // repository declares in `.gitmodules` is an EMPTY directory here. Without
+    // this probe, grep/listDir/findFile answer "nothing here" and the agent
+    // reads that as "this code does not exist" (#1939). The probe only runs on
+    // an already-empty result, and a repo with no `.gitmodules` pays a single
+    // failed read for the whole review.
+    const submoduleProbe = createSubmoduleProbe(remoteCommands);
+
+    /**
+     * Attach the "this was never fetched / never installed" note to a tool
+     * answer that found nothing, and ONLY to one that found nothing — a plain
+     * empty directory that no `.gitmodules` declares keeps answering plainly
+     * empty, and a search that did return results is left untouched.
+     *
+     * "Found nothing" covers a not-found ERROR as well as an empty answer: an
+     * uninitialized submodule directory exists and lists empty, but a
+     * `node_modules` path does not exist at all, so the providers answer it
+     * with `Error: … No such file or directory`. That is the exact string the
+     * reported trace got back before concluding the export was undefined.
+     *
+     * Never throws: a probe failure must not turn a working tool into an error.
+     */
+    const withSubmoduleNote = async (
+        result: string,
+        searchedPath: string,
+    ): Promise<string> => {
+        // Only the tool's OWN absence answers count. Matching the not-found
+        // phrases anywhere in the output would annotate real results: an agent
+        // grepping for "No such file or directory" while reviewing error
+        // handling would get its matches back with "this empty result is NOT
+        // evidence" appended, contradicting the matches it can see.
+        if (!answersNothing(result)) return result;
+        try {
+            const note = await submoduleProbe.explainEmptyResult(searchedPath);
+            if (!note) return result;
+            return result.trim() ? `${result}\n\n${note}` : note;
+        } catch (err) {
+            logger.warn({
+                message: `Submodule probe failed for "${searchedPath}": ${err instanceof Error ? err.message : String(err)}`,
+                context: 'agent-tools.submoduleProbe',
+                error: err,
+                metadata: { searchedPath },
+            });
+            return result;
+        }
+    };
 
     const linkedReposHint = linkedRepoAccess?.list()?.length
         ? ` Optional repo="<fullName>" searches a linked repository (${linkedRepoAccess
@@ -207,9 +297,7 @@ export function buildAgentTools(
             return { ok: false, error: 'Absolute paths are not allowed' };
         }
         const abs =
-            rel === '.'
-                ? rootPath
-                : `${rootPath.replace(/\/+$/, '')}/${rel}`;
+            rel === '.' ? rootPath : `${rootPath.replace(/\/+$/, '')}/${rel}`;
         return { ok: true, abs };
     };
 
@@ -275,6 +363,11 @@ export function buildAgentTools(
                 if (!pattern) {
                     return 'Error: pattern is required';
                 }
+                // rg reads whatever the sandbox user can: a path climbing out
+                // of the checkout would reach other processes' /proc files.
+                if (searchPath.split('/').includes('..')) {
+                    return 'Error: Path traversal using ".." is not allowed';
+                }
 
                 const linked = await resolveLinkedRoot(args.repo);
                 if (!linked.ok) return `Error: ${linked.error}`;
@@ -292,16 +385,15 @@ export function buildAgentTools(
                         const safeGlob = glob
                             ? glob.replace(/'/g, "'\\''")
                             : '';
-                        const globArg = safeGlob
-                            ? ` --glob '${safeGlob}'`
-                            : '';
+                        const globArg = safeGlob ? ` --glob '${safeGlob}'` : '';
                         const excludeTestsArgs = excludeTests
                             ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
                             : '';
                         const modeArg = namesOnly ? ' -l' : ' -n -C 2';
-                        const relForCd =
-                            searchPath === '.' ? '.' : searchPath;
-                        const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} ${shSingleQuote(relForCd)}`;
+                        const relForCd = searchPath === '.' ? '.' : searchPath;
+                        // `-e` and `--`: a pattern or path starting with "-"
+                        // is never read as an rg flag (`--pre` runs a command).
+                        const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- ${shSingleQuote(relForCd)}`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cdCmd);
                         if (exitCode >= 2) {
@@ -365,7 +457,9 @@ export function buildAgentTools(
                             ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
                             : '';
                         const modeArg = namesOnly ? ' -l' : ' -n -C 2';
-                        const cmd = `rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} '${safePath}'`;
+                        // `-e` and `--`: a pattern or path starting with "-"
+                        // is never read as an rg flag (`--pre` runs a command).
+                        const cmd = `rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- '${safePath}'`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cmd);
                         // exit code 1 with "not allowed" = blocked by sandbox, fall through to fallback
@@ -383,7 +477,10 @@ export function buildAgentTools(
                         }
                         // exit code 1 = no matches (not an error)
                         if (exitCode === 1 || !stdout.trim()) {
-                            return 'No matches found.';
+                            return withSubmoduleNote(
+                                'No matches found.',
+                                searchPath,
+                            );
                         }
                         if (exitCode === 0) {
                             const raw = stdout.trim();
@@ -422,9 +519,31 @@ export function buildAgentTools(
                         glob,
                     );
                 } catch (err) {
-                    return `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`;
+                    // A "no such file" here is how a `node_modules` lookup
+                    // fails, so it goes through the note too (#1939).
+                    return withSubmoduleNote(
+                        `Error searching for "${pattern}": ${err instanceof Error ? err.message : String(err)}`,
+                        searchPath,
+                    );
                 }
                 if (namesOnly) {
+                    // The note has to come BEFORE the file-name mapping, and
+                    // on the SAME predicate the note itself uses. An empty
+                    // answer maps to an empty answer; worse, `Error: ... No
+                    // such file or directory` — what a missing `node_modules`
+                    // returns — maps to the bare literal `Error`, losing both
+                    // the marker and the message.
+                    if (answersNothing(result)) {
+                        return withSubmoduleNote(result, searchPath);
+                    }
+                    // A provider error answer is not a list of file names.
+                    // `remoteCommands.grep` returns `Error: <stderr>` for
+                    // every ripgrep exit >= 2 — an invalid regex, a
+                    // permission failure — and the mapping below would
+                    // reduce it to the bare literal `Error`, destroying the
+                    // message the agent needs to fix its own call. The `: `
+                    // keeps real match lines like `ErrorBoundary.tsx:12:`.
+                    if (result.startsWith('Error: ')) return result;
                     const files = [
                         ...new Set(
                             result
@@ -441,7 +560,7 @@ export function buildAgentTools(
                         lines.slice(0, MAX_GREP_MATCHES).join('\n') +
                         `\n... (${lines.length - MAX_GREP_MATCHES} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
                 }
-                return result;
+                return withSubmoduleNote(result, searchPath);
             },
         ),
 
@@ -711,15 +830,31 @@ export function buildAgentTools(
                                 result.substring(0, MAX_LIST_LENGTH) +
                                 `\n... (truncated)`;
                         }
-                        return result || `(empty) linked repo ${linked.repository}`;
+                        return (
+                            result || `(empty) linked repo ${linked.repository}`
+                        );
                     } catch (err) {
                         return `Error listing linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }
                 }
 
-                let result = await remoteCommands.listDir(dirPath, depth);
-                // Filter out common noise directories
+                let result: string;
+                try {
+                    result = await remoteCommands.listDir(dirPath, depth);
+                } catch (err) {
+                    // Same contract as grep/readFile above: a failed listing is
+                    // reported to the model as a tool error, never thrown past
+                    // the tool boundary. Reachable since the null sandbox stopped
+                    // answering '' for a repository it cannot see (#1826).
+                    return withSubmoduleNote(
+                        `Error listing ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
+                        dirPath,
+                    );
+                }
+                // Filter out common noise directories, and the astGrep tool's
+                // scratch directory while a call is using it.
                 const IGNORE_DIRS = [
+                    '.kody-ast-grep-',
                     'node_modules',
                     '.git',
                     'dist',
@@ -743,7 +878,7 @@ export function buildAgentTools(
                         result.substring(0, MAX_LIST_LENGTH) +
                         `\n... (truncated — pass a more specific path or a lower maxDepth to narrow the listing)`;
                 }
-                return result;
+                return withSubmoduleNote(result, dirPath);
             },
         ),
 
@@ -778,7 +913,11 @@ export function buildAgentTools(
                     (args.path || '.').replace(/^\/+/, '') || '.';
                 const ext = args.extension || args.ext || '';
                 const safePattern = pattern.replace(/'/g, "'\\''");
-                const safePath = searchPath.replace(/'/g, "'\\''");
+                // A path starting with "-" would be read as an fd option or a
+                // find expression (`-delete`): anchor it to the checkout.
+                const safePath = (
+                    searchPath.startsWith('-') ? `./${searchPath}` : searchPath
+                ).replace(/'/g, "'\\''");
                 const safeExt = ext ? ext.replace(/'/g, "'\\''") : '';
                 const extArg = safeExt ? ` -e '${safeExt}'` : '';
 
@@ -792,7 +931,7 @@ export function buildAgentTools(
                                 safePattern.includes('?')
                                     ? safePattern
                                     : `*${safePattern}*`;
-                            const fdCmd = `fd --glob '${globPattern}'${extArg} '${safePath}' --type f --max-results 30`;
+                            const fdCmd = `fd --glob --type f --max-results 30${extArg} -- '${globPattern}' '${safePath}'`;
                             const { stdout, exitCode } =
                                 await remoteCommands.exec(fdCmd);
                             // Only trust output on a clean exit. exec merges
@@ -834,10 +973,17 @@ export function buildAgentTools(
                     }
 
                     // Fallback: listDir + filter (slower, no .gitignore)
-                    const allFiles = await remoteCommands.listDir(
-                        searchPath,
-                        4,
-                    );
+                    let allFiles: string;
+                    try {
+                        allFiles = await remoteCommands.listDir(searchPath, 4);
+                    } catch (err) {
+                        // See the listDir tool above: tool errors are reported,
+                        // not thrown past the boundary (#1826).
+                        return withSubmoduleNote(
+                            `Error searching for files under ${searchPath}: ${err instanceof Error ? err.message : String(err)}`,
+                            searchPath,
+                        );
+                    }
                     const matching = allFiles
                         .split('\n')
                         .filter(
@@ -849,7 +995,10 @@ export function buildAgentTools(
                                 (!ext || f.endsWith(`.${ext}`)),
                         );
                     if (matching.length === 0) {
-                        return `No files matching "${pattern}" in ${searchPath}`;
+                        return withSubmoduleNote(
+                            `No files matching "${pattern}" in ${searchPath}`,
+                            searchPath,
+                        );
                     }
 
                     if (matching.length > 30) {
@@ -875,7 +1024,9 @@ export function buildAgentTools(
             exactNames: string[] = [],
             globPattern?: string,
         ): Promise<string | null> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const exactChecks = exactNames
                 .map(
                     (name) =>
@@ -928,7 +1079,9 @@ ${exactNames
             extension: string,
             maxFiles: number,
         ): Promise<string[]> => {
-            const normalizedTarget = normalizeRepoPath(targetPath || '.');
+            const normalizedTarget = anchorRepoPath(
+                normalizeRepoPath(targetPath || '.'),
+            );
             const safeTarget = shellQuote(normalizedTarget || '.');
             const safePattern = shellQuote(`*${extension}`);
             const script = `
@@ -966,7 +1119,9 @@ fi
                 },
             },
             async (args: any) => {
-                const target = normalizeRepoPath(args.path || '.') || '.';
+                const target = anchorRepoPath(
+                    normalizeRepoPath(args.path || '.') || '.',
+                );
                 const safeTarget = shellQuote(target);
 
                 // Detect which languages exist
@@ -993,6 +1148,7 @@ fi
                     lang: string,
                     scope: string,
                     rawOutput: string,
+                    exitCode?: number,
                 ) => {
                     const output = rawOutput?.trim();
                     // Tool not present in the sandbox: the check did NOT run.
@@ -1006,6 +1162,74 @@ fi
                     // We got here because the compiler/linter actually ran
                     // (it either emitted diagnostics or produced clean output).
                     anyCheckerExecuted = true;
+
+                    // #1940: a checker can run and still fail to check the
+                    // project — or check it with a configuration it could not
+                    // load. Decided from the RAW output, because both shapes in
+                    // the report need the same answer: the filter dropping
+                    // every line, and the filter keeping a tsconfig line
+                    // because its directory happens to be the target's scope.
+                    // See unverified-typecheck.ts.
+                    const projectLevelErrors =
+                        lang === 'TypeScript' && output
+                            ? findProjectLevelTypeScriptErrors(output)
+                            : [];
+
+                    // The same answer is needed when the compiler never ran at
+                    // all: an unresolvable or crashing `npx tsc` exits non-zero
+                    // without printing a single diagnostic, which no error-code
+                    // pattern can recognise. The commands keep the compiler's
+                    // own status (`| head` would hand back the pager's), so a
+                    // non-zero status with no diagnostic about a source file is
+                    // this state.
+                    const didNotCheck =
+                        lang === 'TypeScript' &&
+                        (projectLevelErrors.length > 0 ||
+                            (typeof exitCode === 'number' &&
+                                exitCode !== 0 &&
+                                !hasLocatedTypeScriptDiagnostic(output ?? '')));
+
+                    if (didNotCheck) {
+                        // Some project-level errors (an unreadable `extends`,
+                        // an unknown option) are printed ALONGSIDE real source
+                        // diagnostics, so the scoped lines are kept rather than
+                        // replaced: dropping them would lose a finding and tell
+                        // the agent nothing was checked. The project-level lines
+                        // themselves are dropped here, since they are already
+                        // named below and are not diagnostics about the file
+                        // under review.
+                        const scopedDiagnostics = filterDiagnosticsToTarget(
+                            output ?? '',
+                            target,
+                            scope,
+                        )
+                            .split('\n')
+                            .filter(
+                                (line) => !isProjectLevelTypeScriptLine(line),
+                            )
+                            .join('\n')
+                            .trim();
+
+                        const reason =
+                            projectLevelErrors.length > 0
+                                ? `tsc reported project-level errors (${projectLevelErrors.join(', ')})`
+                                : `tsc exited with ${exitCode} without reporting a diagnostic about any source file`;
+
+                        results.push(
+                            truncateShellOutput(
+                                `[${lang} — scope: ${scope}]\n${UNVERIFIED_TYPES_MARKER}\n` +
+                                    `${reason}, so the project may not have been built with its intended configuration and a "no diagnostics" answer for ${target} is NOT a pass. ` +
+                                    `This is the shape a sandbox produces when the compiler cannot be resolved or the project's dependencies are not installed and its submodules were never fetched. ` +
+                                    `Verify manually: read the callee/definition with readFile and confirm the call matches its signature.` +
+                                    (scopedDiagnostics
+                                        ? `\nOther diagnostics in this run within scope ${scope} (not all of them mention ${target}):\n${scopedDiagnostics}`
+                                        : ''),
+                            ),
+                        );
+                        return;
+                    }
+
+                    // A clean run with nothing to report.
                     if (!output) {
                         return;
                     }
@@ -1015,6 +1239,7 @@ fi
                         target,
                         scope,
                     );
+
                     if (filteredOutput) {
                         results.push(
                             truncateShellOutput(
@@ -1083,15 +1308,39 @@ fi
                         ));
 
                     try {
-                        const { stdout } = await exec(
+                        // The output is staged in the sandbox so the command can
+                        // keep the compiler's own status (`| head` would hand
+                        // back the pager's) without forcing the whole dump
+                        // through the sandbox's output channel. truncateShellOutput
+                        // caps what the agent sees. Each invocation stages into
+                        // its own file: checkTypes runs concurrently inside one
+                        // shared sandbox, so a fixed path lets a sibling run
+                        // truncate or overwrite the log while `head` reads it,
+                        // and this run reports another file's diagnostics.
+                        // `rc` is read before the file is removed.
+                        //
+                        // A per-invocation name also means a run that never
+                        // reaches its own `rm` leaves the file behind: e2b kills a
+                        // foreground command at COMMAND_LONG_MS (30s) and the
+                        // resulting error is swallowed by the catch below, so a
+                        // timed-out compile — the very case this staging exists
+                        // for — would pile untruncated dumps up in the shared
+                        // sandbox instead of overwriting one fixed path. So the
+                        // stale ones are swept first, with an age filter no live
+                        // run can match (every run is capped well under 2 minutes).
+                        // A shell `trap` cannot cover this: the timeout kill is a
+                        // hard termination, not a signal the shell handles.
+                        const sweepStaleLogs = `find /tmp -maxdepth 1 -name 'tsc.*.log' -mmin +2 -delete 2>/dev/null; `;
+                        const { stdout, exitCode } = await exec(
                             tsconfig
-                                ? `npx tsc --noEmit -p ${shellQuote(tsconfig)} 2>&1 | head -40`
-                                : `npx tsc --noEmit --pretty false ${safeTarget} 2>&1 | head -40`,
+                                ? `${sweepStaleLogs}log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit -p ${shellQuote(tsconfig)} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`
+                                : `${sweepStaleLogs}log=$(mktemp /tmp/tsc.XXXXXX.log); npx tsc --noEmit --pretty false ${safeTarget} > "$log" 2>&1; rc=$?; head -200 "$log"; rm -f "$log"; exit $rc`,
                         );
                         pushScopedResult(
                             'TypeScript',
                             tsconfig || target,
                             stdout,
+                            exitCode,
                         );
                     } catch {
                         // tsc not available, skip
@@ -1488,6 +1737,18 @@ fi
                 }
 
                 try {
+                    // Distinguish "search cannot run" from "no docs exist".
+                    // Previously an unconfigured/broken backend produced the
+                    // same "No documentation found" as a genuine empty result,
+                    // so the agent could not tell "tool unavailable" from "the
+                    // library has no docs" and fell back to its prior (#1762).
+                    const available =
+                        documentationSearchService.isSearchAvailable?.() ??
+                        true;
+                    if (!available) {
+                        return `Documentation search is not available right now (no configured search backend). Do NOT conclude the package has no documentation: this means the tool did not run. If the finding depends on framework documentation, state that verification is unavailable.`;
+                    }
+
                     const planByFile = {
                         agent: { queryTasks: [{ packageName, query }] },
                     };
@@ -1499,7 +1760,13 @@ fi
 
                     const docs = results['agent'] || [];
                     if (docs.length === 0) {
-                        return `No documentation found for "${packageName}" with query "${query}".`;
+                        // A successful Exa search always returns a doc item
+                        // (even a 0-result query yields url:"unknown" + a
+                        // fallback snippet), so empty docs with a configured
+                        // backend means every query failed at runtime (#1762
+                        // cause b) — NOT "the library has no docs". Say so,
+                        // matching the unconfigured-backend branch above.
+                        return `Documentation search ran but returned no documentation for "${packageName}" with query "${query}" (the search backend answered nothing). Do NOT conclude the package has no documentation: this usually means the backend is failing at runtime. If the finding depends on framework documentation, state that verification is unavailable.`;
                     }
 
                     const formatted = docs

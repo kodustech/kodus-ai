@@ -29,6 +29,12 @@ export interface CreateSandboxParams {
     sandboxMetadata?: Record<string, string>;
 }
 
+export interface SandboxRunOptions {
+    timeoutMs?: number;
+    envs?: Record<string, string>;
+    asRoot?: boolean;
+}
+
 export interface SandboxRunResult {
     stdout: string;
     stderr?: string;
@@ -52,19 +58,30 @@ export interface SandboxInstance {
     /** Absolute path to the repo root inside the sandbox */
     repoDir: string;
     /**
+     * True when the sandbox's review user lost every way to become root
+     * (sudo and setuid binaries) before any repository content arrived.
+     * Only then may a sandbox hold credentials that other users must not
+     * reach (custom agent CLIs). Unset means unknown, and is treated as no.
+     */
+    privilegesDropped?: boolean;
+    /**
      * Run a shell command inside the sandbox.
      * `envs` are merged into the process environment for this command only
      * (used e.g. for GIT_AUTH_HEADER during linked-repo clones — token never
      * lands in the command string).
+     * `asRoot` runs it as root through the provider's own channel, never
+     * through the review user. Only the isolated (E2B) sandbox supports it;
+     * the others refuse the command.
      */
-    run(
-        command: string,
-        opts?: { timeoutMs?: number; envs?: Record<string, string> },
-    ): Promise<SandboxRunResult>;
+    run(command: string, opts?: SandboxRunOptions): Promise<SandboxRunResult>;
     /** Read a file from the sandbox filesystem */
     readFile(path: string, opts?: { timeoutMs?: number }): Promise<string>;
     /** Write a file to the sandbox filesystem */
-    writeFile(path: string, content: string, opts?: { timeoutMs?: number }): Promise<void>;
+    writeFile(
+        path: string,
+        content: string,
+        opts?: { timeoutMs?: number },
+    ): Promise<void>;
 }
 
 export interface ISandboxProvider {
@@ -78,3 +95,15 @@ export interface ISandboxProvider {
 }
 
 export const SANDBOX_PROVIDER_TOKEN = Symbol('SANDBOX_PROVIDER_TOKEN');
+
+/**
+ * A branch as a host reports it, reduced to the name git wants.
+ *
+ * Azure Repos spells branches in full ("refs/heads/main"). Everything that
+ * builds a ref from a sandbox's base branch writes `origin/<branch>`, which
+ * becomes `origin/refs/heads/main` and resolves to nothing — the dependency
+ * baseline then silently disappears. Normalize wherever a branch enters the
+ * sandbox so the fetch and the consumers cannot disagree.
+ */
+export const toBranchName = (branch?: string): string | undefined =>
+    branch?.replace(/^refs\/heads\//, '');

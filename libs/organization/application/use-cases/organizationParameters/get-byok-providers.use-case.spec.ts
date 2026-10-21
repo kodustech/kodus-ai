@@ -1,5 +1,16 @@
 import { GetByokProvidersUseCase } from './get-byok-providers.use-case';
 
+// `isProviderAvailableHere('kodus')` reads `environment.API_CLOUD_MODE` from
+// the COMPILED `libs/ee/configs/environment/environment.ts` — a generated
+// file that differs per local checkout (self-hosted vs cloud), not something
+// this spec controls. Mocked here so the "kodus provider" tests below assert
+// the use-case's own gate logic, not whatever cloud-mode this machine's
+// environment.ts happens to have been generated with.
+jest.mock(
+    '@libs/core/infrastructure/services/providers/kodus-provider-availability',
+    () => ({ isProviderAvailableHere: jest.fn(() => true) }),
+);
+
 /**
  * The use-case is a pure descriptor over the process-wide provider REGISTRY
  * (populated by the '@libs/llm/providers' barrel's self-registration side
@@ -57,5 +68,25 @@ describe('GetByokProvidersUseCase', () => {
         for (const p of providers) {
             expect(typeof p.autoListModels).toBe('boolean');
         }
+    });
+});
+
+describe('GetByokProvidersUseCase — Kodus provider private alpha', () => {
+    it('hides `kodus` when no gate is wired (dependency-free descriptor stays closed)', async () => {
+        const { providers } = await new GetByokProvidersUseCase().execute('org-1');
+        expect(providers.map((p) => p.id)).not.toContain('kodus');
+    });
+
+    it('hides `kodus` for an org the gate refuses and shows it for one it allows', async () => {
+        const gate = { isEnabledFor: jest.fn(async (org?: string) => org === 'org-alpha') };
+        const off = await new GetByokProvidersUseCase(gate as any).execute('org-other');
+        expect(off.providers.map((p) => p.id)).not.toContain('kodus');
+        const on = await new GetByokProvidersUseCase(gate as any).execute('org-alpha');
+        expect(on.providers.map((p) => p.id)).toContain('kodus');
+        expect(gate.isEnabledFor).toHaveBeenCalledWith('org-alpha');
+        // Every other provider is unaffected by the gate.
+        expect(off.providers.map((p) => p.id)).toEqual(
+            on.providers.map((p) => p.id).filter((id) => id !== 'kodus'),
+        );
     });
 });

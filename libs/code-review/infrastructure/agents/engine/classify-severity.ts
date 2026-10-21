@@ -39,8 +39,11 @@ export async function classifySeverity(
     suggestions: SuggestionForClassification[],
     severityFlags?: CodeReviewConfig['v2PromptOverrides'],
     byokConfig?: NormalizedModel,
+    organizationId?: string,
 ): Promise<Map<number, string>> {
-    if (suggestions.length === 0) return new Map();
+    if (suggestions.length === 0) {
+        return new Map();
+    }
 
     const flags = severityFlags?.severity?.flags || DEFAULT_SEVERITY_FLAGS;
     const allMedium = () =>
@@ -57,6 +60,10 @@ export async function classifySeverity(
             user: buildSeverityPrompt(suggestions, flags),
             runName: 'severity-classifier',
             timeoutMs: SEVERITY_TIMEOUT_MS,
+            // Stamp the org so this secondary pass's usage/cost lands in the
+            // org's token-usage view instead of being recorded org-less (the
+            // dashboard filters by org, so an unstamped span is dropped).
+            organizationId,
         });
 
         const { classifications, parseOk } = parseSeverityResponse(text || '');
