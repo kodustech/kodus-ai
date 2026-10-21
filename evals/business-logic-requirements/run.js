@@ -63,6 +63,9 @@ function score(c, decided) {
         return {
             gold: goldClass(gold),
             flagged: GAP_STATES.includes(state),
+            // A requirement the verdict leaves out was not judged at all: it
+            // is no credit for done work, and a gap missed.
+            unlisted: !found && !gold.absentOk,
             what: `/${gold.match}/ ${state}, expected ${gold.accept.join(' or ')}${gold.absentOk ? ' or not listed' : ''}`,
             ok: found ? gold.accept.includes(state) : !!gold.absentOk,
         };
@@ -87,7 +90,8 @@ async function main() {
     const world = { current: null };
     const services = await harness.startServices(world);
     const results = [];
-    const confusion = { tp: 0, fn: 0, tn: 0, fp: 0 };
+    // `unlisted`: done requirements the verdict left out, counted against it.
+    const confusion = { tp: 0, fn: 0, tn: 0, fp: 0, unlisted: 0 };
     let errored = 0;
     try {
         for (const c of cases) {
@@ -101,7 +105,7 @@ async function main() {
                 const scored = score(c, run.decided);
                 for (const d of scored.detail) {
                     if (d.gold === 'gap') confusion[d.flagged ? 'tp' : 'fn'] += 1;
-                    if (d.gold === 'done') confusion[d.flagged ? 'fp' : 'tn'] += 1;
+                    if (d.gold === 'done') confusion[d.unlisted ? 'unlisted' : d.flagged ? 'fp' : 'tn'] += 1;
                 }
                 results.push({
                     id: c.id,
@@ -130,7 +134,7 @@ async function main() {
     }
 
     const ratio = (a, b) => (b ? a / b : null);
-    const doneNotFlagged = ratio(confusion.tn, confusion.tn + confusion.fp);
+    const doneNotFlagged = ratio(confusion.tn, confusion.tn + confusion.fp + confusion.unlisted);
     const gapsCaught = ratio(confusion.tp, confusion.tp + confusion.fn);
     const result = {
         eval: 'business-logic-requirements',
@@ -150,7 +154,7 @@ async function main() {
     }
     const pct = (v) => (v === null ? 'n/a' : `${(v * 100).toFixed(1)}%`);
     console.log(
-        `business-logic-requirements: done work not called a gap ${confusion.tn}/${confusion.tn + confusion.fp} (${pct(doneNotFlagged)}) · gaps caught ${confusion.tp}/${confusion.tp + confusion.fn} (${pct(gapsCaught)})${args.verify ? ' (verify pass on)' : ''} · ${errored} of ${cases.length} cases did not measure`,
+        `business-logic-requirements: done work not called a gap ${confusion.tn}/${confusion.tn + confusion.fp + confusion.unlisted} (${pct(doneNotFlagged)}${confusion.unlisted ? `, ${confusion.unlisted} left out` : ''}) · gaps caught ${confusion.tp}/${confusion.tp + confusion.fn} (${pct(gapsCaught)})${args.verify ? ' (verify pass on)' : ''} · ${errored} of ${cases.length} cases did not measure`,
     );
     if (errored > cases.length * 0.05) {
         console.error(`not measured: ${errored} of ${cases.length} cases failed to run (see above)`);

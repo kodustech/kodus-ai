@@ -1,30 +1,30 @@
 {
     "__doc": [
         "Two floors per model, as ratios (run.js --gate): `floor` for the requirements a PR does that the stage does not call a gap, `gapsFloor` for the requirements it leaves out that it calls one.",
-        "eval-fake (the wiring smoke, every PR): deterministic. The scripted judge's answer reads as a task too thin to judge, so nothing is called a gap: 42/42 done work not flagged, 0/25 gaps caught. floor = observed; a stage that judged nothing would score the same, which is why the real models carry the gaps floor.",
-        "2026-10-21, 29 cases (42 done, 25 gaps), four runs each on the cases with their new-file diffs fixed (an indented line used to lose its '+'), after the second look widened to PARTIAL and CHECK MANUALLY and the judge's rules for what a partial is and for a rule left to a helper; the last two also ground the handled-elsewhere mark in sub-tasks or guidance: deepseek-v4-flash@fireworks 42/42, 42/42, 42/42, 43/43 done work not flagged and 24/25, 25/25, 25/25, 25/25 gaps caught; gpt-6-sol 41/42, 40/42, 40/42, 41/42 and 23/25, 23/25, 24/25, 23/25. floor and gapsFloor = the lowest run, observed = the mean.",
+        "eval-fake (the wiring smoke, every PR): deterministic. The scripted judge's answer reads as a task too thin to judge, so the verdict lists almost nothing: 1/42 done work not flagged (the other 41 are left out, which counts against the share), 0/25 gaps caught. floor = observed: it proves the production path runs end to end, not how good it is; the real models carry both floors.",
+        "2026-10-21, 29 cases (42 done, 25 gaps), two runs each on this commit (the second look widened to PARTIAL and CHECK MANUALLY with its inputs fenced as data, the judge's rules for what a partial is and for a rule left to a helper, the handled-elsewhere mark grounded in the note and the task's sub-tasks or the team's guidance, the cases' diffs fixed, and a requirement the verdict leaves out counted against the done share): deepseek-v4-flash@fireworks 42/42 and 41/42 done work not flagged, 25/25 and 25/25 gaps caught; gpt-6-sol 40/42 (1 left out) and 41/42, 24/25 and 23/25. floor and gapsFloor = the lower run, observed = the mean; deepseek's gapsFloor stays at 0.96, its lowest of the six runs since the second look widened (24/25), so one requirement's swing does not fail the week.",
         "Deliberate break (rule 7): settleVerdict made to call every requirement met scores 0/25 gaps caught on deepseek, exit 1 under --gate.",
         "What is left (the runs' verdicts, read case by case): gpt-6-sol asks for an ISO 4217 check the task does not name, sometimes folds two requirements into one (scored not listed), and once took 'they should see the error' to need the screen code. Before these changes, the judge read only the diff and the second look ran on MISSING alone: deepseek caught 22/25 and gpt-6-sol flagged 13 of 42 done requirements.",
         "RATCHET: a PR that moves the value on purpose (the judge, the second look, the cases) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
         "eval-fake": {
-            "floor": 1,
-            "observed": 1,
+            "floor": 0.023,
+            "observed": 0.024,
             "gapsFloor": 0,
             "gapsObserved": 0
         },
         "deepseek-v4-flash@fireworks": {
-            "floor": 1,
-            "observed": 1,
+            "floor": 0.976,
+            "observed": 0.988,
             "gapsFloor": 0.96,
-            "gapsObserved": 0.99
+            "gapsObserved": 1
         },
         "gpt-6-sol": {
             "floor": 0.952,
             "observed": 0.964,
             "gapsFloor": 0.92,
-            "gapsObserved": 0.93
+            "gapsObserved": 0.94
         }
     }
 }

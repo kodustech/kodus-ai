@@ -9,7 +9,7 @@ new file mode 100644
 diff --git a/src/loans/borrow.ts b/src/loans/borrow.ts
 --- a/src/loans/borrow.ts
 +++ b/src/loans/borrow.ts
-@@ -1,8 +1,8 @@
+@@ -1,4 +1,8 @@
  import { db } from '../db';
 +import { LoanLimitError } from './errors';
 +const MAX_ACTIVE_LOANS = 5;

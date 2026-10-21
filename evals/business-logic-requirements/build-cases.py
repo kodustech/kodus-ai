@@ -17,10 +17,20 @@ MANUAL = ['check_manually']
 def diff(path, lines, new=True):
     head = [f'diff --git a/{path} b/{path}']
     head += ['new file mode 100644', '--- /dev/null'] if new else [f'--- a/{path}']
-    head += [f'+++ b/{path}', f'@@ -0,0 +1,{len(lines)} @@' if new else f'@@ -1,{len(lines)} +1,{len(lines)} @@']
-    # Every line of a new file is added, indented ones too: a leading space is
-    # code, not a context marker.
-    body = [l if l.startswith('+') else '+' + l for l in lines] if new else lines
+    if new:
+        # Every line of a new file is added, indented ones too: a leading
+        # space is code, not a context marker.
+        body = [l if l.startswith('+') else '+' + l for l in lines]
+        hunk = f'@@ -0,0 +1,{len(body)} @@'
+    else:
+        body = lines
+        unmarked = [l for l in body if l[:1] not in (' ', '+', '-')]
+        assert not unmarked, f'{path}: a modified file needs a marker on every line: {unmarked[0]!r}'
+        # The old side holds context and removals, the new side context and additions.
+        old = sum(1 for l in body if l[:1] in (' ', '-'))
+        added = sum(1 for l in body if l[:1] in (' ', '+'))
+        hunk = f'@@ -1,{old} +1,{added} @@'
+    head += [f'+++ b/{path}', hunk]
     return '\n'.join(head + body)
 
 

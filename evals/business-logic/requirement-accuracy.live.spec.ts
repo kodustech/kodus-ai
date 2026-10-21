@@ -321,38 +321,39 @@ async function judge(c: Case): Promise<ValidationResult> {
 }
 
 function score(c: Case, result: ValidationResult) {
-    const requirements = result.requirements ?? [];
+    // Each judge row answers one gold at most, read once; with onlyGold,
+    // every row no gold took is a requirement the ticket never stated.
+    const rows = (result.requirements ?? []).map((r) => ({
+        text: r.requirement.toLowerCase(),
+        requirement: r.requirement,
+        state: r.state,
+    }));
+    const taken = new Set<number>();
+    const scored = c.gold.map((gold) => {
+        const match = gold.match.toLowerCase();
+        const index = rows.findIndex(
+            (row, i) => !taken.has(i) && row.text.includes(match),
+        );
+        if (index >= 0) {
+            taken.add(index);
+        }
+        const found = index >= 0 ? rows[index] : undefined;
+        return {
+            match: gold.match,
+            state: found?.state ?? 'not listed',
+            right: found ? gold.accept.includes(found.state) : !!gold.absentOk,
+        };
+    });
     const invented = c.onlyGold
-        ? requirements
-              .filter(
-                  (r) =>
-                      !c.gold.some((g) =>
-                          r.requirement
-                              .toLowerCase()
-                              .includes(g.match.toLowerCase()),
-                      ),
-              )
-              .map((r) => ({
-                  match: `invented: ${r.requirement}`,
-                  state: r.state,
+        ? rows
+              .filter((_, i) => !taken.has(i))
+              .map((row) => ({
+                  match: `invented: ${row.requirement}`,
+                  state: row.state,
                   right: false,
               }))
         : [];
-    return [
-        ...invented,
-        ...c.gold.map((gold) => {
-            const found = requirements.find((r) =>
-                r.requirement.toLowerCase().includes(gold.match.toLowerCase()),
-            );
-            return {
-                match: gold.match,
-                state: found?.state ?? 'not listed',
-                right: found
-                    ? gold.accept.includes(found.state)
-                    : !!gold.absentOk,
-            };
-        }),
-    ];
+    return [...invented, ...scored];
 }
 
 (RUN ? describe : describe.skip)(
@@ -385,11 +386,10 @@ function score(c: Case, result: ValidationResult) {
             }
 
             const accuracy = right / total;
-            const out =
-                path.join(
-                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
-                    'business-rules-requirement-accuracy.json',
-                );
+            const out = path.join(
+                process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
+                'business-rules-requirement-accuracy.json',
+            );
             fs.mkdirSync(path.dirname(out), { recursive: true });
             fs.writeFileSync(
                 out,

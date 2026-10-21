@@ -1,7 +1,7 @@
 diff --git a/src/members/saveMember.ts b/src/members/saveMember.ts
 --- a/src/members/saveMember.ts
 +++ b/src/members/saveMember.ts
-@@ -1,4 +1,4 @@
+@@ -1,3 +1,3 @@
  export async function saveMember(input: MemberInput) {
 -  return db.members.upsert(input);
 +  return db.members.upsert({ ...input, name: input.name.trim() });

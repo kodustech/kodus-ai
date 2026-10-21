@@ -1,7 +1,7 @@
 diff --git a/src/reservations/ReservationsPage.tsx b/src/reservations/ReservationsPage.tsx
 --- a/src/reservations/ReservationsPage.tsx
 +++ b/src/reservations/ReservationsPage.tsx
-@@ -1,11 +1,11 @@
+@@ -1,3 +1,11 @@
  export function ReservationsPage({ reservations }: Props) {
 +  if (reservations.length === 0) {
 +    return (

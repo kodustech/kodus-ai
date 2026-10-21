@@ -11,7 +11,7 @@ new file mode 100644
 diff --git a/src/loans/returnLoan.ts b/src/loans/returnLoan.ts
 --- a/src/loans/returnLoan.ts
 +++ b/src/loans/returnLoan.ts
-@@ -1,8 +1,8 @@
+@@ -1,5 +1,7 @@
  import { db } from '../db';
 +import { lateFee } from './lateFee';
  export async function returnLoan(loanId: string, returnedAt = new Date()) {

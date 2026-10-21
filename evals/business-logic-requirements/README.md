@@ -18,6 +18,8 @@ Two numbers, because one hides the other:
   the share whose state is not `missing` or `partial`. A false gap tells an
   author to redo done work (#1725, #1884, #2019). A requirement the ticket
   never stated and the verdict calls a gap counts as one (`onlyGold` cases).
+  One the verdict leaves out was never judged, so it counts against the
+  share too (`confusion.unlisted`), never for it.
 - **gaps caught**: of the requirements the PR leaves out, the share called
   `missing` or `partial`.
 

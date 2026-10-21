@@ -11,7 +11,7 @@ new file mode 100644
 diff --git a/src/invoices/invoice.entity.ts b/src/invoices/invoice.entity.ts
 --- a/src/invoices/invoice.entity.ts
 +++ b/src/invoices/invoice.entity.ts
-@@ -1,4 +1,4 @@
+@@ -1,3 +1,4 @@
  export class Invoice {
    total: number;
 +  currency: string; // ISO 4217

@@ -1,7 +1,7 @@
 diff --git a/src/invoices/InvoiceActions.tsx b/src/invoices/InvoiceActions.tsx
 --- a/src/invoices/InvoiceActions.tsx
 +++ b/src/invoices/InvoiceActions.tsx
-@@ -1,9 +1,9 @@
+@@ -1,8 +1,9 @@
  export function InvoiceActions({ invoice, api }: Props) {
    const onDelete = async () => {
 +    if (!window.confirm(`Delete invoice ${invoice.number}?`)) return;
@@ -14,7 +14,7 @@ diff --git a/src/invoices/InvoiceActions.tsx b/src/invoices/InvoiceActions.tsx
 diff --git a/src/invoices/openInvoices.ts b/src/invoices/openInvoices.ts
 --- a/src/invoices/openInvoices.ts
 +++ b/src/invoices/openInvoices.ts
-@@ -1,4 +1,4 @@
+@@ -1,3 +1,3 @@
  export function openInvoices(invoices: Invoice[]) {
 -  return invoices.filter((i) => i.status !== 'paid');
 +  return invoices.filter((i) => i.status !== 'paid' && !i.archivedAt);

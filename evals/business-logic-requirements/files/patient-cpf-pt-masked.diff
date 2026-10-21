@@ -1,7 +1,7 @@
 diff --git a/src/patients/patient.entity.ts b/src/patients/patient.entity.ts
 --- a/src/patients/patient.entity.ts
 +++ b/src/patients/patient.entity.ts
-@@ -1,5 +1,5 @@
+@@ -1,4 +1,5 @@
  export class Patient {
    id: string;
    name: string;
@@ -10,7 +10,7 @@ diff --git a/src/patients/patient.entity.ts b/src/patients/patient.entity.ts
 diff --git a/src/patients/patient.serializer.ts b/src/patients/patient.serializer.ts
 --- a/src/patients/patient.serializer.ts
 +++ b/src/patients/patient.serializer.ts
-@@ -1,4 +1,4 @@
+@@ -1,3 +1,3 @@
  export function serializePatient(p: Patient) {
 -  return { id: p.id, name: p.name };
 +  return { id: p.id, name: p.name, cpf: p.cpf ?? null };
