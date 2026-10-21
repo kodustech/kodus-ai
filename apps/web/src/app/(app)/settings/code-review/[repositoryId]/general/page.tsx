@@ -209,7 +209,7 @@ export default function General() {
             <Page.Header sticky className="min-w-0 gap-y-2 px-4 sm:px-8">
                 <Page.TitleContainer>
                     <Page.Title>General settings</Page.Title>
-                    <Page.Description>
+                    <Page.Description className="hidden sm:block">
                         When Kody reviews, which pull requests and files it
                         skips, and how it reports back on the pull request.
                     </Page.Description>
@@ -226,7 +226,7 @@ export default function General() {
                             leftIcon={<Settings2Icon />}
                             onClick={() => setIsCentralizedModalOpen(true)}
                             variant="helper"
-                            className="whitespace-nowrap"
+                            className="hidden whitespace-nowrap sm:inline-flex"
                             disabled={!canEdit}>
                             Configure centralized config
                         </Button>
@@ -236,6 +236,18 @@ export default function General() {
 
             <Page.Content className="min-w-0 gap-5 px-4 sm:px-8">
                 <CentralizedConfigReadOnlyAlert />
+
+                {isGlobalGeneralView && (
+                    <Button
+                        size="sm"
+                        leftIcon={<Settings2Icon />}
+                        onClick={() => setIsCentralizedModalOpen(true)}
+                        variant="helper"
+                        className="self-start sm:hidden"
+                        disabled={!canEdit}>
+                        Configure centralized config
+                    </Button>
+                )}
 
                 <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
                     <div data-field-name="automatedReviewActive">
