@@ -402,9 +402,10 @@ jobs:
                   done
 
             - name: Comment the preview link
-              if: always() && github.event_name != 'workflow_dispatch' && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
+                  PR_NUMBER: ${{ inputs.pr_number }}
                   URLS: ${{ steps.up.outputs.urls }}
                   OUTCOME: ${{ steps.up.outcome }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
@@ -413,6 +414,7 @@ jobs:
               with:
                   script: |
                       const marker = '## Preview Environment';
+                      const prNumber = Number(process.env.PR_NUMBER) || context.issue.number;
                       const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
                       const stamp = `_Updated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · [logs](${runUrl})_`;
                       const wanted = (process.env.PROFILES || '').split(' ').filter(Boolean);
@@ -446,7 +448,7 @@ jobs:
                       const comments = await github.paginate(github.rest.issues.listComments, {
                         owner: context.repo.owner,
                         repo: context.repo.repo,
-                        issue_number: context.issue.number,
+                        issue_number: prNumber,
                         per_page: 100,
                       });
                       const existing = comments.find((c) => c.body.includes(marker));
@@ -461,7 +463,7 @@ jobs:
                         await github.rest.issues.createComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
-                          issue_number: context.issue.number,
+                          issue_number: prNumber,
                           body,
                         });
                       }
