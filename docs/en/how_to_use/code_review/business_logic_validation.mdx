@@ -108,7 +108,7 @@ Comment on the PR (not on a line of code):
 Open **Code review → What to review → Business Logic → Configure**. Every setting can be set globally and overridden per repository or directory.
 
 - **Task source**: every connected tracker (custom task plugins like ClickUp included), or one plugin. For a custom plugin, pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it** at the end of the page: a task alone shows what Kody reads from it, and a pull request runs the whole check without posting, with the settings on screen, saved or not.
-- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96` or `sc-123`, `#12`, `AB#8`, `CU-…` and tracker links are found without it.
+- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96`, `#12`, `AB#8`, `CU-…` and tracker links are found without it, and so is a lower-case key like `sc-123` in a branch name. In a title or description a lower-case key counts only when Linear or Jira has that team or project; for another tracker, set the format.
 - **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field; a task without the field is read from its description.
 - **Ask for a task when the PR references none**: Kody comments asking which task the PR is for (or pointing at the typo), instead of skipping it. PRs opened by bots, like Dependabot or Renovate, are left alone. A tracker that is down never counts.
 - **Re-check**: while something is missing (default), on every push, or only on request.
