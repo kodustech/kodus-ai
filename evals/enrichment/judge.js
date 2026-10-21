@@ -37,7 +37,7 @@ const args = process.argv.slice(2);
 const JUDGE_MODEL = (args.find((a) => a.startsWith('--judge=')) || '--judge=claude-opus-5.5@api').slice(8);
 const NO_REF = args.includes('--no-ref');
 const REFS_FILE = (args.find((a) => a.startsWith('--refs=')) || '').slice(7);
-const TAG = [JUDGE_MODEL === 'claude-opus-5.5@api' ? '' : JUDGE_MODEL.replace(/[@/]/g, '_'), NO_REF ? 'noref' : '', REFS_FILE ? 'selfref' : ''].filter(Boolean).join('-');
+const TAG = [JUDGE_MODEL === 'claude-opus-5.5@api' ? '' : JUDGE_MODEL.replace(/[@/]/g, '_'), NO_REF ? 'noref' : '', REFS_FILE ? (REFS_FILE.endsWith('-tools.json') ? 'selfref-tools' : 'selfref') : ''].filter(Boolean).join('-');
 const selfRefs = REFS_FILE ? new Map(JSON.parse(fs.readFileSync(REFS_FILE, 'utf8')).items.map((r) => [r.issueId, r])) : null;
 const files = args.filter((a) => !a.startsWith('--'));
 const PAR = Number((args.find((a) => a.startsWith('--par=')) || '--par=6').split('=')[1]);

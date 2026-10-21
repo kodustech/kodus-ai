@@ -57,14 +57,30 @@ tab_prod += f'<tr class="gtop"><td class="ver"><b>total</b></td><td>{PROD_N}</td
 SELF_MODELS = [('gpt-6.1-sol@sub', 'gpt-6.1-sol_sub-oneshot', 'gpt-6.1-sol_sub'), ('claude-opus-5.5@api', 'claude-opus-5.5_api-oneshot', ''),
                ('deepseek-v4.1-flash@together', 'deepseek-v4.1-flash_together-oneshot', 'deepseek-v4.1-flash_together')]
 SELF_TESTS = [
+    ('selfref-tools', 'Teste 3 · o próprio modelo prepara a referência lendo o repositório e depois julga',
+     'Igual ao teste 2, mas quem prepara a referência pode ler o repositório no head do PR (grep, readFile, listDir, findFile, até 12 passos), como o Astra lia. Continua sem gabarito e sem exemplo de correção. O julgamento é igual ao do teste 2.'),
     ('selfref', 'Teste 2 · o próprio modelo prepara a referência e depois julga',
      'Antes de julgar, o próprio modelo escreve a referência de cada item, no papel que era do Astra: o defeito e o que uma correção certa precisa cumprir. Ele faz isso numa chamada, sem ver resposta nenhuma, só com o que o enriquecimento recebe (achado, código citado, 60 linhas em volta, diff); sem repositório, sem gabarito e sem exemplo de correção. Depois julga as respostas contra essa referência.'),
     ('noref', 'Teste 1 · o próprio modelo julga sem referência',
      'O próprio modelo julga as respostas vendo só o achado, o código citado, as 60 linhas em volta e a resposta.'),
 ]
+def nota_producao(suf):
+    linhas = PORTAO.get(suf)
+    if not linhas: return ''
+    tab = ''.join(f'<tr><td class="ver">{E(n)}</td><td>{e}</td><td><b>{ch}</b></td><td>{fa}</td><td>{sc0} → {sc1}</td></tr>' for n, e, ch, fa, sc0, sc1 in linhas)
+    return (f'<h3>Comparado com produção hoje</h3><div class="scroll"><table class="t5"><thead><tr><th>Modelo</th><th>Correções erradas que chegam ao cliente hoje</th>'
+            f'<th>Com este portão</th><th>Certas perdidas</th><th>Sem código</th></tr></thead><tbody>{tab}</tbody></table></div>'
+            f'<p class="nota"><b>Melhor que produção nos três.</b> Produção não tem portão: toda correção errada chega ao cliente (a coluna "hoje" usa a contagem do Opus com referência do Astra, porque produção não mede acerto). '
+            f'O portão só tira o improvedCode; o comentário sai igual, então não há perda de recall. O custo: {min(x[3] for x in linhas)} a {max(x[3] for x in linhas)} correção certa sai sem código, e sem código sobe um pouco (em produção é {100 * SKV / SKN:.1f}% nesses labels). '
+            f'{LEITURA.get(suf, "")} Dá para publicar e ir melhorando.</p>')
 def veredito(r):
     if not r.get('result') or r['result']['fixStatus'] != 'local': return 'N'
     return {'PASS': 'P', 'FAIL': 'F'}.get(J(r).get('fix'), 'U')
+PORTAO = {}
+LEITURA = {
+    'selfref': 'O ganho real é no GPT; no Opus e no DeepSeek a maior parte das erradas ainda passa.',
+    'selfref-tools': 'Ler o repositório ajudou o DeepSeek (barra 6 de 20, contra 4 no teste 2) e não mudou o GPT nem o Opus; a maior parte das erradas ainda passa no Opus e no DeepSeek.',
+}
 def tabela_self(sufixo):
     lin = []
     for m, base, judge in SELF_MODELS:
@@ -76,6 +92,7 @@ def tabela_self(sufixo):
         c = lambda D, x: sum(1 for v in D.values() if v == x)
         pegou = sum(1 for i in A if A[i] == 'F' and B[i] in ('F', 'U')); erradas = c(A, 'F')
         falso = sum(1 for i in A if A[i] == 'P' and B[i] != 'P')
+        PORTAO.setdefault(sufixo, []).append((NOME[m], erradas, erradas - pegou, falso, c(A, 'N'), c(B, 'N') + c(B, 'F') + c(B, 'U')))
         for j, (nome, D) in enumerate((('Opus com referência do Astra', A), ('O próprio modelo', B))):
             mod = f'<th class="mod" rowspan="2">{E(NOME[m])}</th>' if j == 0 else ''
             extra = f'<td class="sep" rowspan="2"><b>{pegou} de {erradas}</b></td><td rowspan="2">{falso}</td>' if j == 0 else ''
@@ -87,7 +104,7 @@ for k_, (suf, tit, desc) in enumerate(SELF_TESTS):
     corpo = tabela_self(suf)
     if not corpo: continue
     blocos_self.append(f'''<details class="teste"{' open' if not blocos_self else ''}><summary>{E(tit)}</summary><div class="body"><p class="nota">{E(desc)}</p>
-<div class="scroll"><table class="t4"><thead><tr><th>Modelo</th><th>Juiz</th><th>Aprovadas</th><th>Reprovadas</th><th>Juiz não decidiu</th><th>Sem código</th><th class="sep">Correções erradas que o próprio modelo barrou</th><th>Certas que ele barrou à toa</th></tr></thead><tbody>{corpo}</tbody></table></div></div></details>''')
+<div class="scroll"><table class="t4"><thead><tr><th>Modelo</th><th>Juiz</th><th>Aprovadas</th><th>Reprovadas</th><th>Juiz não decidiu</th><th>Sem código</th><th class="sep">Correções erradas que o próprio modelo barrou</th><th>Certas que ele barrou à toa</th></tr></thead><tbody>{corpo}</tbody></table></div>{nota_producao(suf) if suf.startswith('selfref') else ''}</div></details>''')
 tab_self = ''.join(blocos_self)
 semc = sorted(s['n'] - s['att'] for s in S.values()); repr_ = sorted(s['F'] for s in S.values())
 bestF = sorted(S[(m, 'tools')]['F'] for m in ('gpt-6.1-sol@sub', 'claude-opus-5.5@api', 'claude-sonnet-5.5@api') if (m, 'tools') in S)
@@ -192,7 +209,7 @@ thead th:first-child,thead th:nth-child(2){{text-align:left}}
 th.mod{{text-align:left;vertical-align:top;font-weight:600}}.via{{display:block;font-weight:400;font-size:12px;color:var(--mut)}}td.ver{{text-align:left;color:var(--mut)}}
 tr.gtop th,tr.gtop td{{border-top:2px solid var(--line)}}.sep{{border-left:2px solid var(--line)}}
 td.hi{{background:var(--hi);box-shadow:inset 3px 0 0 var(--hil)}}
-.t1{{min-width:560px}}.t3{{min-width:560px}}.teste{{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:10px}}.teste>summary{{padding:10px 14px;font-weight:600;cursor:pointer}}.teste .scroll{{margin-top:8px}}.t4{{min-width:760px}}.t2{{min-width:620px}}
+.t1{{min-width:560px}}.t3{{min-width:560px}}.t5{{min-width:620px}}h3{{font-size:15px;margin:18px 0 4px}}.teste{{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:10px}}.teste>summary{{padding:10px 14px;font-weight:600;cursor:pointer}}.teste .scroll{{margin-top:8px}}.t4{{min-width:760px}}.t2{{min-width:620px}}
 .tabs{{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 8px;border-bottom:1px solid var(--line)}}\n.tabs button{{font:600 13px var(--sans);border:0;border-bottom:2px solid transparent;background:none;color:var(--mut);padding:8px 12px;cursor:pointer;margin-bottom:-1px}}\n.tabs button.on{{color:var(--fg);border-bottom-color:var(--acc)}}\n.leg{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0;color:var(--mut);font-size:13px;align-items:center}}
 .c{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;font:600 12px var(--mono)}}
 .c-ok{{background:var(--okb);color:var(--ok)}}.c-ko{{background:var(--kob);color:var(--ko)}}.c-ab{{background:var(--abb);color:var(--ab)}}.c-un{{background:var(--unb);color:var(--un)}}.c-na{{background:var(--nab);color:var(--na)}}
