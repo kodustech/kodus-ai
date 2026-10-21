@@ -97,7 +97,7 @@ export const TestResult = ({
             <Step n={1} title="Task references in the pull request">
                 {references.length ? (
                     references.map((r) => (
-                        <span key={`${r.kind}:${r.id}`}>
+                        <span key={`${r.source}:${r.raw}`}>
                             <code>{r.raw}</code> in {SOURCE[r.source]} ·{" "}
                             {named && r.source !== "command"
                                 ? "not used: you named the task"
