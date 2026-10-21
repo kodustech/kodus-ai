@@ -220,6 +220,16 @@ describe('IN_APP_TEMPLATE_REGISTRY', () => {
             );
         });
 
+        it('a rule paused again after a resume is judged since the resume', () => {
+            const result = build([
+                entry({ sinceResume: true, windowDays: 1, triggers: 10 }),
+            ]);
+            expect(result.body).toContain(
+                '2 of 10 suggestions implemented since it was last resumed',
+            );
+            expect(result.body).not.toContain('1 days');
+        });
+
         it('several rules: counts and lists them, and lands on the global rules page', () => {
             const result = build([
                 entry(),

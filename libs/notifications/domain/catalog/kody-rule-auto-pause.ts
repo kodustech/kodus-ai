@@ -17,7 +17,9 @@ export function normaliseAutoPauseEntries(
 
 /** Why the rule was paused, with the numbers behind it. */
 export function describeAutoPauseReason(entry: KodyRuleAutoPauseEntry): string {
-    const window = `in the last ${entry.windowDays} days`;
+    const window = entry.sinceResume
+        ? 'since it was last resumed'
+        : `in the last ${entry.windowDays} ${entry.windowDays === 1 ? 'day' : 'days'}`;
     if (entry.state === 'noisy') {
         return `Noisy: ${entry.thumbsDown} 👎 and ${entry.thumbsUp} 👍 on ${entry.triggers} suggestions ${window}.`;
     }

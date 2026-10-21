@@ -83,6 +83,8 @@ export interface KodyRuleAutoPauseEntry {
     thumbsDown: number;
     /** Length of the usage window the rule was judged on. */
     windowDays: number;
+    /** The window started at the rule's last resume, not a full look-back. */
+    sinceResume?: boolean;
     pausedAt: string;
     /** Digest only: the rule was resumed before the digest went out. */
     resumed?: boolean;

@@ -313,6 +313,7 @@ describe('AutoPauseKodyRulesUseCase', () => {
                             triggers: 14,
                             implemented: 2,
                             windowDays: 30,
+                            sinceResume: false,
                             pausedAt: NOW.toISOString(),
                         }),
                         expect.objectContaining({

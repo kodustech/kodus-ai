@@ -40,6 +40,7 @@ import {
     ICockpitReviewAnalyticsService,
 } from '../../domain/contracts/cockpit-review-analytics.service.contract';
 import {
+    AUTO_PAUSE_WINDOW_DAYS,
     AutoPauseSkipReason,
     autoPauseWindowStart,
     decideAutoPause,
@@ -52,6 +53,7 @@ import { CockpitHealthService } from '../../infrastructure/services/cockpit-heal
 const MAX_INGESTION_LAG_HOURS = 26;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 const SYSTEM_USER = { userId: 'kody-system', userEmail: 'kody@kodus.io' };
 
@@ -466,6 +468,9 @@ export function toEntry(
     >,
     autoPause: IKodyRuleAutoPause,
 ): KodyRuleAutoPauseEntry {
+    const windowMs =
+        new Date(autoPause.windowEnd).getTime() -
+        new Date(autoPause.windowStart).getTime();
     const repositoryId =
         rule.repositoryId && rule.repositoryId !== 'global'
             ? rule.repositoryId
@@ -481,14 +486,8 @@ export function toEntry(
         rate: autoPause.rate,
         thumbsUp: autoPause.thumbsUp,
         thumbsDown: autoPause.thumbsDown,
-        windowDays: Math.max(
-            1,
-            Math.round(
-                (new Date(autoPause.windowEnd).getTime() -
-                    new Date(autoPause.windowStart).getTime()) /
-                    DAY_MS,
-            ),
-        ),
+        windowDays: Math.max(1, Math.round(windowMs / DAY_MS)),
+        sinceResume: windowMs < AUTO_PAUSE_WINDOW_DAYS * DAY_MS - MINUTE_MS,
         pausedAt: new Date(autoPause.pausedAt).toISOString(),
     };
 }

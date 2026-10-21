@@ -27,8 +27,24 @@ const windowDays = (autoPause: KodyRuleAutoPause) =>
     );
 
 /** Why Kody paused the rule, with the numbers behind it. */
+// The cron looks back 30 days, or to the last resume when that is more recent.
+const FULL_WINDOW_DAYS = 30;
+
+const describeWindow = (autoPause: KodyRuleAutoPause): string => {
+    const windowMs =
+        new Date(autoPause.windowEnd).getTime() -
+        new Date(autoPause.windowStart).getTime();
+    if (windowMs < FULL_WINDOW_DAYS * DAY_MS - 60 * 1000) {
+        const resumed = formatDate(autoPause.windowStart);
+        return resumed
+            ? `since it was resumed on ${resumed}`
+            : "since it was last resumed";
+    }
+    return `in the last ${windowDays(autoPause)} days`;
+};
+
 export const autoPauseReason = (autoPause: KodyRuleAutoPause): string => {
-    const window = `in the last ${windowDays(autoPause)} days`;
+    const window = describeWindow(autoPause);
     return autoPause.state === "noisy"
         ? `Developers downvoted it: ${autoPause.thumbsDown} 👎 and ${autoPause.thumbsUp} 👍 on ${autoPause.triggers} suggestions ${window}.`
         : `Developers ignored it: ${autoPause.implemented} of ${autoPause.triggers} suggestions implemented ${window}.`;
