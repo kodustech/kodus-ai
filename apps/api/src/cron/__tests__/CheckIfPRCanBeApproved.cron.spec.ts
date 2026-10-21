@@ -328,6 +328,56 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it.each([
+        ['head changes', { head: { sha: 'new-sha' }, labels: ['ready'] }],
+        ['scope label is removed', { head: { sha: 'same-sha' }, labels: [] }],
+    ])(
+        'holds approval if the %s before the provider call',
+        async (_, latest) => {
+            const { cron, deps } = makeCron();
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    dataExecution: {
+                        lastAnalyzedCommit: 'same-sha',
+                        approvalDecision: { kind: 'approve' },
+                    },
+                },
+            );
+            deps.codeManagementService.getPullRequest = jest
+                .fn()
+                .mockResolvedValueOnce({
+                    head: { sha: 'same-sha' },
+                    labels: ['ready'],
+                    user: { login: 'alice' },
+                })
+                .mockResolvedValueOnce({
+                    ...latest,
+                    user: { login: 'alice' },
+                });
+
+            const result = await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: makeOpenPr(77, 'repo-b'),
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalLabels: ['ready'],
+                },
+                teamAutomationId: 'team-automation-1',
+            });
+
+            expect(result).toBe(false);
+            expect(
+                deps.codeManagementService.getPullRequest,
+            ).toHaveBeenCalledTimes(2);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('does not approve a zero-comment PR whose review was held', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getPullRequest = jest.fn();

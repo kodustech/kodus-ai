@@ -564,6 +564,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         let conditionalDecision: ApprovalDecision | undefined;
         const allowNoComments =
             !!policy?.labels?.length && (pr?.suggestions?.length ?? 0) === 0;
+        let changedPaths: string[] = [];
         if (
             allowNoComments &&
             !['approve', 'out-of-scope'].includes(
@@ -623,7 +624,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 ) {
                     return false;
                 }
-                let changedPaths: string[] = [];
                 if (policy.sensitivePaths?.length) {
                     const files =
                         await this.codeManagementService.getFilesByPullRequestId(
@@ -833,6 +833,38 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
 
                 if (conditionalDecision) {
+                    // Comments and provider status checks can take time. A new
+                    // commit or a removed scope label invalidates the decision
+                    // made at the start of this cron pass.
+                    const latestPullRequest =
+                        await this.codeManagementService.getPullRequest(
+                            codeManagementRequestData,
+                            platformType,
+                        );
+                    const latestHeadSha =
+                        latestPullRequest?.head?.sha ||
+                        (latestPullRequest as any)?.headSha ||
+                        (latestPullRequest as any)?.head?.commit?.sha;
+                    if (
+                        !latestHeadSha ||
+                        latestHeadSha !== lastAnalyzedCommitSha ||
+                        (policy?.labels?.length && !latestPullRequest?.labels)
+                    ) {
+                        return false;
+                    }
+                    conditionalDecision = evaluateApproval({
+                        approvalActive: true,
+                        policy,
+                        author:
+                            latestPullRequest?.user?.login ??
+                            latestPullRequest?.user?.username,
+                        labels: latestPullRequest?.labels,
+                        changedPaths,
+                        reviewClean: true,
+                        risk: lastExecution?.dataExecution?.approvalRisk,
+                        currentHeadSha: latestHeadSha,
+                    });
+                    if (conditionalDecision.kind !== 'approve') return false;
                     const before =
                         await this.codeManagementService.getReviewStatusByPullRequest(
                             codeManagementRequestData,
