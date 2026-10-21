@@ -362,8 +362,8 @@ export function CodeAreasTab({
                         Code hotspots
                     </h2>
                     <p className="text-text-secondary mt-1 max-w-2xl text-sm">
-                        See which directories change often and contain
-                        structural signals. Linked bug fixes add context.
+                        See which directories change often and contain long or
+                        complex functions. Linked bug fixes add context.
                     </p>
                 </div>
                 {!repositoriesLoading && repositories.length > 0 && (
@@ -464,8 +464,8 @@ export function CodeAreasTab({
                                 <p className="text-text-secondary mt-1 text-xs leading-5">
                                     Each card is a directory. Start with
                                     “Investigate first”: these directories
-                                    change often and have structural signals in
-                                    sampled files.
+                                    change often and contain long or complex
+                                    functions in sampled files.
                                 </p>
                             </div>
                             {(structureCoverage?.analyzedFiles ?? 0) > 0 ? (
@@ -493,9 +493,9 @@ export function CodeAreasTab({
                                         </div>
                                         <div className="grid grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)] gap-3">
                                             <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
-                                                Structural
+                                                Complex
                                                 <br />
-                                                signals
+                                                functions
                                             </div>
                                             {group(
                                                 "fragile-occasional",
@@ -507,7 +507,7 @@ export function CodeAreasTab({
                                                 true,
                                             )}
                                             <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
-                                                No signals
+                                                No findings
                                                 <br />
                                                 in sample
                                             </div>
@@ -523,16 +523,15 @@ export function CodeAreasTab({
                                     </div>
                                     <p className="text-text-tertiary mt-4 text-xs">
                                         Frequent means the top quarter of
-                                        directories by changed PRs. Structural
-                                        signals identify long, branch-heavy or
-                                        deeply nested functions in sampled JS/TS
-                                        files.
+                                        directories by changed PRs. Functions
+                                        are flagged when long, branch-heavy or
+                                        deeply nested in sampled JS/TS files.
                                     </p>
                                 </div>
                             ) : (
                                 <div className="px-5 py-12">
                                     <p className="text-text-primary text-sm font-medium">
-                                        Structural analysis is not available yet
+                                        Function analysis is not available yet
                                     </p>
                                     <p className="text-text-secondary mt-2 max-w-lg text-sm leading-5">
                                         The map needs a sample of JS/TS files
@@ -598,9 +597,9 @@ export function CodeAreasTab({
                                                       " of " +
                                                       selectedArea.structure
                                                           .functions +
-                                                      " sampled functions crossed a structural threshold."
-                                                    : "No structural threshold was crossed in the sampled files."
-                                                : "Code structure has not been measured for this area."}{" "}
+                                                      " sampled functions were flagged for length or complexity."
+                                                    : "No sampled functions were flagged for length or complexity."
+                                                : "Functions have not been measured for this area."}{" "}
                                             {selectedArea.linkedBugFixPrs} of
                                             its {selectedArea.changedPrs}{" "}
                                             changed PRs were linked to bug
@@ -611,7 +610,7 @@ export function CodeAreasTab({
                                         ?.length && (
                                         <div className="mt-6">
                                             <h4 className="text-text-primary mb-2 text-sm font-semibold">
-                                                Files in the structural sample
+                                                Files sampled
                                             </h4>
                                             <div className="divide-card-lv3 divide-y">
                                                 {selectedArea.structure.files.map(
@@ -664,7 +663,7 @@ export function CodeAreasTab({
                                     </h3>
                                     <p className="text-text-secondary mt-1 text-xs">
                                         {classified.unknown.length} areas have
-                                        history but no JS/TS structural sample.
+                                        history but no JS/TS function sample.
                                         They stay outside the quadrants.
                                     </p>
                                 </div>
