@@ -336,6 +336,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/agents/core/micro-agents.ts', // PLANNER_SCHEMA — all-required
         'libs/code-review/infrastructure/agents/core/selector-shard.ts', // PLAN_SCHEMA — all-required
         'libs/code-review/infrastructure/agents/core/scout-investigator.ts', // SCOUT_SCHEMA — `line` optional, converted by zodToStrictWireSchema
+        'libs/code-review/infrastructure/agents/engine/enrich-content.ts', // RESULT_ZOD — all-required
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {
