@@ -29,7 +29,11 @@ def main():
     parser.add_argument('--retry', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--blind-output', type=Path)
+    parser.add_argument('--candidate-run', action='append', default=[], metavar='RUN_ID=JSON')
+    parser.add_argument('--candidate-output', type=Path)
     args = parser.parse_args()
+    if bool(args.candidate_run) != bool(args.candidate_output):
+        parser.error('--candidate-run and --candidate-output must be used together')
 
     candidate_plan = json.loads((ROOT / 'adjudication-plan.json').read_text())['ids']
     labels = {case['id']: case for case in json.loads((ROOT / 'adjudications.json').read_text())['cases']}
@@ -91,6 +95,58 @@ def main():
         writer = csv.DictWriter(file, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows({key: safe_cell(value) for key, value in row.items()} for row in rows)
+    if args.candidate_output:
+        candidate_cases = {}
+        for entry in args.candidate_run:
+            run_id, separator, path = entry.partition('=')
+            if not separator or not run_id or not path:
+                raise ValueError(f'expected RUN_ID=JSON, got {entry!r}')
+            for ident, case in measured_cases(Path(path)).items():
+                if ident in candidate_cases:
+                    raise ValueError(f'duplicate candidate result: {ident}')
+                candidate_cases[ident] = (run_id, case)
+        if set(candidate_cases) != set(plan):
+            missing = sorted(set(plan) - set(candidate_cases))
+            extra = sorted(set(candidate_cases) - set(plan))
+            raise ValueError(
+                f'candidate results must measure the same 200 cases; '
+                f'missing={missing}, extra={extra}'
+            )
+        comparison = []
+        for row in rows:
+            run_id, case = candidate_cases[row['id']]
+            metadata = case['metadata']
+            expected = 'hold' if row['codexLabel'] == 'hold' else 'approve'
+            if metadata['expect'] != expected:
+                raise ValueError(f'{row["id"]}: candidate expectation differs from frozen label')
+            decision = metadata['arms']['modelAndMap']
+            if expected == 'hold' and decision == 'approve':
+                priority = 'wrong_approval'
+            elif expected == 'approve' and decision == 'hold':
+                priority = 'missed_approval'
+            else:
+                priority = 'agreement'
+            comparison.append({
+                'id': row['id'],
+                'snapshotAt': row['snapshotAt'],
+                'compareUrl': row['compareUrl'],
+                'codexLabel': row['codexLabel'],
+                'originalModelMapDecision': row['modelMapDecision'],
+                'candidateModelOnlyDecision': metadata['arms']['modelOnly'],
+                'candidateModelMapDecision': decision,
+                'candidatePriority': priority,
+                'candidateRisk': metadata['risks']['modelAndMap']['level'],
+                'candidateReason': metadata['risks']['modelAndMap']['reason'],
+                'sparseHistory': metadata['sparseHistory'],
+                'linkedBugHistory': metadata['linkedBugHistory'],
+                'candidateEvalRun': run_id,
+            })
+        comparison.sort(key=lambda row: (order[row['candidatePriority']], row['id']))
+        args.candidate_output.parent.mkdir(parents=True, exist_ok=True)
+        with args.candidate_output.open('w', newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=list(comparison[0]))
+            writer.writeheader()
+            writer.writerows({key: safe_cell(value) for key, value in row.items()} for row in comparison)
     if args.blind_output:
         blind_ids = plan.copy()
         random.Random(1765).shuffle(blind_ids)
