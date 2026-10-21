@@ -14,7 +14,7 @@ VIA = {'gpt-6.1-sol@sub': 'assinatura, effort low', 'claude-opus-5.5@api': 'LLM.
        'deepseek-v4.1-flash@together': 'Together', 'kimi-k2.7-code@openrouter': 'OpenRouter, Moonshot'}
 VAR = {'oneshot': 'Chamada única', 'tools': 'Com ferramentas'}
 runs = {}
-for f in glob.glob(f'{AQUI}/results/*.judged.json'):
+for f in glob.glob(f'{AQUI}/results/*-oneshot.judged.json') + glob.glob(f'{AQUI}/results/*-tools.judged.json'):
     d = json.load(open(f))
     if d['model'] in NOME: runs[(d['model'], d['variant'])] = {r['issueId']: r for r in d['rows']}
 ctrl = json.load(open(f'{AQUI}/results/control-noop.judged.json'))['rows']
@@ -140,6 +140,18 @@ nctrl = len(ctrl); cfail = sum(1 for r in ctrl if J(r).get('fix') == 'FAIL')
 
 # ── matriz por item ──────────────────────────────────────────────────────────
 COLS = [(m, v) for m in ORDEM for v in ('oneshot', 'tools') if (m, v) in runs]
+# Refinamento: corrigíveis aprovadas (das MUST) por versão do prompt e rodada.
+REF_COLS = [('', 'v1, rodada 1'), ('-r2', 'v1, rodada 2'), ('-v2', 'v2, rodada 1'), ('-v2r2', 'v2, rodada 2')]
+def refino(m, suf):
+    f = f"{AQUI}/results/{m.replace('@', '_')}-oneshot{suf}.judged.json"
+    if not os.path.exists(f): return '<td class="mut">—</td>'
+    R = {r['issueId']: r for r in json.load(open(f))['rows']}
+    p = sum(1 for i in MUST if J(R.get(i, {})).get('fix') == 'PASS')
+    cls = 'ok' if p >= 0.7 * len(MUST) else 'bad'
+    return f'<td class="{cls}">{p} ({100 * p / len(MUST):.0f}%)</td>'
+tab_ref = ''.join(f'<tr><td class="ver">{NOME[m]}</td>' + ''.join(refino(m, s) for s, _ in REF_COLS) + '</tr>' for m in ORDEM)
+tab_ref_head = ''.join(f'<th>{t}</th>' for _, t in REF_COLS)
+
 def chip(r):
     if not r.get('result'): return '<span class="c c-na" title="sem resposta">–</span>'
     st = r['result']['fixStatus']
@@ -196,7 +208,7 @@ page = f'''<title>Enriquecimento do Finder</title>
 body{{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans)}}
 .wrap{{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}}
 h1{{font-size:22px;margin:0 0 4px;text-wrap:balance}}h2{{font-size:17px;margin:32px 0 6px;text-wrap:balance}}
-.sub,.nota,.mut{{color:var(--mut)}}.nota{{margin:8px 0}}
+.sub,.nota,.mut{{color:var(--mut)}}.t3 td.ok{{color:var(--ok);font-weight:600}}.t3 td.bad{{color:var(--ko);font-weight:600}}.nota{{margin:8px 0}}
 .regra{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0 4px}}
 .regra div{{border-top:2px solid var(--line);padding-top:8px;min-width:0}}.regra b{{font:600 20px var(--mono);color:var(--acc)}}.regra p{{margin:2px 0 0;color:var(--mut);font-size:13px}}
 .scroll{{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:12px}}
@@ -238,7 +250,7 @@ code{{font:12px var(--mono)}}.def{{background:var(--card);border:1px solid var(-
 <div class="wrap">
 <h1>Enriquecimento do Finder</h1>
 <p class="sub">Prompt v1 · 100 TPs do gold v3 · juiz Opus 5.5 · 20/10/26</p>
-<div class="tabs" id="tabs" role="tablist"><button class="on" data-t="resultado">Resultado dos modelos</button><button data-t="diag">Diagnóstico</button><button data-t="self">Autojulgamento</button><button data-t="itens">Item a item</button><button data-t="dataset">Dataset e validação</button></div>
+<div class="tabs" id="tabs" role="tablist"><button class="on" data-t="resultado">Resultado dos modelos</button><button data-t="refino">Refinamento</button><button data-t="diag">Diagnóstico</button><button data-t="self">Autojulgamento</button><button data-t="itens">Item a item</button><button data-t="dataset">Dataset e validação</button></div>
 
 <section id="t-resultado">
 <p class="nota">Cada modelo recebeu os mesmos 100 achados confirmados e, para cada um, escreveu o título e, quando achou que dava, o improvedCode. Todas as contagens são sobre os 100 achados; as quatro colunas somam 100.</p>
@@ -254,6 +266,16 @@ code{{font:12px var(--mono)}}.def{{background:var(--card);border:1px solid var(-
 <h2>Título e custo</h2>
 <div class="scroll"><table class="t2"><thead><tr><th>Modelo</th><th>Versão</th><th>Título certo /100</th><th class="sep">Input</th><th>Cache read</th><th>Output</th><th>Tempo</th></tr></thead><tbody>{tab2}</tbody></table></div>
 <p class="nota">Título certo: nomeia o problema do achado, segundo o juiz. Tokens e tempo são por achado, só do modelo enriquecendo; o juiz não entra.</p>
+</section>
+
+<section id="t-refino" hidden>
+<p class="nota">Das {len(MUST)} sugestões que dá para corrigir trocando só as linhas citadas, quantas o improvedCode corrige, segundo o juiz. Chamada única. Meta: 70% ({-(-7 * len(MUST) // 10)} de {len(MUST)}). Verde atinge a meta.</p>
+<div class="scroll"><table class="t3"><thead><tr><th>Modelo</th>{tab_ref_head}</tr></thead><tbody>{tab_ref}</tbody></table></div>
+<div class="def">
+<p><b>v1:</b> o prompt atual do enriquecimento.</p>
+<p><b>v2:</b> o v1 mais três instruções: procurar uma correção que caiba nas linhas citadas antes de responder needs-wider-change; corrigir todos os casos que a sugestão cita e manter o que ela não questiona; substituir exatamente as linhas citadas, sem repetir nem fechar blocos das linhas vizinhas.</p>
+<p><b>Rodadas:</b> o mesmo prompt rodado de novo. A diferença entre elas é a oscilação do modelo.</p>
+</div>
 </section>
 
 <section id="t-diag" hidden>
@@ -314,9 +336,9 @@ code{{font:12px var(--mono)}}.def{{background:var(--card);border:1px solid var(-
 function fit(){{document.querySelectorAll('.scroll').forEach(function(s){{s.classList.remove('fits');var t=s.querySelector('table');if(t&&t.scrollWidth<=s.clientWidth+1)s.classList.add('fits');}});}}
 window.addEventListener('load',fit);
 function aba(t){{document.querySelectorAll('#tabs button').forEach(function(x){{x.classList.toggle('on',x.dataset.t===t);}});
-['resultado','diag','self','itens','dataset'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});fit();}}
+['resultado','refino','diag','self','itens','dataset'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});fit();}}
 document.getElementById('tabs').addEventListener('click',function(e){{var b=e.target.closest('button');if(b){{aba(b.dataset.t);try{{history.replaceState(null,'','#'+b.dataset.t);}}catch(_){{}}}}}});
-if(['diag','self','itens','dataset'].indexOf(location.hash.slice(1))>=0)aba(location.hash.slice(1));window.addEventListener('resize',fit);fit();
+if(['refino','diag','self','itens','dataset'].indexOf(location.hash.slice(1))>=0)aba(location.hash.slice(1));window.addEventListener('resize',fit);fit();
 document.getElementById('f').addEventListener('click',function(e){{var b=e.target.closest('button');if(!b)return;
 document.querySelectorAll('#f button').forEach(function(x){{x.classList.toggle('on',x===b);}});var g=b.dataset.g;
 document.querySelectorAll('#lista .item').forEach(function(it){{it.hidden=!!g&&it.dataset.g!==g;}});}});

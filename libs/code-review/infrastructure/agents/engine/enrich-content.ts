@@ -87,7 +87,14 @@ Return:
   - "insufficient-context": you cannot write a correct fix without guessing names, signatures or behavior you have not seen.
   - "no-code-fix": the problem is not fixed by changing code.
   For every status other than "local", improvedCode is "".
-Write a fix whenever you can write a correct one. Do not abstain to be safe, and do not guess.`;
+Write a fix whenever you can write a correct one. Do not abstain to be safe, and do not guess.
+
+Before choosing "needs-wider-change", look for a correct fix that fits inside the cited lines: a guard, a reordering, a wrapper, a small helper written inline. The fix the finding proposes is one option, not the only one.
+
+A correct fix:
+- fixes the whole defect: every case, input and path the finding names, not only the first one;
+- keeps what the finding does not question: the other inputs, the existing checks, nil or empty values, the error handling around the cited lines;
+- replaces exactly the cited lines: the lines right before and after them stay in the file unchanged, so do not repeat them, and do not open or close a block that one of them opens or closes.`;
 
 const WITH_TOOLS = `
 
