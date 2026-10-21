@@ -373,6 +373,13 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 deps.codeManagementService.getPullRequest,
             ).toHaveBeenCalledTimes(2);
             expect(
+                deps.codeManagementService.getReviewStatusByPullRequest.mock
+                    .invocationCallOrder[0],
+            ).toBeLessThan(
+                deps.codeManagementService.getPullRequest.mock
+                    .invocationCallOrder[1],
+            );
+            expect(
                 deps.codeManagementService.checkIfPullRequestShouldBeApproved,
             ).not.toHaveBeenCalled();
         },
