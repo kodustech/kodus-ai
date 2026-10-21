@@ -703,6 +703,7 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             file: any;
             pullRequest: any;
+            suppressNotFoundLogs?: boolean;
         },
         type?: PlatformType,
     ) {

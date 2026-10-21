@@ -148,6 +148,34 @@ async function main(): Promise<void> {
         scanComplete: true,
         pullRequests,
     });
+    const structuralFindings: Record<string, number> = {
+        'src/auth/session': 4,
+        'src/billing/checkout': 3,
+        'src/auth/sso': 2,
+        'src/api/webhooks': 1,
+        'src/permissions/roles': 1,
+        'src/docs/guides': 1,
+    };
+    snapshot.directDirectories = snapshot.directDirectories.map((area) => ({
+        ...area,
+        structure: {
+            eligibleFiles: 3,
+            analyzedFiles: 3,
+            functions: 18,
+            functionsNeedingAttention: structuralFindings[area.path] ?? 0,
+            files: Array.from({ length: 3 }, (_, index) => ({
+                path: `${area.path}/sample-${index + 1}.ts`,
+                functions: 6,
+                functionsNeedingAttention:
+                    index === 0 ? (structuralFindings[area.path] ?? 0) : 0,
+            })),
+        },
+    }));
+    snapshot.structureCoverage = {
+        eligibleFiles: snapshot.directDirectories.length * 3,
+        analyzedFiles: snapshot.directDirectories.length * 3,
+        sampled: true,
+    };
     const mongo = await mongoMigrationClient();
     try {
         await mongo.db

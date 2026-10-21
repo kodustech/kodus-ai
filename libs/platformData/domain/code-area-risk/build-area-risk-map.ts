@@ -28,6 +28,19 @@ export interface CodeAreaRecord {
     linkedBugFixPrs: number;
     titleBugFixPrs: number;
     recentEvidence: AreaEvidence[];
+    linkedBugEvidence?: AreaEvidence[];
+    /** Optional JS/TS structural sample from the repository default branch. */
+    structure?: {
+        eligibleFiles: number;
+        analyzedFiles: number;
+        functions: number;
+        functionsNeedingAttention: number;
+        files: Array<{
+            path: string;
+            functions: number;
+            functionsNeedingAttention: number;
+        }>;
+    };
 }
 
 export interface CodeAreaRiskMap {
@@ -47,6 +60,11 @@ export interface CodeAreaRiskMap {
     files: CodeAreaRecord[];
     directories: CodeAreaRecord[];
     directDirectories: CodeAreaRecord[];
+    structureCoverage?: {
+        eligibleFiles: number;
+        analyzedFiles: number;
+        sampled: boolean;
+    };
 }
 
 /** Heuristic evidence order, not a bug probability. Churn is the eval control. */
@@ -102,6 +120,7 @@ function addEvidence(
             linkedBugFixPrs: 0,
             titleBugFixPrs: 0,
             recentEvidence: [],
+            linkedBugEvidence: [],
         };
         records.set(path, record);
     }
@@ -113,6 +132,12 @@ function addEvidence(
     }
     if (record.recentEvidence.length < MAX_EVIDENCE_PER_AREA) {
         record.recentEvidence.push(evidence);
+    }
+    if (
+        evidence.bugFixEvidence === 'linked-bug-issue' &&
+        (record.linkedBugEvidence?.length ?? 0) < MAX_EVIDENCE_PER_AREA
+    ) {
+        record.linkedBugEvidence?.push(evidence);
     }
 }
 

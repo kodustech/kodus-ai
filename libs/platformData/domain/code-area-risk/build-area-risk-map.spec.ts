@@ -91,6 +91,37 @@ it('does not turn missing history into a zero-risk assertion', () => {
     expect(result.coverage.prsWithIssueSupport).toBe(0);
 });
 
+it('retains linked bug evidence even after newer non-bug PRs fill recent examples', () => {
+    const pullRequests = [
+        pr(1, {
+            mergedAt: '2025-01-02T00:00:00Z',
+            linkedBugIssues: ['https://github.com/example/repo/issues/1'],
+        }),
+        ...Array.from({ length: 6 }, (_, index) =>
+            pr(index + 2, {
+                mergedAt: `2025-01-${String(index + 3).padStart(2, '0')}T00:00:00Z`,
+            }),
+        ),
+    ];
+    const result = buildCodeAreaRiskMap({
+        source: 'github',
+        windowStart: '2025-01-01T00:00:00Z',
+        windowEnd: '2025-02-01T00:00:00Z',
+        refreshedAt: '2025-02-02T00:00:00Z',
+        discoveredMergedPrs: pullRequests.length,
+        pullRequests,
+    });
+
+    const area = result.directDirectories.find(
+        (record) => record.path === 'src/auth',
+    );
+    expect(area?.recentEvidence).toHaveLength(5);
+    expect(area?.recentEvidence.some((item) => item.prNumber === 1)).toBe(
+        false,
+    );
+    expect(area?.linkedBugEvidence?.[0].prNumber).toBe(1);
+});
+
 it('ranks bug evidence separately from the churn control', () => {
     const areas = [
         {

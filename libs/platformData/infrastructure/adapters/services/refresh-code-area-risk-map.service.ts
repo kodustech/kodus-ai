@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 
@@ -8,8 +9,13 @@ import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/t
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     buildCodeAreaRiskMap,
+    type CodeAreaRiskMap,
     type HistoricalAreaPullRequest,
 } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
+import {
+    analyzeCodeStructure,
+    supportsCodeStructureAnalysis,
+} from '@libs/platformData/domain/code-area-risk/analyze-code-structure';
 import {
     CodeAreaHistoryPrModel,
     CodeAreaHistorySyncModel,
@@ -22,6 +28,9 @@ import {
 const WINDOW_DAYS = 7;
 const LOOKBACK_DAYS = 365;
 const MAX_PRS_PER_BATCH = 20;
+const MAX_STRUCTURE_FILES = 60;
+const MAX_FILES_PER_DIRECTORY = 3;
+const STRUCTURE_FETCH_CONCURRENCY = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOSING_REFERENCE =
     /\b(?:fix(?:es)?|clos(?:e|es)|resolv(?:e|es))\s+#(\d+)\b/gi;
@@ -147,6 +156,22 @@ export class RefreshCodeAreaRiskMapService {
         if (state.complete) {
             const now = new Date();
             if (now.getTime() - Date.parse(state.windowEnd) < DAY_MS) {
+                const existing = await this.maps.read(
+                    organizationId,
+                    repository.id,
+                );
+                if (existing && !existing.structureCoverage) {
+                    await this.addCodeStructureSample(
+                        existing,
+                        organizationAndTeamData,
+                        repository,
+                    );
+                    await this.maps.save(
+                        organizationId,
+                        repository.id,
+                        existing,
+                    );
+                }
                 return {
                     complete: true,
                     processed: 0,
@@ -282,12 +307,184 @@ export class RefreshCodeAreaRiskMapService {
             scanComplete: nextState.complete,
             pullRequests: records,
         });
+        const previous = await this.maps.read(organizationId, repository.id);
+        if (
+            nextState.complete ||
+            !previous?.structureCoverage ||
+            (previous.structureCoverage.eligibleFiles > 0 &&
+                previous.structureCoverage.analyzedFiles === 0)
+        ) {
+            await this.addCodeStructureSample(
+                snapshot,
+                organizationAndTeamData,
+                repository,
+            );
+        } else {
+            const previousByPath = new Map(
+                previous.directDirectories.map((area) => [
+                    area.path,
+                    area.structure,
+                ]),
+            );
+            snapshot.directDirectories = snapshot.directDirectories.map(
+                (area) => ({
+                    ...area,
+                    ...(previousByPath.get(area.path)
+                        ? { structure: previousByPath.get(area.path) }
+                        : {}),
+                }),
+            );
+            const eligibleFiles = snapshot.files.filter((file) =>
+                supportsCodeStructureAnalysis(file.path),
+            ).length;
+            const analyzedFiles = snapshot.directDirectories.reduce(
+                (sum, area) => sum + (area.structure?.analyzedFiles ?? 0),
+                0,
+            );
+            snapshot.structureCoverage = {
+                eligibleFiles,
+                analyzedFiles,
+                sampled: analyzedFiles < eligibleFiles,
+            };
+            snapshot.version = createHash('sha256')
+                .update(JSON.stringify(snapshot))
+                .digest('hex');
+        }
         await this.maps.save(organizationId, repository.id, snapshot);
         return {
             complete: nextState.complete,
             processed,
             cursorEnd: nextState.cursorEnd,
         };
+    }
+
+    private async addCodeStructureSample(
+        snapshot: CodeAreaRiskMap,
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { id: string; name: string },
+    ): Promise<void> {
+        const eligible = snapshot.files.filter((area) =>
+            supportsCodeStructureAnalysis(area.path),
+        );
+        const selected = new Set<string>();
+        for (const area of [...snapshot.directDirectories].sort(
+            (a, b) => b.changedPrs - a.changedPrs,
+        )) {
+            const candidates = eligible
+                .filter((file) =>
+                    area.path === '.'
+                        ? !file.path.includes('/')
+                        : file.path.startsWith(`${area.path}/`) &&
+                          file.path.slice(area.path.length + 1).indexOf('/') <
+                              0,
+                )
+                .sort((a, b) => b.changedPrs - a.changedPrs);
+            for (const file of candidates.slice(0, MAX_FILES_PER_DIRECTORY)) {
+                if (selected.size >= MAX_STRUCTURE_FILES) break;
+                selected.add(file.path);
+            }
+            if (selected.size >= MAX_STRUCTURE_FILES) break;
+        }
+        const results = new Map<
+            string,
+            { functions: number; functionsNeedingAttention: number }
+        >();
+        if (selected.size) {
+            const branch = await this.codeManagement
+                .getDefaultBranch({ organizationAndTeamData, repository })
+                .catch(() => null);
+            if (typeof branch === 'string' && branch) {
+                const paths = [...selected];
+                for (
+                    let offset = 0;
+                    offset < paths.length;
+                    offset += STRUCTURE_FETCH_CONCURRENCY
+                ) {
+                    await Promise.all(
+                        paths
+                            .slice(offset, offset + STRUCTURE_FETCH_CONCURRENCY)
+                            .map(async (path) => {
+                                const response = await this.codeManagement
+                                    .getRepositoryContentFile({
+                                        organizationAndTeamData,
+                                        repository,
+                                        file: { filename: path },
+                                        pullRequest: {
+                                            head: { ref: branch },
+                                            base: { ref: branch },
+                                        },
+                                        suppressNotFoundLogs: true,
+                                    })
+                                    .catch(() => null);
+                                const encoded = response?.data?.content;
+                                const encoding = response?.data?.encoding;
+                                if (typeof encoded !== 'string') return;
+                                const content =
+                                    encoding === 'base64'
+                                        ? Buffer.from(
+                                              encoded,
+                                              'base64',
+                                          ).toString('utf8')
+                                        : encoding === 'utf-8'
+                                          ? encoded
+                                          : null;
+                                if (content === null) return;
+                                const result = analyzeCodeStructure(
+                                    path,
+                                    content,
+                                );
+                                if (result) results.set(path, result);
+                            }),
+                    );
+                }
+            }
+        }
+        snapshot.directDirectories = snapshot.directDirectories.map((area) => {
+            const files = eligible.filter((file) => {
+                const parent = file.path.includes('/')
+                    ? file.path.slice(0, file.path.lastIndexOf('/'))
+                    : '.';
+                return parent === area.path;
+            });
+            const measured = files
+                .map((file) => results.get(file.path))
+                .filter((result) => result !== undefined);
+            return {
+                ...area,
+                structure: {
+                    eligibleFiles: files.length,
+                    analyzedFiles: measured.length,
+                    functions: measured.reduce(
+                        (sum, result) => sum + result.functions,
+                        0,
+                    ),
+                    functionsNeedingAttention: measured.reduce(
+                        (sum, result) => sum + result.functionsNeedingAttention,
+                        0,
+                    ),
+                    files: files
+                        .filter((file) => results.has(file.path))
+                        .map((file) => ({
+                            path: file.path,
+                            ...results.get(file.path)!,
+                        }))
+                        .sort(
+                            (a, b) =>
+                                b.functionsNeedingAttention -
+                                    a.functionsNeedingAttention ||
+                                a.path.localeCompare(b.path),
+                        ),
+                },
+            };
+        });
+        snapshot.structureCoverage = {
+            eligibleFiles: eligible.length,
+            analyzedFiles: results.size,
+            sampled: results.size < eligible.length,
+        };
+        snapshot.version = createHash('sha256')
+            .update(JSON.stringify(snapshot))
+            .digest('hex');
     }
 
     private async findLinkedBugIssues(

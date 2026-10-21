@@ -12,7 +12,7 @@ import {
 } from "@components/ui/select";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { CODE_MANAGEMENT_API_PATHS } from "@services/codeManagement/types";
-import { ArrowUpRight, ChevronDown, FolderGit2, Search } from "lucide-react";
+import { ArrowUpRight, FolderGit2, Search } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFetch } from "src/core/utils/reactQuery";
 
@@ -31,6 +31,18 @@ type CodeArea = {
     linkedBugFixPrs: number;
     titleBugFixPrs: number;
     recentEvidence: AreaEvidence[];
+    linkedBugEvidence?: AreaEvidence[];
+    structure?: {
+        eligibleFiles: number;
+        analyzedFiles: number;
+        functions: number;
+        functionsNeedingAttention: number;
+        files?: Array<{
+            path: string;
+            functions: number;
+            functionsNeedingAttention: number;
+        }>;
+    };
 };
 
 type AreaMapResponse = {
@@ -40,16 +52,17 @@ type AreaMapResponse = {
         windowEnd: string;
         refreshedAt: string;
         coverage: {
-            discoveredMergedPrs: number;
             scannedPrs: number;
             scanComplete: boolean;
-            prsWithCompleteFiles: number;
             prsWithIssueSupport: number;
         };
+        structureCoverage?: {
+            eligibleFiles: number;
+            analyzedFiles: number;
+            sampled: boolean;
+        };
     } | null;
-    sync: { complete: boolean; discoveredMergedPrs: number } | null;
     rankedAreaPaths: string[];
-    topAreas: CodeArea[];
 };
 
 const date = (value: string) =>
@@ -63,51 +76,96 @@ const issueLabel = (url: string, index: number) => {
     try {
         const segment = new URL(url).pathname.split("/").filter(Boolean).at(-1);
         return segment
-            ? `Issue ${decodeURIComponent(segment)}`
-            : `Issue ${index + 1}`;
+            ? "Issue " + decodeURIComponent(segment)
+            : "Issue " + (index + 1);
     } catch {
-        return `Issue ${index + 1}`;
+        return "Issue " + (index + 1);
     }
 };
+
+const areaEvidence = (area: CodeArea): AreaEvidence[] => {
+    const seen = new Set<number>();
+    return [...(area.linkedBugEvidence ?? []), ...area.recentEvidence]
+        .filter((item) => {
+            if (seen.has(item.prNumber)) return false;
+            seen.add(item.prNumber);
+            return true;
+        })
+        .slice(0, 7);
+};
+
+function AreaChoice({
+    area,
+    selected,
+    onSelect,
+}: {
+    area: CodeArea;
+    selected: boolean;
+    onSelect: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            aria-pressed={selected}
+            className={
+                "border-card-lv3 focus-visible:ring-primary-light hover:border-primary-light/60 w-full min-w-0 rounded-md border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none " +
+                (selected
+                    ? "border-primary-light/70 bg-primary-light/10"
+                    : "bg-card-lv2/60")
+            }>
+            <span
+                className="text-text-primary block truncate font-mono text-xs font-semibold"
+                title={area.path}>
+                {area.path}
+            </span>
+            <span className="text-text-tertiary mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums">
+                <span>{area.changedPrs} changed PRs</span>
+                {area.linkedBugFixPrs > 0 && (
+                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-300">
+                        {area.linkedBugFixPrs} linked fixes
+                    </span>
+                )}
+            </span>
+        </button>
+    );
+}
 
 function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
     if (!evidence.length) {
         return (
             <p className="text-text-tertiary text-sm">
-                No recent PR examples were retained for this area.
+                No recent PR examples were retained.
             </p>
         );
     }
-
     return (
-        <div className="grid gap-x-8 md:grid-cols-2">
+        <div className="divide-card-lv3 divide-y">
             {evidence.map((item) => (
-                <div
-                    key={item.prNumber}
-                    className="border-card-lv3/70 min-w-0 border-b py-3 first:pt-0">
+                <div key={item.prNumber} className="py-3 first:pt-0">
                     {/^https?:\/\//i.test(item.prUrl) ? (
                         <a
                             href={item.prUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-text-primary hover:text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm font-medium focus-visible:ring-2">
-                            PR #{item.prNumber}
+                            PR #{item.prNumber}{" "}
                             <ArrowUpRight className="size-3.5" />
                         </a>
                     ) : (
-                        <p className="text-text-primary text-sm font-medium">
+                        <span className="text-text-primary text-sm font-medium">
                             PR #{item.prNumber}
-                        </p>
+                        </span>
                     )}
-                    <p className="text-text-tertiary mt-0.5 text-sm">
+                    <p className="text-text-tertiary mt-0.5 text-xs">
                         {item.bugFixEvidence === "linked-bug-issue"
-                            ? "Linked bug issue"
+                            ? "Linked to a bug issue"
                             : item.bugFixEvidence === "title-signal"
-                              ? "Bug-fix title signal"
+                              ? "Bug-fix wording in the title"
                               : "Changed this area"}
                     </p>
                     {!!item.bugIssueUrls?.length && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                        <div className="mt-1.5 flex flex-wrap gap-3">
                             {item.bugIssueUrls
                                 .filter((url) => /^https?:\/\//i.test(url))
                                 .map((url, index) => (
@@ -116,8 +174,8 @@ function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
                                         href={url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-primary-light focus-visible:ring-primary-light inline-flex items-center gap-1 rounded text-sm hover:underline focus-visible:ring-2">
-                                        {issueLabel(url, index)}
+                                        className="text-primary-light inline-flex items-center gap-1 text-xs hover:underline">
+                                        {issueLabel(url, index)}{" "}
                                         <ArrowUpRight className="size-3" />
                                     </a>
                                 ))}
@@ -140,9 +198,9 @@ export function CodeAreasTab({
     const { data: repositories = [], isLoading: repositoriesLoading } =
         useGetSelectedRepositories(teamId);
     const [localRepositoryId, setLocalRepositoryId] = useState("");
-    const [query, setQuery] = useState("");
     const [selectedPath, setSelectedPath] = useState("");
-    const [sortBy, setSortBy] = useState<"fixes" | "changes">("fixes");
+    const [query, setQuery] = useState("");
+    const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
     const globalRepository = selectedRepository
         ? repositories.find(
@@ -168,9 +226,10 @@ export function CodeAreasTab({
         window.history.replaceState(
             null,
             "",
-            `${pathname}?${params.toString()}`,
+            pathname + "?" + params.toString(),
         );
     }, [areaRepositoryId, pathname, repository?.id]);
+
     const { data, isLoading, isError } = useFetch<AreaMapResponse>(
         CODE_MANAGEMENT_API_PATHS.GET_AREA_RISK_MAP,
         { params: { repositoryId: repository?.id } },
@@ -188,50 +247,114 @@ export function CodeAreasTab({
                 .filter((area): area is CodeArea => !!area) ?? []
         );
     }, [data]);
-    const filteredAreas = useMemo(() => {
-        const filtered = areas.filter((area) =>
-            area.path.toLowerCase().includes(query.trim().toLowerCase()),
-        );
-        return filtered.sort((a, b) =>
-            sortBy === "fixes"
-                ? b.linkedBugFixPrs - a.linkedBugFixPrs ||
-                  b.changedPrs - a.changedPrs ||
-                  a.path.localeCompare(b.path)
-                : b.changedPrs - a.changedPrs ||
-                  b.linkedBugFixPrs - a.linkedBugFixPrs ||
-                  a.path.localeCompare(b.path),
-        );
-    }, [areas, query, sortBy]);
-    const maxChanges = areas.reduce(
-        (max, area) => Math.max(max, area.changedPrs),
-        1,
-    );
-    const maxLinkedFixes = areas.reduce(
-        (max, area) => Math.max(max, area.linkedBugFixPrs),
-        1,
-    );
-    const focusAreas = [...areas]
-        .filter((area) => area.linkedBugFixPrs > 0)
-        .sort(
+    const classified = useMemo(() => {
+        const byChanges = [...areas].sort(
             (a, b) =>
-                b.linkedBugFixPrs - a.linkedBugFixPrs ||
-                b.changedPrs - a.changedPrs ||
-                a.path.localeCompare(b.path),
-        )
-        .slice(0, 3);
+                b.changedPrs - a.changedPrs || a.path.localeCompare(b.path),
+        );
+        const frequent = new Set(
+            byChanges
+                .slice(0, Math.max(1, Math.ceil(byChanges.length * 0.25)))
+                .map((a) => a.path),
+        );
+        const groups = {
+            "fragile-frequent": [] as CodeArea[],
+            "fragile-occasional": [] as CodeArea[],
+            "clear-frequent": [] as CodeArea[],
+            "clear-occasional": [] as CodeArea[],
+            "unknown": [] as CodeArea[],
+        };
+        for (const area of areas) {
+            const structure = area.structure;
+            if (!structure?.analyzedFiles) {
+                groups.unknown.push(area);
+            } else {
+                const key =
+                    (structure.functionsNeedingAttention > 0
+                        ? "fragile"
+                        : "clear") +
+                    (frequent.has(area.path) ? "-frequent" : "-occasional");
+                groups[key as keyof typeof groups].push(area);
+            }
+        }
+        for (const group of Object.values(groups)) {
+            group.sort(
+                (a, b) =>
+                    b.linkedBugFixPrs - a.linkedBugFixPrs ||
+                    b.changedPrs - a.changedPrs ||
+                    a.path.localeCompare(b.path),
+            );
+        }
+        return groups;
+    }, [areas]);
+    const focus = classified["fragile-frequent"];
+    const selectedArea =
+        areas.find((area) => area.path === selectedPath) ??
+        focus[0] ??
+        areas[0];
+    const unknown = classified.unknown.filter((area) =>
+        area.path.toLowerCase().includes(query.trim().toLowerCase()),
+    );
     const coverage = data?.map?.coverage;
-
-    const inspectArea = (path: string) => {
-        setQuery("");
-        setSelectedPath(path);
-        requestAnimationFrame(() => {
-            document
-                .getElementById(`area-row-${encodeURIComponent(path)}`)
-                ?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center",
-                });
-        });
+    const structureCoverage = data?.map?.structureCoverage;
+    const group = (
+        id: keyof typeof classified,
+        title: string,
+        prominent = false,
+    ) => {
+        const items = classified[id];
+        const visible = expandedGroups.includes(id) ? items : items.slice(0, 4);
+        return (
+            <div
+                className={
+                    "border-card-lv3 min-h-36 rounded-lg border p-3 " +
+                    (prominent
+                        ? "border-amber-400/35 bg-amber-400/5"
+                        : "bg-card-lv2/50")
+                }>
+                <div
+                    className={
+                        "mb-3 text-xs font-semibold tracking-wide uppercase " +
+                        (prominent ? "text-amber-300" : "text-text-tertiary")
+                    }>
+                    {title}{" "}
+                    <span className="ml-1 font-normal tabular-nums">
+                        ({items.length})
+                    </span>
+                </div>
+                <div className="space-y-2">
+                    {visible.map((area) => (
+                        <AreaChoice
+                            key={area.path}
+                            area={area}
+                            selected={selectedArea?.path === area.path}
+                            onSelect={() => setSelectedPath(area.path)}
+                        />
+                    ))}
+                </div>
+                {!items.length && (
+                    <p className="text-text-tertiary text-xs">
+                        No measured areas here.
+                    </p>
+                )}
+                {items.length > 4 && (
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setExpandedGroups((current) =>
+                                current.includes(id)
+                                    ? current.filter((value) => value !== id)
+                                    : [...current, id],
+                            )
+                        }
+                        className="text-primary-light mt-3 text-xs font-medium hover:underline">
+                        {expandedGroups.includes(id)
+                            ? "Show fewer"
+                            : "Show " + (items.length - 4) + " more"}
+                    </button>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -245,8 +368,8 @@ export function CodeAreasTab({
                         Code areas
                     </h2>
                     <p className="text-text-secondary mt-1 max-w-2xl text-sm">
-                        See which directories changed most and where fixes were
-                        linked to bug issues.
+                        Find areas where frequent changes, structural issues and
+                        linked bug fixes meet.
                     </p>
                 </div>
                 {!repositoriesLoading && repositories.length > 0 && (
@@ -267,7 +390,7 @@ export function CodeAreasTab({
                                 window.history.replaceState(
                                     null,
                                     "",
-                                    `${pathname}?${params.toString()}`,
+                                    pathname + "?" + params.toString(),
                                 );
                             }}>
                             <SelectTrigger
@@ -289,18 +412,18 @@ export function CodeAreasTab({
             </div>
 
             {repositoriesLoading ? (
-                <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
+                <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
                     Loading repositories…
                 </div>
             ) : !repositories.length ? (
-                <div className="border-card-lv3/70 bg-card-lv1 flex flex-col items-start gap-3 rounded-lg border px-6 py-12">
+                <div className="border-card-lv3 bg-card-lv1 flex flex-col items-start gap-3 rounded-lg border px-6 py-12">
                     <FolderGit2 className="text-text-tertiary size-6" />
-                    <h2 className="text-text-primary text-base font-medium">
+                    <h3 className="text-text-primary text-base font-medium">
                         Connect a repository to map its code areas
-                    </h2>
+                    </h3>
                     <p className="text-text-secondary max-w-lg text-sm">
-                        Kodus builds this view from merged PRs and their linked
-                        bug issues.
+                        Kodus uses merged PRs, linked bug issues and a limited
+                        JS/TS structural scan.
                     </p>
                     <Link
                         href="/settings/git"
@@ -309,109 +432,259 @@ export function CodeAreasTab({
                     </Link>
                 </div>
             ) : isLoading ? (
-                <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
+                <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
                     Loading code-area history…
                 </div>
             ) : isError ? (
-                <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
+                <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
                     Could not load code-area history for this repository.
                 </div>
             ) : !data?.map ? (
-                <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
+                <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
                     History is being collected. Check back after the first scan.
                 </div>
             ) : (
                 <>
-                    <div className="border-card-lv3/70 bg-card-lv1 overflow-hidden rounded-lg border">
-                        <div className="border-card-lv3/70 flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-5 py-3 text-sm">
-                            <span className="text-text-primary font-medium tabular-nums">
-                                {coverage?.scannedPrs ?? 0} merged PRs scanned
+                    <div className="border-card-lv3 bg-card-lv1 flex flex-wrap gap-x-6 gap-y-2 rounded-lg border px-5 py-3 text-xs">
+                        <span className="text-text-primary font-medium tabular-nums">
+                            {coverage?.scannedPrs ?? 0} merged PRs scanned
+                        </span>
+                        <span className="text-text-secondary tabular-nums">
+                            {areas.length} directories
+                        </span>
+                        <span className="text-text-secondary tabular-nums">
+                            Issue data: {coverage?.prsWithIssueSupport ?? 0}/
+                            {coverage?.scannedPrs ?? 0} PRs
+                        </span>
+                        <span className="text-text-secondary tabular-nums">
+                            JS/TS structure:{" "}
+                            {structureCoverage?.analyzedFiles ?? 0}/
+                            {structureCoverage?.eligibleFiles ?? 0} files
+                        </span>
+                        {!coverage?.scanComplete && (
+                            <span className="text-primary-light">
+                                Scan in progress
                             </span>
-                            {!coverage?.scanComplete && (
-                                <span className="text-primary-light text-xs font-medium">
-                                    Scan in progress
-                                </span>
-                            )}
-                            <span className="text-text-secondary tabular-nums">
-                                {areas.length} directories
-                            </span>
-                            <span className="text-text-secondary tabular-nums">
-                                Issue data for{" "}
-                                {coverage?.prsWithIssueSupport ?? 0} /{" "}
-                                {coverage?.scannedPrs ?? 0} PRs
-                            </span>
-                            <span className="text-text-tertiary ml-auto">
-                                {date(data.map.windowStart)} –{" "}
-                                {date(data.map.windowEnd)}
-                            </span>
-                        </div>
-                        {focusAreas.length > 0 && (
-                            <div className="border-card-lv3/70 bg-primary-light/5 border-b px-5 py-6">
-                                <div className="mb-5">
-                                    <p className="text-primary-light text-xs font-semibold tracking-wide uppercase">
-                                        Review focus
-                                    </p>
-                                    <h3 className="text-text-primary mt-1 text-lg font-semibold">
-                                        Start here when a PR touches these areas
-                                    </h3>
-                                    <p className="text-text-secondary mt-1 text-sm">
-                                        These directories have the most PRs
-                                        linked to bug issues in this history
-                                        window.
-                                    </p>
-                                </div>
-                                <div className="grid gap-0 lg:grid-cols-3">
-                                    {focusAreas.map((area, index) => (
-                                        <button
-                                            key={area.path}
-                                            type="button"
-                                            onClick={() =>
-                                                inspectArea(area.path)
-                                            }
-                                            className="border-card-lv3/70 focus-visible:ring-primary-light hover:bg-primary-light/10 min-w-0 border-t py-4 text-left focus-visible:ring-2 focus-visible:outline-none lg:border-t-0 lg:border-l lg:px-5 lg:first:border-l-0 lg:first:pl-0">
-                                            <span className="text-text-tertiary text-xs font-medium tabular-nums">
-                                                {String(index + 1).padStart(
-                                                    2,
-                                                    "0",
-                                                )}
-                                            </span>
-                                            <span
-                                                className="text-text-primary mt-2 block truncate font-mono text-sm font-semibold"
-                                                title={area.path}>
-                                                {area.path}
-                                            </span>
-                                            <span className="mt-3 flex items-baseline gap-2">
-                                                <span className="text-primary-light text-3xl font-semibold tabular-nums">
-                                                    {area.linkedBugFixPrs}
-                                                </span>
-                                                <span className="text-text-secondary text-sm">
-                                                    linked fixes ·{" "}
-                                                    {area.changedPrs} changed
-                                                    PRs
-                                                </span>
-                                            </span>
-                                            <span className="text-primary-light mt-3 inline-flex items-center gap-1 text-sm font-medium">
-                                                Inspect evidence{" "}
-                                                <ChevronDown className="size-3.5" />
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         )}
-                        <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-6 pb-5">
+                        <span className="text-text-tertiary ml-auto">
+                            {date(data.map.windowStart)} –{" "}
+                            {date(data.map.windowEnd)}
+                        </span>
+                    </div>
+
+                    {focus.length > 0 && (
+                        <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-5 py-4 sm:flex sm:items-center sm:gap-4">
+                            <span className="mb-2 inline-block rounded bg-amber-400 px-2 py-1 text-[11px] font-bold text-neutral-950 sm:mb-0">
+                                START HERE
+                            </span>
                             <div>
-                                <h3 className="text-text-primary text-lg font-semibold">
-                                    Where bug fixes were linked
-                                </h3>
-                                <p className="text-text-secondary mt-1 text-sm">
-                                    Compare merged PR activity by directory.
-                                    Open a row for the PRs and issues behind its
-                                    counts.
+                                <p className="text-text-primary text-sm font-semibold">
+                                    {focus.length}{" "}
+                                    {focus.length === 1
+                                        ? "area changes"
+                                        : "areas change"}{" "}
+                                    frequently and{" "}
+                                    {focus.length === 1 ? "has" : "have"}{" "}
+                                    structural issues in the sampled files
+                                </p>
+                                <p className="text-text-secondary mt-0.5 text-xs">
+                                    Inspect the evidence before planning an
+                                    improvement.
                                 </p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-52 items-center gap-2 rounded-md border px-3">
+                        </div>
+                    )}
+
+                    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
+                        <section className="border-card-lv3 bg-card-lv1 min-w-0 overflow-hidden rounded-lg border">
+                            <div className="border-card-lv3 border-b px-5 py-4">
+                                <h3 className="text-text-primary text-base font-semibold">
+                                    Attention map
+                                </h3>
+                                <p className="text-text-secondary mt-1 text-xs leading-5">
+                                    Position is relative to this repository.
+                                    Amber badges show PRs linked to bug issues.
+                                </p>
+                            </div>
+                            {(structureCoverage?.analyzedFiles ?? 0) > 0 ? (
+                                <div className="p-4 sm:p-5">
+                                    <div className="text-text-tertiary mb-2 grid grid-cols-2 gap-3 pl-16 text-center text-xs font-medium sm:pl-20">
+                                        <span>Occasional changes</span>
+                                        <span>Frequent changes</span>
+                                    </div>
+                                    <div className="grid grid-cols-[52px_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
+                                        <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
+                                            Structural
+                                            <br />
+                                            signals
+                                        </div>
+                                        {group("fragile-occasional", "Monitor")}
+                                        {group(
+                                            "fragile-frequent",
+                                            "Investigate first",
+                                            true,
+                                        )}
+                                        <div className="text-text-secondary flex items-center justify-end text-right text-xs leading-4">
+                                            No signals
+                                            <br />
+                                            in sample
+                                        </div>
+                                        {group(
+                                            "clear-occasional",
+                                            "Less active",
+                                        )}
+                                        {group(
+                                            "clear-frequent",
+                                            "Watch changes",
+                                        )}
+                                    </div>
+                                    <p className="text-text-tertiary mt-4 text-xs">
+                                        Frequent = top 25% by changed PRs.
+                                        Structural signals = sampled JS/TS
+                                        functions with 80+ lines, 12+ branches
+                                        or nesting of 4+.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="px-5 py-12">
+                                    <p className="text-text-primary text-sm font-medium">
+                                        Structural analysis is not available yet
+                                    </p>
+                                    <p className="text-text-secondary mt-2 max-w-lg text-sm leading-5">
+                                        The map needs a sample of JS/TS files
+                                        from the default branch. You can still
+                                        inspect changed areas and linked bug
+                                        fixes below.
+                                    </p>
+                                </div>
+                            )}
+                        </section>
+
+                        <aside className="border-card-lv3 bg-card-lv1 min-w-0 rounded-lg border">
+                            {selectedArea ? (
+                                <div className="p-5">
+                                    <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
+                                        Area detail
+                                    </p>
+                                    <h3 className="text-text-primary mt-2 font-mono text-base font-semibold break-all">
+                                        {selectedArea.path}
+                                    </h3>
+                                    <div className="border-card-lv3 mt-5 grid grid-cols-3 gap-3 border-y py-4">
+                                        <div>
+                                            <strong className="text-text-primary block text-xl tabular-nums">
+                                                {selectedArea.changedPrs}
+                                            </strong>
+                                            <span className="text-text-tertiary mt-1 block text-xs">
+                                                Changed PRs
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <strong className="text-text-primary block text-xl tabular-nums">
+                                                {selectedArea.structure
+                                                    ?.analyzedFiles ?? 0}
+                                                /
+                                                {selectedArea.structure
+                                                    ?.eligibleFiles ?? 0}
+                                            </strong>
+                                            <span className="text-text-tertiary mt-1 block text-xs">
+                                                JS/TS files checked
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <strong className="block text-xl text-amber-300 tabular-nums">
+                                                {selectedArea.linkedBugFixPrs}
+                                            </strong>
+                                            <span className="text-text-tertiary mt-1 block text-xs">
+                                                Linked fix PRs
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="mt-5">
+                                        <h4 className="text-text-primary text-sm font-semibold">
+                                            Why it appears here
+                                        </h4>
+                                        <p className="text-text-secondary mt-2 text-sm leading-5">
+                                            {selectedArea.structure
+                                                ?.analyzedFiles
+                                                ? selectedArea.structure
+                                                      .functionsNeedingAttention >
+                                                  0
+                                                    ? selectedArea.structure
+                                                          .functionsNeedingAttention +
+                                                      " of " +
+                                                      selectedArea.structure
+                                                          .functions +
+                                                      " sampled functions crossed a structural threshold."
+                                                    : "No structural threshold was crossed in the sampled files."
+                                                : "Code structure has not been measured for this area."}{" "}
+                                            {selectedArea.linkedBugFixPrs} of
+                                            its {selectedArea.changedPrs}{" "}
+                                            changed PRs were linked to bug
+                                            issues.
+                                        </p>
+                                    </div>
+                                    {!!selectedArea.structure?.files
+                                        ?.length && (
+                                        <div className="mt-6">
+                                            <h4 className="text-text-primary mb-2 text-sm font-semibold">
+                                                Files in the structural sample
+                                            </h4>
+                                            <div className="divide-card-lv3 divide-y">
+                                                {selectedArea.structure.files.map(
+                                                    (file) => (
+                                                        <div
+                                                            key={file.path}
+                                                            className="flex min-w-0 items-start justify-between gap-3 py-2 text-xs">
+                                                            <span className="text-text-secondary min-w-0 font-mono break-all">
+                                                                {file.path}
+                                                            </span>
+                                                            <span className="text-text-tertiary shrink-0 tabular-nums">
+                                                                {
+                                                                    file.functionsNeedingAttention
+                                                                }
+                                                                /
+                                                                {file.functions}{" "}
+                                                                flagged
+                                                            </span>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="mt-6">
+                                        <h4 className="text-text-primary mb-3 text-sm font-semibold">
+                                            PR and issue evidence
+                                        </h4>
+                                        <EvidenceList
+                                            evidence={areaEvidence(
+                                                selectedArea,
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-text-secondary p-5 text-sm">
+                                    No directories found in this history window.
+                                </p>
+                            )}
+                        </aside>
+                    </div>
+
+                    {classified.unknown.length > 0 && (
+                        <section className="border-card-lv3 bg-card-lv1 rounded-lg border p-5">
+                            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                                <div>
+                                    <h3 className="text-text-primary text-sm font-semibold">
+                                        Structure not measured
+                                    </h3>
+                                    <p className="text-text-secondary mt-1 text-xs">
+                                        {classified.unknown.length} areas have
+                                        history but no JS/TS structural sample.
+                                        They stay outside the quadrants.
+                                    </p>
+                                </div>
+                                <label className="border-card-lv3 text-text-tertiary flex h-9 w-52 items-center gap-2 rounded-md border px-3">
                                     <Search className="size-4 shrink-0" />
                                     <input
                                         value={query}
@@ -423,134 +696,34 @@ export function CodeAreasTab({
                                         className="text-text-primary placeholder:text-text-tertiary w-full min-w-0 bg-transparent text-sm outline-none"
                                     />
                                 </label>
-                                <Select
-                                    value={sortBy}
-                                    onValueChange={(value) =>
-                                        setSortBy(value as "fixes" | "changes")
-                                    }>
-                                    <SelectTrigger
-                                        size="sm"
-                                        aria-label="Sort directories"
-                                        className="w-44">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="fixes">
-                                            Most linked fixes
-                                        </SelectItem>
-                                        <SelectItem value="changes">
-                                            Most changed PRs
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
                             </div>
-                        </div>
-                        <div className="border-card-lv3/70 bg-card-lv2/30 text-text-tertiary hidden grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px] gap-6 border-y px-5 py-2 text-xs font-medium tracking-wide uppercase lg:grid">
-                            <span>Directory</span>
-                            <span>Merged PRs that changed it</span>
-                            <span>PRs linked to bug issues</span>
-                            <span />
-                        </div>
-                        {filteredAreas.length ? (
-                            <div className="divide-card-lv3/70 divide-y">
-                                {filteredAreas.map((area) => {
-                                    const selected = selectedPath === area.path;
-                                    return (
-                                        <div
-                                            key={area.path}
-                                            id={`area-row-${encodeURIComponent(area.path)}`}>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setSelectedPath(
-                                                        selected
-                                                            ? ""
-                                                            : area.path,
-                                                    )
-                                                }
-                                                aria-expanded={selected}
-                                                aria-controls={`area-evidence-${area.path.replace(/[^a-zA-Z0-9-]/g, "-")}`}
-                                                className={`focus-visible:ring-primary-light hover:bg-card-lv2/50 w-full px-5 py-3.5 text-left focus-visible:ring-2 focus-visible:outline-none ${selected ? "bg-card-lv2/50" : ""}`}>
-                                                <div className="grid min-w-0 items-center gap-x-6 gap-y-3 lg:grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px]">
-                                                    <span className="text-text-primary min-w-0 font-mono text-sm font-medium break-all">
-                                                        {area.path}
-                                                    </span>
-                                                    <span className="flex min-w-0 items-center gap-3">
-                                                        <span className="text-text-primary w-7 shrink-0 text-right text-sm font-medium tabular-nums">
-                                                            {area.changedPrs}
-                                                        </span>
-                                                        <span className="bg-card-lv3/70 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
-                                                            <span
-                                                                className="bg-text-tertiary block h-full rounded-full"
-                                                                style={{
-                                                                    width: `${(area.changedPrs / maxChanges) * 100}%`,
-                                                                }}
-                                                            />
-                                                        </span>
-                                                        <span className="text-text-tertiary text-xs lg:hidden">
-                                                            changed PRs
-                                                        </span>
-                                                    </span>
-                                                    <span className="flex min-w-0 items-center gap-3">
-                                                        <span className="text-text-primary w-7 shrink-0 text-right text-sm font-medium tabular-nums">
-                                                            {
-                                                                area.linkedBugFixPrs
-                                                            }
-                                                        </span>
-                                                        <span className="bg-card-lv3/70 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
-                                                            <span
-                                                                className="bg-primary-light block h-full rounded-full"
-                                                                style={{
-                                                                    width: `${(area.linkedBugFixPrs / maxLinkedFixes) * 100}%`,
-                                                                }}
-                                                            />
-                                                        </span>
-                                                        <span className="text-text-tertiary text-xs lg:hidden">
-                                                            linked fixes
-                                                        </span>
-                                                    </span>
-                                                    <ChevronDown
-                                                        className={`text-text-tertiary hidden size-4 transition-transform lg:block ${selected ? "rotate-180" : ""}`}
-                                                    />
-                                                </div>
-                                            </button>
-                                            {selected && (
-                                                <div
-                                                    id={`area-evidence-${area.path.replace(/[^a-zA-Z0-9-]/g, "-")}`}
-                                                    className="border-card-lv3/70 bg-card-lv2/30 border-t px-5 py-5 md:pl-8">
-                                                    <h4 className="text-text-primary mb-4 text-sm font-semibold">
-                                                        Recent PR evidence
-                                                    </h4>
-                                                    <EvidenceList
-                                                        evidence={
-                                                            area.recentEvidence
-                                                        }
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                {unknown.map((area) => (
+                                    <AreaChoice
+                                        key={area.path}
+                                        area={area}
+                                        selected={
+                                            selectedArea?.path === area.path
+                                        }
+                                        onSelect={() =>
+                                            setSelectedPath(area.path)
+                                        }
+                                    />
+                                ))}
                             </div>
-                        ) : (
-                            <p className="text-text-secondary px-5 py-12 text-sm">
-                                {areas.length
-                                    ? "No directories match that search."
-                                    : "No changed directories were found in this history window."}
-                            </p>
-                        )}
-                        <div className="border-card-lv3/70 text-text-tertiary flex flex-wrap justify-between gap-x-5 gap-y-1 border-t px-5 py-3 text-xs">
-                            <span>
-                                Bars are scaled to the highest count in each
-                                column. Counts are merged PRs, not unique bugs.
-                            </span>
-                            <span>Updated {date(data.map.refreshedAt)}</span>
-                        </div>
-                    </div>
-
-                    <p className="text-text-tertiary max-w-3xl text-sm leading-5">
-                        A linked fix is a PR linked to a bug issue. This history
-                        does not measure the probability of future bugs.
+                            {!unknown.length && (
+                                <p className="text-text-tertiary text-xs">
+                                    No matching directories.
+                                </p>
+                            )}
+                        </section>
+                    )}
+                    <p className="text-text-tertiary max-w-4xl text-xs leading-5">
+                        Structural checks cover a bounded sample of JS/TS files
+                        on the default branch. Linked fixes count PRs that
+                        changed an area and linked to a bug issue; they do not
+                        establish where a defect originated or predict future
+                        bugs. Updated {date(data.map.refreshedAt)}.
                     </p>
                 </>
             )}
