@@ -190,7 +190,31 @@ export function CodeAreasTab({
     const activeArea =
         filteredAreas.find((area) => area.path === selectedPath) ??
         filteredAreas[0];
-    const leadingPaths = new Set(data?.topAreas.map((area) => area.path) ?? []);
+    const maxChanges = areas.reduce(
+        (max, area) => Math.max(max, area.changedPrs),
+        1,
+    );
+    const maxLinkedFixes = areas.reduce(
+        (max, area) => Math.max(max, area.linkedBugFixPrs),
+        1,
+    );
+    const plottedAreas = useMemo(() => {
+        const groups = new Map<string, CodeArea[]>();
+        for (const area of filteredAreas) {
+            const key = `${area.changedPrs}:${area.linkedBugFixPrs}`;
+            groups.set(key, [...(groups.get(key) ?? []), area]);
+        }
+        return [...groups.values()];
+    }, [filteredAreas]);
+    const activePoint = plottedAreas.find((group) =>
+        group.some((area) => area.path === activeArea?.path),
+    );
+    const selectPoint = (group: CodeArea[]) => {
+        const selectedIndex = group.findIndex(
+            (area) => area.path === activeArea?.path,
+        );
+        setSelectedPath(group[(selectedIndex + 1) % group.length].path);
+    };
     const coverage = data?.map?.coverage;
 
     return (
@@ -317,11 +341,11 @@ export function CodeAreasTab({
                             <div className="border-card-lv3/70 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
                                 <div>
                                     <h2 className="text-text-primary text-sm font-semibold">
-                                        Directories by evidence
+                                        Change × bug-fix history
                                     </h2>
                                     <p className="text-text-tertiary mt-0.5 text-xs">
-                                        Ranked by change volume and bug-fix
-                                        signals
+                                        Each point is a directory in this
+                                        repository
                                     </p>
                                 </div>
                                 <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-full items-center gap-2 rounded-md border px-3 sm:w-52">
@@ -338,72 +362,76 @@ export function CodeAreasTab({
                                 </label>
                             </div>
                             {filteredAreas.length ? (
-                                <div className="divide-card-lv3/60 divide-y">
-                                    {filteredAreas.map((area, index) => {
-                                        const selected =
-                                            area.path === activeArea?.path;
-                                        const proportion = area.changedPrs
-                                            ? (area.linkedBugFixPrs /
-                                                  area.changedPrs) *
-                                              100
-                                            : 0;
-                                        return (
-                                            <button
-                                                key={area.path}
-                                                type="button"
-                                                onClick={() =>
-                                                    setSelectedPath(area.path)
-                                                }
-                                                aria-pressed={selected}
-                                                className={`hover:bg-card-lv2/60 focus-visible:ring-primary-light grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-3 text-left focus-visible:ring-2 focus-visible:outline-none sm:grid-cols-[minmax(0,1fr)_70px_110px] ${selected ? "bg-card-lv2/60" : ""}`}>
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <span className="text-text-tertiary w-5 shrink-0 text-xs tabular-nums">
-                                                        {String(
-                                                            index + 1,
-                                                        ).padStart(2, "0")}
-                                                    </span>
-                                                    <div className="min-w-0">
-                                                        <p className="text-text-primary truncate font-mono text-xs font-medium">
-                                                            {area.path}
-                                                        </p>
-                                                        {leadingPaths.has(
-                                                            area.path,
-                                                        ) && (
-                                                            <p className="text-text-tertiary mt-0.5 text-[11px]">
-                                                                Top 20% of
-                                                                mapped
-                                                                directories
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <p className="text-text-secondary text-right text-xs tabular-nums">
-                                                    {area.changedPrs} PRs
-                                                </p>
-                                                <div className="col-span-2 pl-8 sm:col-span-1 sm:pl-0">
-                                                    <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
-                                                        <span className="text-text-secondary">
-                                                            {
-                                                                area.linkedBugFixPrs
-                                                            }{" "}
-                                                            {area.linkedBugFixPrs ===
-                                                            1
-                                                                ? "linked bug"
-                                                                : "linked bugs"}
-                                                        </span>
-                                                    </div>
-                                                    <div className="bg-card-lv3 mt-1.5 h-1 overflow-hidden rounded-full">
-                                                        <div
-                                                            className="bg-primary-light h-full rounded-full"
-                                                            style={{
-                                                                width: `${proportion}%`,
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
+                                <div className="px-4 pt-5 pb-4 sm:px-6">
+                                    <div className="text-text-tertiary mb-2 flex justify-between text-[11px]">
+                                        <span>More linked bug-fix PRs ↑</span>
+                                        <span>{maxLinkedFixes} max</span>
+                                    </div>
+                                    <div className="border-card-lv3/70 bg-card-lv2/30 relative h-[360px] overflow-hidden rounded-md border sm:h-[420px]">
+                                        <div
+                                            className="border-card-lv3/70 pointer-events-none absolute inset-y-0 border-l border-dashed"
+                                            style={{ left: "47.5%" }}
+                                        />
+                                        <div
+                                            className="border-card-lv3/70 pointer-events-none absolute inset-x-0 border-t border-dashed"
+                                            style={{ bottom: "46%" }}
+                                        />
+                                        <span className="text-text-tertiary pointer-events-none absolute top-4 left-4 text-[11px]">
+                                            More fixes · fewer changes
+                                        </span>
+                                        <span className="text-text-tertiary pointer-events-none absolute top-4 right-4 text-right text-[11px]">
+                                            More fixes · more changes
+                                        </span>
+                                        <span className="text-text-tertiary pointer-events-none absolute bottom-4 left-4 text-[11px]">
+                                            Fewer fixes · fewer changes
+                                        </span>
+                                        <span className="text-text-tertiary pointer-events-none absolute right-4 bottom-4 text-right text-[11px]">
+                                            Fewer fixes · more changes
+                                        </span>
+                                        {plottedAreas.map((group) => {
+                                            const area = group[0];
+                                            const selected = group.some(
+                                                (item) =>
+                                                    item.path ===
+                                                    activeArea?.path,
+                                            );
+                                            return (
+                                                <button
+                                                    key={`${area.changedPrs}:${area.linkedBugFixPrs}`}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        selectPoint(group)
+                                                    }
+                                                    aria-label={`${group.length} ${group.length === 1 ? "directory" : "directories"}: ${group.map((item) => item.path).join(", ")}; ${area.changedPrs} changed PRs, ${area.linkedBugFixPrs} linked bug-fix PRs`}
+                                                    aria-pressed={selected}
+                                                    title={group
+                                                        .map(
+                                                            (item) => item.path,
+                                                        )
+                                                        .join(", ")}
+                                                    className={`focus-visible:ring-primary-light absolute z-10 flex size-8 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border text-xs font-semibold tabular-nums shadow-sm transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:outline-none ${selected ? "border-primary-light bg-primary-light text-black" : "border-primary-light/70 bg-card-lv1 text-text-primary"}`}
+                                                    style={{
+                                                        left: `${5 + (area.changedPrs / maxChanges) * 85}%`,
+                                                        bottom: `${8 + (area.linkedBugFixPrs / maxLinkedFixes) * 76}%`,
+                                                    }}>
+                                                    {group.length > 1
+                                                        ? group.length
+                                                        : ""}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="text-text-tertiary mt-2 flex justify-between text-[11px]">
+                                        <span>0</span>
+                                        <span>
+                                            More changed PRs → {maxChanges} max
+                                        </span>
+                                    </div>
+                                    <p className="text-text-tertiary mt-3 text-xs">
+                                        Dashes split the observed range in half.
+                                        Select a point to inspect its PRs; a
+                                        number means directories overlap.
+                                    </p>
                                 </div>
                             ) : (
                                 <p className="text-text-secondary px-5 py-12 text-sm">
@@ -423,6 +451,27 @@ export function CodeAreasTab({
                                     <h2 className="text-text-primary mt-2 font-mono text-base font-medium break-all">
                                         {activeArea.path}
                                     </h2>
+                                    {activePoint && activePoint.length > 1 && (
+                                        <div className="mt-3 flex flex-wrap gap-1.5">
+                                            {activePoint.map((area) => (
+                                                <button
+                                                    key={area.path}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setSelectedPath(
+                                                            area.path,
+                                                        )
+                                                    }
+                                                    aria-pressed={
+                                                        area.path ===
+                                                        activeArea.path
+                                                    }
+                                                    className={`focus-visible:ring-primary-light rounded border px-2 py-1 font-mono text-[11px] focus-visible:ring-2 ${area.path === activeArea.path ? "border-primary-light text-text-primary" : "border-card-lv3 text-text-tertiary hover:text-text-primary"}`}>
+                                                    {area.path}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                     <div className="border-card-lv3/70 mt-5 grid grid-cols-3 gap-2 border-y py-4">
                                         {[
                                             [
@@ -430,7 +479,7 @@ export function CodeAreasTab({
                                                 activeArea.changedPrs,
                                             ],
                                             [
-                                                "Linked bugs",
+                                                "Linked bug-fix PRs",
                                                 activeArea.linkedBugFixPrs,
                                             ],
                                             [
@@ -464,10 +513,11 @@ export function CodeAreasTab({
                     </div>
 
                     <p className="text-text-tertiary max-w-3xl text-xs leading-5">
-                        A bug fix is inferred from a linked bug issue or a PR
-                        title. The ordering is an investigation aid, not a
-                        measured probability of a future bug. A directory can
-                        appear in more than one PR.
+                        The chart counts PRs linked to bug issues, not bugs
+                        caused by a directory. Title-only signals appear in the
+                        detail panel. This is an investigation aid, not a
+                        measured probability of a future bug. A PR can touch
+                        multiple directories.
                     </p>
                 </>
             )}
