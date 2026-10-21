@@ -186,7 +186,130 @@ describe('createGapCheck', () => {
         expect(stop()).toBe(true);
     });
 
-    it('keeps MISSING when the agent finds nothing or fails', async () => {
+    it('settles a CHECK MANUALLY as MISSING only on a line it read that lacks it', async () => {
+        const unsure = {
+            ...input,
+            requirement: {
+                ...input.requirement,
+                state: 'check_manually' as const,
+            },
+        };
+        await expect(
+            createGapCheck(
+                scripted([
+                    ['read_file', { path: 'src/tickets/priorityFilter.ts' }],
+                    [
+                        'report_missing',
+                        {
+                            file: 'src/tickets/priorityFilter.ts',
+                            line: 1,
+                            note: 'Priority has no urgent value.',
+                            action: 'Add urgent to Priority.',
+                        },
+                    ],
+                ]),
+            )(unsure),
+        ).resolves.toEqual({
+            state: 'missing',
+            evidence: [{ file: 'src/tickets/priorityFilter.ts', line: 1 }],
+            note: 'Priority has no urgent value.',
+            action: 'Add urgent to Priority.',
+        });
+        // No line read, or no note: it stays CHECK MANUALLY.
+        await expect(
+            createGapCheck(
+                scripted([
+                    [
+                        'report_missing',
+                        {
+                            file: 'src/tickets/priorityFilter.ts',
+                            line: 1,
+                            note: 'Not there.',
+                        },
+                    ],
+                ]),
+            )(unsure),
+        ).resolves.toBeUndefined();
+        await expect(
+            createGapCheck(
+                scripted([
+                    ['read_file', { path: 'src/tickets/priorityFilter.ts' }],
+                    [
+                        'report_missing',
+                        { file: 'src/tickets/priorityFilter.ts', line: 1 },
+                    ],
+                ]),
+            )(unsure),
+        ).resolves.toBeUndefined();
+    });
+
+    it('turns a PARTIAL only into MET, never into a second PARTIAL or a MISSING', async () => {
+        const partial = {
+            ...input,
+            requirement: { ...input.requirement, state: 'partial' as const },
+        };
+        const found = (state: string) =>
+            createGapCheck(
+                scripted([
+                    ['read_file', { path: 'src/tickets/priorityFilter.ts' }],
+                    [
+                        'report_found',
+                        {
+                            state,
+                            file: 'src/tickets/priorityFilter.ts',
+                            line: 3,
+                            note: 'Defaults to all.',
+                        },
+                    ],
+                ]),
+            )(partial);
+        await expect(found('met')).resolves.toMatchObject({ state: 'met' });
+        await expect(found('partial')).resolves.toBeUndefined();
+        await expect(
+            createGapCheck(
+                scripted([
+                    ['read_file', { path: 'src/tickets/priorityFilter.ts' }],
+                    [
+                        'report_missing',
+                        {
+                            file: 'src/tickets/priorityFilter.ts',
+                            line: 3,
+                            note: 'Nothing.',
+                        },
+                    ],
+                ]),
+            )(partial),
+        ).resolves.toBeUndefined();
+    });
+
+    it('keeps the state when the agent is unsure', async () => {
+        for (const state of ['missing', 'partial', 'check_manually'] as const) {
+            await expect(
+                createGapCheck(scripted([['report_unsure', {}]]))({
+                    ...input,
+                    requirement: { ...input.requirement, state },
+                }),
+            ).resolves.toBeUndefined();
+        }
+    });
+
+    it('tells the agent which state it is checking', async () => {
+        const prompts: string[] = [];
+        const capture: AgentRun = async (spec, message) => {
+            prompts.push(`${spec.systemPrompt}\n${message}`);
+        };
+        for (const state of ['missing', 'partial', 'check_manually'] as const) {
+            await createGapCheck(capture)({
+                ...input,
+                requirement: { ...input.requirement, state },
+            });
+        }
+        expect(prompts[0]).toContain('MISSING');
+        expect(prompts[1]).toContain('PARTIAL');
+        expect(prompts[2]).toContain('could not tell');
+    });
+
+    it('keeps MISSING when the agent finds nothing, and lets a failed agent throw for the caller to log', async () => {
         await expect(
             createGapCheck(scripted([['report_missing', {}]]))(input),
         ).resolves.toBeUndefined();
@@ -194,6 +317,6 @@ describe('createGapCheck', () => {
             createGapCheck(async () => {
                 throw new Error('model down');
             })(input),
-        ).resolves.toBeUndefined();
+        ).rejects.toThrow('model down');
     });
 });

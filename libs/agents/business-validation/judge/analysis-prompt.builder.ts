@@ -82,7 +82,7 @@ export function buildBusinessRulesAnalysisPrompt(
             : []),
         '',
         'INSTRUCTIONS:',
-        'List EVERY requirement of the task in `requirements`: each acceptance criterion, then any requirement of FULL_TASK_CONTEXT the criteria leave out. For each, set `state`: met, partial, missing, or check_manually (a visual or flow requirement the code cannot prove).',
+        'List EVERY requirement of the task in `requirements`: each acceptance criterion, then any requirement of FULL_TASK_CONTEXT the criteria leave out. For each, set `state`: met, partial, missing, or check_manually (a visual or flow requirement the code cannot prove, or a rule the diff leaves to a helper it calls but does not show).',
         'Give `evidence` as file and line from PR_DIFF for met and partial, and for missing when a file shows the gap. Put what the code does or lacks in `note`, and the change to make in `action`.',
         'Set `confidence` per requirement: low when you are guessing. List changes the task does not ask for in `outOfScope`.',
         'Write `note`, `action`, `change`, `summary` and `missingInfo` in USER LANGUAGE. Quote `requirement` from the task as written.',

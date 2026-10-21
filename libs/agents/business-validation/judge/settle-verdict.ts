@@ -4,6 +4,10 @@ import { deriveStatus } from './validation-verdict';
 export interface SettleInput {
     /** Changed files the judge was not shown because the diff was over budget. */
     unseenFiles: string[];
+    /** The task was split into sub-tasks the judge was shown. */
+    subtasks?: boolean;
+    /** The team wrote guidance the judge was shown. */
+    teamGuidance?: boolean;
 }
 
 /**
@@ -14,6 +18,11 @@ export interface SettleInput {
  * - it is about how something looks, or a flow the judge can't pin to code
  *   (UC-30);
  * - it may live in a file the judge never saw (UC-32).
+ *
+ * And a CHECK MANUALLY marked as another piece's work keeps that mark only
+ * when the judge had that piece to point at (sub-tasks, team guidance): the
+ * mark keeps it from being re-judged, so a judge that pinned it on a helper
+ * it couldn't see would hide a gap.
  */
 export function settleVerdict(
     result: ValidationResult,
@@ -23,13 +32,33 @@ export function settleVerdict(
         return result;
     }
     const requirements = result.requirements.map((requirement) =>
-        settleRequirement(requirement, input),
+        settleRequirement(groundElsewhere(requirement, input), input),
     );
     return {
         ...result,
         requirements,
         ...deriveStatus({ ...result, requirements }),
     };
+}
+
+function groundElsewhere(
+    requirement: RequirementVerdict,
+    input: SettleInput,
+): RequirementVerdict {
+    const { handledElsewhere: _, ...rest } = requirement;
+    if (requirement.state !== 'check_manually') {
+        return rest;
+    }
+    // The prompt has the judge start the note with these words when the
+    // sub-tasks or the guidance decided it.
+    const note = requirement.note ?? '';
+    const marked =
+        input.subtasks && /^\s*delivered by\b/i.test(note)
+            ? 'sub_task'
+            : input.teamGuidance && /^\s*team guidance:/i.test(note)
+              ? 'team_guidance'
+              : undefined;
+    return marked ? { ...rest, handledElsewhere: marked } : rest;
 }
 
 function settleRequirement(

@@ -81,6 +81,13 @@ export interface RequirementVerdict {
     confidence: Confidence;
     /** Visual and flow requirements can't be confirmed from code. */
     kind?: 'behavior' | 'visual' | 'flow';
+    /**
+     * Set by the runtime on a CHECK MANUALLY by policy, not doubt: a sub-task
+     * delivers it, or the team's guidance says it isn't checked here (the
+     * judge's note says so, and the task or the team has that piece).
+     * Nothing re-judges it.
+     */
+    handledElsewhere?: 'sub_task' | 'team_guidance';
     /** What area it's about, so a lead sees what is most often missed (UC-42). */
     topic?: RequirementTopic;
     /** Set by the runtime when it moved the judge's state to `check_manually`. */

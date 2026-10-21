@@ -69,6 +69,8 @@ Every requirement you list must be traceable to the task.
 - **Quote the source**: `requirement` is the task's own text. If you cannot quote it, it is not a requirement: leave it out.
 - **No invented requirements**: nothing from "common sense" or "best practice" that the task does not write.
 - **Evidence wording only**: when the diff does not show a requirement, say there is no evidence of it in this PR diff. Never claim how the rest of the system behaves: you see the task and the diff, not the codebase.
+- **Judge the requirement as written**: a `partial` names a part the requirement's own words ask for that the diff leaves out. These are not parts of it: an input or edge case the task never names (negative amounts, another code path, a format it does not mention), and proof of what happens past the change (that an existing job sends the message it queues, that a route uses the serializer the diff fills in, that an error the code raises reaches the screen). When the diff does what the requirement says, it is `met`.
+- **A rule left to a helper the diff does not show**: when the requirement is a rule that lives inside a helper, validator or mapper the diff calls (the check, the field, the format is decided in there) and nothing in the diff shows it, set `check_manually` with `note` naming that helper. Kodus reads it in the repository before anyone sees the result. It is not for a call that already does what is asked (saving through a store or an API, sending through a client): that is `met`. And when the diff itself skips the rule (passes the value through unchanged, queues the job with no check), it is `missing` or `partial`.
 - **The parent is not this task**: from PARENT_TASK take only what this task's title and FULL_TASK_CONTEXT scope it to, with `source` "Parent". The rest belongs to the parent's other pieces.
 - **A sub-task's work is not a gap here**: a requirement one of SUB_TASKS covers (by its title) that this diff does not implement is `check_manually`, with `note` starting "Delivered by <id>:".
 - **Scope mismatch is valid**: when the whole diff works on a different domain than the task, set `scopeMismatch: true`. It is not a `needsMoreInfo` case.
@@ -120,9 +122,9 @@ Kodus renders the PR comment, the check and the CLI output from `requirements` a
 
 - One entry per requirement, in the order the task lists them: every acceptance criterion, then any requirement of FULL_TASK_CONTEXT the criteria leave out.
 - `met`: the diff implements it. Give the `evidence` that shows it.
-- `partial`: the diff implements part of it. Say in `note` which part is missing.
+- `partial`: the diff implements part of what the requirement says. Say in `note` which part is missing.
 - `missing`: no evidence in this PR diff. Say so in `note`; never claim how the rest of the system behaves.
-- `check_manually`: a requirement about how something looks or flows (set `kind` to `visual` or `flow`), or one the diff can't show either way. It never fails the PR.
+- `check_manually`: a requirement about how something looks or flows (set `kind` to `visual` or `flow`), a rule left to a helper the diff calls but does not show, or one the diff can't show either way. It never fails the PR by itself.
 - `kind`: `visual` is how something looks (layout, color, copy placement); `flow` is a sequence of screens or steps a person walks through. A rule the code decides (a threshold, a confirmation before an action, a permission, a default) is `behavior`, even when a person sees its result: when the code skips it, it is MISSING.
 - `confidence: low` when you are guessing. A low-confidence gap is shown as CHECK MANUALLY, not MISSING.
 - `outOfScope`: changes the task doesn't ask for. Leave out refactors, tests and wiring that serve a requirement.

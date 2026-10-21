@@ -43,7 +43,10 @@ import {
 import { settleVerdict } from './judge/settle-verdict';
 import { createGapCheck, type GapCheck } from './judge/gap-check';
 import { deriveStatus } from './judge/validation-verdict';
-import type { ValidationResult } from './judge/validation.types';
+import type {
+    RequirementVerdict,
+    ValidationResult,
+} from './judge/validation.types';
 import { inlineTask } from './command';
 import * as messages from './messages';
 import {
@@ -114,8 +117,39 @@ export interface TryReadResult {
     message?: string;
 }
 
-/** MISSING requirements looked for across the repository, per task. */
-const MAX_GAP_CHECKS = 5;
+/** Requirements looked for across the repository, per task. */
+const MAX_GAP_CHECKS = 8;
+
+/**
+ * What the second look settles, most costly first: a MISSING fails the PR, a
+ * CHECK MANUALLY leaves the author to prove it by hand, a PARTIAL sends them
+ * after a half that may already be there.
+ */
+const SECOND_LOOK_ORDER: Partial<Record<RequirementVerdict['state'], number>> =
+    { missing: 0, check_manually: 1, partial: 2 };
+
+/** Whether code at the PR head can settle a requirement the diff left open. */
+function needsSecondLook(requirement: RequirementVerdict): boolean {
+    if (requirement.accepted) {
+        return false;
+    }
+    if (SECOND_LOOK_ORDER[requirement.state] === undefined) {
+        return false;
+    }
+    // How it looks, or a flow the judge couldn't pin to code: no file says.
+    if (requirement.downgraded === 'visual') {
+        return false;
+    }
+    // A sub-task delivers it, or the team's guidance waives it: a policy, not
+    // a doubt, and re-judging it would fail the PR for another piece's work.
+    // settleVerdict kept the mark only where the judge had that piece.
+    if (requirement.handledElsewhere) {
+        return false;
+    }
+    return !(
+        requirement.state === 'check_manually' && requirement.kind === 'visual'
+    );
+}
 
 export const BUSINESS_VALIDATION_SKILL = 'business-rules-validation';
 const DEFAULT_LANGUAGE = 'en-US';
@@ -533,7 +567,11 @@ export class BusinessValidationService {
         }
         const settled = await this.checkGaps(
             request,
-            settleVerdict(verdict, { unseenFiles }),
+            settleVerdict(verdict, {
+                unseenFiles,
+                subtasks: !!found.task.subtasks?.length,
+                teamGuidance: !!settings.teamGuidance,
+            }),
             formatTaskForJudge(found.task),
             diff,
             language,
@@ -549,10 +587,12 @@ export class BusinessValidationService {
     }
 
     /**
-     * Looks for each MISSING requirement in the repository at the PR head:
-     * the judge read only the diff, and code that already does it is the
-     * commonest false gap. A requirement changes only on a cited line the
-     * runtime checked; anything else stays MISSING.
+     * Looks in the repository at the PR head for each requirement the diff
+     * alone left open (MISSING, CHECK MANUALLY, PARTIAL): the judge read only
+     * the diff, and code the PR calls but doesn't change is the commonest
+     * false gap, and the commonest gap it can't see. A requirement changes
+     * only on a cited line the runtime checked (judge/gap-check.ts); anything
+     * else keeps its state.
      */
     private async checkGaps(
         request: BusinessValidationRequest,
@@ -563,19 +603,22 @@ export class BusinessValidationService {
         judge: () => Promise<IntentJudge>,
     ): Promise<ValidationResult> {
         const reader = request.repositoryReader;
-        const missing = (verdict.requirements ?? [])
+        const open = (verdict.requirements ?? [])
             .map((requirement, index) => ({ requirement, index }))
-            .filter(
-                ({ requirement }) =>
-                    requirement.state === 'missing' && !requirement.accepted,
+            .filter(({ requirement }) => needsSecondLook(requirement))
+            .sort(
+                (a, b) =>
+                    SECOND_LOOK_ORDER[a.requirement.state]! -
+                        SECOND_LOOK_ORDER[b.requirement.state]! ||
+                    a.index - b.index,
             )
             .slice(0, MAX_GAP_CHECKS);
-        if (!reader || !missing.length) {
+        if (!reader || !open.length) {
             return verdict;
         }
         const check = this.gapCheck((await judge()).modelSlot, request);
         const results = await Promise.all(
-            missing.map(({ requirement }) =>
+            open.map(({ requirement }) =>
                 check({
                     requirement,
                     taskText,
@@ -583,10 +626,10 @@ export class BusinessValidationService {
                     reader,
                     userLanguage: language,
                 }).catch((error) => {
-                    // A failed re-check keeps the requirement MISSING.
+                    // A failed re-check keeps the requirement as judged.
                     this.logger.warn({
                         message:
-                            'Business validation could not re-check a MISSING requirement; kept it',
+                            'Business validation could not re-check a requirement across the repository; kept it',
                         context: BusinessValidationService.name,
                         error,
                         metadata: {
@@ -599,34 +642,42 @@ export class BusinessValidationService {
                 }),
             ),
         );
-        // Never silent: a run says how many gaps it re-checked and turned.
+        const found = results.filter((r) => r && r.state !== 'missing').length;
+        const confirmed = results.filter((r) => r?.state === 'missing').length;
+        // Never silent: a run says how many it re-checked and what they became.
         this.logger.log({
-            message: `[BUSINESS-LOGIC] Re-checked ${missing.length} MISSING requirement(s) across the repository; ${results.filter(Boolean).length} already in the code`,
+            message: `[BUSINESS-LOGIC] Re-checked ${open.length} requirement(s) across the repository; ${found} already in the code, ${confirmed} confirmed missing`,
             context: BusinessValidationService.name,
             metadata: {
                 organizationId: request.organizationAndTeamData.organizationId,
                 pullRequest: request.pullRequest?.number,
-                checked: missing.length,
-                overturned: results.filter(Boolean).length,
+                checked: open.length,
+                overturned: found,
+                confirmedMissing: confirmed,
             },
         });
         if (!results.some(Boolean)) {
             return verdict;
         }
         const requirements = [...(verdict.requirements ?? [])];
-        missing.forEach(({ requirement, index }, i) => {
-            const found = results[i];
-            if (found) {
-                requirements[index] = {
-                    ...requirement,
-                    state: found.state,
-                    evidence: found.evidence,
-                    note: found.note,
-                    action: undefined,
-                    judgedState: 'missing',
-                    foundOutsideDiff: true,
-                };
+        open.forEach(({ requirement, index }, i) => {
+            const settled = results[i];
+            if (!settled) {
+                return;
             }
+            requirements[index] = {
+                ...requirement,
+                state: settled.state,
+                evidence: settled.evidence,
+                note: settled.note,
+                action: settled.action,
+                // What the judge said before the runtime moved it.
+                judgedState: requirement.judgedState ?? requirement.state,
+                downgraded: undefined,
+                ...(settled.state === 'missing'
+                    ? {}
+                    : { foundOutsideDiff: true as const }),
+            };
         });
         return {
             ...verdict,

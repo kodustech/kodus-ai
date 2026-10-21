@@ -249,6 +249,201 @@ describe('BusinessValidationService · a MISSING the repository refutes', () => 
     });
 });
 
+describe('BusinessValidationService · a requirement the diff alone could not settle', () => {
+    // The second look answers per requirement text; `checked` records who it saw.
+    class Service extends BusinessValidationService {
+        checked: string[] = [];
+        constructor(
+            private readonly scripted: Record<string, Record<string, unknown>>,
+        ) {
+            super(
+                {} as any,
+                {} as any,
+                { findByKey: async () => undefined } as any,
+                {} as any,
+            );
+        }
+        protected gapCheck() {
+            return async ({ requirement }: any) => {
+                this.checked.push(requirement.requirement);
+                return this.scripted[requirement.requirement] as any;
+            };
+        }
+    }
+    const row = (requirement: string, extra: Record<string, unknown>) => ({
+        requirement,
+        evidence: [],
+        confidence: 'high',
+        ...extra,
+    });
+    const run = (service: Service, requirements: unknown[]) =>
+        (service as any).checkGaps(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repositoryReader: {
+                    listFiles: async () => [],
+                    readFile: async () => undefined,
+                },
+            },
+            {
+                needsMoreInfo: false,
+                reason: 'analysis_ready',
+                status: 'partially_compliant',
+                summary: '',
+                requirements,
+                outOfScope: [],
+            },
+            'task',
+            'diff',
+            'en-US',
+            async () => ({ modelSlot: undefined }),
+        );
+    const at = { file: 'src/loans/rules.ts', line: 4 };
+
+    it('marks MET a CHECK MANUALLY whose code is in a file the PR calls but does not change', async () => {
+        const result = await run(
+            new Service({
+                'Refuses an overdue loan': {
+                    state: 'met',
+                    evidence: [at],
+                    note: 'assertRenewable refuses overdue loans.',
+                },
+            }),
+            [row('Refuses an overdue loan', { state: 'check_manually' })],
+        );
+        expect(result.requirements[0]).toMatchObject({
+            state: 'met',
+            evidence: [at],
+            judgedState: 'check_manually',
+            foundOutsideDiff: true,
+        });
+        expect(result.status).toBe('compliant');
+    });
+
+    it('marks MISSING a CHECK MANUALLY when the code it calls lacks the rule', async () => {
+        const result = await run(
+            new Service({
+                'Refuses a reserved loan': {
+                    state: 'missing',
+                    evidence: [at],
+                    note: 'assertRenewable checks only the due date.',
+                    action: 'Refuse loans another member reserved.',
+                },
+            }),
+            [
+                row('Refuses a reserved loan', {
+                    state: 'check_manually',
+                    downgraded: 'not_in_diff',
+                    judgedState: 'missing',
+                }),
+            ],
+        );
+        expect(result.requirements[0]).toMatchObject({
+            state: 'missing',
+            evidence: [at],
+            action: 'Refuse loans another member reserved.',
+            judgedState: 'missing',
+        });
+        expect(result.requirements[0].downgraded).toBeUndefined();
+        expect(result.requirements[0].foundOutsideDiff).toBeUndefined();
+        expect(result.status).toBe('issues_found');
+    });
+
+    it('marks MET a PARTIAL whose missing half is already in the code', async () => {
+        const result = await run(
+            new Service({
+                'Shows the doctor name': {
+                    state: 'met',
+                    evidence: [at],
+                    note: 'toAppointmentDto returns doctorName.',
+                },
+            }),
+            [
+                row('Shows the doctor name', {
+                    state: 'partial',
+                    action: 'Return the doctor name.',
+                }),
+            ],
+        );
+        expect(result.requirements[0]).toMatchObject({
+            state: 'met',
+            judgedState: 'partial',
+            foundOutsideDiff: true,
+        });
+        expect(result.requirements[0].action).toBeUndefined();
+    });
+
+    it("never re-checks what code can't show, what the team accepted, or what a sub-task or the team's guidance covers", async () => {
+        const service = new Service({});
+        await run(service, [
+            row('Looks like the mock', {
+                state: 'check_manually',
+                downgraded: 'visual',
+                judgedState: 'missing',
+            }),
+            row('Uses the brand colour', {
+                state: 'check_manually',
+                kind: 'visual',
+            }),
+            row('Sends the export', {
+                state: 'missing',
+                accepted: { by: 'lead', at: '2026-10-21' },
+            }),
+            row('Already there', { state: 'met' }),
+            row('Reminder template', {
+                state: 'check_manually',
+                handledElsewhere: 'sub_task',
+                note: 'Delivered by PROJ-217: the job is built there.',
+            }),
+            row('Copy review', {
+                state: 'check_manually',
+                handledElsewhere: 'team_guidance',
+                note: 'Team guidance: QA checks copy.',
+            }),
+        ]);
+        expect(service.checked).toEqual([]);
+    });
+
+    it('keeps the state, and says why, when the second look fails', async () => {
+        class Failing extends Service {
+            warnings: string[] = [];
+            protected gapCheck() {
+                return async () => {
+                    throw new Error('quota exceeded');
+                };
+            }
+        }
+        const service = new Failing({});
+        (service as any).logger = {
+            warn: ({ message }: { message: string }) =>
+                service.warnings.push(message),
+            log: () => undefined,
+        };
+        const result = await run(service, [
+            row('Refuses an overdue loan', { state: 'check_manually' }),
+        ]);
+        expect(result.requirements[0].state).toBe('check_manually');
+        expect(service.warnings).toEqual([
+            expect.stringContaining('could not re-check'),
+        ]);
+    });
+
+    it('looks at MISSING first, then CHECK MANUALLY, then PARTIAL', async () => {
+        const service = new Service({});
+        await run(service, [
+            row('partial one', { state: 'partial' }),
+            row('unsure one', { state: 'check_manually' }),
+            row('missing one', { state: 'missing' }),
+        ]);
+        expect(service.checked).toEqual([
+            'missing one',
+            'unsure one',
+            'partial one',
+        ]);
+    });
+});
+
 describe('BusinessValidationService · an answer without a verdict', () => {
     it('is no verdict, not a gap', async () => {
         const service = new BusinessValidationService(

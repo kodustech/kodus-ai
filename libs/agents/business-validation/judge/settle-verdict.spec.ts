@@ -90,3 +90,57 @@ describe('settleVerdict', () => {
         expect(settleVerdict(prose, { unseenFiles: [] })).toBe(prose);
     });
 });
+
+describe('settleVerdict · work handled elsewhere', () => {
+    const marked = (
+        note: string,
+        input: { subtasks?: boolean; teamGuidance?: boolean },
+        extra: Partial<RequirementVerdict> = {},
+    ) =>
+        settleVerdict(
+            result([requirement({ state: 'check_manually', note, ...extra })]),
+            { unseenFiles: [], ...input },
+        ).requirements![0].handledElsewhere;
+
+    it("marks a sub-task's or the guidance's CHECK MANUALLY, so nothing re-judges it", () => {
+        expect(
+            marked('Delivered by PROJ-217: the template.', { subtasks: true }),
+        ).toBe('sub_task');
+        expect(
+            marked('Team guidance: QA checks copy.', { teamGuidance: true }),
+        ).toBe('team_guidance');
+    });
+
+    it('never marks it when the task has no sub-tasks or the team no guidance', () => {
+        expect(
+            marked('Delivered by PROJ-217: the template.', {
+                teamGuidance: true,
+            }),
+        ).toBeUndefined();
+        expect(
+            marked('Team guidance: QA checks copy.', { subtasks: true }),
+        ).toBeUndefined();
+    });
+
+    it("drops a mark the judge's note doesn't back, and any mark off a CHECK MANUALLY", () => {
+        // A helper the judge couldn't see, pinned on someone else's work.
+        expect(
+            marked(
+                'Left to assertRenewable, not in this diff.',
+                { subtasks: true, teamGuidance: true },
+                { handledElsewhere: 'team_guidance' },
+            ),
+        ).toBeUndefined();
+        expect(
+            settleVerdict(
+                result([
+                    requirement({
+                        state: 'met',
+                        handledElsewhere: 'sub_task',
+                    }),
+                ]),
+                { unseenFiles: [], subtasks: true },
+            ).requirements![0].handledElsewhere,
+        ).toBeUndefined();
+    });
+});
