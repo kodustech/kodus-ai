@@ -122,7 +122,7 @@ function AreaChoice({
             <span className="text-text-tertiary mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums">
                 <span>{area.changedPrs} changed PRs</span>
                 {area.linkedBugFixPrs > 0 && (
-                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-300">
+                    <span className="bg-card-lv3 text-text-secondary rounded px-1.5 py-0.5 font-medium">
                         {area.linkedBugFixPrs} linked fixes
                     </span>
                 )}
@@ -305,17 +305,11 @@ export function CodeAreasTab({
         const items = classified[id];
         const visible = expandedGroups.includes(id) ? items : items.slice(0, 4);
         return (
-            <div
-                className={
-                    "border-card-lv3 min-h-36 rounded-lg border p-3 " +
-                    (prominent
-                        ? "border-amber-400/35 bg-amber-400/5"
-                        : "bg-card-lv2/50")
-                }>
+            <div className="border-card-lv3 bg-card-lv2/50 min-h-36 rounded-lg border p-3">
                 <div
                     className={
                         "mb-3 text-xs font-semibold tracking-wide uppercase " +
-                        (prominent ? "text-amber-300" : "text-text-tertiary")
+                        (prominent ? "text-text-primary" : "text-text-tertiary")
                     }>
                     {title}{" "}
                     <span className="ml-1 font-normal tabular-nums">
@@ -473,23 +467,20 @@ export function CodeAreasTab({
                     </div>
 
                     {focus.length > 0 && (
-                        <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-5 py-4 sm:flex sm:items-center sm:gap-4">
-                            <span className="mb-2 inline-block rounded bg-amber-400 px-2 py-1 text-[11px] font-bold text-neutral-950 sm:mb-0">
-                                START HERE
-                            </span>
-                            <div>
+                        <div className="border-card-lv3 bg-card-lv1 flex items-start gap-4 rounded-lg border px-5 py-4">
+                            <strong className="text-primary-light text-2xl leading-none tabular-nums">
+                                {focus.length}
+                            </strong>
+                            <div className="min-w-0">
                                 <p className="text-text-primary text-sm font-semibold">
-                                    {focus.length}{" "}
                                     {focus.length === 1
-                                        ? "area changes"
-                                        : "areas change"}{" "}
-                                    frequently and{" "}
-                                    {focus.length === 1 ? "has" : "have"}{" "}
-                                    structural issues in the sampled files
+                                        ? "Area to investigate first"
+                                        : "Areas to investigate first"}
                                 </p>
-                                <p className="text-text-secondary mt-0.5 text-xs">
-                                    Inspect the evidence before planning an
-                                    improvement.
+                                <p className="text-text-secondary mt-1 text-xs leading-5">
+                                    Frequent changes and structural signals in
+                                    sampled files. Select an area to inspect its
+                                    PR and issue evidence.
                                 </p>
                             </div>
                         </div>
@@ -502,8 +493,8 @@ export function CodeAreasTab({
                                     Attention map
                                 </h3>
                                 <p className="text-text-secondary mt-1 text-xs leading-5">
-                                    Position is relative to this repository.
-                                    Amber badges show PRs linked to bug issues.
+                                    Position is relative to this repository. Fix
+                                    counts show PRs linked to bug issues.
                                 </p>
                             </div>
                             {(structureCoverage?.analyzedFiles ?? 0) > 0 ? (
@@ -591,7 +582,7 @@ export function CodeAreasTab({
                                             </span>
                                         </div>
                                         <div>
-                                            <strong className="block text-xl text-amber-300 tabular-nums">
+                                            <strong className="text-text-primary block text-xl tabular-nums">
                                                 {selectedArea.linkedBugFixPrs}
                                             </strong>
                                             <span className="text-text-tertiary mt-1 block text-xs">
