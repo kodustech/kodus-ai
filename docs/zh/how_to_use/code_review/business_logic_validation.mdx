@@ -1,141 +1,143 @@
 ---
 title: "业务逻辑验证"
-description: "使用 @kody -v business-logic 将您的拉取请求与业务规则或规范进行比较。"
+description: "将每个拉取请求与其引用的任务逐条需求进行核对。"
 ---
 
 ## 概述
 
-业务逻辑验证让您确认拉取请求是否实现了规范、文档或工单中描述的预期行为。Kody 分析 PR 差异，引入引用的业务上下文，并在合并之前标记不匹配。
+业务逻辑验证检查拉取请求是否交付了任务所要求的内容。Kody 找到 PR 引用的任务，从你的任务管理工具中读取它，并列出每条需求在代码中的状态。结果是 PR 上的一条评论，并保持最新，在 GitHub、GitLab、Bitbucket、Azure Repos 和 Forgejo 上都一样。
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="使用业务逻辑验证的示例" />
+<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
 
 ## 前提条件
-- 如果您希望 Kody **自动获取任务上下文**（来自 Jira、Linear、Notion、ClickUp 等工具），需要在工作区的[插件](/zh/how_to_use/code_review/plugins)页面中连接相应的插件。
-- 您共享的任何链接（Jira、Slack、Google Docs 等）必须可通过工作区中安装的插件访问。
-- 您始终可以**内联提供规范**而无需任何插件 — 只需在 PR 评论中直接粘贴需求即可。
 
-## 启用业务逻辑验证
+- 在 [Plugins](/zh/how_to_use/code_review/plugins) 中连接的任务管理工具：Linear、Jira (Atlassian Rovo)、Notion、Git Issues 或自定义插件。
+- Kody 只按 ID **读取**任务，以及任务所链接的内容（父任务、子任务、附加文档）。它从不搜索任务，也从不写入你的任务管理工具。
+- 没有任务管理工具时，你仍然可以在命令中粘贴任务文本（见下文）。
 
-业务逻辑验证**默认启用**。您可以通过两种方式控制它：
+## 启用
 
-**通过 `kodus-config.yml`：**
+Business Logic 默认启用。在 **Code review → What to review** 的 **Business Logic** 一行中，或在 `kodus-config.yml` 中开启或关闭：
 
 ```yaml
 reviewOptions:
   business_logic: true
 ```
 
-**通过 Web UI：**
+点击该行的 **Configure** 打开 Business Logic 设置。
 
-在侧边栏中打开 **Code review → What to review**（在 **Global** 级别，或在范围选择器中选择一个仓库或目录），然后切换 **Business Logic** 开关。如果没有连接任务管理插件，该类别开启时这一行会显示 **Needs a task management plugin**。
+## Kody 如何找到任务
 
-启用后，Kody 在每次 PR 审查时自动运行业务逻辑验证，同时也支持按需命令。
+Kody 按顺序在 PR 标题、分支名和描述中查找任务引用：
+
+- 类似 `PROJ-123` 的键（Jira、Linear 和大多数任务管理工具）
+- `#123` 和 `owner/repo#123`（Git issues；属于拉取请求的编号会被忽略）
+- `AB#123`（Azure Boards）
+- 指向 Linear、Jira、Notion、GitHub/GitLab issue 和 Azure work item 的链接
+
+只有当任务管理工具返回 ID 完全一致的任务时，引用才算数，因此标题中的 `UTF-8` 或 `gpt-5` 永远不会被误认为任务。标题中的小写键（`feat(kod-10)`）在你的任务管理工具中存在该团队或项目时算数；Linear 项目 ID（`P-KOD-1`）永远不算。
+
+Kody 还会读取任务所链接的内容：
+
+- **父任务**（Linear 子 issue、Jira 子任务、ClickUp 子任务）：PR 会与本任务标题所涵盖的父任务需求进行核对。只写着"见父任务"的子 issue 也会被检查。
+- **子任务**：由某个子任务交付的需求显示为 CHECK MANUALLY（"Delivered by KOD-20"），永远不会显示为缺失。
+- **附加到任务的文档**（Linear docs）：作为任务的一部分读取，包括其中的验收标准。
+
+- **"Closes PROJ-1"**，或标题、分支中的键：PR 与整个任务进行核对。
+- **"Part of PROJ-1"** 或 **"Refs PROJ-1"**：PR 只交付其中一部分。缺失的内容会列出，但不作为合并前需要完成的事项。
+- 每个 PR **最多检查三个任务**，每个任务一个部分。引用更多任务的 PR（例如发布或合并）会被跳过。
+
+## 五种状态
+
+| 状态 | 含义 | 需要修复 |
+|---|---|---|
+| **MET** | diff 实现了该需求。 | 否 |
+| **PARTIAL** | 需求所述内容已部分实现。 | 否，仅显示：完成一半属于主观判断，两次运行之间可能不同 |
+| **MISSING** | 此 PR 的 diff 中没有证据，或 PR 依赖的代码没有实现它。 | 是 |
+| **CHECK MANUALLY** | 视觉或流程类需求、Kody 读过仓库后仍不确定的需求，或可能位于过大而无法读取的文件中的需求。 | 从不 |
+| **NOT IN TASK** | 任务没有要求的变更。 | 否，仅显示 |
+
+每一行都会引用其依据的文件和行号，并说明需要修改什么。
+
+### 显示差距之前
+
+差距意味着要求作者返工，因此 Kody 会用代码核实每一个差距：
+
+- **按任务原文理解需求。** 任务从未提及的输入或边界情况（负数金额、另一条代码路径、未提及的格式）永远不会使某行变为 PARTIAL，变更之后发生的事情也不会（例如现有任务是否发送了 PR 放入队列的消息，某个路由是否使用了 PR 填充的序列化器）。
+- **PR 调用的代码，而不只是 diff。** 当规则位于 PR 调用但未修改的代码中（验证器、辅助函数、构建响应的 mapper），Kody 会在显示任何内容之前，在 PR head 处的仓库中读取它，并对每一个 MISSING、PARTIAL 和 CHECK MANUALLY 行做同样的事。只有基于 Kody 读过的文件和行，某行才会变为 MET，并注明它已存在于代码中、位于 diff 之外。只有当 Kody 读过 PR 所依赖的代码并引用缺少该规则的那一行时，某行才会变为 MISSING。仓库无法确定的内容保持原状。
+- **属于别处的工作。** 由子任务交付的需求，或团队指南说明不在此处检查的需求，保持为 CHECK MANUALLY，永远不会被重新判定为缺失。
+
+## 在拉取请求上
+
+- Kody 在 PR 的**首次审查**时进行检查，之后在仍有缺失时每次 push 都会再次检查，因此修复后评论会自动更新，无需任何人请求。**Re-check** 也可以设置为每次 push，或仅在有人评论 `@kody -v business-logic` 时。
+- 随时可以用 `@kody -v business-logic` 重新检查。**同一条评论会被编辑**；Kody 从不发布第二条评论。
+- 满足任务的 PR 会收到一行评论（"✅ 4 of 4 met"），外加需要手动检查的内容，让作者知道已经检查过。关闭 **Comment when every requirement is met** 可在这种情况下不发评论。
+- 评论是所有平台上的信号：Kody 不写入 check 或 status，因此它本身永远不会阻止合并。评论标题会说明还有哪些需要修复。
+
+### 回复评论
+
+回复 Business Logic 评论并提及 `@kody`：
+
+- **提出异议**："这在 `useDrag.ts` 中已经覆盖了"。Kody 会重新检查你指出的内容，要么将其标记为 MET，要么说明它查看了什么并保留原状态。
+- **接受某项发现**（在 GitHub 上，任何对仓库有写权限的人，包括作者；其他平台不报告评论者的角色，因此任何人都可以）："键盘重新排序不在范围内，已移至 SAA-102"。Kody 确认 SAA-102 存在，将该行标记为 **ACCEPTED** 并注明接受者，该行不再需要修复。这一决定在之后的重新检查中保持不变。
+
+## Kody 何时不发表评论
+
+Kody 只在作者能够采取行动时才发表评论：
+
+| 情况 | 在 PR 上 |
+|---|---|
+| 任务只有标题 | 一条请求提供验收标准的评论 |
+| `SAA-999` 不存在，但 SAA 是你任务管理工具中的一个团队 | 一条指出可能是拼写错误的评论，并附上最接近的真实任务。开启 **Ask for a task** 时，该评论保持未解决直到修正 |
+| 没有引用任务，或只有任何任务管理工具都没有的 ID（标题中的 `UTF-8`） | 不做任何事。开启 **Ask for a task** 时，发布一条请求提供任务的评论（从不在机器人的 PR 上发布） |
+| 引用的是 GitHub issue，但只连接了 Linear | 不做任何事；管理员会在设置页面上看到计数。开启 **Ask for a task** 时，发布一条说明哪个任务管理工具无法读取它的评论 |
+| 任务管理工具宕机或其令牌已过期 | 不做任何事；会通知所有者，任务管理工具恢复响应后 Kody 会重新检查 |
+
+每次跳过的原因都会被记录，并显示在 Business Logic 设置页面上。
 
 ## 按需运行
 
-您也可以随时手动触发验证：
+在 PR 上评论（而不是在某一行代码上）：
 
-1. 打开主 PR 评论框（在内联代码建议之外）。
-2. 提及 Kody 并添加验证命令：`@kody -v business-logic ...`。
-3. 内联提供规范内容或粘贴 Kody 可以通过可用插件获取的链接。
-4. 提交评论并在同一线程中等待 Kody 的响应。
+- `@kody -v business-logic`：重新检查 PR 引用的任务
+- `@kody -v business-logic PROJ-123` 或任务链接：与该任务进行核对
+- `@kody -v business-logic` 后跟文本形式的需求：与你写的内容进行核对，无需任务管理工具
 
-该命令仅从主对话框触发；内联建议内的回复将被忽略。
+## 设置
 
-您可以随时重新运行验证——只需在新评论中再次发布命令即可。后续操作必须是新命令；不支持直接在 Git UI 中回复 Kody 的消息。
+打开 **Code review → What to review → Business Logic → Configure**。每项设置都可以全局设置，并按仓库或目录覆盖。
 
-### 示例
+- **Task source**：所有已连接的任务管理工具（包括 ClickUp 等自定义任务插件），或某一个插件。对于自定义插件，选择按 ID 读取单个任务的工具；只会提供只读工具。使用页面底部的 **Try it**：只填任务时会显示 Kody 从中读取的内容，填写拉取请求时会使用屏幕上的设置（无论是否已保存）运行完整检查且不发布任何内容。
+- **Custom task id format**（可选）：用于 Kody 自身无法识别的 ID 的正则表达式：`T(\d{4})` 会将 `T1234` 读作任务 1234。类似 `SAA-96` 或 `sc-123` 的键、`#12`、`AB#8`、`CU-…` 以及任务管理工具链接无需此设置即可识别。
+- **Where acceptance criteria live**：自动检测、在描述中的某个标题下，或在自定义字段中；没有该字段的任务从其描述中读取。
+- **Ask for a task when the PR references none**：Kody 会发表评论询问该 PR 对应哪个任务（或指出拼写错误），而不是跳过它。由机器人（如 Dependabot 或 Renovate）创建的 PR 不受影响。任务管理工具宕机永远不算在内。
+- **Re-check**：仍有缺失时（默认）、每次 push 时，或仅在请求时。
+- **Skipped pull requests**：代码审查跳过的 PR 在这里也会被跳过：标题包含被忽略关键词（`ignoredTitleKeywords`，例如 `wip`）的 PR，以及 `runOnDraft` 关闭时的草稿。`@kody -v business-logic` 评论始终会运行。
+- **Team guidance**：Kody 判断时遵循的说明，例如"当功能开关存在且默认关闭时，视为已实现"。它不能改变判定格式，也不能让 Kody 编造需求。
 
-- Jira 工单：`@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1292`
-- Linear 问题：`@kody -v business-logic https://linear.app/your-team/issue/TEAM-123`
-- Notion 页面：`@kody -v business-logic https://www.notion.so/your-workspace/Feature-Spec-abc123`
-- Google 文档：`@kody -v business-logic https://docs.google.com/document/d/1234567890/edit`
-- Slack 对话：`@kody -v business-logic https://kodustech.slack.com/archives/C070E5E97DE/p1727814000000000`
-- 内联规范片段：`@kody -v business-logic 规则 XYZ — 超过 $500 的订单必须发放返现积分。`
+`kodus-config.yml` 中的相同设置：
 
-## Kody 做什么
-
-1. **获取 PR 差异**和拉取请求元数据。
-2. **检索任务上下文** — 从链接的任务管理工具（Jira、Linear 等）或您提供的内联文本。
-3. **分类任务上下文质量** — 根据可用信息确定分析的深度。
-4. **将实现与需求进行比较** — 检查 PR 差异中的每个验收标准。
-5. **报告发现**，包含严重性级别和需求追溯。
-
-如果 Kody 无法访问资源或缺少权限，它会指出这一点，以便您可以调整访问权限或以其他方式提供信息。
-
-## 任务上下文质量
-
-Kody 在分析之前自动分类任务上下文的质量，这影响验证的深度：
-
-| 质量 | 描述 | 分析行为 |
-|------|------|----------|
-| **完整** | 有标题、描述和验收标准 | 逐条验收标准进行全面分析 |
-| **部分** | 有标题和描述但没有验收标准 | 根据描述的业务行为尽力分析 |
-| **最小** | 仅有标题或非常简短的描述 | 保守 — 仅标记明显的差距 |
-| **空** | 未找到有意义的任务上下文 | 返回"需要任务信息"响应 |
-
-## 理解输出
-
-### 发现严重性
-
-每个发现包含一个严重性级别：
-
-- **MUST_FIX** — 必需的业务规则未实现、不正确或与任务要求矛盾
-- **SUGGESTION** — 未涵盖相关的边缘情况、健壮性或可维护性要点
-- **INFO** — 不阻碍合规性的有用观察
-
-### 有据可查的发现
-
-每个发现都可以**追溯到任务上下文中的特定需求**。每个发现包含：
-
-- **需求** — 建立该需求的任务中的确切引用
-- **代码中缺失的** — PR 差异中缺失或错误的内容
-- **建议操作** — 具体的实现操作
-
-Kody 不会发明需求。如果一个发现无法追溯到任务中的特定句子，则不会报告。
-
-### 范围不匹配检测
-
-如果 PR 差异似乎在与任务本身不同的领域工作，Kody 会检测到这是一个**范围不匹配**，并将其作为首要发现报告，而不是产生误导性的差距分析。
-
-### 输出示例
-
-```markdown
-## Business Rules Validation
-
-**Task:** KC-1441 - Team-scoped Kody rules
-**Task Link:** https://kodustech.atlassian.net/browse/KC-1441
-**Status:** Issues Found
-**Confidence:** high
-
-### Findings
-
-#### MUST_FIX: No evidence of team-scoped rule resolution in this PR diff
-**Requirement:** "Rules must be resolved by organization and team
-to avoid cross-workspace billing mismatch."
-**Missing in code:** No evidence in this PR diff of adding `teamId`
-to the relevant persistence or lookup path.
-**Suggested action:** Add `teamId` to rule persistence and query filters.
-
-#### SUGGESTION: No evidence of deterministic mixed-license handling
-**Requirement:** "When teams have different subscription states,
-behavior must remain deterministic."
-**Missing in code:** No evidence in this PR diff of logic handling
-mixed subscription states.
-**Suggested action:** Add deterministic fallback and error handling
-scoped to team.
-
-### Requirements Verified
-- AC #1: "Team-scoped reads/writes" — Implemented in `rules.service.ts:42`
-- AC #2: "Multi-workspace billing path" — Implemented in `billing.service.ts:118`
-
----
-*Analysis performed by Kodus AI Business Rules Validator*
+```yaml
+businessLogic:
+  taskSource: 'auto'
+  criteriaLocation: 'heading'
+  criteriaHeading: 'Acceptance criteria'
+  commentWhenMet: true
+  recheckOn: 'failing' # failing | push | request
+  requireTask: false
 ```
 
-## 提示
+## 通过 CLI
 
-- 将大型规范分解为多个部分并分别验证，以保持反馈的重点。
-- 共享私有链接时，请仔细检查所需的插件（例如，Jira、Slack、Google Drive）是否已为您的工作区安装和授权。
-- 解决发现的问题后，重新运行命令以确认 PR 现在与业务规则一致。
-- 在任务中提供验收标准以获得最全面的分析 — 具有明确标准的任务会获得逐条验证。
+编码代理可以在创建 PR 之前检查自己的工作：
+
+```bash
+kodus pr business-validation --task-id AB#8
+kodus pr business-validation --task-id AB#8 --format json
+```
+
+它会将你的本地变更与任务进行核对，并为每条需求输出一行及其状态。使用 `--format json`（或 `--agent`）时，它会以结构化形式输出相同的判定结果，供代理据此行动。不会向任何拉取请求发布内容。
+
+## Cockpit
+
+**Cockpit → Delivered as asked** 显示满足任务的 PR 比例、不在任务中的变更、开发者认同 Kody 的频率，以及按代码编写者（人或编码代理，依据提交作者和 `Co-Authored-By` trailer 判断）和按团队的分布。

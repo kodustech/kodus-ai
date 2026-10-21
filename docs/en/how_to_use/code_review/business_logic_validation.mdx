@@ -52,14 +52,20 @@ Kody also reads what the task links to:
 | State | Meaning | Left to fix |
 |---|---|---|
 | **MET** | The diff implements it. | No |
-| **PARTIAL** | Part of it is implemented. | No, shown: half done is a judgment call that can change between two runs |
-| **MISSING** | No evidence in this PR diff. | Yes |
-| **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about, or one that may live in a file too large to read. | Never |
+| **PARTIAL** | Part of what the requirement says is implemented. | No, shown: half done is a judgment call that can change between two runs |
+| **MISSING** | No evidence in this PR diff, or the code the PR relies on doesn't do it. | Yes |
+| **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about even after reading the repository, or one that may live in a file too large to read. | Never |
 | **NOT IN TASK** | A change the task doesn't ask for. | No, shown |
 
 Every row cites the file and line it is based on, and says what to change.
 
-Before a requirement is shown as MISSING, Kody looks for it across the repository at the PR's head, not only in the diff: code the PR reuses (a default, a check in a file it didn't touch) often already does it. A row turns MET only on a file and line Kody read, and says it is already in the code, outside the diff.
+### Before a gap is shown
+
+A gap tells the author to redo work, so Kody holds each one to the code:
+
+- **The requirement as the task writes it.** An input or edge case the task never names (negative amounts, another code path, a format it doesn't mention) never makes a row PARTIAL, and neither does what happens after the change (that an existing job sends the message the PR queues, that a route uses the serializer the PR fills in).
+- **The code the PR calls, not only the diff.** When a rule lives in code the PR calls but didn't change (a validator, a helper, the mapper that builds a response), Kody reads it in the repository at the PR's head before anything is shown, and does the same for every MISSING, PARTIAL and CHECK MANUALLY row. A row turns MET only on a file and line Kody read, and says it is already in the code, outside the diff. A row turns MISSING only when Kody read the code the PR relies on and cites the line that lacks the rule. Whatever the repository doesn't settle stays as it was.
+- **Work that belongs elsewhere.** A requirement a sub-task delivers, or one your team guidance says isn't checked here, stays CHECK MANUALLY and is never re-judged as missing.
 
 ## On the pull request
 
