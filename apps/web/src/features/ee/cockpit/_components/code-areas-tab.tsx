@@ -12,7 +12,7 @@ import {
 } from "@components/ui/select";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { CODE_MANAGEMENT_API_PATHS } from "@services/codeManagement/types";
-import { ArrowUpRight, FolderGit2, Search } from "lucide-react";
+import { ArrowUpRight, ChevronDown, FolderGit2, Search } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFetch } from "src/core/utils/reactQuery";
 
@@ -69,26 +69,6 @@ const issueLabel = (url: string, index: number) => {
         return `Issue ${index + 1}`;
     }
 };
-
-function SummaryStat({
-    label,
-    value,
-    detail,
-}: {
-    label: string;
-    value: string | number;
-    detail: string;
-}) {
-    return (
-        <div className="border-card-lv3/70 min-w-0 border-b px-5 py-4 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0">
-            <p className="text-text-tertiary text-sm">{label}</p>
-            <p className="text-text-primary mt-2 text-2xl font-semibold tabular-nums">
-                {value}
-            </p>
-            <p className="text-text-tertiary mt-1 text-sm">{detail}</p>
-        </div>
-    );
-}
 
 function EvidenceList({ evidence }: { evidence: AreaEvidence[] }) {
     if (!evidence.length) {
@@ -163,7 +143,7 @@ export function CodeAreasTab({
     const [localRepositoryId, setLocalRepositoryId] = useState("");
     const [query, setQuery] = useState("");
     const [selectedPath, setSelectedPath] = useState("");
-    const [expandedQuadrant, setExpandedQuadrant] = useState("");
+    const [sortBy, setSortBy] = useState<"fixes" | "changes">("fixes");
 
     const globalRepository = selectedRepository
         ? repositories.find(
@@ -209,16 +189,20 @@ export function CodeAreasTab({
                 .filter((area): area is CodeArea => !!area) ?? []
         );
     }, [data]);
-    const filteredAreas = useMemo(
-        () =>
-            areas.filter((area) =>
-                area.path.toLowerCase().includes(query.trim().toLowerCase()),
-            ),
-        [areas, query],
-    );
-    const activeArea =
-        filteredAreas.find((area) => area.path === selectedPath) ??
-        filteredAreas[0];
+    const filteredAreas = useMemo(() => {
+        const filtered = areas.filter((area) =>
+            area.path.toLowerCase().includes(query.trim().toLowerCase()),
+        );
+        return filtered.sort((a, b) =>
+            sortBy === "fixes"
+                ? b.linkedBugFixPrs - a.linkedBugFixPrs ||
+                  b.changedPrs - a.changedPrs ||
+                  a.path.localeCompare(b.path)
+                : b.changedPrs - a.changedPrs ||
+                  b.linkedBugFixPrs - a.linkedBugFixPrs ||
+                  a.path.localeCompare(b.path),
+        );
+    }, [areas, query, sortBy]);
     const maxChanges = areas.reduce(
         (max, area) => Math.max(max, area.changedPrs),
         1,
@@ -227,50 +211,6 @@ export function CodeAreasTab({
         (max, area) => Math.max(max, area.linkedBugFixPrs),
         1,
     );
-    const changeBoundary = Math.floor(maxChanges / 2);
-    const fixBoundary = Math.floor(maxLinkedFixes / 2);
-    const quadrants = [
-        {
-            id: "more-fixes-fewer-changes",
-            title: "More linked fixes · fewer changes",
-            rule: `Up to ${changeBoundary} changed PRs · over ${fixBoundary} linked fixes`,
-            areas: filteredAreas.filter(
-                (area) =>
-                    area.changedPrs <= changeBoundary &&
-                    area.linkedBugFixPrs > fixBoundary,
-            ),
-        },
-        {
-            id: "more-fixes-more-changes",
-            title: "More linked fixes · more changes",
-            rule: `Over ${changeBoundary} changed PRs · over ${fixBoundary} linked fixes`,
-            areas: filteredAreas.filter(
-                (area) =>
-                    area.changedPrs > changeBoundary &&
-                    area.linkedBugFixPrs > fixBoundary,
-            ),
-        },
-        {
-            id: "fewer-fixes-fewer-changes",
-            title: "Fewer linked fixes · fewer changes",
-            rule: `Up to ${changeBoundary} changed PRs · up to ${fixBoundary} linked fixes`,
-            areas: filteredAreas.filter(
-                (area) =>
-                    area.changedPrs <= changeBoundary &&
-                    area.linkedBugFixPrs <= fixBoundary,
-            ),
-        },
-        {
-            id: "fewer-fixes-more-changes",
-            title: "Fewer linked fixes · more changes",
-            rule: `Over ${changeBoundary} changed PRs · up to ${fixBoundary} linked fixes`,
-            areas: filteredAreas.filter(
-                (area) =>
-                    area.changedPrs > changeBoundary &&
-                    area.linkedBugFixPrs <= fixBoundary,
-            ),
-        },
-    ];
     const coverage = data?.map?.coverage;
 
     return (
@@ -362,51 +302,37 @@ export function CodeAreasTab({
             ) : (
                 <>
                     <div className="border-card-lv3/70 bg-card-lv1 overflow-hidden rounded-lg border">
-                        <div className="grid grid-cols-1 sm:grid-cols-3">
-                            <SummaryStat
-                                label="Merged PRs scanned"
-                                value={coverage?.scannedPrs ?? 0}
-                                detail={
-                                    coverage?.scanComplete
-                                        ? "Scan complete"
-                                        : "Scan in progress"
-                                }
-                            />
-                            <SummaryStat
-                                label="Directories mapped"
-                                value={areas.length}
-                                detail="With merged PR changes"
-                            />
-                            <SummaryStat
-                                label="Linked issue coverage"
-                                value={`${coverage?.prsWithIssueSupport ?? 0} / ${coverage?.scannedPrs ?? 0}`}
-                                detail="PRs with issue data"
-                            />
-                        </div>
-                        <div className="border-card-lv3/70 text-text-tertiary flex flex-wrap gap-x-4 gap-y-1 border-t px-5 py-3 text-xs">
-                            <span>
-                                History: {date(data.map.windowStart)} –{" "}
+                        <div className="border-card-lv3/70 flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-5 py-3 text-sm">
+                            <span className="text-text-primary font-medium tabular-nums">
+                                {coverage?.scannedPrs ?? 0} merged PRs scanned
+                            </span>
+                            <span className="text-text-secondary tabular-nums">
+                                {areas.length} directories
+                            </span>
+                            <span className="text-text-secondary tabular-nums">
+                                Issue data for{" "}
+                                {coverage?.prsWithIssueSupport ?? 0} /{" "}
+                                {coverage?.scannedPrs ?? 0} PRs
+                            </span>
+                            <span className="text-text-tertiary ml-auto">
+                                {date(data.map.windowStart)} –{" "}
                                 {date(data.map.windowEnd)}
                             </span>
-                            <span>Updated {date(data.map.refreshedAt)}</span>
                         </div>
-                    </div>
-
-                    <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
-                        <section className="border-card-lv3/70 bg-card-lv1 min-w-0 overflow-hidden rounded-lg border">
-                            <div className="border-card-lv3/70 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-                                <div>
-                                    <h2 className="text-text-primary text-sm font-semibold">
-                                        Where changes and bug fixes happened
-                                    </h2>
-                                    <p className="text-text-secondary mt-1 max-w-lg text-sm leading-5">
-                                        Four groups compare activity in this
-                                        repository. Select a directory to see
-                                        its PRs and linked issues.
-                                    </p>
-                                </div>
-                                <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-full items-center gap-2 rounded-md border px-3 sm:w-52">
-                                    <Search className="size-3.5 shrink-0" />
+                        <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-6 pb-5">
+                            <div>
+                                <h3 className="text-text-primary text-lg font-semibold">
+                                    Where bug fixes were linked
+                                </h3>
+                                <p className="text-text-secondary mt-1 text-sm">
+                                    Compare merged PR activity by directory.
+                                    Open a row for the PRs and issues behind its
+                                    counts.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <label className="border-card-lv3/70 text-text-tertiary flex h-9 w-52 items-center gap-2 rounded-md border px-3">
+                                    <Search className="size-4 shrink-0" />
                                     <input
                                         value={query}
                                         onChange={(event) =>
@@ -417,184 +343,134 @@ export function CodeAreasTab({
                                         className="text-text-primary placeholder:text-text-tertiary w-full min-w-0 bg-transparent text-sm outline-none"
                                     />
                                 </label>
+                                <Select
+                                    value={sortBy}
+                                    onValueChange={(value) =>
+                                        setSortBy(value as "fixes" | "changes")
+                                    }>
+                                    <SelectTrigger
+                                        size="sm"
+                                        aria-label="Sort directories"
+                                        className="w-44">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="fixes">
+                                            Most linked fixes
+                                        </SelectItem>
+                                        <SelectItem value="changes">
+                                            Most changed PRs
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            {filteredAreas.length ? (
-                                <div className="p-4 sm:p-5">
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        {quadrants.map((quadrant) => {
-                                            const expanded =
-                                                expandedQuadrant ===
-                                                quadrant.id;
-                                            const visibleAreas =
-                                                query.trim() || expanded
-                                                    ? quadrant.areas
-                                                    : quadrant.areas.slice(
-                                                          0,
-                                                          4,
-                                                      );
-                                            const remaining =
-                                                quadrant.areas.length -
-                                                visibleAreas.length;
-                                            return (
-                                                <div
-                                                    key={quadrant.id}
-                                                    className={`min-w-0 rounded-md border p-4 ${quadrant.id === "more-fixes-more-changes" ? "border-primary-light/50 bg-primary-light/5" : "border-card-lv3/70 bg-card-lv2/30"}`}>
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <h3 className="text-text-primary text-sm leading-5 font-semibold">
-                                                                {quadrant.title}
-                                                            </h3>
-                                                            <p className="text-text-secondary mt-1 text-sm leading-5">
-                                                                {quadrant.rule}
-                                                            </p>
-                                                        </div>
-                                                        <span className="text-text-primary text-xl font-semibold tabular-nums">
+                        </div>
+                        <div className="border-card-lv3/70 bg-card-lv2/30 text-text-tertiary hidden grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px] gap-6 border-y px-5 py-2 text-xs font-medium tracking-wide uppercase md:grid">
+                            <span>Directory</span>
+                            <span>Merged PRs that changed it</span>
+                            <span>PRs linked to bug issues</span>
+                            <span />
+                        </div>
+                        {filteredAreas.length ? (
+                            <div className="divide-card-lv3/70 divide-y">
+                                {filteredAreas.map((area) => {
+                                    const selected = selectedPath === area.path;
+                                    return (
+                                        <div key={area.path}>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSelectedPath(
+                                                        selected
+                                                            ? ""
+                                                            : area.path,
+                                                    )
+                                                }
+                                                aria-expanded={selected}
+                                                aria-controls={`area-evidence-${area.path.replace(/[^a-zA-Z0-9-]/g, "-")}`}
+                                                className={`focus-visible:ring-primary-light hover:bg-card-lv2/50 w-full px-5 py-3.5 text-left focus-visible:ring-2 focus-visible:outline-none ${selected ? "bg-card-lv2/50" : ""}`}>
+                                                <div className="grid min-w-0 items-center gap-x-6 gap-y-3 md:grid-cols-[minmax(260px,1fr)_minmax(180px,0.8fr)_minmax(180px,0.8fr)_24px]">
+                                                    <span className="text-text-primary min-w-0 font-mono text-sm font-medium break-all">
+                                                        {area.path}
+                                                    </span>
+                                                    <span className="flex min-w-0 items-center gap-3">
+                                                        <span className="text-text-primary w-7 shrink-0 text-right text-sm font-medium tabular-nums">
+                                                            {area.changedPrs}
+                                                        </span>
+                                                        <span className="bg-card-lv3/70 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
+                                                            <span
+                                                                className="bg-text-tertiary block h-full rounded-full"
+                                                                style={{
+                                                                    width: `${(area.changedPrs / maxChanges) * 100}%`,
+                                                                }}
+                                                            />
+                                                        </span>
+                                                        <span className="text-text-tertiary text-xs md:hidden">
+                                                            changed PRs
+                                                        </span>
+                                                    </span>
+                                                    <span className="flex min-w-0 items-center gap-3">
+                                                        <span className="text-text-primary w-7 shrink-0 text-right text-sm font-medium tabular-nums">
                                                             {
-                                                                quadrant.areas
-                                                                    .length
+                                                                area.linkedBugFixPrs
                                                             }
                                                         </span>
-                                                    </div>
-                                                    {visibleAreas.length ? (
-                                                        <div className="mt-4 space-y-1.5">
-                                                            {visibleAreas.map(
-                                                                (area) => (
-                                                                    <button
-                                                                        key={
-                                                                            area.path
-                                                                        }
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            setSelectedPath(
-                                                                                area.path,
-                                                                            )
-                                                                        }
-                                                                        aria-pressed={
-                                                                            area.path ===
-                                                                            activeArea?.path
-                                                                        }
-                                                                        className={`focus-visible:ring-primary-light w-full rounded-md border px-3 py-2.5 text-left focus-visible:ring-2 focus-visible:outline-none ${area.path === activeArea?.path ? "border-primary-light bg-primary-light/10" : "border-card-lv3/70 hover:bg-card-lv3/40"}`}>
-                                                                        <span className="text-text-primary block font-mono text-sm leading-5 break-all">
-                                                                            {
-                                                                                area.path
-                                                                            }
-                                                                        </span>
-                                                                        <span className="text-text-secondary mt-1 block text-sm tabular-nums">
-                                                                            {
-                                                                                area.changedPrs
-                                                                            }{" "}
-                                                                            changed
-                                                                            PRs
-                                                                            ·{" "}
-                                                                            {
-                                                                                area.linkedBugFixPrs
-                                                                            }{" "}
-                                                                            linked
-                                                                            fixes
-                                                                        </span>
-                                                                    </button>
-                                                                ),
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-text-tertiary mt-5 text-sm">
-                                                            No directories in
-                                                            this group.
-                                                        </p>
-                                                    )}
-                                                    {!query.trim() &&
-                                                        remaining > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setExpandedQuadrant(
-                                                                        quadrant.id,
-                                                                    )
-                                                                }
-                                                                className="text-primary-light focus-visible:ring-primary-light mt-3 rounded text-sm font-medium hover:underline focus-visible:ring-2">
-                                                                Show {remaining}{" "}
-                                                                more
-                                                            </button>
-                                                        )}
-                                                    {!query.trim() &&
-                                                        expanded &&
-                                                        quadrant.areas.length >
-                                                            4 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setExpandedQuadrant(
-                                                                        "",
-                                                                    )
-                                                                }
-                                                                className="text-primary-light focus-visible:ring-primary-light mt-3 rounded text-sm font-medium hover:underline focus-visible:ring-2">
-                                                                Show fewer
-                                                            </button>
-                                                        )}
+                                                        <span className="bg-card-lv3/70 h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
+                                                            <span
+                                                                className="bg-primary-light block h-full rounded-full"
+                                                                style={{
+                                                                    width: `${(area.linkedBugFixPrs / maxLinkedFixes) * 100}%`,
+                                                                }}
+                                                            />
+                                                        </span>
+                                                        <span className="text-text-tertiary text-xs md:hidden">
+                                                            linked fixes
+                                                        </span>
+                                                    </span>
+                                                    <ChevronDown
+                                                        className={`text-text-tertiary hidden size-4 transition-transform md:block ${selected ? "rotate-180" : ""}`}
+                                                    />
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-text-secondary px-5 py-12 text-sm">
-                                    {areas.length
-                                        ? "No directories match that search."
-                                        : "No changed directories were found in this history window."}
-                                </p>
-                            )}
-                        </section>
-
-                        <aside className="border-card-lv3/70 bg-card-lv1 h-fit min-w-0 rounded-lg border p-5 lg:sticky lg:top-5">
-                            {activeArea ? (
-                                <>
-                                    <p className="text-text-tertiary text-xs font-medium tracking-wide uppercase">
-                                        Area detail
-                                    </p>
-                                    <h2 className="text-text-primary mt-2 font-mono text-lg font-medium break-all">
-                                        {activeArea.path}
-                                    </h2>
-                                    <div className="border-card-lv3/70 mt-5 grid grid-cols-2 gap-2 border-y py-4">
-                                        {[
-                                            [
-                                                "Changed PRs",
-                                                activeArea.changedPrs,
-                                            ],
-                                            [
-                                                "Linked bug-fix PRs",
-                                                activeArea.linkedBugFixPrs,
-                                            ],
-                                        ].map(([label, value]) => (
-                                            <div key={label}>
-                                                <p className="text-text-primary text-lg font-semibold tabular-nums">
-                                                    {value}
-                                                </p>
-                                                <p className="text-text-tertiary text-xs">
-                                                    {label}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <h3 className="text-text-primary mt-5 mb-3 text-sm font-semibold">
-                                        Recent PR evidence
-                                    </h3>
-                                    <EvidenceList
-                                        evidence={activeArea.recentEvidence}
-                                    />
-                                </>
-                            ) : (
-                                <p className="text-text-secondary text-sm">
-                                    Select a directory to inspect its history.
-                                </p>
-                            )}
-                        </aside>
+                                            </button>
+                                            {selected && (
+                                                <div
+                                                    id={`area-evidence-${area.path.replace(/[^a-zA-Z0-9-]/g, "-")}`}
+                                                    className="border-card-lv3/70 bg-card-lv2/30 border-t px-5 py-5 md:pl-8">
+                                                    <h4 className="text-text-primary mb-4 text-sm font-semibold">
+                                                        Recent PR evidence
+                                                    </h4>
+                                                    <div className="max-w-3xl">
+                                                        <EvidenceList
+                                                            evidence={
+                                                                area.recentEvidence
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-text-secondary px-5 py-12 text-sm">
+                                {areas.length
+                                    ? "No directories match that search."
+                                    : "No changed directories were found in this history window."}
+                            </p>
+                        )}
+                        <div className="border-card-lv3/70 text-text-tertiary flex flex-wrap justify-between gap-x-5 gap-y-1 border-t px-5 py-3 text-xs">
+                            <span>
+                                Bars are scaled to the highest count in each
+                                column. Counts are merged PRs, not unique bugs.
+                            </span>
+                            <span>Updated {date(data.map.refreshedAt)}</span>
+                        </div>
                     </div>
 
                     <p className="text-text-tertiary max-w-3xl text-sm leading-5">
-                        Counts are merged PRs. A linked fix is a PR linked to a
-                        bug issue. The groups compare this repository with
-                        itself; they are not a measured probability of future
-                        bugs.
+                        A linked fix is a PR linked to a bug issue. This history
+                        does not measure the probability of future bugs.
                     </p>
                 </>
             )}
