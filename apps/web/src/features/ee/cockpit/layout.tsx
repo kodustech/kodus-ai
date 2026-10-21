@@ -24,9 +24,9 @@ import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
 import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
 import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
-import { RepositoryPicker } from "./_components/repository-picker";
 import { ShareViewButton } from "./_components/share-view-button";
 import { TabAwareDateRangePicker } from "./_components/tab-aware-date-range-picker";
+import { TabAwareRepositoryPicker } from "./_components/tab-aware-repository-picker";
 import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
 import { getSelectedRepository } from "./_helpers/get-selected-repository";
@@ -223,7 +223,7 @@ async function CockpitLayoutBody({
                     <Greeting />
                 </Page.Title>
                 <div className="ml-auto flex items-center gap-2">
-                    <RepositoryPicker
+                    <TabAwareRepositoryPicker
                         cookieValue={repositoryCookieValue}
                         teamId={selectedTeamId}
                     />

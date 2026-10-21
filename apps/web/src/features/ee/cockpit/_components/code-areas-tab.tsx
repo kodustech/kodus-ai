@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
     Select,
     SelectContent,
@@ -14,6 +15,8 @@ import { CODE_MANAGEMENT_API_PATHS } from "@services/codeManagement/types";
 import { ArrowUpRight, FolderGit2, Search } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFetch } from "src/core/utils/reactQuery";
+
+import { COCKPIT_PARAM } from "../_constants";
 
 type AreaEvidence = {
     prNumber: number;
@@ -125,23 +128,30 @@ export function CodeAreasTab({
     selectedRepository: string | null;
 }) {
     const { teamId } = useSelectedTeamId();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const { data: repositories = [], isLoading: repositoriesLoading } =
         useGetSelectedRepositories(teamId);
     const [localRepositoryId, setLocalRepositoryId] = useState("");
     const [query, setQuery] = useState("");
     const [selectedPath, setSelectedPath] = useState("");
 
-    const focusedRepository = selectedRepository
+    const globalRepository = selectedRepository
         ? repositories.find(
               (repo) =>
                   repo.full_name === selectedRepository ||
                   repo.name === selectedRepository,
           )
         : null;
-    const repository = selectedRepository
-        ? focusedRepository
-        : (repositories.find((repo) => repo.id === localRepositoryId) ??
-          repositories[0]);
+    const repository =
+        repositories.find(
+            (repo) =>
+                repo.id ===
+                (searchParams.get(COCKPIT_PARAM.areaRepository) ||
+                    localRepositoryId),
+        ) ??
+        globalRepository ??
+        repositories[0];
     const { data, isLoading, isError } = useFetch<AreaMapResponse>(
         CODE_MANAGEMENT_API_PATHS.GET_AREA_RISK_MAP,
         { params: { repositoryId: repository?.id } },
@@ -149,7 +159,9 @@ export function CodeAreasTab({
     );
     const areas = useMemo(() => {
         const byPath = new Map(
-            data?.map?.directDirectories.map((area) => [area.path, area]) ?? [],
+            (data?.map?.directDirectories ?? []).map(
+                (area) => [area.path, area] as const,
+            ),
         );
         return (
             data?.rankedAreaPaths
@@ -177,9 +189,9 @@ export function CodeAreasTab({
                     <p className="text-text-tertiary mb-1 text-xs font-medium tracking-wide uppercase">
                         Repository intelligence
                     </p>
-                    <h1 className="text-text-primary text-2xl font-semibold tracking-tight">
+                    <h2 className="text-text-primary text-2xl font-semibold tracking-tight">
                         Code areas
-                    </h1>
+                    </h2>
                     <p className="text-text-secondary mt-1 max-w-2xl text-sm">
                         Find directories with concentrated change and bug-fix
                         history. Use the evidence to guide review attention.
@@ -190,37 +202,36 @@ export function CodeAreasTab({
                         <p className="text-text-tertiary mb-1.5 text-xs">
                             Repository
                         </p>
-                        {selectedRepository ? (
-                            <p className="text-text-primary text-sm font-medium">
-                                {repository?.full_name ??
-                                    repository?.name ??
-                                    selectedRepository}
-                            </p>
-                        ) : (
-                            <Select
-                                value={repository?.id}
-                                onValueChange={(id) => {
-                                    setLocalRepositoryId(id);
-                                    setSelectedPath("");
-                                    setQuery("");
-                                }}>
-                                <SelectTrigger
-                                    size="sm"
-                                    aria-label="Code area repository"
-                                    className="w-full sm:w-72">
-                                    <SelectValue placeholder="Select repository" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {repositories.map((repo) => (
-                                        <SelectItem
-                                            key={repo.id}
-                                            value={repo.id}>
-                                            {repo.full_name || repo.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
+                        <Select
+                            value={repository?.id}
+                            onValueChange={(id) => {
+                                setLocalRepositoryId(id);
+                                setSelectedPath("");
+                                setQuery("");
+                                const params = new URLSearchParams(
+                                    window.location.search,
+                                );
+                                params.set(COCKPIT_PARAM.areaRepository, id);
+                                window.history.replaceState(
+                                    null,
+                                    "",
+                                    `${pathname}?${params.toString()}`,
+                                );
+                            }}>
+                            <SelectTrigger
+                                size="sm"
+                                aria-label="Code area repository"
+                                className="w-full sm:w-72">
+                                <SelectValue placeholder="Select repository" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {repositories.map((repo) => (
+                                    <SelectItem key={repo.id} value={repo.id}>
+                                        {repo.full_name || repo.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 )}
             </div>
@@ -244,10 +255,6 @@ export function CodeAreasTab({
                         className="text-primary-light text-sm font-medium hover:underline">
                         Connect repository ↗
                     </Link>
-                </div>
-            ) : selectedRepository && !focusedRepository ? (
-                <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
-                    The selected repository is not available for this team.
                 </div>
             ) : isLoading ? (
                 <div className="border-card-lv3/70 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
@@ -368,7 +375,10 @@ export function CodeAreasTab({
                                                             {
                                                                 area.linkedBugFixPrs
                                                             }{" "}
-                                                            linked bugs
+                                                            {area.linkedBugFixPrs ===
+                                                            1
+                                                                ? "linked bug"
+                                                                : "linked bugs"}
                                                         </span>
                                                     </div>
                                                     <div className="bg-card-lv3 mt-1.5 h-1 overflow-hidden rounded-full">
