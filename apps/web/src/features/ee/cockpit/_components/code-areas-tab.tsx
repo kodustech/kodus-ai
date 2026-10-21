@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -152,6 +152,17 @@ export function CodeAreasTab({
         ) ??
         globalRepository ??
         repositories[0];
+    const areaRepositoryId = searchParams.get(COCKPIT_PARAM.areaRepository);
+    useEffect(() => {
+        if (!repository?.id || areaRepositoryId === repository.id) return;
+        const params = new URLSearchParams(window.location.search);
+        params.set(COCKPIT_PARAM.areaRepository, repository.id);
+        window.history.replaceState(
+            null,
+            "",
+            `${pathname}?${params.toString()}`,
+        );
+    }, [areaRepositoryId, pathname, repository?.id]);
     const { data, isLoading, isError } = useFetch<AreaMapResponse>(
         CODE_MANAGEMENT_API_PATHS.GET_AREA_RISK_MAP,
         { params: { repositoryId: repository?.id } },
