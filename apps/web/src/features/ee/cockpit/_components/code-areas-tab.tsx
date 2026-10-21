@@ -32,6 +32,7 @@ type CodeArea = {
 
 type AreaMapResponse = {
     map: {
+        directDirectories: CodeArea[];
         windowStart: string;
         windowEnd: string;
         refreshedAt: string;
@@ -44,7 +45,7 @@ type AreaMapResponse = {
         };
     } | null;
     sync: { complete: boolean; discoveredMergedPrs: number } | null;
-    rankedAreas: CodeArea[];
+    rankedAreaPaths: string[];
     topAreas: CodeArea[];
 };
 
@@ -146,7 +147,16 @@ export function CodeAreasTab({
         { params: { repositoryId: repository?.id } },
         !!repository?.id,
     );
-    const areas = data?.rankedAreas ?? [];
+    const areas = useMemo(() => {
+        const byPath = new Map(
+            data?.map?.directDirectories.map((area) => [area.path, area]) ?? [],
+        );
+        return (
+            data?.rankedAreaPaths
+                .map((path) => byPath.get(path))
+                .filter((area): area is CodeArea => !!area) ?? []
+        );
+    }, [data]);
     const filteredAreas = useMemo(
         () =>
             areas.filter((area) =>

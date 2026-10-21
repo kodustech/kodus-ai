@@ -121,12 +121,13 @@ export class CodeManagementController {
             this.codeAreaRiskMaps.read(organizationId, repositoryId),
             this.codeAreaRiskRefresh.readStatus(organizationId, repositoryId),
         ]);
+        const rankedAreas = map ? rankCodeAreas(map.directDirectories) : [];
         return {
             map,
             sync,
-            rankedAreas: map ? rankCodeAreas(map.directDirectories) : [],
+            rankedAreaPaths: rankedAreas.map((area) => area.path),
             topAreas: map
-                ? rankCodeAreas(map.directDirectories).slice(
+                ? rankedAreas.slice(
                       0,
                       Math.ceil(map.directDirectories.length * 0.2),
                   )
