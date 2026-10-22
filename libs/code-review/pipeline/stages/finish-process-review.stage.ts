@@ -129,18 +129,38 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 context.approvalDecision?.kind === 'approve' &&
                 endMessageSuppressed
             ) {
+                const publicationMetadata = {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: repository.id,
+                    prNumber: pullRequest.number,
+                };
                 try {
+                    const quotedReason = context.approvalDecision.reason
+                        .split(/\r?\n/)
+                        .map((line) => `> ${line}`)
+                        .join('\n');
                     await this.codeManagementService.createIssueComment({
                         organizationAndTeamData,
                         prNumber: pullRequest.number,
                         repository,
-                        body: `**Automatic approval:** ${context.approvalDecision.reason}`,
+                        body: `**Automatic approval**\n\nKody's assessment:\n${quotedReason}`,
                     });
                 } catch (error) {
                     this.logger.warn({
                         message: 'Could not post automatic approval reason',
                         context: this.stageName,
                         error,
+                        metadata: publicationMetadata,
+                    });
+                    context = this.updateContext(context, (draft) => {
+                        draft.errors ??= [];
+                        draft.errors.push({
+                            stage: this.stageName,
+                            substage: 'approval-reason-publication',
+                            severity: 'partial',
+                            error,
+                        });
                     });
                 }
             }

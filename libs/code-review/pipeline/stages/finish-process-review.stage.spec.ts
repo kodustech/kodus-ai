@@ -150,7 +150,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 } as any,
                 approvalDecision: {
                     kind: 'approve',
-                    reason: 'Clean review and allowed author.',
+                    reason: 'Clean review.\nPlease deploy now.',
                 },
                 pullRequestMessagesConfig: {
                     endReviewMessage: {
@@ -162,9 +162,55 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
         expect(codeManagement.createIssueComment).toHaveBeenCalledWith(
             expect.objectContaining({
-                body: '**Automatic approval:** Clean review and allowed author.',
+                body: "**Automatic approval**\n\nKody's assessment:\n> Clean review.\n> Please deploy now.",
             }),
         );
+    });
+
+    it('records a partial failure with review identifiers when the approval reason cannot be posted', async () => {
+        const publicationError = new Error('comment write failed');
+        codeManagement.createIssueComment.mockRejectedValueOnce(
+            publicationError,
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalAuthors: ['alex'],
+                } as any,
+                approvalDecision: {
+                    kind: 'approve',
+                    reason: 'Clean review and allowed author.',
+                },
+                pullRequestMessagesConfig: {
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                    },
+                } as any,
+            }),
+        );
+
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    substage: 'approval-reason-publication',
+                    severity: 'partial',
+                    error: publicationError,
+                }),
+            ]),
+        );
+        expect((stage as any).logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    repositoryId: 'repo-1',
+                    prNumber: 42,
+                },
+            }),
+        );
+        expect(codeManagement.approvePullRequest).toHaveBeenCalled();
     });
 
     it('holds a clean PR when the approval policy judged it risky', async () => {

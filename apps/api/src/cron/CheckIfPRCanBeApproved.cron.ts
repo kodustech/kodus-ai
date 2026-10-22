@@ -97,6 +97,7 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_MARKER = '<!-- kodus-conditional-approval -->';
+const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -966,13 +967,24 @@ export class CheckIfPRCanBeApprovedCronProvider {
         platformType: PlatformType,
         decision: ApprovalDecision,
     ): Promise<void> {
+        let operation = 'getAllCommentsInPullRequest';
         try {
-            const body = `${APPROVAL_REASON_MARKER}\n**Automatic approval ${decision.kind === 'approve' ? 'completed' : 'held'}:** ${decision.reason}`;
-            const comments =
-                await this.codeManagementService.getAllCommentsInPullRequest(
+            const quotedReason = decision.reason
+                .split(/\r?\n/)
+                .map((line) => `> ${line}`)
+                .join('\n');
+            const body = `${APPROVAL_REASON_MARKER}\n**Automatic approval ${decision.kind === 'approve' ? 'completed' : 'held'}**\n\nKody's assessment:\n${quotedReason}`;
+            // The lookup is only for keeping one reason comment current. A
+            // timed-out read may finish later, but cannot post a comment: the
+            // write happens only after this bounded await resolves.
+            const comments = await runWithBoundedTimeout(
+                this.codeManagementService.getAllCommentsInPullRequest(
                     request,
                     platformType,
-                );
+                ),
+                APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
+                'conditional approval comment lookup',
+            );
             const existing = comments?.find((comment) => {
                 const text = comment?.body ?? comment?.note ?? comment?.content;
                 return (
@@ -986,11 +998,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 const previous =
                     existing?.body ?? existing?.note ?? existing?.content;
                 if (previous === body) return;
+                operation = 'updateIssueComment';
                 await this.codeManagementService.updateIssueComment(
                     { ...request, body, commentId, noteId: commentId },
                     platformType,
                 );
             } else {
+                operation = 'createIssueComment';
                 await this.codeManagementService.createIssueComment(
                     { ...request, body },
                     platformType,
@@ -1005,6 +1019,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     organizationAndTeamData: request.organizationAndTeamData,
                     repositoryId: request.repository.id,
                     prNumber: request.prNumber,
+                    operation,
+                    lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
                 },
             });
         }

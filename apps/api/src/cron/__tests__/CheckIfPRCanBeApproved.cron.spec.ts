@@ -368,6 +368,49 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('bounds reason-comment lookup without posting after the lookup times out', async () => {
+        jest.useFakeTimers();
+        try {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getAllCommentsInPullRequest.mockReturnValue(
+                new Promise(() => {}),
+            );
+
+            const posting = (cron as any).postConditionalApprovalReason(
+                {
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    repository: { id: 'repo-1', name: 'api' },
+                    prNumber: 7,
+                },
+                PlatformType.GITHUB,
+                { kind: 'hold', reason: 'A person should review this.' },
+            );
+            await jest.advanceTimersByTimeAsync(10_000);
+            await posting;
+
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.updateIssueComment,
+            ).not.toHaveBeenCalled();
+            expect((cron as any).logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        repositoryId: 'repo-1',
+                        prNumber: 7,
+                        lookupTimeoutMs: 10_000,
+                    }),
+                }),
+            );
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it('holds conditional approval when the provider status is unavailable', async () => {
         const { cron, deps } = makeCron();
         deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
