@@ -41,7 +41,8 @@ export interface FeatureCheckContext {
  * NestJS adapter around the pure `evaluateCatalogGate` decision in
  * `libs/feature-gate/domain/decision.ts`. Loads the snapshot, decides
  * cloud vs self-hosted from `environment.API_CLOUD_MODE`, then either
- * delegates to PostHog (cloud) or short-circuits (self-hosted).
+ * uses the release track for cloud beta, PostHog for cloud alpha/GA/legacy,
+ * and the catalog plus BETA_FEATURES for self-hosted.
  *
  * The web mirror at `apps/web/src/core/feature-gate/resolver.ts` calls
  * the same `evaluateCatalogGate` — there's exactly one source of gate
@@ -79,6 +80,10 @@ export class FeatureGateService {
         if (audience === 'self-hosted') {
             return true; // pass or compat-pass: catalog already gated us.
         }
+
+        // Beta is controlled by the release track in the catalog. PostHog
+        // remains available for private alpha and legacy rollout flags.
+        if (entry?.stage === 'beta') return true;
 
         const evaluationContext: FeatureEvaluationContext | undefined =
             ctx.groups ? { groups: ctx.groups } : undefined;

@@ -45,7 +45,7 @@ function getPostHog(): PostHog | null {
 /**
  * Next.js adapter around the pure `evaluateCatalogGate` decision in
  * `libs/feature-gate/domain/decision.ts`. Self-hosted uses BETA_FEATURES;
- * cloud uses the org's release track and PostHog.
+ * cloud beta uses the org's release track; other cloud stages use PostHog.
  *
  * The lib mirror at `libs/feature-gate/application/feature-gate.service.ts`
  * calls the same `evaluateCatalogGate` — there's exactly one source of
@@ -68,6 +68,7 @@ export const isFeatureEnabled = async ({
 
         if (decision === "deny") return false;
         if (selfHosted) return true;
+        if (entry?.stage === "beta") return true;
 
         // Keep the existing cloud behavior when PostHog is unconfigured.
         const posthog = getPostHog();

@@ -4,7 +4,7 @@
  * by `test/unit/feature-gate/feature-gate.service.spec.ts`. Here we
  * only verify the web-specific wiring:
  *
- *   - cloud uses release track and PostHog; self-hosted uses BETA_FEATURES
+ *   - cloud beta uses release track; other stages may use PostHog
  *   - "deny" decisions short-circuit before calling PostHog
  *   - missing WEB_POSTHOG_KEY retains the cloud compatibility fallback
  *   - the user-vs-organization identifier is selected correctly
@@ -113,6 +113,20 @@ describe("isFeatureEnabled (web resolver)", () => {
         });
 
         expect(result).toBe(false);
+        expect(isFeatureEnabledMock).not.toHaveBeenCalled();
+    });
+
+    it("enables beta for beta-track orgs without PostHog", async () => {
+        featureMock.current = { ...baseFeature, stage: "beta" };
+        isFeatureEnabledMock.mockResolvedValue(false);
+
+        expect(
+            await isFeatureEnabled({
+                feature: "conditional-pr-approval",
+                releaseTrack: "beta",
+            }),
+        ).toBe(true);
+        expect(authMock).not.toHaveBeenCalled();
         expect(isFeatureEnabledMock).not.toHaveBeenCalled();
     });
 

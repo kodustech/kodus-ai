@@ -22,7 +22,6 @@ const access = new ConditionalApprovalAccessService(
     organizationService as any,
     licenseService as any,
 );
-
 beforeEach(() => {
     jest.clearAllMocks();
     featureGate.isEnabled.mockResolvedValue(true);

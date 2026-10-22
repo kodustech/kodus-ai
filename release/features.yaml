@@ -1,6 +1,6 @@
 # Kodus feature catalog — single source of truth for feature lifecycle.
 #
-# - `key`: the PostHog feature flag key the runtime calls (e.g. `agent-review`).
+# - `key`: the feature gate key (and PostHog flag key for alpha/legacy rollout).
 # - `stage`: lifecycle. draft | concept | alpha | beta | general-availability.
 # - `audience`: where the feature can run. Subset of [cloud, self-hosted].
 # - `description`: customer-facing copy. Used as seed for the LLM-generated
@@ -14,6 +14,7 @@
 #
 # Promotion is a PR with CODEOWNERS approval. Any change here triggers
 # `yarn feature-gate:snapshot:check` in CI to verify the snapshot is up to date.
+# Cloud beta is enabled by release track; it does not require a PostHog flag.
 
 schema_version: 1
 
