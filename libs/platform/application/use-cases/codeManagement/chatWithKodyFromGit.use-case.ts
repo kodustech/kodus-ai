@@ -788,7 +788,9 @@ export class ChatWithKodyFromGitUseCase {
                         },
                         PlatformType.GITLAB,
                     )
-                    .catch(() => undefined),
+                    // Unverified is no: a failed lookup must not let anyone accept.
+                    .then((canWrite) => canWrite === true)
+                    .catch(() => false),
             };
         }
         const members = await this.codeManagementService

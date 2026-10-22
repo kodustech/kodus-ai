@@ -170,6 +170,28 @@ describe('BusinessLogicReplies', () => {
         expect(quiet).not.toHaveBeenCalled();
     });
 
+    it('accepts nothing when the access lookup fails', async () => {
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+        });
+        const result = await replies.handle({
+            request,
+            message: 'Keyboard reordering is out of scope',
+            sender: {
+                login: 'rafa',
+                access: async () => {
+                    throw new Error('502');
+                },
+            },
+        });
+        expect(result).toMatchObject({
+            handled: true,
+            reply: expect.stringContaining('nothing was accepted'),
+        });
+        expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
     it('records who accepted (UC-37)', async () => {
         const { replies, publisher } = build({
             intent: 'accept',

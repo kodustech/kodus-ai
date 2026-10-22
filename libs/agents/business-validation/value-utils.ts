@@ -52,7 +52,9 @@ const MAX_ENVELOPE_TEXT = 200;
 /**
  * An answer with nothing in it: empty, or only empty lists beside a short
  * message, status or count (`{"tasks":[]}`, `{"message":"No results"}`).
- * Plain text is not one: it may be a task in a shape nobody parsed.
+ * Plain text is not one: it may be a task in a shape nobody parsed; nor is a
+ * failure (`{"error":"Unauthorized"}`, `{"tasks":[],"status":500}`), which
+ * says nothing about whether the task exists.
  */
 export function answersNothing(value: unknown): boolean {
     if (isEmpty(value)) {
@@ -67,7 +69,7 @@ export function answersNothing(value: unknown): boolean {
     if (Array.isArray(value)) {
         return value.every(answersNothing);
     }
-    if (typeof value !== 'object') {
+    if (typeof value !== 'object' || reportsFailure(value)) {
         return false;
     }
     return Object.entries(value).every(
@@ -77,4 +79,27 @@ export function answersNothing(value: unknown): boolean {
                 (field === null || typeof field !== 'object') &&
                 String(field).length <= MAX_ENVELOPE_TEXT),
     );
+}
+
+const FAILED_STATUS = /^(?:error|failed|failure|unauthori[sz]ed|forbidden)$/i;
+
+/** An envelope that says the call failed: an error, `ok: false`, a 4xx/5xx status. */
+function reportsFailure(envelope: object): boolean {
+    return Object.entries(envelope).some(([key, field]) => {
+        const name = key.toLowerCase().replace('_', '');
+        if (name === 'error' || name === 'errors') {
+            return !isEmpty(field) && field !== false;
+        }
+        if (name === 'ok' || name === 'success') {
+            return field === false;
+        }
+        if (name === 'status' || name === 'statuscode' || name === 'code') {
+            const code = Number(field);
+            return (
+                (Number.isInteger(code) && code >= 400 && code < 600) ||
+                (typeof field === 'string' && FAILED_STATUS.test(field))
+            );
+        }
+        return false;
+    });
 }

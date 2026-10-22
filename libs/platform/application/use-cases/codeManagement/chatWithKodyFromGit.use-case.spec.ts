@@ -403,6 +403,31 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         expect(getListMembers).not.toHaveBeenCalled();
 
+        // A failed or empty level lookup is a no, never "unknown".
+        const gitlab = {
+            platformType: PlatformType.GITLAB,
+            payload: {
+                user: { id: 7, name: 'guest' },
+                merge_request: { author_id: 9 },
+            },
+        };
+        userCanWrite.mockRejectedValueOnce(new Error('502'));
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        userCanWrite.mockResolvedValueOnce(undefined as any);
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+
         getListMembers.mockResolvedValueOnce([]);
         await expect(
             (useCase as any).senderAccess(

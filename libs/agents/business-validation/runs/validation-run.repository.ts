@@ -136,7 +136,10 @@ export class ValidationRunRepository {
         organizationId: string,
         previewId: string,
     ): Promise<boolean> {
-        return !!(await this.model.exists({ organizationId, previewId }));
+        return !!(await this.model.exists({
+            organizationId: { $eq: String(organizationId) },
+            previewId: { $eq: String(previewId) },
+        }));
     }
 
     /** The PR's last run that wrote a comment or a verdict: the one a re-check or a reply builds on. */

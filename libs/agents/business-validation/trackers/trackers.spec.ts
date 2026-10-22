@@ -318,6 +318,25 @@ describe('McpTaskTracker', () => {
         },
     );
 
+    it.each([
+        { error: 'Unauthorized' },
+        { tasks: [], status: 500 },
+        { items: [], ok: false },
+        '{"tasks":[],"status":"error"}',
+    ])('never reads a failure envelope as a clean miss: %j', async (answer) => {
+        const getTask = tool(
+            'get_task',
+            { properties: { id: { type: 'string' } }, required: ['id'] },
+            { readOnlyHint: true },
+        );
+        const s = session({ tools: [getTask], call: () => answer });
+        const lookup = await new CustomMcpTracker('Plugin', s).read(
+            ref('SHA-256'),
+            { organizationAndTeamData: {} as any },
+        );
+        expect(lookup).toMatchObject({ status: 'not_found', unread: true });
+    });
+
     it('says which tools it called to read a task, for the test on a PR', async () => {
         const s = session({
             call: () => ({

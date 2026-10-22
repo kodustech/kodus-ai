@@ -146,10 +146,37 @@ export class BusinessLogicReplies {
                 request.organizationAndTeamData,
                 text,
             );
-        const sender = {
-            ...input.sender,
-            ...(await input.sender.access?.().catch(() => ({}))),
-        };
+        let sender: Pick<
+            BusinessLogicReplyInput['sender'],
+            'canWrite' | 'isAuthor'
+        >;
+        try {
+            sender = {
+                ...input.sender,
+                ...(await input.sender.access?.()),
+            };
+        } catch (error) {
+            // Unverified is not allowed: nothing is accepted on a failed lookup.
+            this.logger.error({
+                message:
+                    'Could not verify who replied to the business logic comment',
+                context: BusinessLogicReplies.name,
+                error,
+                metadata: {
+                    organizationId:
+                        request.organizationAndTeamData.organizationId,
+                    teamId: request.organizationAndTeamData.teamId,
+                    repositoryId: request.repository?.id,
+                    prNumber: request.pullRequest.number,
+                },
+            });
+            return {
+                handled: true,
+                reply: await say(
+                    `I couldn't check your access to the repository, so nothing was accepted. Reply again in a moment.`,
+                ),
+            };
+        }
         // With the comment as the only signal, a PR must not clear itself:
         // the author disputes, someone else accepts.
         if (sender.isAuthor) {
