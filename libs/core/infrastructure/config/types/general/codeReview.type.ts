@@ -703,12 +703,16 @@ export type CodeReviewConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    // Pause rules Cockpit labels ignored or noisy (daily analytics cron).
+    kodyRulesAutoPauseEnabled?: boolean;
     // Provider-native user ids whose review comments are EXCLUDED when learning
     // Kody Rules from past reviews. Denylist: empty/absent = learn from everyone.
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: KodyKnowledgeApprovalConfig;
     reviewModeConfig?: ReviewModeConfig;
-    ideRulesSyncEnabled?: boolean;
+    // Reviews read the repo's coding-agent instructions (CLAUDE.md, AGENTS.md,
+    // .cursor/rules, ...). It never imports those files as Kody Rules.
+    repoInstructionsEnabled?: boolean;
     kodyFineTuningConfig?: KodyFineTuningConfig;
     configLevel?: ConfigLevel;
     directoryId?: string;

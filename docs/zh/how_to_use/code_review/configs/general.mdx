@@ -79,6 +79,9 @@ deterministicEvidence:
         secrets: false # 对变更文件进行凭据扫描
         dependencies: false # 此 PR 新增或升级的依赖中的已知 CVE
 
+# what to review:编码代理指令
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
+
 # what to review:严重程度阈值
 suggestionControl:
     applyFiltersToKodyRules: false
@@ -92,7 +95,6 @@ summary:
     customInstructions: ''
 
 # kody rules
-ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:

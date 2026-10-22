@@ -13,10 +13,13 @@ export class KodyRulesLimitResponseDto extends ApiResponseBaseDto {
 
 export class KodyRulesSyncStatusDto {
     @ApiProperty()
-    ideRulesSyncEnabledFirstTime: boolean;
-
-    @ApiProperty()
     kodyRulesGeneratorEnabledFirstTime: boolean;
+
+    @ApiProperty({
+        description:
+            'Rules the onboarding import made from coding-agent files that were removed when those files stopped becoming rules.',
+    })
+    removedOnboardingImports: number;
 }
 
 export class KodyRulesSyncStatusResponseDto extends ApiResponseBaseDto {
@@ -236,9 +239,17 @@ export class KodyRuleDto {
 
     @ApiPropertyOptional({
         description:
-            'True when the source file currently carries an `@kody-sync` marker — the per-file override that keeps the rule synced even with the repo `ideRulesSyncEnabled=false`. Surfaced so the UI can exclude such rules from the orphan chip and bulk pause/delete actions.',
+            'Deprecated. Used to mark rules whose source file carried `@kody-sync`; no longer set.',
     })
     pinnedSync?: boolean;
+
+    @ApiPropertyOptional({
+        nullable: true,
+        enum: ['not_a_rule_template'],
+        description:
+            "Set when the rule's .kody/rules file stopped parsing as a rule template; the rule keeps its last text.",
+    })
+    sourceFileIssue?: 'not_a_rule_template' | null;
 
     @ApiPropertyOptional({
         description:

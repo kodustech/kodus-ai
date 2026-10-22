@@ -42,21 +42,21 @@ describe("isIdeRuleSource", () => {
 
 describe("inferRuleOrigin", () => {
     // Client data: b207a89c (Logging Best Practices) — real IDE sync
-    it('returns "Auto-sync" when sourcePath points at a .cursor/rules/*.mdc file', () => {
+    it('returns "Agent file" when sourcePath points at a .cursor/rules/*.mdc file', () => {
         const result = inferRuleOrigin({
             sourcePath: "qantilever/.cursor/rules/logging.mdc",
             origin: "user",
         });
-        expect(result).toBe("Auto-sync");
+        expect(result).toBe("Agent file");
     });
 
     // Client data: 32dfa554 (Java/Spring Arch) — real IDE sync
-    it('returns "Auto-sync" for a .cursorrules nested in a subdirectory', () => {
+    it('returns "Agent file" for a .cursorrules nested in a subdirectory', () => {
         const result = inferRuleOrigin({
             sourcePath: "applications/backoffice-bff/.cursorrules",
             origin: "user",
         });
-        expect(result).toBe("Auto-sync");
+        expect(result).toBe("Agent file");
     });
 
     // Local reproduction: 3 rules from fast-sync on a fresh account where

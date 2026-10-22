@@ -30,7 +30,9 @@ const suggestionSchema = z.object({
     // finder.agent.ts): without them there is no finding to keep.
     relevantFile: z.string().refine(nonBlank),
     language: lenient(z.string()),
-    label: lenient(z.enum(['bug', 'security', 'performance'])),
+    label: lenient(
+        z.enum(['bug', 'security', 'performance', 'repo_instruction']),
+    ),
     suggestionContent: z.string().refine(nonBlank),
     // A finding without a fix is still a finding: the #1833 gate
     // (agent-review.stage.ts) publishes it as a plain comment.

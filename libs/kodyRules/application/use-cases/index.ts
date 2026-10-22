@@ -20,7 +20,7 @@ import { GenerateKodyRulesUseCase } from './generate-kody-rules.use-case';
 import { GetInheritedRulesKodyRulesUseCase } from './get-inherited-kody-rules.use-case';
 import { GetPendingKodyRulesUseCase } from './get-pending-kody-rules.use-case';
 import { GetRulesLimitStatusUseCase } from './get-rules-limit-status.use-case';
-import { ImportFastKodyRulesUseCase } from './import-fast-kody-rules.use-case';
+import { ListAgentInstructionFilesUseCase } from './list-agent-instruction-files.use-case';
 import { ManageImportedKodyRulesUseCase } from './manage-imported-kody-rules.use-case';
 import { ResyncRulesFromIdeUseCase } from './resync-rules-from-ide.use-case';
 import { SendRulesNotificationUseCase } from './send-rules-notification.use-case';
@@ -50,7 +50,7 @@ export const UseCases = [
     FindSuggestionsByRuleUseCase,
     ResyncRulesFromIdeUseCase,
     FastSyncIdeRulesUseCase,
-    ImportFastKodyRulesUseCase,
+    ListAgentInstructionFilesUseCase,
     ConvertPendingUpdatesToNewUseCase,
     ManageImportedKodyRulesUseCase,
     GetKodyRulesIndexUseCase,

@@ -220,7 +220,8 @@ const SETTINGS_TABS = [
         label: "What to review",
         href: "review-scope",
         icon: ScanSearchIcon,
-        keywords: "categories severity instructions",
+        keywords:
+            "categories severity instructions coding-agent claude.md agents.md cursor",
     },
     {
         label: "Kody Rules",

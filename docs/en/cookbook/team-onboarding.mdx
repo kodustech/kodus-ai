@@ -36,15 +36,15 @@ automatedReviewActive: true
 
 This gives you automated reviews with a reasonable severity threshold. Adjust after a week based on feedback.
 
-## Step 3 — Import existing rules from IDE tools
+## Step 3 — Use the instructions you already wrote for coding agents
 
-If your team already uses Cursor, Copilot, or Claude rules:
+If your team already keeps Cursor, Copilot, Claude or `AGENTS.md` instructions:
 
-1. In the sidebar, pick the repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Auto-sync rules from repo**
-2. Kodus detects `.cursorrules`, `.github/copilot-instructions.md`, and `.claude` files
-3. Review the imported rules and keep the ones that make sense for code review
+1. In the sidebar, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **What to review**, and turn on **Coding-agent instructions**
+2. Kody reads the instruction files that cover each pull request's changed files and points out changes that break them
+3. For a convention you want enforced on every review, write it as a rule file in `.kody/rules`
 
-This avoids having to rewrite rules from scratch.
+The instruction files are never turned into Kody Rules, so they can't silently change your review policy.
 
 ## Step 4 — Teach your top 5 conventions
 

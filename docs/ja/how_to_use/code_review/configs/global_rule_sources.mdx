@@ -3,15 +3,16 @@ title: "グローバルルールソース"
 description: "接続済みリポジトリを組織全体の Kody Rules のソースにして、単一のアーキテクチャ・コーディング標準をすべてのリポジトリのコードレビューに適用します。"
 ---
 
-グローバルルールソースを使うと、1 つ以上の接続済みリポジトリを Kodus に指定し、そこにあるルールファイルを**グローバル** Kody Rules としてインポートできます。[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules)（それが置かれたリポジトリにのみ適用）とは異なり、グローバルソースからインポートされたルールはコードレビュー時に**すべての**リポジトリに適用されます。
+グローバルルールソースを使うと、1 つ以上の接続済みリポジトリを Kodus に指定し、そこにある Kody Rule ファイルを**グローバル** Kody Rules としてインポートできます。[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules)（それが置かれたリポジトリにのみ適用）とは異なり、グローバルソースからインポートされたルールはコードレビュー時に**すべての**リポジトリに適用されます。
 
 チームがアーキテクチャとコーディング標準を専用の「standards」リポジトリで管理していて、各プロジェクトにルールファイルをコピーせずにその標準をどこでも適用したい場合に使います。
 
 ## 仕組み
 
 - **ソース**として振る舞う接続済みリポジトリを選択します。
-- Kodus は各ソースリポジトリを、[ルールファイル検出](/ja/how_to_use/code_review/configs/rules_file_detection) と同じパターン（`CLAUDE.md`、`AGENTS.md`、`.cursor/rules/**`、`.kody/rules/**` など）でスキャンします。
+- Kodus は各ソースリポジトリで、[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules) と同じ場所とテンプレート（`.kody/rules/**`、`rules/**/*.md` など）の Kody Rule ファイルをスキャンします。
 - 見つかった各ルールファイルは**グローバルスコープ**にインポートされ、取得元のソースリポジトリのタグが付きます。
+- コーディングエージェント向けに書かれた指示（`CLAUDE.md`、`AGENTS.md`、`.cursor/rules/**`）はインポートされません。この変更以前にそれらからインポートされたグローバルルールは残りますが、更新されなくなります。[コーディングエージェント向け指示](/ja/how_to_use/code_review/configs/rules_file_detection) を参照してください。
 - 任意のリポジトリのコードレビュー時に、これらのグローバルルールがそのリポジトリ自身のルールと併せて適用されます（[継承](/ja/how_to_use/code_review/configs/rules_inheritance) に従います）。
 
 <Info>
@@ -67,5 +68,5 @@ Trial プランでは、インポート時に、選択したリポジトリ全�
 ## 関連
 
 - [リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules) — 単一リポジトリにスコープされたバージョン管理下のルール。
-- [ルールファイル検出](/ja/how_to_use/code_review/configs/rules_file_detection) — Kodus がスキャンするファイルパターン。
+- [リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules) — Kodus がインポートするルールファイルの場所とテンプレート。
 - [ルールの継承](/ja/how_to_use/code_review/configs/rules_inheritance) — グローバル・リポジトリ・ディレクトリのルールがレビュー時にどう組み合わさるか。

@@ -56,7 +56,10 @@ export interface ICockpitReviewAnalyticsService {
     getReviewOperationalMetricsWeekly(
         q: CockpitRangeQuery,
     ): Promise<ReviewOperationalMetricsWeeklyRow[]>;
-    getKodyRulesUsage(q: CockpitRangeQuery): Promise<KodyRuleUsageRow[]>;
+    getKodyRulesUsage(
+        q: CockpitRangeQuery,
+        opts?: { suggestionsCreatedSince?: string },
+    ): Promise<KodyRuleUsageRow[]>;
     /**
      * Review quality split into rule-driven vs Kodus-native suggestions, in a
      * single warehouse pass. Powers the report's "is the team acting on /
