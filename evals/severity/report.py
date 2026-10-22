@@ -135,7 +135,7 @@ details summary{{cursor:pointer;font-weight:600;margin-bottom:8px}}table.rev td{
 <div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="defs">Definições</button></div>
 <section id="t-testes" class="aba">
 <p>Meta: 80% de acerto em cada nível, separado. Dataset: 205 sugestões rotuladas pelo próprio texto, contra a definição da aba Definições (50 low, 70 medium, 50 high, 35 critical; 31 dos critical são sintéticos, confirmados pelo Astra, porque o gold só tem 4). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 80% (na meta), amarelo 70–79%, vermelho abaixo de 70%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
-<p class="leitura"><b>Resultado:</b> o teste 16 (definição final, voto de 3) bate a meta de 80% em todos os níveis no Opus (86/93/84/100), no DeepSeek (90/89/88/100) e no GPT (86/93/80/100). O Sonnet fica em high (62%). O prompt de produção, nos mesmos itens, fica em 27–51% no medium e 42–58% no high. Os testes 1 a 15 abaixo são histórico, medidos pelo rótulo do gold.</p>
+<p class="leitura"><b>Resultado:</b> o teste 16 (definição final, voto de 3) bate a meta de 80% em todos os níveis no Opus (86/93/84/100), no DeepSeek (90/89/88/100) e no GPT (86/93/80/100). O Kimi fica a 3 itens em medium (76%, sobe medium para high) e o Sonnet em high (62%, rebaixa high para medium). O prompt de produção, nos mesmos itens, fica em 27–51% no medium e 42–58% no high. Os testes 1 a 15 abaixo são histórico, medidos pelo rótulo do gold.</p>
 {''.join(blocos)}
 </section>
 <section id="t-defs" class="aba" hidden>{tab_defs()}</section>

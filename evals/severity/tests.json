@@ -4,7 +4,7 @@
   "rotulo": "texto",
   "titulo": "Teste 16 · definição final, rótulos pelo texto",
   "mudou": "Dataset novo: 205 itens rotulados pelo texto de cada sugestão contra a definição final (50 low, 70 medium, 50 high, 35 critical, dos quais 31 sintéticos confirmados pelo Astra). Prompt com a definição final (log é low, CI só de desenvolvimento é medium, latente no máximo medium, exploit só afirmado vale pela fraqueza), 10 exemplos alinhados, sem código, voto de 3. Opus e Sonnet pela assinatura.",
-  "leitura": "Opus (86/93/84/100), DeepSeek (90/89/88/100) e GPT (86/93/80/100) passam de 80% em todos os níveis. O Sonnet segura em high (62): rebaixa high em todos os testes. Os 35 critical acertam nos quatro modelos; os sintéticos são fáceis, servem para pegar quem rebaixa critical."
+  "leitura": "Opus (86/93/84/100), DeepSeek (90/89/88/100) e GPT (86/93/80/100) passam de 80% em todos os níveis. O Kimi (80/76/90/100) fica a 3 itens da meta em medium: sobe 17 medium para high, o inverso do Sonnet, que segura em high (62) porque rebaixa high para medium em todos os testes. Os 35 critical acertam nos cinco modelos; os sintéticos são fáceis, servem para pegar quem rebaixa critical."
  },
  {
   "pasta": "prod-205",
