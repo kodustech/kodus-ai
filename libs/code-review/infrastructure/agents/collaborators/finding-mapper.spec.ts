@@ -38,6 +38,25 @@ describe('resolveSuggestionLabel', () => {
             'bug',
         );
     });
+    it('keeps repo_instruction only when the run allows it', () => {
+        expect(
+            resolveSuggestionLabel({ label: 'repo_instruction' }, mixedPolicy),
+        ).toBe('bug');
+        expect(
+            resolveSuggestionLabel(
+                { label: 'repo_instruction' },
+                {
+                    ...mixedPolicy,
+                    allowedLabels: [
+                        'bug',
+                        'security',
+                        'performance',
+                        'repo_instruction',
+                    ],
+                },
+            ),
+        ).toBe('repo_instruction');
+    });
 });
 
 describe('mapAgentFindings', () => {

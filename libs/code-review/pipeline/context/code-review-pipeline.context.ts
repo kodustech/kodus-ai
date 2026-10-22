@@ -385,6 +385,8 @@ export interface DedupTraceSummary {
     groupsCount: number;
     removedCount: number;
     errorMessage?: string;
+    /** The follow-up for left-out suggestions failed; the stage kept them as they were. */
+    followupError?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
     /** Presente quando o reducer rodou no lugar do dedup. */

@@ -33,6 +33,8 @@ import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import { buildRepoInstructionTool } from '@libs/code-review/infrastructure/agents/adapters/repo-instruction-tool';
+import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
     FINDER_DONE_TOOL,
     buildFinderAgentSpec,
@@ -454,6 +456,17 @@ export function finderRunEnvironment(
         linkedRepoAccess: secrets.linkedRepoAccess,
         extraTools: secrets.extraTools,
     });
+    // Without a sandbox or tools of the agent's own there are no repository
+    // tools; that decides the self-contained regime, before the instructions
+    // tool is added.
+    const isSelfContained = baseTools.list().length === 0;
+    const reviewTools =
+        input.listsRepoInstructions && input.repoInstructions?.files?.length
+            ? new InMemoryToolRegistry([
+                  ...baseTools.list(),
+                  buildRepoInstructionTool(input.repoInstructions),
+              ])
+            : baseTools;
 
     // Second pass for convention findings (custom agents): needs the guides
     // as they are on the target branch, so only with a sandbox that can run
@@ -469,8 +482,8 @@ export function finderRunEnvironment(
     // needs no model check.
     const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
     const tools = astGrepLog
-        ? recordAstGrepOutputs(baseTools, astGrepLog)
-        : baseTools;
+        ? recordAstGrepOutputs(reviewTools, astGrepLog)
+        : reviewTools;
 
     // Reasoning/thinking config (provider-specific) → providerOptions, forwarded
     // to every model call (finder + verifier). Ported from the legacy loop.
@@ -543,6 +556,7 @@ export function finderRunEnvironment(
         runner,
         tools,
         toolCache,
+        isSelfContained,
         providerOptions,
         contextWindowTokens,
         overheadTokens,
@@ -559,6 +573,7 @@ export function finderRunEnvironment(
             tools,
             providerOptions,
             previousDecisions: input.previousDecisions,
+            repoInstructions: input.repoInstructions,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,
@@ -597,6 +612,7 @@ export async function runAgentLoopViaCore(
     const {
         tools,
         toolCache,
+        isSelfContained,
         providerOptions,
         contextWindowTokens,
         overheadTokens,
@@ -618,7 +634,6 @@ export async function runAgentLoopViaCore(
     // --heavy`) forces the recall passes to run regardless — the whole point of
     // heavy is more recall via resampling, so it must not be silently nullified
     // by the default fast/self-contained gating.
-    const isSelfContained = tools.list().length === 0;
     const skipHeavyPasses =
         !input.heavy &&
         (input.reviewMode === 'fast' ||
@@ -1328,6 +1343,7 @@ export async function runAgentLoopViaCore(
                       )
                 : undefined,
             previousDecisions: input.previousDecisions,
+            repoInstructions: input.repoInstructions,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,

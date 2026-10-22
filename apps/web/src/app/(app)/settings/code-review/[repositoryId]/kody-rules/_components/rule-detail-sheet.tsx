@@ -26,6 +26,7 @@ import {
     type KodyRuleWithInheritanceDetails,
 } from "@services/kodyRules/types";
 import {
+    AlertTriangleIcon,
     ArrowDownIcon,
     ArrowRightToLineIcon,
     ArrowUpIcon,
@@ -45,6 +46,7 @@ import {
 import { cn } from "src/core/utils/components";
 
 import { ExternalReferencesDisplay } from "../../pr-summary/_components/external-references-display";
+import { AutoPauseNotice } from "./auto-pause-notice";
 import {
     formatAbsoluteDate,
     RuleStatus,
@@ -58,7 +60,6 @@ type RuleDetailSheetProps = {
     /** The rule to show; null keeps the sheet closed. */
     rule: KodyRuleWithInheritanceDetails | null;
     variant: KodyRulesTableVariant;
-    syncEnabledForRepo?: boolean;
     context: KodyRuleRowContext;
     onClose: () => void;
     /** Step to the previous / next rule in the list currently on screen. */
@@ -77,7 +78,6 @@ type RuleDetailSheetProps = {
 export const KodyRuleDetailSheet = ({
     rule,
     variant,
-    syncEnabledForRepo,
     context,
     onClose,
     onNavigate,
@@ -216,11 +216,7 @@ export const KodyRuleDetailSheet = ({
                         <SheetDescription asChild>
                             <div className="text-text-secondary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                                 {!isMemory && (
-                                    <OriginBadge
-                                        rule={rule}
-                                        syncEnabledForRepo={syncEnabledForRepo}
-                                        variant="text"
-                                    />
+                                    <OriginBadge rule={rule} variant="text" />
                                 )}
                                 {isMemory ? (
                                     <span className="flex items-center gap-1">
@@ -249,6 +245,14 @@ export const KodyRuleDetailSheet = ({
                                         </code>
                                     </span>
                                 )}
+                                {rule.sourceFileIssue && (
+                                    <span className="text-warning flex items-center gap-1">
+                                        <AlertTriangleIcon className="size-3 shrink-0" />
+                                        Its file no longer syncs: a .kody/rules
+                                        file needs a frontmatter with a title.
+                                        Kody keeps the last version that synced.
+                                    </span>
+                                )}
                                 {isInherited && (
                                     <span className="flex items-center gap-1">
                                         <LayersIcon className="size-3 shrink-0" />
@@ -268,13 +272,27 @@ export const KodyRuleDetailSheet = ({
 
                 <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                     <div className="flex flex-col gap-8 px-6 py-6">
+                        {isPaused && rule.autoPause && (
+                            <AutoPauseNotice
+                                autoPause={rule.autoPause}
+                                canResume={context.canEdit && !isInherited}
+                                resuming={isChangingStatus}
+                                onResume={() =>
+                                    changeStatus(KodyRulesStatus.ACTIVE)
+                                }
+                            />
+                        )}
+
                         {/* The instructions ARE the rule: body copy, readable
                             measure, no label — the title above names it. */}
                         <p className="text-text-primary max-w-prose text-[15px] leading-relaxed break-words whitespace-pre-wrap">
                             {rule.rule}
                         </p>
 
-                        {!isMemory && (
+                        {/* Rule health covers active rules only, so a rule
+                            paused by Kody would read as never triggered; the
+                            notice above carries its numbers instead. */}
+                        {!isMemory && !(isPaused && rule.autoPause) && (
                             <RuleImpact
                                 rule={rule}
                                 seeAll={context.renderSuggestions?.(rule)}

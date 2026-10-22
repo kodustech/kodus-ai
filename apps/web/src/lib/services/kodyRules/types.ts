@@ -7,6 +7,19 @@ export enum KodyRuleInheritanceOrigin {
     DIRECTORY = 'directory',
 }
 
+export type KodyRuleAutoPause = {
+    state: 'ignored' | 'noisy';
+    /** ISO timestamps from the API. */
+    pausedAt: string;
+    windowStart: string;
+    windowEnd: string;
+    triggers: number;
+    implemented: number;
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+};
+
 export type KodyRule = {
     uuid?: string;
     status: KodyRulesStatus;
@@ -19,14 +32,8 @@ export type KodyRule = {
     repositoryId?: string;
     directoryId?: string;
     sourcePath?: string;
-    /**
-     * True when the source file currently carries an `@kody-sync`
-     * marker — the per-file override that keeps the rule synced
-     * even with the repo's auto-sync toggle off. Surfaced so the
-     * orphan chip can exclude these (they're not orphans) and the
-     * Auto-sync badge can render a pin affordance.
-     */
-    pinnedSync?: boolean;
+    /** For rules imported from a global-rules source repository. */
+    sourceRepositoryId?: string;
     /**
      * True when this rule is PAUSED because activating it would exceed
      * the free plan's active-rule quota, rather than a user-initiated
@@ -34,6 +41,13 @@ export type KodyRule = {
      * resume toggle.
      */
     lockedByPlan?: boolean;
+    /** The rule's .kody/rules file stopped parsing; the rule keeps its last text. */
+    sourceFileIssue?: "not_a_rule_template" | null;
+    /**
+     * Set while the rule is paused because Kody judged it ignored or noisy
+     * (`kodyRulesAutoPauseEnabled`). Cleared on resume.
+     */
+    autoPause?: KodyRuleAutoPause | null;
     centralizedConfig?: {
         path: string;
         status: KodyRuleCentralizedStatus;

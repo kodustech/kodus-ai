@@ -12,6 +12,7 @@ import {
     FindMemoriesResult,
     IKodyRule,
     IKodyRuleContextNeed,
+    KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
     IKodyRuleCompileAttempt,
     IKodyRuleDetector,
@@ -91,6 +92,16 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationId: string,
         ruleId: string,
         detector: IKodyRuleDetector | null,
+    ): Promise<IKodyRule | null>;
+
+    /**
+     * Flag (or, with `null`, clear) a rule whose source file stopped parsing
+     * as a Kody rule template. The rule itself is left as it is.
+     */
+    updateRuleSourceFileIssue(
+        organizationId: string,
+        ruleId: string,
+        issue: KodyRuleSourceFileIssue | null,
     ): Promise<IKodyRule | null>;
 
     /**

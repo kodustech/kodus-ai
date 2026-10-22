@@ -23,6 +23,23 @@ describe('sanitizeFindingsResult', () => {
         mockLogger.warn.mockClear();
     });
 
+    it('keeps a repo_instruction finding', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                {
+                    relevantFile: 'src/a.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says: use the logger.',
+                    existingCode: 'console.log(x)',
+                    improvedCode: 'logger.info(x)',
+                },
+            ],
+        } as FindingsOutput);
+
+        expect(result?.suggestions[0]?.label).toBe('repo_instruction');
+    });
+
     it('returns null when given null', () => {
         expect(sanitizeFindingsResult(null)).toBeNull();
     });

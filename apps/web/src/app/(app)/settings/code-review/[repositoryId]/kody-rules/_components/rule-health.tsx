@@ -30,14 +30,14 @@ export const HEALTH: Record<
     noisy: {
         label: "Noisy",
         className:
-            "bg-warning/10 text-warning ring-warning/40 [--button-foreground:var(--color-warning)]",
-        title: "Triggers a lot, but almost nothing it flags gets implemented.",
+            "bg-danger/10 text-danger ring-danger/40 [--button-foreground:var(--color-danger)]",
+        title: "What it flags is being dismissed or voted down.",
     },
     ignored: {
         label: "Ignored",
         className:
-            "bg-danger/10 text-danger ring-danger/40 [--button-foreground:var(--color-danger)]",
-        title: "What it flags is being dismissed or voted down.",
+            "bg-warning/10 text-warning ring-warning/40 [--button-foreground:var(--color-warning)]",
+        title: "Triggers a lot, but almost nothing it flags gets implemented.",
     },
     stale: {
         label: "Stale",

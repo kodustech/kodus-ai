@@ -48,11 +48,12 @@ import {
     TrashIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
-import { isOrphanAutoSyncRule } from "src/core/utils/kody-rules/apply-filters";
+import { isFrozenAgentFileRule } from "src/core/utils/kody-rules/apply-filters";
 import { inferRuleOrigin } from "src/core/utils/kody-rules/infer-origin";
 import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
 import type { KodyRuleHealthRow } from "src/features/ee/cockpit/_services/analytics/review/fetch";
 
+import { autoPauseTitle } from "./auto-pause-notice";
 import { OriginBadge } from "./origin-badge";
 import { ATTENTION_STATES, RuleHealthChip } from "./rule-health";
 
@@ -287,8 +288,12 @@ export const RuleStatus = ({
         return (
             <StatusPill
                 tone="warning"
-                label="Paused"
-                title={`This ${entityLabel} is paused: it stays in your list but is skipped on every new PR.`}
+                label={rule.autoPause ? "Paused by Kody" : "Paused"}
+                title={
+                    rule.autoPause
+                        ? autoPauseTitle(rule.autoPause)
+                        : `This ${entityLabel} is paused: it stays in your list but is skipped on every new PR.`
+                }
             />
         );
     }
@@ -330,8 +335,6 @@ type KodyRuleRowProps = {
         eligible: boolean;
         onToggle: () => void;
     };
-    /** Repo's `ideRulesSyncEnabled`; forwarded to OriginBadge + row accent. */
-    syncEnabledForRepo?: boolean;
     /** The rule currently open in the detail sheet. */
     active: boolean;
     /** Row click: open this rule in the detail sheet. */
@@ -344,7 +347,6 @@ export const KodyRuleRow = ({
     variant,
     withSelection,
     selection,
-    syncEnabledForRepo,
     active,
     onSelect,
     context,
@@ -359,8 +361,7 @@ export const KodyRuleRow = ({
     const canMutate = context.canEdit && !isInherited;
     const syncErrors = Array.isArray(rule.syncErrors) ? rule.syncErrors : [];
     const hasSyncErrors = syncErrors.length > 0;
-    const isOrphan =
-        !isMemory && syncEnabledForRepo === false && isOrphanAutoSyncRule(rule);
+    const isFrozen = !isMemory && isFrozenAgentFileRule(rule);
     const references = rule.externalReferences ?? [];
     const origin = inferRuleOrigin(rule);
     const withUsage = variant === "rules" && !!context.health;
@@ -372,12 +373,12 @@ export const KodyRuleRow = ({
             context.onChangeStatus(rule, status),
     );
 
-    // Status cue on the row's leading edge, so a broken reference sync or an
-    // orphaned auto-sync rule is caught on the first downward scan. Every
-    // other state keeps a transparent edge so the list stays quiet.
+    // Status cue on the row's leading edge, so a broken reference sync or a
+    // frozen rule from a coding-agent file is caught on the first downward
+    // scan. Every other state keeps a transparent edge so the list stays quiet.
     const rowAccent = hasSyncErrors
         ? "border-l-danger/70"
-        : isOrphan
+        : isFrozen
           ? "border-l-warning/70"
           : "border-l-transparent";
 
@@ -457,6 +458,20 @@ export const KodyRuleRow = ({
                                 </TooltipContent>
                             </Tooltip>
                         )}
+                        {rule.sourceFileIssue && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="text-warning flex shrink-0 items-center">
+                                        <AlertTriangleIcon className="size-3.5" />
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs text-xs">
+                                    Its file no longer syncs: a .kody/rules file
+                                    needs a frontmatter with a title. Kody keeps
+                                    the last version that synced.
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                     </div>
 
                     <div className="text-text-secondary mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
@@ -526,7 +541,6 @@ export const KodyRuleRow = ({
                         {!isMemory && origin !== "manual" && (
                             <OriginBadge
                                 rule={rule}
-                                syncEnabledForRepo={syncEnabledForRepo}
                                 variant="text"
                                 className="@4xl:hidden"
                             />
@@ -564,11 +578,7 @@ export const KodyRuleRow = ({
 
                 {!isMemory && (
                     <div className="hidden min-w-0 items-center @4xl:flex">
-                        <OriginBadge
-                            rule={rule}
-                            syncEnabledForRepo={syncEnabledForRepo}
-                            variant="text"
-                        />
+                        <OriginBadge rule={rule} variant="text" />
                     </div>
                 )}
 

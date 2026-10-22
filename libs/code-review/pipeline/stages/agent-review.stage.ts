@@ -147,6 +147,12 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
+    collectRepoInstructions,
+    shouldCollectRepoInstructions,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS } from '@libs/common/utils/kody-rules/file-patterns';
+import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
@@ -401,6 +407,148 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly buildPreviousReviewDecisionsUseCase?: BuildPreviousReviewDecisionsUseCase,
     ) {
         super();
+    }
+
+    /**
+     * The repository's coding-agent instructions (CLAUDE.md, AGENTS.md,
+     * .cursor/rules, ...) that govern the changed files, read from the PR's
+     * target branch when the repository opted in (`repoInstructionsEnabled`). Never fails
+     * the review: a git host error just means the review runs without them.
+     */
+    private async resolveRepoInstructions(
+        context: CodeReviewPipelineContext,
+        changedFiles: Array<{ filename: string }>,
+        adaptiveProfile: { kind?: string; dropCallGraph?: boolean },
+        prNumber: number,
+    ): Promise<RepoInstructionsContext | undefined> {
+        const enabled =
+            context.codeReviewConfig?.repoInstructionsEnabled === true;
+        const logMetadata = {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            repositoryId: context.repository?.id,
+            prNumber,
+        };
+
+        if (
+            !shouldCollectRepoInstructions(
+                context.codeReviewConfig,
+                adaptiveProfile,
+            )
+        ) {
+            if (enabled) {
+                this.logger.log({
+                    message: `[repo-instructions] skipped for PR#${prNumber}: adaptive-fit profile ${adaptiveProfile.kind} drops optional context`,
+                    context: this.stageName,
+                    metadata: { ...logMetadata, profile: adaptiveProfile.kind },
+                });
+            }
+            return undefined;
+        }
+
+        // Deep mode dispatches only the category agents, which never render
+        // the instructions block.
+        if (context.codeReviewConfig?.reviewMode === 'deep') {
+            this.logger.log({
+                message: `[repo-instructions] skipped for PR#${prNumber}: deep review mode does not read them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
+        // The generalist, the only agent that reads them, runs only when at
+        // least one of these categories is on.
+        const options = context.codeReviewConfig?.reviewOptions;
+        if (
+            options?.bug === false &&
+            options?.security === false &&
+            options?.performance === false
+        ) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
+        const organizationAndTeamData = context.organizationAndTeamData;
+        const repository = {
+            id: String(context.repository?.id ?? ''),
+            name: context.repository?.name,
+        };
+        // The target branch, never the head: what a PR is checked against is
+        // what the team merged, not text the PR itself adds or edits.
+        const ref = context.pullRequest?.base?.ref;
+        if (!ref) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: target branch unknown`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+        const startedAt = Date.now();
+
+        const result = await collectRepoInstructions({
+            changedFiles: changedFiles.map((f) => f.filename),
+            listFiles: async () => {
+                const files =
+                    (await this.codeManagementService.getRepositoryAllFiles({
+                        organizationAndTeamData,
+                        repository,
+                        filters: {
+                            branch: ref,
+                            filePatterns: [
+                                ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
+                            ],
+                        },
+                    })) ?? [];
+                return files.map((f: { path: string }) => f.path);
+            },
+            readFile: async (path) => {
+                const response =
+                    await this.codeManagementService.getRepositoryContentFile({
+                        organizationAndTeamData,
+                        repository,
+                        file: { filename: path },
+                        pullRequest: { head: { ref }, base: { ref } },
+                    });
+                // Forgejo returns the file flat and already decoded; the
+                // other providers wrap it in `data`.
+                const file = response?.data ?? response;
+                const raw = file?.content;
+                if (typeof raw !== 'string' || !raw) return null;
+                return file?.encoding === 'base64'
+                    ? Buffer.from(raw, 'base64').toString('utf-8')
+                    : raw;
+            },
+        });
+
+        const bytes = result.files.reduce(
+            (sum, f) => sum + Buffer.byteLength(f.content),
+            0,
+        );
+        const unreadable = result.unreadable ?? [];
+        this.logger[result.error || unreadable.length ? 'warn' : 'log']({
+            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} listed=${result.files.length} dropped=${result.dropped.length} unreadable=${unreadable.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
+            context: this.stageName,
+            metadata: {
+                ...logMetadata,
+                ref,
+                durationMs: Date.now() - startedAt,
+                indexed: result.indexedCount,
+                listed: result.files.map((f) => f.path),
+                dropped: result.dropped,
+                unreadable,
+                bytes,
+                truncated: result.truncated,
+                error: result.error,
+            },
+        });
+
+        return result.files.length ? result : undefined;
     }
 
     /**
@@ -868,6 +1016,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             });
             if (crossRepoLost) stageWarnings.push(crossRepoLost);
 
+            const repoInstructions = await this.resolveRepoInstructions(
+                context,
+                changedFiles,
+                adaptiveProfile,
+                prNumber,
+            );
+
             const customAgents = await this.resolveCustomAgents(context);
             const customAgentsById: CustomAgentsById =
                 indexCustomAgents(customAgents);
@@ -890,6 +1045,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
+                    repoInstructions,
                 }),
                 customAgents,
                 onlyCustomAgent: context.onlyCustomAgent,
@@ -3006,10 +3162,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             ) as any;
 
+            // The model ranks `keep` by how a finding reads, which always
+            // favours its own prose over a scanner's, and the longest text over
+            // the one on the defective lines. Re-seat the roles so a
+            // deterministic finding survives the group it was merged into, and
+            // otherwise the finding anchored on the lines at fault. The
+            // follow-up sees the scanner re-seat; the rest runs on the final
+            // groups below.
             let groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = normalizedDedup?.groups || [];
+            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
             let unique: number[] = normalizedDedup?.unique || [];
 
             // A model can stop partway through the list. The left-out
@@ -3017,15 +3180,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // decided; any still left out falls to the safety net below.
             const leftOut =
                 groups.length || unique.length
-                    ? unclassifiedDedupIndices(
-                          suggestions.length,
-                          groups,
-                          unique,
-                      )
+                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
                     : [];
+            // Kept in the dedup trace: a failed follow-up keeps those
+            // suggestions as they were (a duplicate may reach the PR), the same
+            // way a failed dedup keeps everything, without degrading the review.
+            let followupError: string | undefined;
             if (leftOut.length > 0) {
                 try {
-                    const followup = (await LLM.run({
+                    // The same shape recovery as the first answer (#1786): a
+                    // wrapped, bare-array or stringified answer still counts,
+                    // and one with no assignments fails like a failed call.
+                    const followupOutput = await LLM.run({
                         byokConfig: resolvedSlot,
                         schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
                         user: buildDedupFollowupPrompt(
@@ -3045,33 +3211,54 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ? { teamId: telemetryMeta.teamId }
                                 : {}),
                         },
-                    })) as any;
+                    });
+                    const followup = normalizeEnvelope(
+                        followupOutput,
+                        'assignments',
+                        [],
+                        {
+                            onRecover: (reason) =>
+                                this.logger.warn({
+                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
+                                    context: this.stageName,
+                                }),
+                        },
+                    ) as any;
+                    if (!Array.isArray(followup?.assignments)) {
+                        throw new Error(
+                            'the follow-up answer has no assignments',
+                        );
+                    }
                     ({ groups, unique } = applyDedupFollowup(
                         suggestions.length,
                         groups,
                         unique,
                         leftOut,
-                        Array.isArray(followup?.assignments)
-                            ? followup.assignments
-                            : [],
+                        followup.assignments,
                     ));
                     this.logger.log({
                         message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
                         context: this.stageName,
                     });
                 } catch (error) {
+                    followupError =
+                        error instanceof Error ? error.message : String(error);
                     this.logger.warn({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them: ${error instanceof Error ? error.message : String(error)}`,
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
                         context: this.stageName,
+                        error,
+                        metadata: {
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                            prNumber,
+                            leftOutCount: leftOut.length,
+                        },
                     });
                 }
             }
 
-            // The model ranks `keep` by how a finding reads, which always
-            // favours its own prose over a scanner's, and the longest text over
-            // the one on the defective lines. Re-seat the roles so a
-            // deterministic finding survives the group it was merged into, and
-            // otherwise the finding anchored on the lines at fault.
+            // After the follow-up, so a custom agent's finding taken back out
+            // of a group is not sent to it again and stays unique.
             groups = keepOwnFindingsApart(
                 preferCustomAgentKeep(
                     preferSpecificKeep(
@@ -3362,6 +3549,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     uniqueCount: uniqueSuggestions.length,
                     groupsCount: groupSummaries.length,
                     removedCount: totalRemoved,
+                    ...(followupError ? { followupError } : {}),
                     groups: groupSummaries,
                     unique: uniqueSuggestions,
                 },

@@ -377,6 +377,41 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             : null;
     }
 
+    async markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean> {
+        const result = await this.kodyRulesModel
+            .updateOne(
+                { organizationId },
+                {
+                    $set: {
+                        'rules.$[current].autoPause.digestedAt': digestedAt,
+                        'rules.$[previous].lastAutoPause.digestedAt':
+                            digestedAt,
+                    },
+                },
+                {
+                    arrayFilters: [
+                        {
+                            'current.uuid': ruleId,
+                            'current.autoPause.pausedAt': { $in: pausedAts },
+                        },
+                        {
+                            'previous.uuid': ruleId,
+                            'previous.lastAutoPause.pausedAt': {
+                                $in: pausedAts,
+                            },
+                        },
+                    ],
+                },
+            )
+            .exec();
+        return result.modifiedCount > 0;
+    }
+
     async updateRulesStatusByFilter(
         organizationId: string,
         repositoryId: string,

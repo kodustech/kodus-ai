@@ -1,118 +1,72 @@
 ---
-title: "Detección de Archivos de Reglas"
-description: "Detecta e importa automáticamente tus archivos de reglas existentes de herramientas de codificación con IA populares para mejorar las capacidades de revisión de código de Kody con los estándares de codificación establecidos de tu equipo."
+title: "Instrucciones para Agentes de Código"
+description: "Deja que Kody lea las instrucciones que tu equipo escribe para agentes de código (CLAUDE.md, AGENTS.md, .cursor/rules, instrucciones de Copilot) y señale los cambios que las incumplen, sin convertirlas en Kody Rules."
 ---
 
-Kodus puede sincronizar e importar automáticamente tus archivos de reglas del IDE existentes para mejorar la revisión de código de Kody con los estándares de codificación y preferencias establecidas de tu equipo.
+Archivos como `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` y `.github/copilot-instructions.md` les dicen a los agentes de código cómo trabaja tu equipo. No son política de revisión, así que Kodus nunca los convierte en Kody Rules. Cuando activas esta opción, Kody lee los que cubren los archivos que cambia un pull request y señala los cambios que incumplen lo que dicen.
 
-<Frame caption="Auto-sync rules from repo en el panel Configuration de Kody Rules (alcance de repositorio)">
-  <img src="/images/sync-rules.png" />
-</Frame>
+Para que una convención sea una regla de revisión obligatoria, escríbela como una [Regla del Repositorio](/es/how_to_use/code_review/configs/repository_rules) en `.kody/rules`.
 
-## ¿Qué es la Detección de Archivos de Reglas?
+## Cómo activarlo
 
-La Detección de Archivos de Reglas detecta e importa automáticamente archivos de configuración de herramientas y asistentes de codificación con IA populares en tu repositorio. Esto garantiza que Kody entienda y respete tus estándares de codificación existentes sin necesidad de configuración manual.
+- **Durante el onboarding**, el paso **Teach Kody how your team builds software** muestra los archivos para agentes de código encontrados en cada repositorio seleccionado y pregunta si Kody debe usarlos. Está desactivado a menos que lo actives.
+- **Más adelante**, elige **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **What to review** y activa **Coding-agent instructions**. El valor global es el predeterminado para todos los repositorios que no definan el suyo.
 
-## Archivos de Reglas Soportados
+La opción se guarda como `repoInstructionsEnabled` en la configuración de revisión de código (y en `kodus-config.yml`). La antigua `ideRulesSyncEnabled` ya no se lee, así que un valor guardado allí no la activa.
 
-Kodus detecta e importa automáticamente los siguientes patrones de archivos de reglas:
+## Archivos que lee Kody
 
 ### Cursor
-- `.cursorrules` - Archivo principal de reglas de Cursor (heredado)
-- `.cursor/rules/**/*.mdc` - Reglas de Cursor en subdirectorios
+- `.cursorrules`
+- `.cursor/rules/**/*.mdc`
 
 ### GitHub Copilot
-- `.github/copilot-instructions.md` - Instrucciones de Copilot
-- `.github/instructions/**/*.instructions.md` - Archivos de instrucciones detalladas
+- `.github/copilot-instructions.md`
+- `.github/instructions/**/*.instructions.md`
 
-### Agentic (convención agents.md)
-- `AGENTS.md` - El archivo estándar de facto para guiar agentes
-- `.agents.md` / `.agent.md` - Variantes con punto
+### Agentes (convención agents.md)
+- `AGENTS.md`, `.agents.md`, `.agent.md`
+- `.agents/rules/**`
 
 ### Claude
-- `CLAUDE.md` - Reglas específicas de Claude
-- `.claude/settings.json` - Configuración de Claude
+- `CLAUDE.md`
 
 ### Windsurf
-- `.windsurfrules` - Reglas del IDE Windsurf
+- `.windsurfrules`
 
 ### Sourcegraph Cody
-- `.sourcegraph/**/*.rule.md` - Archivos de reglas de Cody
+- `.sourcegraph/**/*.rule.md`
 
-### OpenCode
-- `.opencode.json` - Configuración de OpenCode
+Los archivos de configuración de herramientas (`.claude/settings.json`, `.opencode.json`, `.aider.conf.yml`, `.aiderignore`) se reconocen pero nunca se leen, porque no contienen instrucciones contra las que revisar el código.
 
-### Aider
-- `.aider.conf.yml` - Configuración de Aider
-- `.aiderignore` - Patrones de ignorado de Aider
+## Cómo los usa una revisión
 
-### Reglas Genéricas/Internas
-- `.rules/**/*` - Directorio de reglas genéricas
-- `.kody/rules/**` y `rules/**/*.md` - Reglas específicas de Kody (consulta [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules) — se importan literalmente, sin reescritura por LLM)
-- `docs/coding-standards/**/*` - Estándares de codificación basados en documentación
+- **Solo los archivos que cubren el cambio.** Un archivo en la raíz del repositorio cubre todos los archivos. Un archivo anidado como `services/billing/CLAUDE.md` cubre `services/billing/**`. Una regla de Cursor con `globs:` (y sin `alwaysApply: true`) o un archivo de Copilot con `applyTo:` cubre solo los archivos que declara. Una regla de Cursor sin ninguno de los dos, que Cursor solo carga cuando su agente la pide, no se lee.
+- **Se leen desde la rama de destino del pull request.** Un pull request se revisa con las instrucciones ya fusionadas en ella; los cambios que haga en las instrucciones solo cuentan después de fusionarse.
+- **Se siguen las referencias.** Un archivo que apunta a otro archivo del repositorio, con una línea que solo tiene una ruta (`AI-AGENTS.md`) o un import de Claude Code (`@docs/guide.md`), se sigue en la rama de destino: se lee el archivo al que apunta en su lugar, con los mismos límites. Las rutas fuera del repositorio se ignoran.
+- **Con límites.** Como máximo 8 archivos y 64 KB por revisión, primero los archivos de la raíz; un archivo más largo se recorta. La revisión registra en el log lo que quedó fuera.
+- **Los hallazgos llevan la etiqueta Repo Instruction.** Kody reporta uno solo cuando la instrucción aplica al archivo modificado y la línea que la incumple fue agregada o modificada por el pull request. El comentario cita la instrucción y nombra el archivo.
+- **Se aplican los filtros de la revisión.** Los hallazgos Repo Instruction pasan por el filtro de severidad y los límites de sugerencias del equipo como cualquier otro hallazgo; uno por debajo del umbral no se publica. La opción permite que Kody lea los archivos, no publicar por encima de esos límites.
+- **Nunca son instrucciones para Kody.** Los archivos se tratan como texto del repositorio contra el que se revisa el diff. Cualquier cosa que le pidan al revisor se ignora, y nunca cambian cómo se evalúan los bugs ni los problemas de seguridad o rendimiento.
 
-### Detalles de la detección
+<Note>
+El modo de revisión profunda ejecuta revisores separados de bugs, seguridad y rendimiento, y no lee las instrucciones para agentes de código.
+</Note>
 
-- **Se descubren archivos anidados.** Cada patrón anterior se busca en la raíz del repositorio **y bajo cualquier subdirectorio**. Un `services/billing/CLAUDE.md` se importa y se acota automáticamente a `services/billing/**` — los archivos de guía por directorio (la convención habitual en monorepos) funcionan sin configuración.
-- **La coincidencia no distingue mayúsculas.** `claude.md` y `CLAUDE.md` son equivalentes.
-- **Se siguen las referencias `@file`.** Si un archivo de reglas referencia otro con la convención `@` (p. ej. `@AGENTS.md` dentro de `CLAUDE.md`), el contenido referenciado se descarga y se incluye durante la importación (un nivel de profundidad, hasta 5 referencias por archivo, 100KB por archivo referenciado).
-- **Se admiten varios globs por regla.** Una ruta como `app/**/*.rb,lib/**/*.rb` (o una lista `path: []` en el frontmatter de [Reglas de Repositorio](/es/how_to_use/code_review/configs/repository_rules)) aplica la regla a los archivos que coincidan con **cualquiera** de los globs.
+## Reglas importadas antes de este cambio
 
-## Cómo Funciona
+Las versiones anteriores de Kodus convertían estos archivos en Kody Rules. Esas reglas se conservan pero quedan **congeladas**: ya no se actualizan cuando cambia el archivo y llevan el origen **Agent file** en la página de Kody Rules. El chip **rules from coding-agent files** filtra la lista para mostrar solo esas reglas, así puedes pausarlas o eliminarlas, o mover a `.kody/rules` las convenciones que quieras que se apliquen.
 
-### Configuración Inicial
-1. **Habilitar Sincronización Automática**: En la barra lateral, elige el repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **Kody Rules**, haz clic en **Configuration** y activa **Auto-sync rules from repo**
-2. **Diálogo de Primera Sincronización**: Un diálogo (**Sync repository rules now?**) pregunta si deseas sincronizar por primera vez. Elige **Sync now**, o **Skip initial scan** para esperar a la próxima sincronización
-3. **Escaneo del Repositorio**: Al confirmar, Kodus escanea todo tu repositorio en busca de archivos de reglas soportados
-4. **Generación de Reglas**: Un LLM procesa los archivos encontrados y crea automáticamente las Kody Rules correspondientes. Excepción: los archivos de plantilla `.kody/rules/**` y `rules/**/*.md` se importan **literalmente** — sin conversión por LLM — preservando instrucciones, ejemplos e identificadores tal como se escribieron. Si uno de esos archivos no sigue la plantilla (frontmatter ausente o inválido, o sin `title`), vuelve a la ruta del LLM
+Las reglas que el onboarding importó desde archivos para agentes de código sin que nadie las eligiera se eliminaron: la copia de un archivo de cada repositorio se había convertido en una regla propia que se aplicaba a todos los repositorios. La página de Kody Rules muestra cuántas se eliminaron y lleva a **Coding-agent instructions** en **What to review**, que lee esos mismos archivos en las revisiones de cada repositorio. Para recuperar las reglas eliminadas, contacta con soporte.
 
-### Valor predeterminado para toda la organización
-Configura "Auto-sincronizar reglas del repositorio" una vez en la configuración **Global** de Kody Rules y todos los repositorios que no definan su propio valor lo seguirán. La configuración propia de un repositorio siempre prevalece. Activarla globalmente no ejecuta el escaneo inicial: cada repositorio importa los archivos de reglas a medida que cambian en Pull Requests fusionados.
+`@kody-sync` ya no hace nada: los archivos de Kody Rules siempre se sincronizan y los archivos para agentes de código nunca se convierten en reglas. `@kody-ignore` sigue excluyendo un archivo de Kody Rule de la sincronización.
 
-### Sincronización Continua
-- **Actualizaciones Automáticas**: La sincronización ocurre automáticamente cuando se cierra un Pull Request
-- **Cambios de Archivos Detectados**: 
-  - **Nuevos archivos de reglas** → Crea nuevas Kody Rules
-  - **Archivos de reglas modificados** → Actualiza las Kody Rules existentes  
-  - **Archivos de reglas eliminados** → Elimina las Kody Rules correspondientes
+## Verificarlo en self-hosted
 
-### Sincronización Manual (Interruptor Deshabilitado)
-
-Puedes sincronizar archivos de reglas individuales sin habilitar la sincronización automática:
-
-1. Agrega `@kody-sync` en cualquier parte de tu archivo de regla
-2. Haz commit del cambio
-3. Kody sincronizará solo ese archivo específico
-
-Esto te permite sincronizar selectivamente reglas sin habilitar la sincronización automática para todos los archivos.
-
-### Excluir un archivo (`@kody-ignore`)
-
-Para mantener un archivo de reglas/guía en tu repositorio pero evitar que Kody lo convierta en Kody Rules, agrega `@kody-ignore` en cualquier parte del archivo:
-
-1. Agrega `@kody-ignore` en cualquier parte del archivo de reglas (sin distinguir mayúsculas)
-2. Haz commit del cambio
-
-En la siguiente sincronización Kody **omitirá** ese archivo **y eliminará las Kody Rules creadas a partir de él**. Las reglas vuelven automáticamente si más adelante quitas el marcador `@kody-ignore` (o agregas `@kody-sync`). Úsalo para mantener documentos de estilo interno como un `CLAUDE.md` o `AGENTS.md` sin que se conviertan en reglas aplicadas en la revisión.
-
-<Warning>
-Si editas manualmente una Kody Rule que fue creada desde un archivo de regla del IDE, tus cambios serán sobreescritos la próxima vez que el archivo correspondiente sea modificado y sincronizado.
-</Warning>
-
-## Verificar sincronización y evaluación de reglas (self-hosted)
-
-En despliegues self-hosted los logs de la API llevan marcadores grep-ables para depurar:
-
-- `[kody-rules-sync]` — resumen por ejecución: qué archivos se importaron, se omitieron (con el motivo) o se eliminaron.
-- `[kody-rules-eval]` — traza de evaluación por archivo durante una revisión: exactamente qué reglas (uuid + título) se seleccionaron para el prompt de cada archivo revisado.
+Los logs del worker llevan un marcador grep-able en cada revisión que lee instrucciones para agentes de código:
 
 ```bash
-docker logs kodus_api 2>&1 | grep "kody-rules-sync"
-docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+docker logs kodus_worker 2>&1 | grep "\[repo-instructions\]"
 ```
 
-Si una regla aparece activa en la UI pero nunca sale en `[kody-rules-eval]` para los archivos que esperas, revisa su glob de **Path** — una regla solo se ejecuta sobre archivos que coincidan con su ruta.
-
-## Límites de reglas
-
-Las organizaciones en el plan **Free** de la nube (o cuya suscripción fue cancelada o expiró) y las instancias self-hosted que corren **sin una licencia válida** (Community Edition) evalúan como máximo **10 reglas activas** por revisión (las más antiguas primero). Las reglas que superan el límite permanecen en la lista como **Locked** y se omiten en cada PR; un banner en **Code review → Kody Rules** indica cuántas se omiten. Los planes de pago en la nube y las instancias self-hosted con licencia no tienen ese límite. Si las reglas más allá de la décima no se disparan, este límite es la razón.
+Cada línea muestra cuántos archivos de instrucciones se encontraron, cuáles se leyeron, cuántos bytes y si algo quedó fuera.

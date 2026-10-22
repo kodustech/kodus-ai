@@ -109,6 +109,9 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     'kodyRulesGeneratorEnabled': {
         actionDescription: 'Kody Rules Generator',
     },
+    'kodyRulesAutoPauseEnabled': {
+        actionDescription: 'Pause Ignored and Noisy Kody Rules',
+    },
     'kodyLearningExcludedReviewers': {
         actionDescription: 'Kody Rules Learning — Excluded Reviewers',
     },

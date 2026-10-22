@@ -5,7 +5,13 @@ import {
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 
-export const RULE_FILE_PATTERNS = [
+/**
+ * Files written to instruct coding agents (Cursor, Copilot, Claude, ...).
+ * They are NOT review policy: they are never converted into Kody Rules. When a
+ * repository opts in (`repoInstructionsEnabled`), the review reads the ones that
+ * govern the changed files as context (see `collectRepoInstructions`).
+ */
+export const AGENT_INSTRUCTION_FILE_PATTERNS = [
     // Cursor
     '.cursorrules',
     '.cursor/rules/**/*.mdc',
@@ -23,6 +29,7 @@ export const RULE_FILE_PATTERNS = [
     // Claude
     'CLAUDE.md',
     '.claude/settings.json',
+    '.claude/skills/**',
 
     // Windsurf
     '.windsurfrules',
@@ -36,61 +43,120 @@ export const RULE_FILE_PATTERNS = [
     // Aider
     '.aider.conf.yml',
     '.aiderignore',
+] as const;
 
-    // Generic / internal
-    '.rules/**/*',
+/**
+ * Agent files a review never reads: tool configuration, which carries no prose
+ * a reviewer could check a diff against, and Claude skills, which Claude loads
+ * only when a task calls for one.
+ */
+const AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS = [
+    '.claude/settings.json',
+    '.claude/skills/**',
+    '.opencode.json',
+    '.aider.conf.yml',
+    '.aiderignore',
+] as const;
+
+/**
+ * Repository files that ARE Kody Rules: one file = one rule, parsed
+ * deterministically by `parseKodyRuleFile`. `.kody/rules/**` is unambiguous by
+ * name; files under the generic locations only count when they parse as the
+ * template, so an ESLint plugin's `docs/rules/*.md` stays out.
+ */
+export const KODY_RULE_FILE_PATTERNS = [
     '.kody/rules/**',
     // Documented alongside `.kody/rules/**` on the "Repository Rules"
     // page; `.md`-only to avoid sweeping arbitrary `rules/` code dirs.
     'rules/**/*.md',
+    '.rules/**/*',
     'docs/coding-standards/**/*',
+] as const;
+
+/**
+ * Every location that has ever been synced into Kody Rules. Only for
+ * recognising rows created before agent files stopped converting (origin
+ * backfill, path scoping of legacy rows). New code picks one of the two lists.
+ */
+export const RULE_FILE_PATTERNS = [
+    ...AGENT_INSTRUCTION_FILE_PATTERNS,
+    ...KODY_RULE_FILE_PATTERNS,
 ] as const;
 
 export type RuleFilePattern = (typeof RULE_FILE_PATTERNS)[number];
 
 /**
- * Patterns used to DISCOVER rule files anywhere in a repository: every
- * base pattern plus its `**\/`-prefixed variant, so root-level names like
- * `CLAUDE.md` or `AGENTS.md` are also found in subdirectories (the
- * common monorepo convention of per-directory guidance files).
- *
- * Discovery and recognition (`isIdeRuleSource`) intentionally share this
- * list — a file the sync imports must always be recognised as IDE-synced
- * afterwards. Nested sources are scoped to their subdirectory by
- * `extractRepoSubdirFromIdeSource`, so a `services/foo/CLAUDE.md` rule
- * applies to `services/foo/**`, not repo-wide.
+ * Every base pattern plus its `**\/`-prefixed variant, so root-level names
+ * like `CLAUDE.md` or `.kody/rules` are also found in subdirectories (the
+ * common monorepo convention of per-directory files). Nested sources are
+ * scoped to their subdirectory by `extractRepoSubdirFromIdeSource`.
  */
-export const RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> = [
-    ...RULE_FILE_PATTERNS,
-    ...RULE_FILE_PATTERNS.map((p) => `**/${p}`),
-];
+function withNestedVariants(patterns: ReadonlyArray<string>): string[] {
+    return [...patterns, ...patterns.map((p) => `**/${p}`)];
+}
+
+export const AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(AGENT_INSTRUCTION_FILE_PATTERNS);
+
+export const KODY_RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(KODY_RULE_FILE_PATTERNS);
+
+export const RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(RULE_FILE_PATTERNS);
+
+const AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS);
+
+// Case-insensitive to stay consistent with discovery: a lowercase `claude.md`
+// found by the sync must be recognised the same way afterwards.
+function matchesAny(
+    sourcePath: string | null | undefined,
+    patterns: ReadonlyArray<string>,
+): boolean {
+    if (!sourcePath) return false;
+    return isFileMatchingGlobCaseInsensitive(sourcePath, [...patterns]);
+}
+
+/** Whether `sourcePath` is a coding-agent instruction file, at any depth. */
+export function isAgentInstructionSource(
+    sourcePath: string | null | undefined,
+): boolean {
+    return matchesAny(sourcePath, AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS);
+}
+
+/** An agent instruction file a review reads (see the unread list above). */
+export function isAgentInstructionProseFile(
+    sourcePath: string | null | undefined,
+): boolean {
+    return (
+        isAgentInstructionSource(sourcePath) &&
+        !matchesAny(sourcePath, AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS)
+    );
+}
 
 /**
- * Whether `sourcePath` came from an IDE rule file recognised by the auto-sync
- * importer (i.e. it matches one of `RULE_FILE_PATTERNS`, anywhere in the repo).
- *
- * Reason: rules persisted by ingestion all carry a `sourcePath`, but only a
- * subset of those came from the IDE-rule auto-sync flow. Other flows
- * (Onboard, etc.) also set `sourcePath`. Code paths that should only act on
- * IDE-synced rules — e.g. the toggle-off purge in `KodyRulesSyncService` —
- * must use this check, not just `sourcePath != null`, to avoid sweeping up
- * unrelated origins.
- *
- * Patterns are matched at the repo root AND under any subdirectory (e.g. a
- * sourcePath of `applications/sales/.cursorrules` matches the `.cursorrules`
- * pattern via the `**\/` prefix variant), so per-subdir IDE rule imports are
- * recognised the same way as repo-root ones.
+ * Whether `sourcePath` sits in a Kody rule file location, at any depth. The
+ * generic `rules/**\/*.md` also matches `.agents/rules/*.md`; an agent
+ * instruction location always wins.
+ */
+export function isKodyRuleFileSource(
+    sourcePath: string | null | undefined,
+): boolean {
+    return (
+        matchesAny(sourcePath, KODY_RULE_FILE_DISCOVERY_PATTERNS) &&
+        !isAgentInstructionSource(sourcePath)
+    );
+}
+
+/**
+ * Whether `sourcePath` came from any file the repo-file sync has ever imported
+ * (agent instruction files included). Used to classify legacy rows; code that
+ * acts on rules picks `isAgentInstructionSource` or `isKodyRuleFileSource`.
  */
 export function isIdeRuleSource(
     sourcePath: string | null | undefined,
 ): boolean {
-    if (!sourcePath) return false;
-    // Case-insensitive to stay consistent with discovery: a file the sync
-    // imports (e.g. lowercase `claude.md`) must always be recognised as an
-    // IDE-synced source afterwards (toggle-off purge, origin resolution).
-    return isFileMatchingGlobCaseInsensitive(sourcePath, [
-        ...RULE_FILE_DISCOVERY_PATTERNS,
-    ]);
+    return matchesAny(sourcePath, RULE_FILE_DISCOVERY_PATTERNS);
 }
 
 /**

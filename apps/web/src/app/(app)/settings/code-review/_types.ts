@@ -101,6 +101,7 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyRulesAutoPauseEnabled?: boolean;
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: {
         enabled: boolean;
@@ -116,15 +117,13 @@ export type CodeReviewGlobalConfig = {
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
+    /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
+     *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
+    repoInstructionsEnabled: boolean;
     /** Team-defined review agents (beta, behind `custom-agents`). */
     customAgents?: CustomAgent[];
     /** Skills and docs in the repository, linked to the main review or agents. */
     knowledge?: KnowledgeItem[];
-    ideRulesSyncEnabled: boolean;
-    /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
-     *  Picks what happens to the rules previously imported from IDE files.
-     *  Default on the backend is `keep` (least destructive) when omitted. */
-    ideSyncDisableAction?: "keep" | "pause" | "delete";
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {
