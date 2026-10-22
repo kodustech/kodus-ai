@@ -1,5 +1,11 @@
 [
  {
+  "pasta": "r12x3",
+  "titulo": "Teste 15 · definições acordadas no gold v3",
+  "mudou": "Prompt novo montado sobre as definições acordadas por Astra e Opus (aba Definições), com 10 exemplos inventados alinhados a elas, sem código, voto de 3. Medido, como todos os testes desta página, pelos rótulos revisados (50 low, 53 medium, 48 high, 7 critical).",
+  "leitura": "High sobe muito: DeepSeek 94%, GPT 83%. Medium do GPT vai a 89%. Low cai para 68–72%: os dois sobem para medium os mesmos ~12 low, quase todos log ou mensagem com dado errado, contrato de retorno e vazamento em teste, que a definição põe em medium (saída de diagnóstico) e o gold deixou em low. Opus e Sonnet sem resultado: a API da Anthropic bateu o limite mensal da organização."
+ },
+ {
   "pasta": "r11x3",
   "titulo": "Refino 5 (teste 14) · exemplos reais do gold",
   "mudou": "O prompt do refino 2 com voto de 3, mais 12 exemplos reais do gold v3 com a severidade que receberam (4 low, 4 medium, 4 high), tirados de problemas que não estão no dataset, um por categoria quando possível.",

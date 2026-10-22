@@ -123,7 +123,32 @@ const ANCHORS = require('./dataset/anchors.json').anchors;
 const REAL_EXAMPLES = `Examples from past reviews, with the severity they were given:
 ${ANCHORS.map((a) => `- "${a.text}" -> ${a.severity}`).join('\n')}`;
 
+// Test 15: the level definitions agreed from gold v3 (definitions.md), with examples that follow them.
+const DEFS = require('fs').readFileSync(path.join(__dirname, 'definitions.md'), 'utf8')
+    .replace(' Internally refuted findings need validity review.', '').trim();
+const DEFS_RULE = `Rate the problem as the comment states it. Assume what it claims is true and rate how bad that would be; do not try to decide whether the claim is correct. Do not raise the severity because the comment uses alarming words, and do not lower it because the fix is small.`;
+const DEFS_EXAMPLES = `Examples (invented, for calibration only):
+- "The helper is still named loadXml although it now reads JSON." -> low
+- "The new sorting branch has no test." -> medium (the change adds that behavior)
+- "The retry test only checks the final result, so it passes even when no retry happens." -> medium
+- "After saving a preference, the badge keeps its old value until reload." -> medium
+- "A negative page size returns 500 instead of a validation error." -> medium
+- "Two concurrent sign-ups can both pass the seat count, so the team ends up over its seat limit." -> high (admission cap bypassed; concurrency does not lower it)
+- "Cancelling a booking leaves the event in the host's external calendar." -> high (essential calendar update fails)
+- "Users without a billing profile get a 500 on the settings page." -> high
+- "A viewer can call the endpoint that grants administrator access." -> critical
+- "An uploaded filename is passed to a shell command without escaping." -> critical`;
+
 module.exports = {
+    r12: { describe: 'Definições acordadas no gold v3 (definitions.md), com exemplos alinhados a elas.', build: (items) => [
+        'Assign each code review comment below one severity: low, medium, high or critical. Return one item per comment index.',
+        DEFS_RULE,
+        DEFS,
+        DEFS_EXAMPLES,
+        'Comments:',
+        items.map((x, i) => block(x, i, {})).join('\n\n'),
+        OUTPUT,
+    ].join('\n\n') },
     prod: { describe: 'Prompt de produção.', build: (items) => buildSeverityPrompt(items.map((x) => ({ relevantFile: x.file, suggestionContent: x.text }))) },
     r11: { describe: 'Refino 2 com 12 exemplos reais do gold de fora do dataset.', build: calibrated({ code: false, examples: `${EXAMPLES_V2}\n\n${REAL_EXAMPLES}`, levels: `${CALIBRATE_FULL}\n\n${SOFT_KINDS}\n\n${TIE_UP}` }) },
     r10: { describe: 'Teste 8 sem desconto para sugestão que hesita.', build: calibrated({ code: false, examples: EXAMPLES_V2, levels: `${CALIBRATE_FULL}\n\n${SOFT_KINDS}\n\n${TIE_UP}` }) },

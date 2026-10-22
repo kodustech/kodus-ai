@@ -10,6 +10,14 @@ NIVEIS = ['low', 'medium', 'high', 'critical']
 # (pasta em results/, título, o que mudou), do mais novo para o mais antigo.
 TESTES = json.load(open(f'{AQUI}/tests.json'))
 E = html.escape
+# Scored against the current dataset labels (gold v3 after the 68 relabels), not the gold stored in each run.
+GOLD = {x['issueId']: x['severity'] for x in json.load(open(f'{AQUI}/dataset/items.json'))['items']}
+
+
+def por_nivel(rows):
+    certo = lambda g, x: x in ('high', 'critical') if g == 'critical' else x == g
+    feitos = [r for r in rows if r.get('got')]
+    return {l: {'n': sum(GOLD[r['issueId']] == l for r in feitos), 'right': sum(GOLD[r['issueId']] == l and certo(l, r['got']) for r in feitos)} for l in NIVEIS}
 
 
 def celula(lv):
@@ -27,7 +35,7 @@ def tabela(pasta):
             linhas.append(f'<tr><td>{nome}</td>' + '<td class="na">—</td>' * 5 + '</tr>')
             continue
         d = json.load(open(f))
-        pl = d['perLevel']
+        pl = por_nivel(d['rows'])
         tot = sum(pl[l]['right'] for l in NIVEIS)
         n = sum(1 for _ in d['rows'])
         piso = min(100 * pl[l]['right'] / pl[l]['n'] for l in NIVEIS if pl[l]['n'])
@@ -117,7 +125,7 @@ details summary{{cursor:pointer;font-weight:600;margin-bottom:8px}}table.rev td{
 <div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="defs">Definições</button></div>
 <section id="t-testes" class="aba">
 <p>Meta: 80% de acerto em cada nível, separado. Dataset: 158 problemas reais do gold v3, medidos com os rótulos de antes da revisão das definições (50 low, 50 medium, 50 high, 8 critical). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 80% (na meta), amarelo 70–79%, vermelho abaixo de 70%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
-<p class="leitura"><b>Resultado:</b> o Opus bate a meta de 80% em todos os níveis (teste 9 e refino 2); o DeepSeek fica a um item dela em high (80/88/78/100 no refino 2) e o GPT a um item em medium e high (80/78/78/100 no refino 4). O Sonnet não chega: rebaixa high em todos os testes. O que segura é high, de 74% a 80%, e os erros que sobram são em boa parte os mesmos itens nos quatro modelos: o próprio Astra, segundo anotador do gold, concorda com o rótulo em só 71% dos low e 57% dos medium que deu para conferir. O trecho do código e o label não ajudam; o voto de 3 respostas ajuda 2 a 4 itens em high. Candidato para produção: refino 2 (teste 11), sem código, uma chamada por PR, com ou sem voto.</p>
+<p class="leitura"><b>Resultado:</b> todas as tabelas contam pelos rótulos revisados (68 reclassificações). Com eles, os prompts antigos caem até 9 pontos num nível; o melhor antigo é o teste 5 (Opus 82/85/81/100). O teste 15, montado sobre as definições, resolve high (DeepSeek 94%, GPT 83%), mas derruba low para 68–72%: a definição chama erro de log e de mensagem de medium, e o gold chama de low. Opus e Sonnet ficaram sem rodar por limite da API.</p>
 {''.join(blocos)}
 </section>
 <section id="t-defs" class="aba" hidden>{tab_defs()}</section>
