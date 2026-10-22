@@ -12,9 +12,7 @@ describe('BitbucketService.getPullRequestFilesAtCommit', () => {
         const impl = {
             getPullRequestFilesAtCommit: jest.fn().mockResolvedValue(files),
         };
-        jest.spyOn(service as any, 'getImplementation').mockResolvedValue(
-            impl,
-        );
+        jest.spyOn(service as any, 'getImplementation').mockResolvedValue(impl);
         const params = {
             organizationAndTeamData: { organizationId: 'o', teamId: 't' },
             repository: { id: 'r', name: 'repo' },
@@ -23,9 +21,9 @@ describe('BitbucketService.getPullRequestFilesAtCommit', () => {
             headSha: 'old',
         };
 
-        await expect(
-            service.getPullRequestFilesAtCommit(params),
-        ).resolves.toBe(files);
+        await expect(service.getPullRequestFilesAtCommit(params)).resolves.toBe(
+            files,
+        );
         expect(impl.getPullRequestFilesAtCommit).toHaveBeenCalledWith(params);
     });
 });

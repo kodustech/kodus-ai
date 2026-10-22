@@ -19,7 +19,8 @@ export function splitUnifiedDiff(diff: string): UnifiedDiffFile[] {
             if (!header) return null;
 
             const hunkStart = section.search(/^@@ /m);
-            const head = hunkStart === -1 ? section : section.slice(0, hunkStart);
+            const head =
+                hunkStart === -1 ? section : section.slice(0, hunkStart);
             const patch =
                 hunkStart === -1 ? '' : section.slice(hunkStart).trimEnd();
             const renamedFrom = head.match(/^rename from (.+)$/m)?.[1];

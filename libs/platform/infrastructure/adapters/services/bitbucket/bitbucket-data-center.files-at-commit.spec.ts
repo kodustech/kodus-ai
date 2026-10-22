@@ -63,7 +63,9 @@ describe('BitbucketDataCenterService — PR diffs', () => {
             if (url.endsWith('/pull-requests/7/changes')) {
                 return Promise.resolve({
                     data: {
-                        values: [{ path: { toString: 'a.ts' }, type: 'MODIFY' }],
+                        values: [
+                            { path: { toString: 'a.ts' }, type: 'MODIFY' },
+                        ],
                     },
                 });
             }

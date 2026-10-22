@@ -7,7 +7,9 @@ import { ForgejoService } from './forgejo.service';
  */
 describe('ForgejoService.getPullRequestFilesAtCommit', () => {
     it('reports the earlier diff as unavailable', async () => {
-        const service = Object.create(ForgejoService.prototype) as ForgejoService;
+        const service = Object.create(
+            ForgejoService.prototype,
+        ) as ForgejoService;
         const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
         Object.defineProperty(service, 'logger', { value: logger });
 

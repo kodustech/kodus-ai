@@ -29,9 +29,10 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
             orgName: 'o',
             token: 't',
         });
-        jest.spyOn(service as any, 'getProjectIdFromRepository').mockResolvedValue(
-            'project-1',
-        );
+        jest.spyOn(
+            service as any,
+            'getProjectIdFromRepository',
+        ).mockResolvedValue('project-1');
         const generate = jest
             .spyOn(service as any, '_generateFileDiffForAzure')
             .mockImplementation(async (p: any) => ({
