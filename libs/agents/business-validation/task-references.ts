@@ -1,4 +1,4 @@
-import { matchAllWithin } from '@libs/common/utils/safe-regex';
+import { matchAllWithin } from '@libs/common/utils/match-within';
 
 import type {
     ReferenceIntent,

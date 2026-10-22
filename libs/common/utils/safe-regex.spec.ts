@@ -1,4 +1,5 @@
-import { isRegexSafe, matchAllWithin } from './safe-regex';
+import { matchAllWithin } from './match-within';
+import { isRegexSafe } from './safe-regex';
 
 // The id and line matchers teams and detectors write: kept, and fast.
 const KEPT = [
