@@ -9,7 +9,7 @@ ARG BUN_VERSION=1.2.12
 # GitHub releases for build-time downloads (prevents flaky 504s during CI).
 FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 
-FROM docker.io/library/node:22.22.2-slim
+FROM docker.io/library/node:22.23.4-slim
 
 ARG API_CLOUD_MODE
 ARG RELEASE_VERSION

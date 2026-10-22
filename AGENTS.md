@@ -24,7 +24,7 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps and 20 shar
 
 ## Getting Started
 
-- Node.js 22.22.0 required (`.nvmrc` at root). Run `nvm use` if you get version errors
+- Node.js 22.23.4 required (`.nvmrc` at root). Run `nvm use` if you get version errors
 - `pnpm run setup` - First-time project setup
 
 ## Commands
