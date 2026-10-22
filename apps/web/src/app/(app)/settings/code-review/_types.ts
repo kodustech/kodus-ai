@@ -101,6 +101,7 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyRulesAutoPauseEnabled?: boolean;
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: {
         enabled: boolean;

@@ -45,6 +45,7 @@ import {
 import { cn } from "src/core/utils/components";
 
 import { ExternalReferencesDisplay } from "../../pr-summary/_components/external-references-display";
+import { AutoPauseNotice } from "./auto-pause-notice";
 import {
     formatAbsoluteDate,
     RuleStatus,
@@ -268,13 +269,27 @@ export const KodyRuleDetailSheet = ({
 
                 <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                     <div className="flex flex-col gap-8 px-6 py-6">
+                        {isPaused && rule.autoPause && (
+                            <AutoPauseNotice
+                                autoPause={rule.autoPause}
+                                canResume={context.canEdit && !isInherited}
+                                resuming={isChangingStatus}
+                                onResume={() =>
+                                    changeStatus(KodyRulesStatus.ACTIVE)
+                                }
+                            />
+                        )}
+
                         {/* The instructions ARE the rule: body copy, readable
                             measure, no label — the title above names it. */}
                         <p className="text-text-primary max-w-prose text-[15px] leading-relaxed break-words whitespace-pre-wrap">
                             {rule.rule}
                         </p>
 
-                        {!isMemory && (
+                        {/* Rule health covers active rules only, so a rule
+                            paused by Kody would read as never triggered; the
+                            notice above carries its numbers instead. */}
+                        {!isMemory && !(isPaused && rule.autoPause) && (
                             <RuleImpact
                                 rule={rule}
                                 seeAll={context.renderSuggestions?.(rule)}

@@ -202,6 +202,166 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
     });
 });
 
+describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const SYSTEM = { userId: 'kody-system', userEmail: 'kody@kodus.io' };
+
+    const autoPause = {
+        state: 'ignored' as const,
+        pausedAt: new Date('2026-10-01T06:00:00Z'),
+        windowStart: new Date('2026-09-01T06:00:00Z'),
+        windowEnd: new Date('2026-10-01T06:00:00Z'),
+        triggers: 14,
+        implemented: 2,
+        rate: 0.14,
+        thumbsUp: 0,
+        thumbsDown: 1,
+        digestedAt: null,
+    };
+
+    let repo: { findByOrganizationId: jest.Mock; updateRule: jest.Mock };
+    let svc: KodyRulesService;
+
+    const withRule = (over: Record<string, unknown>) => {
+        const stored = {
+            uuid: 'r1',
+            title: 'Rule',
+            rule: 'do the thing',
+            repositoryId: 'repo-1',
+            status: KodyRulesStatus.ACTIVE,
+            ...over,
+        };
+        repo.findByOrganizationId.mockResolvedValue({
+            uuid: 'doc-1',
+            rules: [stored],
+        });
+        repo.updateRule.mockImplementation(
+            async (_doc: string, _id: string, patch: any) => ({
+                rules: [{ ...stored, ...patch }],
+            }),
+        );
+        return stored;
+    };
+
+    const patchSent = () => repo.updateRule.mock.calls[0][2];
+
+    beforeEach(() => {
+        repo = {
+            findByOrganizationId: jest.fn(),
+            updateRule: jest.fn(),
+        };
+        svc = new KodyRulesService(
+            repo as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            {
+                MAX_KODY_RULES: 10,
+                validateRulesLimit: jest.fn().mockResolvedValue(true),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            undefined,
+        );
+    });
+
+    it('records the auto-pause and keeps it out of the plan lock', async () => {
+        const stored = withRule({});
+
+        await svc.createOrUpdate(
+            ORG,
+            { ...stored, status: KodyRulesStatus.PAUSED, autoPause } as any,
+            SYSTEM,
+        );
+
+        expect(patchSent()).toEqual(
+            expect.objectContaining({
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: false,
+                autoPause,
+            }),
+        );
+    });
+
+    it('resuming an auto-paused rule clears the pause, keeps it as the last one and stamps resumedAt', async () => {
+        const stored = withRule({
+            status: KodyRulesStatus.PAUSED,
+            autoPause,
+        });
+
+        await svc.createOrUpdate(
+            ORG,
+            // The status endpoint hands back the whole stored rule, pause included.
+            { ...stored, status: KodyRulesStatus.ACTIVE } as any,
+            SYSTEM,
+        );
+
+        const patch = patchSent();
+        expect(patch.status).toBe(KodyRulesStatus.ACTIVE);
+        // `null`, not `undefined`: the repository skips undefined fields.
+        expect(patch.autoPause).toBeNull();
+        expect(patch.lastAutoPause).toEqual(autoPause);
+        expect(patch.resumedAt).toBeInstanceOf(Date);
+    });
+
+    it('a resume the plan limit refuses keeps the auto-pause and records no resume', async () => {
+        const stored = withRule({
+            status: KodyRulesStatus.PAUSED,
+            autoPause,
+        });
+        (svc as any).kodyRulesValidationService.validateRulesLimit = jest
+            .fn()
+            .mockResolvedValue(false);
+
+        await svc.createOrUpdate(
+            ORG,
+            { ...stored, status: KodyRulesStatus.ACTIVE } as any,
+            SYSTEM,
+        );
+
+        const patch = patchSent();
+        expect(patch.status).toBe(KodyRulesStatus.PAUSED);
+        expect(patch.lockedByPlan).toBe(true);
+        expect(patch.autoPause).toEqual(autoPause);
+        expect(patch.resumedAt).toBeUndefined();
+    });
+
+    it('resuming a rule paused by hand stamps resumedAt and leaves lastAutoPause alone', async () => {
+        const previous = { ...autoPause, digestedAt: new Date() };
+        const stored = withRule({
+            status: KodyRulesStatus.PAUSED,
+            lastAutoPause: previous,
+        });
+
+        await svc.createOrUpdate(
+            ORG,
+            { ...stored, status: KodyRulesStatus.ACTIVE } as any,
+            SYSTEM,
+        );
+
+        const patch = patchSent();
+        expect(patch.resumedAt).toBeInstanceOf(Date);
+        expect(patch.lastAutoPause).toEqual(previous);
+    });
+
+    it('an edit that does not change the status keeps the auto-pause', async () => {
+        withRule({ status: KodyRulesStatus.PAUSED, autoPause });
+
+        await svc.createOrUpdate(
+            ORG,
+            { uuid: 'r1', title: 'Renamed' } as any,
+            SYSTEM,
+        );
+
+        const patch = patchSent();
+        expect(patch.autoPause).toEqual(autoPause);
+        expect(patch.resumedAt).toBeUndefined();
+    });
+});
+
 /* ===========================================================================
  * LLM.run I/O CONTRACT — the two structured-output boundaries in this service.
  *

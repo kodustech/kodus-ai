@@ -99,8 +99,6 @@ describe('SendRepoReportUseCase', () => {
         expect(emittedSections).toHaveLength(1);
         expect(emittedSections[0].repository).toBe('acme/x');
         // Each section carries a repo-scoped cockpit deep link.
-        expect(emittedSections[0].cockpitLink).toContain(
-            'repository=acme%2Fx',
-        );
+        expect(emittedSections[0].cockpitLink).toContain('repository=acme%2Fx');
     });
 });
