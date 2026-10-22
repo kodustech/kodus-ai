@@ -67,7 +67,8 @@ const SHAPES = {
         expect: keep,
     },
     'text-node-split': {
-        checks: () => 'Keeps the postable part of a finding split into {"$text"} items, as MiniMax-M3 sends them (#2112)',
+        checks: () =>
+            'Drops a finding split into {"$text"} items, as MiniMax-M3 sends them: its lines and code are in the text nodes, so the part left has nothing to anchor it on (#2112)',
         apply: (p) => ({
             ...p,
             suggestions: p.suggestions.flatMap((s, i) =>
@@ -80,7 +81,7 @@ const SHAPES = {
                     : [s],
             ),
         }),
-        expect: keep,
+        expect: firstDropped,
     },
     'improved-code-missing': {
         checks: () => 'Keeps a finding with no improvedCode (122 findings in 8 days, #2112)',
@@ -88,9 +89,11 @@ const SHAPES = {
         expect: keep,
     },
     'existing-code-missing': {
-        checks: () => 'Keeps a finding with no existingCode (49 findings in 8 days, #2112)',
+        checks: () => 'Keeps a finding with no existingCode, its fix dropped (49 findings in 8 days, #2112)',
         apply: each(({ existingCode, ...s }) => s),
         expect: keep,
+        // Nothing for the fix to replace that checkFix can see.
+        fixDropped: true,
     },
     'improved-code-null': {
         checks: () => 'Keeps a finding whose improvedCode is null (#2112)',
