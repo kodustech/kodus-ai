@@ -31,6 +31,8 @@ def tabela(pasta):
     linhas = []
     for slug, nome in MODELOS:
         f = f'{AQUI}/results/{pasta}/{slug}.json'
+        sub = f.replace('_api.json', '_sdk.json')  # Claude by subscription when the API was out of quota
+        if not os.path.exists(f) and os.path.exists(sub): f = sub
         if not os.path.exists(f):
             linhas.append(f'<tr><td>{nome}</td>' + '<td class="na">—</td>' * 5 + '</tr>')
             continue
@@ -125,7 +127,7 @@ details summary{{cursor:pointer;font-weight:600;margin-bottom:8px}}table.rev td{
 <div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="defs">Definições</button></div>
 <section id="t-testes" class="aba">
 <p>Meta: 80% de acerto em cada nível, separado. Dataset: 158 problemas reais do gold v3, medidos com os rótulos de antes da revisão das definições (50 low, 50 medium, 50 high, 8 critical). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 80% (na meta), amarelo 70–79%, vermelho abaixo de 70%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
-<p class="leitura"><b>Resultado:</b> todas as tabelas contam pelos rótulos revisados (68 reclassificações). Com eles, os prompts antigos caem até 9 pontos num nível; o melhor antigo é o teste 5 (Opus 82/85/81/100). O teste 15, montado sobre as definições, resolve high (DeepSeek 94%, GPT 83%), mas derruba low para 68–72%: a definição chama erro de log e de mensagem de medium, e o gold chama de low. Opus e Sonnet ficaram sem rodar por limite da API.</p>
+<p class="leitura"><b>Resultado:</b> todas as tabelas contam pelos rótulos revisados (68 reclassificações). O teste 15, montado sobre as definições, é o melhor em medium e high nos quatro modelos (Opus 94/85, GPT 89/83, DeepSeek 79/94, Sonnet 87/77), mas derruba low para 68–80%: a definição chama erro de log e de mensagem de medium, e o gold chama de low. Falta alinhar essa fronteira entre low e medium.</p>
 {''.join(blocos)}
 </section>
 <section id="t-defs" class="aba" hidden>{tab_defs()}</section>
