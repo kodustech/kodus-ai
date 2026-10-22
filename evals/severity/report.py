@@ -45,13 +45,13 @@ import collections as _c
 MUDANCAS = _c.Counter((v['de'], v['para']) for v in REV.values())
 NIVEIS_PT = [
     ('critical', 'Um caminho concreto para burlar um fator de autenticação, administração não autorizada ampla, execução controlada pelo atacante no navegador ou no servidor, ou perda destrutiva sistêmica de uma fila inteira ou de um fluxo contínuo de trabalho.',
-     ['Um usuário só de leitura consegue dar acesso de administrador.', 'Um parâmetro de upload chega sem escape a um comando de shell.']),
+     ['SQL injection ou command injection com entrada comum de usuário.', 'XSS armazenado: conteúdo de um usuário roda como script para outros usuários ou para o admin.', 'Execução remota de código (deserialização insegura, template avaliado com entrada do usuário).', 'Login aceito sem senha ou sem o segundo fator.', 'Usuário só de leitura consegue se dar permissão de administrador.', 'Worker reiniciado descarta a fila inteira de jobs sem processar.', 'Migração apaga ou sobrescreve dados de produção de todos os clientes.']),
     ('high', 'Um caminho operacional suportado fica inutilizável para entradas válidas (inclusive um caminho de interface identificado); um efeito durável essencial falha; uma entidade principal fica sem o identificador obrigatório; dados operacionais são apagados indevidamente; ou um controle de segurança ou de admissão é burlado. Inclui queda em produção comprovada e build ou deploy bloqueado.',
-     ['Uma reserva passa do limite de vagas configurado.', 'Cancelar uma reserva deixa ativo o evento no calendário integrado.']),
+     ['Crash (500) no fluxo principal para usuário comum, como quem ainda não tem um registro opcional.', 'Usuário acessa ou altera dado de outro usuário ou de outro tenant (IDOR, checagem de permissão errada).', 'Race condition que deixa passar do limite de vagas, de dispositivos ou de licenças.', 'Reserva aceita fora da janela de agendamento ou para convidado bloqueado.', 'Cancelar ou remarcar não atualiza o evento no calendário integrado.', 'Registro apagado ou sobrescrito indevidamente.', 'Credencial salva corrompida quebra a integração daí em diante.', 'Migração ou build quebra o deploy.', 'Mudança de contrato que quebra quem já chama a API.']),
     ('medium', 'Defeito real, mas limitado: erro em saída secundária ou de diagnóstico, feedback enganoso, falha de uma requisição isolada, tratamento comum de entrada inválida, trabalho extra significativo, fraqueza de segurança ou privacidade limitada. Falta de teste para comportamento relevante que o PR adiciona é medium. Teste que passa sem verificar o que diz verificar é medium.',
-     ['Uma nova regra de elegibilidade não tem teste.', 'Um teste de retry passa sem que nenhum retry aconteça.']),
+     ['Race condition cujo efeito é só um registro duplicado.', 'Comparação de segredo sem tempo constante (timing attack sem exploit demonstrado).', 'Lentidão relevante: N+1 em coleção grande, trabalho síncrono pesado, falta de paginação.', 'Erro errado para entrada inválida, como 500 no lugar de 400.', 'Log, métrica ou mensagem enganosa para quem opera ou usa.', 'Contador ou badge desatualizado até recarregar a página.', 'E-mail ou anexo enviado com dado errado, sem afetar o registro principal.', 'await faltando: o trabalho roda, mas o erro é engolido.', 'Comportamento novo do PR sem teste, ou teste que passa sem verificar o que diz verificar.']),
     ('low', 'Manutenção, inconsistência cosmética, pouco trabalho redundante, falta de teste em código não alterado ou trivial, fixture de teste imprecisa sem teste que passe falsamente, vazamento de recurso só em teste. N+1 em laço pequeno e limitado é low; N+1 sozinho não prova carga significativa.',
-     ['Uma função que lê JSON ainda se chama loadXml.', 'Um getter trivial e não alterado não tem teste.']),
+     ['Nome de função ou variável enganoso.', 'Comentário ou docstring desatualizado.', 'Texto na interface sem tradução.', 'Código morto ou import não usado.', 'Trabalho redundante pequeno: a mesma consulta repetida num laço curto.', 'Script de desenvolvimento que só roda no macOS.', 'Falta de teste em código que o PR não alterou.', 'Desalinhamento visual leve, sem perder função.']),
 ]
 REGRAS_PT = [
     'Avaliar só a consequência que o comentário e o gatilho declarado sustentam. Não inventar escala, sucesso de exploit, rota alternativa, recuperação, nem se o comportamento é novo. Achado que o próprio texto refuta vai para revisão de validade, não para severidade.',
@@ -62,18 +62,16 @@ REGRAS_PT = [
     'Campo faltando, await faltando ou crescimento de recurso, sozinhos, não provam queda. Testes se julgam pelo dano à verificação, não pela gravidade do bug que poderiam deixar passar.',
 ]
 def tab_defs():
-    cards = ''.join(f'<div class="lvl lvl-{n}"><h3>{n}</h3><p>{E(t)}</p><ul>{"".join(f"<li>{E(x)}</li>" for x in ex)}</ul></div>' for n, t, ex in NIVEIS_PT)
+    cards = ''.join(f'<div class="lvl lvl-{n}"><h3>{n}</h3><p>{E(t)}</p><div class="ex">Exemplos</div><ul>{"".join(f"<li>{E(x)}</li>" for x in ex)}</ul></div>' for n, t, ex in NIVEIS_PT)
     regras = ''.join(f'<li>{E(r)}</li>' for r in REGRAS_PT)
     mud = ''.join(f'<tr><td>{de}</td><td>{para}</td><td>{n}</td></tr>' for (de, para), n in MUDANCAS.most_common())
     lista = ''.join(f'<tr><td class="id">{E(k)}</td><td>{v["de"]} → {v["para"]}</td><td class="mot">{E(v["motivo"])}</td></tr>' for k, v in sorted(REV.items()))
-    return f"""<p>O Astra leu os 431 problemas reais do gold v3 com a severidade de cada um e escreveu a definição de cada nível a partir dos rótulos. O Opus revisou cada versão; foram 4 rodadas do Astra e 2 do Opus. Onde a definição mostrou um rótulo inconsistente com casos parecidos, o rótulo foi reclassificado, só quando os dois concordaram: {len(REV)} reclassificações, {NO_DATASET} delas nos 158 itens do dataset de teste. Os testes da outra aba foram medidos com os rótulos de antes.</p>
+    return f"""<p>O Astra leu os 431 problemas reais do gold v3 com a severidade de cada um e escreveu a definição de cada nível a partir dos rótulos. O Opus revisou cada versão (4 rodadas do Astra, 2 do Opus), e os rótulos inconsistentes foram corrigidos no gold quando os dois concordaram. Os testes da outra aba foram medidos com os rótulos de antes dessa correção.</p>
 <div class="lvls">{cards}</div>
 <h2>Regras de fronteira</h2><ul class="regras">{regras}</ul>
 <h2>Texto para o prompt</h2><p>A mesma definição, em inglês, como vai no prompt de severidade (evals/severity/definitions.md).</p>
 <pre class="en">{E(DEF_EN)}</pre>
-<h2>Reclassificações no gold</h2>
-<div class="wrap"><table><thead><tr><th>De</th><th>Para</th><th>Itens</th></tr></thead><tbody>{mud}</tbody></table></div>
-<details><summary>Ver as {len(REV)} reclassificações</summary><div class="wrap"><table class="rev"><thead><tr><th>Item</th><th>Mudança</th><th>Motivo</th></tr></thead><tbody>{lista}</tbody></table></div></details>"""
+"""
 
 blocos = []
 for t in TESTES:
@@ -106,7 +104,7 @@ td small{{display:inline-block;min-width:3.2em;margin-left:6px;color:inherit;opa
 td.ok{{color:var(--ok);background:var(--okb);font-weight:600}}td.mid{{color:var(--mid);background:var(--midb);font-weight:600}}td.bad{{color:var(--bad);background:var(--badb);font-weight:600}}td.na{{color:var(--mut)}}
 .tabs{{display:flex;gap:4px;border-bottom:1px solid var(--line)}}.tabs button{{font:inherit;font-weight:600;background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;color:var(--mut);cursor:pointer}}.tabs button.on{{color:var(--fg);border-bottom-color:var(--fg)}}.tabs button:focus-visible{{outline:2px solid var(--fg)}}
 .aba{{display:grid;gap:26px}}
-.lvls{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}}.lvl{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;padding:12px 16px;min-width:0}}.lvl h3{{margin:0 0 6px;text-transform:uppercase;letter-spacing:.05em;font-size:.85rem;color:var(--c)}}.lvl p{{color:var(--fg)}}.lvl ul{{margin:8px 0 0;padding-left:18px;color:var(--mut);font-size:.92em}}
+.lvls{{display:grid;gap:12px}}.lvl{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;padding:12px 16px;min-width:0}}.lvl h3{{margin:0 0 6px;text-transform:uppercase;letter-spacing:.05em;font-size:.85rem;color:var(--c)}}.lvl p{{color:var(--fg)}}.lvl ul{{margin:10px 0 0;padding-left:18px;color:var(--mut);columns:2 22em;column-gap:28px}}.lvl li{{break-inside:avoid;margin-bottom:4px}}.lvl .ex{{margin-top:10px;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);font-weight:600}}
 .lvl-critical{{--c:var(--bad)}}.lvl-high{{--c:var(--mid)}}.lvl-medium{{--c:var(--acc)}}.lvl-low{{--c:var(--mut)}}
 .regras{{margin:0;padding-left:20px;display:grid;gap:6px}}
 pre.en{{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px;font:13px/1.5 ui-monospace,monospace;margin:0;overflow-x:auto}}
