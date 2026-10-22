@@ -37,12 +37,21 @@ describe('diffFor: what one second look re-reads on every step', () => {
     it('puts the files the evidence cites first, and names the rest for read_file', () => {
         const diff =
             file('a.ts', 400) + file('b.ts', 400) + file('cited.ts', 400);
-        const sent = diffFor(diff, ['cited.ts'], 900);
+        const sent = diffFor(diff, ['cited.ts'], 1000);
         expect(sent.indexOf('=== FILE: cited.ts')).toBe(0);
         expect(sent).toContain('=== FILE: a.ts');
         expect(sent).not.toContain('=== FILE: b.ts');
         expect(sent).toMatch(
             /not shown here \(read them with read_file\): b\.ts$/,
         );
+    });
+
+    it('keeps the names of the files left out inside the budget', () => {
+        const diff = Array.from({ length: 500 }, (_, i) =>
+            file(`src/features/module-${i}/handler.ts`, 400),
+        ).join('');
+        const sent = diffFor(diff, [], 24_000);
+        expect(sent.length).toBeLessThanOrEqual(24_000);
+        expect(sent).toMatch(/… and \d+ more$/);
     });
 });

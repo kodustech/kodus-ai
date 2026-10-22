@@ -136,6 +136,9 @@ export class BusinessValidationRunModel extends CoreDocument {
      */
     @Prop({ type: Date, required: false })
     pendingSince?: Date;
+
+    /** Set by `timestamps`. */
+    createdAt?: Date;
 }
 
 export const BusinessValidationRunSchema = SchemaFactory.createForClass(

@@ -8,6 +8,7 @@ import { Skeleton } from "@components/ui/skeleton";
 import { useIntentCockpit } from "@services/business-logic/hooks";
 import type { RequirementTopic } from "@services/business-logic/types";
 import { formatDate, subDays } from "date-fns";
+import { useQueryState } from "nuqs";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
@@ -70,13 +71,16 @@ const Metric = ({
     </Card>
 );
 
-/** The repository the picker chose, as the other tabs read it: the URL, then the cookie. */
+/**
+ * The repository the picker chose, as the other tabs read it: the URL (an
+ * empty value means every repository), then the cookie.
+ */
 const repositoryFrom = (
-    searchParams: URLSearchParams,
+    param: string | null,
     cookieValue: string | undefined,
 ) => {
-    if (searchParams.has(COCKPIT_PARAM.repository)) {
-        return searchParams.get(COCKPIT_PARAM.repository) || undefined;
+    if (param !== null) {
+        return param || undefined;
     }
     try {
         return cookieValue ? (JSON.parse(cookieValue) as string) : undefined;
@@ -102,7 +106,8 @@ export const IntentTab = ({
         () => rangeFrom(searchParams, cookieValue),
         [searchParams, cookieValue],
     );
-    const repository = repositoryFrom(searchParams, repositoryCookieValue);
+    const [repositoryParam] = useQueryState(COCKPIT_PARAM.repository);
+    const repository = repositoryFrom(repositoryParam, repositoryCookieValue);
     const { data, isLoading, isError } = useIntentCockpit({
         ...range,
         teamId,

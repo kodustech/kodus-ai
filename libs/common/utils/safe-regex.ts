@@ -1,5 +1,9 @@
 import * as vm from 'node:vm';
 
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('SafeRegex');
+
 /** Longest user or model pattern we run. A line or id matcher is short;
  *  anything longer is more likely an unbounded/backtracking construct. */
 export const MAX_PATTERN_LEN = 200;
@@ -63,7 +67,7 @@ export interface BoundedMatch {
  * cubically on a long run of capitals), and the text is often the PR's own
  * title or description, which its author controls: V8 interrupts a regex that
  * runs past a script timeout, so the review never hangs on one. A pattern
- * that runs out of time matches nothing.
+ * that runs out of time, or doesn't compile, matches nothing and is logged.
  */
 export function matchAllWithin(
     pattern: string,
@@ -81,7 +85,18 @@ export function matchAllWithin(
             text: match,
             ...(group !== undefined ? { group } : {}),
         }));
-    } catch {
+    } catch (error) {
+        // The pattern and the text are the user's: log their sizes, not them.
+        logger.warn({
+            message: 'A user pattern was stopped or failed, read as no match',
+            context: 'SafeRegex',
+            metadata: {
+                timeoutMs,
+                patternLength: pattern.length,
+                textLength: text.length,
+                reason: error instanceof Error ? error.message : String(error),
+            },
+        });
         return [];
     }
 }

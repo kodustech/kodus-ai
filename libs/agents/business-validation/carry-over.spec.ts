@@ -192,4 +192,22 @@ describe('matchPrevious', () => {
             ),
         ).toEqual([undefined, 0, 1]);
     });
+
+    it('never matches a requirement with its negation', () => {
+        expect(
+            matchPrevious(
+                ['Members must not export reports'],
+                ['Members must export reports'],
+            ),
+        ).toEqual([undefined]);
+    });
+
+    it('matches repeated texts one to one', () => {
+        expect(
+            matchPrevious(
+                ['Logs the event', 'Logs the event'],
+                ['Logs the event', 'Logs the event'],
+            ),
+        ).toEqual([0, 1]);
+    });
 });

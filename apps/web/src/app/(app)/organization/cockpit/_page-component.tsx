@@ -31,7 +31,7 @@ const createSettingsSchema = () =>
                     productivity: z.boolean(),
                     intent: z.boolean(),
                 })
-                .refine((t) => t.kodusReview || t.productivity, {
+                .refine((t) => t.kodusReview || t.productivity || t.intent, {
                     message: "At least one tab must stay enabled",
                     path: ["productivity"],
                 }),

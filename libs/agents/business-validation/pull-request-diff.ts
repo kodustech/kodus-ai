@@ -100,7 +100,8 @@ export function diffFor(
     ];
     const kept: string[] = [];
     const left: string[] = [];
-    let used = 0;
+    const room = Math.min(OMITTED_FILES_CHARS, Math.floor(budget / 10));
+    let used = room;
     for (const chunk of ordered) {
         if (used + chunk.text.length <= budget) {
             kept.push(chunk.text);
@@ -110,6 +111,25 @@ export function diffFor(
         }
     }
     return left.length
-        ? `${kept.join('')}\n\nAlso changed, not shown here (read them with read_file): ${left.join(', ')}`
+        ? `${kept.join('')}${omittedFiles(left, room)}`
         : kept.join('');
+}
+
+/** Most room kept for the names of the files left out, so the whole stays in budget. */
+const OMITTED_FILES_CHARS = 2_000;
+
+/** The files left out, by name, cut to the room kept for them. */
+function omittedFiles(files: string[], room: number): string {
+    const head =
+        '\n\nAlso changed, not shown here (read them with read_file): ';
+    let list = '';
+    for (const [i, file] of files.entries()) {
+        const more = `, … and ${files.length - i} more`;
+        const next = `${list ? ', ' : ''}${file}`;
+        if (head.length + list.length + next.length + more.length > room) {
+            return `${head}${list}${more}`;
+        }
+        list += next;
+    }
+    return `${head}${list}`;
 }

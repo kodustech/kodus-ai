@@ -213,7 +213,17 @@ async function findWithin(
     const signal = context.signal
         ? AbortSignal.any([context.signal, deadline])
         : deadline;
-    return find({ ...context, signal });
+    try {
+        return await find({ ...context, signal });
+    } finally {
+        if (deadline.aborted && !context.signal?.aborted) {
+            warn(
+                'Second look stopped at the deadline',
+                context,
+                `ran out of its ${remaining}ms budget`,
+            );
+        }
+    }
 }
 
 /** A found task whose title contradicts the branch it came from counts as not found. */

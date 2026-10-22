@@ -75,8 +75,9 @@ const SAME_REQUIREMENT = 0.8;
  * For each requirement of this run, the index of the same one in the last
  * run. The judge re-quotes the task on every run, and a re-quote may cut a
  * sentence or merge two bullets: the exact text wins, then the most alike
- * one, each earlier requirement taken once. Numbers and symbols must match:
- * "count > 10" never takes "count < 10"'s acceptance.
+ * one, each earlier requirement taken once. Numbers, symbols and negation
+ * must match: "count > 10" never takes "count < 10"'s acceptance, nor "must
+ * not export" the one of "must export".
  */
 export function matchPrevious(
     now: string[],
@@ -84,12 +85,14 @@ export function matchPrevious(
 ): Array<number | undefined> {
     const taken = new Set<number>();
     const result: Array<number | undefined> = now.map(() => undefined);
-    const keys = before.map(requirementKey);
+    const byKey = new Map<string, number[]>();
+    before.forEach((text, j) => {
+        const key = requirementKey(text);
+        byKey.set(key, [...(byKey.get(key) ?? []), j]);
+    });
     now.forEach((text, i) => {
-        const exact = keys.findIndex(
-            (key, j) => !taken.has(j) && key === requirementKey(text),
-        );
-        if (exact >= 0) {
+        const exact = byKey.get(requirementKey(text))?.shift();
+        if (exact !== undefined) {
             taken.add(exact);
             result[i] = exact;
         }
@@ -100,7 +103,11 @@ export function matchPrevious(
             return;
         }
         before.forEach((earlier, j) => {
-            if (taken.has(j) || signs(text) !== signs(earlier)) {
+            if (
+                taken.has(j) ||
+                signs(text) !== signs(earlier) ||
+                negated(text) !== negated(earlier)
+            ) {
                 return;
             }
             const score = overlap(words(text), words(earlier));
@@ -129,6 +136,14 @@ function words(text: string): Set<string> {
 /** The numbers and comparison signs, which must agree for two texts to be one requirement. */
 function signs(text: string): string {
     return (text.match(/\d+(?:[.,]\d+)?|[<>=≤≥≠]+/g) ?? []).sort().join(' ');
+}
+
+const NEGATION =
+    /\b(?:not|no|never|none|nor|without|cannot|não|nao|nunca|sem|nenhum|nenhuma)\b|n['’]t\b/iu;
+
+/** "Must export" and "must not export" share every word but are opposites. */
+function negated(text: string): boolean {
+    return NEGATION.test(text);
 }
 
 /** Shared words over the smaller text's words: a cut sentence still matches. */

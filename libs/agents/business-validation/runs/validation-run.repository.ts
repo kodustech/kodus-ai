@@ -55,6 +55,14 @@ export interface RunFilter {
     repositoryName?: string;
 }
 
+/** The most PRs one range reads, newest first: far past a month of a busy org. */
+const MAX_PULL_REQUESTS = 10_000;
+
+/**
+ * The runs one reader may see. `repositoryIds` is the reader's repository
+ * scope: a query that adds its own `repositoryId` condition puts it first,
+ * so this one wins.
+ */
 function scope(organizationId: string, filter: RunFilter) {
     const name = filter.repositoryName?.split('/').pop();
     return {
@@ -172,16 +180,16 @@ export class ValidationRunRepository {
             .aggregate([
                 {
                     $match: {
+                        repositoryId: { $exists: true, $ne: null },
                         ...scope(organizationId, filter),
                         createdAt: {
                             $gte: range.from,
                             ...(range.to ? { $lte: range.to } : {}),
                         },
-                        repositoryId: { $exists: true, $ne: null },
                         pullRequestNumber: { $exists: true, $ne: null },
                     },
                 },
-                { $sort: { createdAt: -1 } },
+                { $sort: { createdAt: -1, _id: -1 } },
                 {
                     $group: {
                         _id: {
@@ -208,7 +216,8 @@ export class ValidationRunRepository {
                         },
                     },
                 },
-                { $sort: { createdAt: -1 } },
+                { $sort: { createdAt: -1, _id: -1 } },
+                { $limit: MAX_PULL_REQUESTS },
             ])
             .allowDiskUse(true)
             .exec();
@@ -261,8 +270,7 @@ export class ValidationRunRepository {
                 20,
             ),
         ]);
-        const lastAnswered = (answered[0] as { createdAt?: Date } | undefined)
-            ?.createdAt;
+        const lastAnswered = answered[0]?.createdAt;
         const firstFailure = await this.model
             .find({
                 ...base,

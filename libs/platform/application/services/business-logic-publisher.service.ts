@@ -166,7 +166,23 @@ export class BusinessLogicPublisher {
                               pullRequest.platformType as
                                   PlatformType | undefined,
                           )
-                          .catch(() => [])) ?? [])
+                          .catch((error) => {
+                              // Without the files the repository's own
+                              // settings apply, not a directory's.
+                              this.logger.warn({
+                                  message:
+                                      "Could not list the PR's files: Business Logic uses the repository settings",
+                                  context: BusinessLogicPublisher.name,
+                                  error,
+                                  metadata: {
+                                      organizationId:
+                                          organizationAndTeamData.organizationId,
+                                      repositoryId,
+                                      pullRequest: pullRequest.number,
+                                  },
+                              });
+                              return [];
+                          })) ?? [])
                     : [];
             const config = (await this.codeBaseConfigService?.getSimpleConfig(
                 organizationAndTeamData,
@@ -190,7 +206,18 @@ export class BusinessLogicPublisher {
                     ? { byokModelId: config.byokModelId }
                     : {}),
             };
-        } catch {
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the Business Logic config: the defaults apply',
+                context: BusinessLogicPublisher.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    repositoryId,
+                    pullRequest: pullRequest?.number,
+                },
+            });
             return { settings: DEFAULT_BUSINESS_LOGIC_SETTINGS, enabled: true };
         }
     }
