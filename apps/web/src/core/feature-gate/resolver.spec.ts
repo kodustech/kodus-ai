@@ -4,15 +4,16 @@
  * by `test/unit/feature-gate/feature-gate.service.spec.ts`. Here we
  * only verify the web-specific wiring:
  *
- *   - audience is hardcoded to "cloud"
+ *   - cloud uses release track and PostHog; self-hosted uses BETA_FEATURES
  *   - "deny" decisions short-circuit before calling PostHog
- *   - missing WEB_POSTHOG_KEY falls through permissively (self-hosted
- *     web bundle case)
+ *   - missing WEB_POSTHOG_KEY retains the cloud compatibility fallback
  *   - the user-vs-organization identifier is selected correctly
  *   - PostHog and auth() failures degrade safely (return false)
  */
 
 import type { SnapshotFeature } from "@libs/feature-gate/domain/snapshot.types";
+
+import { isFeatureEnabled } from "./resolver";
 
 const featureMock: { current: SnapshotFeature | undefined } = {
     current: undefined,
@@ -39,7 +40,10 @@ jest.mock("src/core/config/auth", () => ({
     auth: () => authMock(),
 }));
 
-const isFeatureEnabledMock = jest.fn<Promise<boolean>, [string, string, unknown]>();
+const isFeatureEnabledMock = jest.fn<
+    Promise<boolean>,
+    [string, string, unknown]
+>();
 const shutdownMock = jest.fn<Promise<void>, []>().mockResolvedValue();
 
 jest.mock("posthog-node", () => ({
@@ -50,8 +54,6 @@ jest.mock("posthog-node", () => ({
     })),
 }));
 
-import { isFeatureEnabled } from "./resolver";
-
 const baseFeature: SnapshotFeature = {
     name: "Test feature",
     stage: "general-availability",
@@ -61,6 +63,8 @@ const baseFeature: SnapshotFeature = {
 describe("isFeatureEnabled (web resolver)", () => {
     const ENV_KEY = "WEB_POSTHOG_KEY";
     const originalKey = process.env[ENV_KEY];
+    const originalWebNodeEnv = process.env.WEB_NODE_ENV;
+    const originalBetaFeatures = process.env.BETA_FEATURES;
 
     beforeEach(() => {
         featureMock.current = { ...baseFeature };
@@ -68,6 +72,8 @@ describe("isFeatureEnabled (web resolver)", () => {
         isFeatureEnabledMock.mockReset();
         shutdownMock.mockClear();
         process.env[ENV_KEY] = "phc-test";
+        process.env.WEB_NODE_ENV = "production";
+        delete process.env.BETA_FEATURES;
     });
 
     afterAll(() => {
@@ -76,6 +82,11 @@ describe("isFeatureEnabled (web resolver)", () => {
         } else {
             process.env[ENV_KEY] = originalKey;
         }
+        if (originalWebNodeEnv === undefined) delete process.env.WEB_NODE_ENV;
+        else process.env.WEB_NODE_ENV = originalWebNodeEnv;
+        if (originalBetaFeatures === undefined)
+            delete process.env.BETA_FEATURES;
+        else process.env.BETA_FEATURES = originalBetaFeatures;
     });
 
     it("denies (without calling PostHog) when the catalog audience excludes cloud", async () => {
@@ -105,13 +116,27 @@ describe("isFeatureEnabled (web resolver)", () => {
         expect(isFeatureEnabledMock).not.toHaveBeenCalled();
     });
 
-    it("falls through permissively when WEB_POSTHOG_KEY is unset (self-hosted web)", async () => {
+    it("falls through permissively when WEB_POSTHOG_KEY is unset in cloud", async () => {
         delete process.env[ENV_KEY];
 
         const result = await isFeatureEnabled({ feature: "agent-review" });
 
         expect(result).toBe(true);
         expect(authMock).not.toHaveBeenCalled();
+        expect(isFeatureEnabledMock).not.toHaveBeenCalled();
+    });
+
+    it("hides beta controls on self-hosted until BETA_FEATURES is enabled", async () => {
+        process.env.WEB_NODE_ENV = "self-hosted";
+        featureMock.current = { ...baseFeature, stage: "beta" };
+
+        expect(
+            await isFeatureEnabled({ feature: "conditional-pr-approval" }),
+        ).toBe(false);
+        process.env.BETA_FEATURES = "true";
+        expect(
+            await isFeatureEnabled({ feature: "conditional-pr-approval" }),
+        ).toBe(true);
         expect(isFeatureEnabledMock).not.toHaveBeenCalled();
     });
 

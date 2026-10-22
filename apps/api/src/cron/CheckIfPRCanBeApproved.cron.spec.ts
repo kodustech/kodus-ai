@@ -46,7 +46,10 @@ function buildDeps(): Deps {
     };
 }
 
-function buildProvider(deps: Deps): CheckIfPRCanBeApprovedCronProvider {
+function buildProvider(
+    deps: Deps,
+    conditionalApprovalEnabled = true,
+): CheckIfPRCanBeApprovedCronProvider {
     return new CheckIfPRCanBeApprovedCronProvider(
         {} as any, // teamService
         {} as any, // parametersService
@@ -58,10 +61,29 @@ function buildProvider(deps: Deps): CheckIfPRCanBeApprovedCronProvider {
         {} as any, // teamAutomationService
         deps.pullRequestMessagesService as any,
         {} as any, // distributedLockService
+        {
+            isEnabled: jest.fn().mockResolvedValue(conditionalApprovalEnabled),
+        } as any,
     );
 }
 
 const ORG_DATA = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+it('does not fall back to legacy approval for a saved policy without access', async () => {
+    const deps = buildDeps();
+    const provider = buildProvider(deps, false);
+    const result = await (provider as any).shouldApprovePR({
+        organizationAndTeamData: ORG_DATA,
+        pr: basePr(),
+        codeReviewConfig: {
+            pullRequestApprovalActive: true,
+            approvalLabels: ['ready'],
+        },
+        teamAutomationId: 'automation-1',
+    });
+    expect(result).toBe(false);
+    expect(deps.codeManagementService.getPullRequest).not.toHaveBeenCalled();
+});
 
 function basePr(overrides: Record<string, any> = {}) {
     return {
@@ -134,9 +156,9 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
         });
 
         it('prefers .commitSha over .commit.sha when .sha is absent', () => {
-            expect(
-                call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } }),
-            ).toBe('sha-b');
+            expect(call({ commitSha: 'sha-b', commit: { sha: 'sha-c' } })).toBe(
+                'sha-b',
+            );
         });
     });
 

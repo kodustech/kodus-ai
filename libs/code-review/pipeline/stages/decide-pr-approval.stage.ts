@@ -14,6 +14,7 @@ import {
     evaluateApproval,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         private readonly codeManagement: CodeManagementService,
         @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
         private readonly areaMaps: ICodeAreaRiskMapService,
+        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
     ) {
         super();
     }
@@ -58,6 +60,18 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
 
         const { pullRequest, organizationAndTeamData, repository } = context;
+        if (
+            !(await this.conditionalApprovalAccess.isEnabled(
+                organizationAndTeamData,
+            ))
+        ) {
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    kind: 'hold',
+                    reason: 'Conditional approval is unavailable for this organization.',
+                };
+            });
+        }
         const organizationId = organizationAndTeamData.organizationId;
         if (!organizationId) {
             return this.updateContext(context, (draft) => {
@@ -123,7 +137,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         // Preserve the assessment even if the required label arrives after
         // review; the cron can then reconsider this exact reviewed head.
         if (policy.assessRisk && !sensitive && headSha) {
-            let areaMap = null;
+            let areaMap;
             try {
                 areaMap = await this.areaMaps.read(
                     organizationId,

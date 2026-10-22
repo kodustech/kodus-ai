@@ -11,6 +11,7 @@ export const FEATURE_KEYS = {
     kodusProvider: 'kodus-provider',
     deterministicEvidence: 'deterministic-evidence',
     customAgents: 'custom-agents',
+    conditionalPrApproval: 'conditional-pr-approval',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

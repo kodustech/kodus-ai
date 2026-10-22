@@ -45,6 +45,15 @@ features:
             look at, the tools they may use and how their comments appear,
             and run them next to Kody on every pull request.
 
+    conditional-pr-approval:
+        name: "Conditional PR approval"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Limit automatic approval by PR label or author, require a person
+            for sensitive paths, and let Kody assess risk using the change and
+            available code history. Available on Teams and Enterprise plans.
+
     heavy-review:
         name: "Heavy review (deeper pass)"
         stage: alpha

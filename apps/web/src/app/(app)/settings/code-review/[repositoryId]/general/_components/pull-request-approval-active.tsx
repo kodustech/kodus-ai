@@ -6,7 +6,11 @@ import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_compo
 
 import type { CodeReviewFormType } from "../../../_types";
 
-export const PullRequestApprovalActive = () => {
+export const PullRequestApprovalActive = ({
+    conditionalApprovalEnabled,
+}: {
+    conditionalApprovalEnabled: boolean;
+}) => {
     const form = useFormContext<CodeReviewFormType>();
 
     return (
@@ -31,8 +35,9 @@ export const PullRequestApprovalActive = () => {
                             <OverrideIndicatorForm fieldName="pullRequestApprovalActive" />
                         </div>
                         <p className="text-text-secondary mt-1.5 max-w-2xl text-sm leading-5">
-                            After a clean automated review, Kody approves a PR
-                            only when it passes the conditions below.
+                            {conditionalApprovalEnabled
+                                ? "After a clean automated review, Kody approves a PR only when it passes the conditions below."
+                                : "After a clean automated review, Kody can approve the PR automatically."}
                         </p>
                     </div>
                     <Switch

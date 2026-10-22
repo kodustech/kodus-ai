@@ -14,9 +14,13 @@ const codeManagement = {
     getFilesByPullRequestId: jest.fn(),
 };
 const areaMaps = { read: jest.fn() };
+const conditionalApprovalAccess = {
+    isEnabled: jest.fn().mockResolvedValue(true),
+};
 const stage = new DecidePrApprovalStage(
     codeManagement as unknown as CodeManagementService,
     areaMaps as unknown as CodeAreaRiskMapService,
+    conditionalApprovalAccess as any,
 );
 
 const context = (config: Record<string, unknown> = {}) =>
@@ -50,6 +54,7 @@ const context = (config: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
     jest.clearAllMocks();
+    conditionalApprovalAccess.isEnabled.mockResolvedValue(true);
     areaMaps.read.mockResolvedValue(null);
     codeManagement.getPullRequest.mockResolvedValue({
         labels: ['ready'],
@@ -65,6 +70,13 @@ beforeEach(() => {
             deletions: 1,
         },
     ]);
+});
+
+it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
+    conditionalApprovalAccess.isEnabled.mockResolvedValueOnce(false);
+    const result = await stage.execute(context({ approvalLabels: ['ready'] }));
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
 });
 
 it('preserves the old path without extra calls when no policy is configured', async () => {

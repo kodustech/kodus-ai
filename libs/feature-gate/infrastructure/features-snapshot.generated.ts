@@ -5,9 +5,18 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-10-17T16:28:20.970Z",
+    "generated_at": "2026-10-22T15:36:14.679Z",
     "source": "manual",
     "features": {
+        "conditional-pr-approval": {
+            "name": "Conditional PR approval",
+            "stage": "beta",
+            "description": "Limit automatic approval by PR label or author, require a person for sensitive paths, and let Kody assess risk using the change and available code history. Available on Teams and Enterprise plans.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "custom-agents": {
             "name": "Custom review agents",
             "stage": "beta",

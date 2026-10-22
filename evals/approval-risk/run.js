@@ -121,7 +121,9 @@ async function runCase(item, slot, withMap = true) {
     );
     const host = new CodeManagementService(integrations, providers);
     const maps = { read: async () => (withMap ? item.areaMap || null : null) };
-    const stage = new DecidePrApprovalStage(host, maps);
+    const stage = new DecidePrApprovalStage(host, maps, {
+        isEnabled: async () => true,
+    });
     const context = {
         organizationAndTeamData: {
             organizationId,

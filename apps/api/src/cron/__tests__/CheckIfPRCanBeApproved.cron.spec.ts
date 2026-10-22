@@ -119,6 +119,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             teamAutomationService,
             pullRequestMessagesService,
             distributedLockService,
+            { isEnabled: jest.fn().mockResolvedValue(true) } as any,
         );
 
         return {

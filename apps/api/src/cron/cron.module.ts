@@ -36,6 +36,10 @@ import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { FeatureGateModule } from '@libs/feature-gate';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 @Module({
     imports: [
@@ -58,8 +62,12 @@ import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
         SpendLimitModule,
         KodusCreditsModule,
         PlatformDataModule,
+        FeatureGateModule,
+        forwardRef(() => LicenseModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
+        ConditionalApprovalAccessService,
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,

@@ -38,6 +38,7 @@ import {
     evaluateApproval,
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
@@ -128,6 +129,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
         private readonly distributedLockService: DistributedLockService,
+        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
     ) {}
 
     @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
@@ -569,6 +571,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
             policy?.assessRisk ||
             policy?.sensitivePaths?.length
         );
+        // A saved policy must never silently fall back to legacy approval
+        // when its beta flag or paid entitlement is no longer available.
+        if (
+            policyActive &&
+            !(await this.conditionalApprovalAccess.isEnabled(
+                organizationAndTeamData,
+            ))
+        ) {
+            return false;
+        }
         let conditionalDecision: ApprovalDecision | undefined;
         const allowNoComments =
             !!policy?.labels?.length && (pr?.suggestions?.length ?? 0) === 0;
@@ -581,7 +593,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         ) {
             return false;
         }
-        let currentPullRequest = null;
+        let currentPullRequest;
 
         if (lastAnalyzedCommitSha || policyActive) {
             currentPullRequest =

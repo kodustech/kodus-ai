@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Switch } from "@components/ui/switch";
@@ -90,6 +91,14 @@ export function ApprovalPolicySettings() {
 
     return (
         <div>
+            <div className="border-card-lv3/60 border-b px-5 py-4 sm:px-6">
+                <h3 className="text-text-primary flex items-center gap-2 text-sm font-semibold">
+                    Conditional approval <Badge>Beta</Badge>
+                </h3>
+                <p className="text-text-secondary mt-1 text-xs leading-5">
+                    Available on Teams and Enterprise.
+                </p>
+            </div>
             <section className="border-card-lv3/60 border-b px-5 py-6 sm:px-6">
                 <div className="mb-5">
                     <h3 className="text-text-primary text-base font-semibold">

@@ -15,6 +15,7 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { InitialCommentStage } from './stages/initial-comment.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
@@ -133,6 +134,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         TraceContextModule,
     ],
     providers: [
+        ConditionalApprovalAccessService,
         // Strategy
         CodeReviewPipelineStrategy,
 

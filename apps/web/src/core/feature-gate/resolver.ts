@@ -1,8 +1,6 @@
-import { PostHog } from "posthog-node";
-
 import { evaluateCatalogGate } from "@libs/feature-gate/domain/decision";
 import type { ReleaseTrack } from "@libs/feature-gate/domain/release-track";
-
+import { PostHog } from "posthog-node";
 import { auth } from "src/core/config/auth";
 
 import { findFeature } from "./snapshot";
@@ -46,9 +44,8 @@ function getPostHog(): PostHog | null {
 
 /**
  * Next.js adapter around the pure `evaluateCatalogGate` decision in
- * `libs/feature-gate/domain/decision.ts`. Web is always cloud, so the
- * audience is hardcoded; runtime specifics are next-auth + posthog-node
- * per call.
+ * `libs/feature-gate/domain/decision.ts`. Self-hosted uses BETA_FEATURES;
+ * cloud uses the org's release track and PostHog.
  *
  * The lib mirror at `libs/feature-gate/application/feature-gate.service.ts`
  * calls the same `evaluateCatalogGate` — there's exactly one source of
@@ -61,24 +58,24 @@ export const isFeatureEnabled = async ({
 }: IsFeatureEnabledOptions): Promise<boolean> => {
     try {
         const entry = findFeature(feature);
+        const selfHosted = process.env.WEB_NODE_ENV === "self-hosted";
         const decision = evaluateCatalogGate({
             entry,
-            audience: "cloud",
+            audience: selfHosted ? "self-hosted" : "cloud",
             track: releaseTrack,
+            selfHostedBetaEnabled: process.env.BETA_FEATURES === "true",
         });
 
         if (decision === "deny") return false;
+        if (selfHosted) return true;
 
-        // Self-hosted web bundles run without a PostHog key. After the
-        // catalog already passed us, fall through to the legacy
-        // permissive behavior so the app keeps working.
+        // Keep the existing cloud behavior when PostHog is unconfigured.
         const posthog = getPostHog();
         if (!posthog) return true;
 
         const jwtPayload = await auth();
         const orgId = jwtPayload?.user?.organizationId;
-        const id =
-            identifier === "user" ? jwtPayload?.user?.userId : orgId;
+        const id = identifier === "user" ? jwtPayload?.user?.userId : orgId;
         if (!id) return false;
 
         const value = await posthog

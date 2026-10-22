@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
 import { magicModal } from "@components/ui/magic-modal";
@@ -16,20 +17,28 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { Settings2Icon } from "lucide-react";
-import { FormProvider, useFormContext, useFormState } from "react-hook-form";
+import {
+    FormProvider,
+    useFormContext,
+    useFormState,
+    useWatch,
+} from "react-hook-form";
+import {
+    useCodeReviewModelData,
+    useFeatureFlags,
+    usePlatformConfig,
+} from "src/app/(app)/settings/_components/context";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
+import { isTeamsOrEnterprisePlan } from "src/features/ee/byok/_utils";
+import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import {
-    useCodeReviewModelData,
-    usePlatformConfig,
-} from "../../../_components/context";
 import {
     useCodeReviewRouteParams,
     useCurrentConfigLevel,
@@ -80,6 +89,22 @@ export default function General() {
     const platformConfig = usePlatformConfig();
     const { byokModels } = useCodeReviewModelData();
     const form = useFormContext<CodeReviewFormType>();
+    const { license } = useSubscriptionContext();
+    const conditionalApprovalEnabled =
+        useFeatureFlags().conditionalPrApproval === true &&
+        isTeamsOrEnterprisePlan(license);
+    const approvalPolicyValues = useWatch({
+        control: form.control,
+        name: [
+            "approvalLabels.value",
+            "approvalAuthors.value",
+            "approvalSensitivePaths.value",
+            "approvalRiskActive.value",
+        ],
+    });
+    const hasApprovalPolicy = approvalPolicyValues.some((value) =>
+        Array.isArray(value) ? value.length > 0 : value === true,
+    );
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const currentLevel = useCurrentConfigLevel();
@@ -274,8 +299,65 @@ export default function General() {
                 <div
                     data-field-name="pullRequestApprovalActive"
                     className="border-card-lv3/60 bg-card-lv1 overflow-hidden rounded-xl border">
-                    <PullRequestApprovalActive />
-                    <ApprovalPolicySettings />
+                    <PullRequestApprovalActive
+                        conditionalApprovalEnabled={conditionalApprovalEnabled}
+                    />
+                    {conditionalApprovalEnabled ? (
+                        <ApprovalPolicySettings />
+                    ) : (
+                        <div className="border-card-lv3/60 border-t px-5 py-4 sm:px-6">
+                            <p className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                                Conditional approval <Badge>Beta</Badge>
+                            </p>
+                            <p className="text-text-secondary mt-1 text-xs leading-5">
+                                PR conditions and risk assessment are available
+                                on Teams and Enterprise when beta access is
+                                enabled. Automatic approval without conditions
+                                remains available.
+                            </p>
+                            {hasApprovalPolicy && (
+                                <div className="mt-3">
+                                    <p className="text-text-secondary text-xs leading-5">
+                                        Saved conditions are holding automatic
+                                        approval while access is unavailable.
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="helper"
+                                        className="mt-2"
+                                        onClick={() => {
+                                            form.setValue(
+                                                "approvalLabels.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalAuthors.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalSensitivePaths.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalRiskActive.value",
+                                                false,
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalRiskInstructions.value",
+                                                "",
+                                                { shouldDirty: true },
+                                            );
+                                        }}>
+                                        Clear saved conditions
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
                 <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
                     <div className="px-5 py-4 sm:px-6">
