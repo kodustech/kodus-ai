@@ -662,9 +662,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             ? approvalPolicyFromConfig(codeReviewConfig)
             : undefined;
         if (
-            [PlatformType.BITBUCKET, PlatformType.AZURE_REPOS].includes(
-                platformType,
-            ) &&
+            platformType === PlatformType.AZURE_REPOS &&
             configuredPolicy?.labels?.length
         ) {
             return false;

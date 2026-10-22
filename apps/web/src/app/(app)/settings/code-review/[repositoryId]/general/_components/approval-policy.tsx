@@ -65,7 +65,7 @@ function EligibilityFields() {
                                 <FormControl.Helper className="text-xs leading-5">
                                     {name === "approvalLabels" &&
                                     labelsUnavailable
-                                        ? "Bitbucket and Azure Repos cannot verify PR labels. PRs on those providers need a person while labels are configured. You can remove saved labels here."
+                                        ? "Bitbucket ignores approval labels. Azure Repos needs a person while labels are configured. You can remove saved labels here."
                                         : help}
                                 </FormControl.Helper>
                             </FormControl.Root>

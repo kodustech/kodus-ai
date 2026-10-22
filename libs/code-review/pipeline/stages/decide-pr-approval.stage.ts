@@ -54,9 +54,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         const configuredPolicy = approvalPolicyFromConfig(config);
         if (
-            [PlatformType.BITBUCKET, PlatformType.AZURE_REPOS].includes(
-                context.platformType,
-            ) &&
+            context.platformType === PlatformType.AZURE_REPOS &&
             configuredPolicy.labels?.length
         ) {
             return this.updateContext(context, (draft) => {

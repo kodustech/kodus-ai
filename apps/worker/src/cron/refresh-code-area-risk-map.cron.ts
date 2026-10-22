@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 
 import { createLogger } from '@libs/core/log/logger';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
@@ -112,6 +113,18 @@ export class RefreshCodeAreaRiskMapCron {
             );
             for (const repo of selected) {
                 try {
+                    const status = await this.refresh.readStatus(
+                        repo.organizationId,
+                        repo.id,
+                    );
+                    if (
+                        status?.source &&
+                        ![PlatformType.GITHUB, PlatformType.GITLAB].includes(
+                            status.source as PlatformType,
+                        )
+                    ) {
+                        continue;
+                    }
                     await this.refresh.refreshOneBatch({
                         organizationAndTeamData: {
                             organizationId: repo.organizationId,

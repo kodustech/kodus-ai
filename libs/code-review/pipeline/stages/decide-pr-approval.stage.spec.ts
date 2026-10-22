@@ -84,9 +84,17 @@ it('holds a saved conditional policy when beta or paid access is unavailable', a
     expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
 });
 
-it('holds a label policy on Bitbucket, where labels cannot be verified', async () => {
+it('ignores inherited label restrictions on Bitbucket', async () => {
     const result = await stage.execute(
         context({ approvalLabels: ['ready'] }, PlatformType.BITBUCKET),
+    );
+    expect(result.approvalDecision).toBeUndefined();
+    expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
+});
+
+it('holds Azure label policies until PR labels can be verified', async () => {
+    const result = await stage.execute(
+        context({ approvalLabels: ['ready'] }, PlatformType.AZURE_REPOS),
     );
     expect(result.approvalDecision?.kind).toBe('hold');
     expect(codeManagement.getPullRequest).not.toHaveBeenCalled();

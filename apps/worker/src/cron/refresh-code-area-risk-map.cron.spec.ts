@@ -14,7 +14,10 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
             },
         }),
     };
-    const refresh = { refreshOneBatch: jest.fn().mockResolvedValue({}) };
+    const refresh = {
+        readStatus: jest.fn().mockResolvedValue(null),
+        refreshOneBatch: jest.fn().mockResolvedValue({}),
+    };
     const release = jest.fn();
     const locks = {
         acquire: jest.fn().mockResolvedValue({ release }),
@@ -45,5 +48,39 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
         },
         repository: { id: 'repo-1', name: 'api' },
     });
+    expect(release).toHaveBeenCalledTimes(1);
+});
+
+it('skips repositories already known to have unsupported history providers', async () => {
+    const teams = {
+        findTeamsWithIntegrations: jest
+            .fn()
+            .mockResolvedValue([
+                { uuid: 'team-1', organization: { uuid: 'org-1' } },
+            ]),
+    };
+    const parameters = {
+        findOne: jest.fn().mockResolvedValue({
+            configValue: {
+                repositories: [{ id: 'repo-1', name: 'api', isSelected: true }],
+            },
+        }),
+    };
+    const refresh = {
+        readStatus: jest.fn().mockResolvedValue({ source: 'bitbucket' }),
+        refreshOneBatch: jest.fn(),
+    };
+    const release = jest.fn();
+    const cron = new RefreshCodeAreaRiskMapCron(
+        teams as any,
+        parameters as any,
+        refresh as any,
+        { acquire: jest.fn().mockResolvedValue({ release }) } as any,
+        { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+    );
+
+    await cron.handleCron();
+
+    expect(refresh.refreshOneBatch).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
 });
