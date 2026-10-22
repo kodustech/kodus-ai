@@ -2,7 +2,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord, isEmpty } from '../value-utils';
+import { asRecord, answersNothing } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import {
     jiraCustomFields,
@@ -75,7 +75,7 @@ export class JiraTracker extends McpTaskTracker {
             );
             if (!issue) {
                 // Answered, without an error and without the issue.
-                unread ||= !isEmpty(payload);
+                unread ||= !answersNothing(payload);
                 continue;
             }
             const fields = asRecord(issue.fields);

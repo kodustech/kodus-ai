@@ -255,6 +255,23 @@ describe('reference intent (UC-18)', () => {
         ).toEqual(['SAA-96:mentions']);
     });
 
+    it('takes a lone "Refs #12" as the PR\'s own, and never an issue the body only names', () => {
+        expect(
+            selectReferences(
+                extractTaskReferences({ body: 'Refs #12' }),
+                3,
+            )!.map((r) => r.id),
+        ).toEqual(['12']);
+        expect(
+            selectReferences(
+                extractTaskReferences({
+                    body: 'Same bug as #45, now in exports.',
+                }),
+                3,
+            ),
+        ).toEqual([]);
+    });
+
     it("treats a task in the title or branch as the PR's own, and one only mentioned in the body as a mention", () => {
         expect(
             intents({

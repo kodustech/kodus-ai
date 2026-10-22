@@ -710,11 +710,15 @@ export class ChatWithKodyFromGitUseCase {
                 },
                 message,
                 sender: {
-                    login: this.getSender(params).login,
-                    ...(await this.senderAccess(
-                        params,
-                        organizationAndTeamData,
-                    )),
+                    login: replySender(params, this.getSender(params)).login,
+                    // Asked only when someone tries to accept: listing members
+                    // on every Kody mention costs a call per repository.
+                    access: () =>
+                        this.senderAccess(
+                            params,
+                            organizationAndTeamData,
+                            repository,
+                        ),
                 },
                 threadId: replyThreadOf(params),
             })
@@ -752,8 +756,9 @@ export class ChatWithKodyFromGitUseCase {
     private async senderAccess(
         params: WebhookParams,
         organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
     ): Promise<{ canWrite?: boolean; isAuthor: boolean }> {
-        const sender = this.getSender(params);
+        const sender = replySender(params, this.getSender(params));
         const isAuthor = isPullRequestAuthor(params, sender);
         if (params.platformType === PlatformType.GITHUB) {
             const association = params.payload?.comment?.author_association;
@@ -768,6 +773,22 @@ export class ChatWithKodyFromGitUseCase {
                           ].includes(association),
                       }
                     : {}),
+            };
+        }
+        if (params.platformType === PlatformType.GITLAB && sender.id) {
+            // Listed members include Guests and Reporters: ask for the level.
+            return {
+                isAuthor,
+                canWrite: await this.codeManagementService
+                    .userCanWrite(
+                        {
+                            organizationAndTeamData,
+                            repository: { id: String(repository.id) },
+                            userId: sender.id as string | number,
+                        },
+                        PlatformType.GITLAB,
+                    )
+                    .catch(() => undefined),
             };
         }
         const members = await this.codeManagementService
@@ -2797,9 +2818,26 @@ function isPullRequestAuthor(
                 payload.resource?.pullRequest?.createdBy?.id,
                 sender.id,
             );
+        case PlatformType.FORGEJO:
+            return sameId(
+                payload.pull_request?.user?.id ?? payload.issue?.user?.id,
+                sender.id,
+            );
         default:
             return false;
     }
+}
+
+/** Who replied: Forgejo names the commenter as the event's `sender`. */
+function replySender(
+    params: WebhookParams,
+    sender: { login?: string; id?: unknown },
+): { login: string; id?: unknown } {
+    if (params.platformType === PlatformType.FORGEJO) {
+        const user = params.payload?.comment?.user ?? params.payload?.sender;
+        return { login: user?.login ?? '', id: user?.id };
+    }
+    return { login: sender.login ?? '', id: sender.id };
 }
 
 function sameId(a: unknown, b: unknown): boolean {

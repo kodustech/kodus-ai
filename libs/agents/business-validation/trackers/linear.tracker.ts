@@ -4,7 +4,7 @@ import type {
 } from '../business-validation.types';
 import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
-import { asRecord, isEmpty } from '../value-utils';
+import { asRecord, answersNothing } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import type { RelatedTask, Task } from '../business-validation.types';
 import {
@@ -104,7 +104,7 @@ export class LinearTracker extends McpTaskTracker {
         }
         // It answered without an error and without the issue: a shape this
         // tracker can't read, so the finder may look.
-        return isEmpty(payload)
+        return answersNothing(payload)
             ? { status: 'not_found' }
             : { status: 'not_found', unread: true };
     }

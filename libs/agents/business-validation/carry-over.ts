@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import type {
     BusinessValidationOutcome,
+    Task,
     TaskCheck,
 } from './business-validation.types';
 import { taskPasses } from './check-policy';
@@ -28,9 +31,16 @@ export function carryOver(
 
 function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
     const current = check.verdict.requirements ?? [];
+    // Likeness may only stand in for the same text when the task's text is
+    // the one the acceptance was given on: edited, "on the orders page"
+    // would hand its acceptance to "on the invoices page".
+    const sameTask =
+        !!before.textHash &&
+        before.textHash === (check.textHash ?? taskTextHash(check.task));
     const priors = matchPrevious(
         current.map((r) => r.requirement),
         before.requirements.map((r) => r.requirement),
+        { similar: sameTask },
     );
     const requirements = current.map((r, i) => {
         const at = priors[i];
@@ -74,14 +84,15 @@ const SAME_REQUIREMENT = 0.8;
 /**
  * For each requirement of this run, the index of the same one in the last
  * run. The judge re-quotes the task on every run, and a re-quote may cut a
- * sentence or merge two bullets: the exact text wins, then the most alike
- * one, each earlier requirement taken once. Numbers, symbols and negation
+ * sentence or merge two bullets: the exact text wins, then, when `similar`
+ * (the task's text is unchanged), the most alike one, each earlier requirement taken once. Numbers, symbols and negation
  * must match: "count > 10" never takes "count < 10"'s acceptance, nor "must
  * not export" the one of "must export".
  */
 export function matchPrevious(
     now: string[],
     before: string[],
+    { similar = true }: { similar?: boolean } = {},
 ): Array<number | undefined> {
     const taken = new Set<number>();
     const result: Array<number | undefined> = now.map(() => undefined);
@@ -97,6 +108,9 @@ export function matchPrevious(
             result[i] = exact;
         }
     });
+    if (!similar) {
+        return result;
+    }
     const pairs: Array<{ i: number; j: number; score: number }> = [];
     now.forEach((text, i) => {
         if (result[i] !== undefined) {
@@ -171,4 +185,20 @@ export function requirementKey(text: string): string {
         .toLowerCase()
         .replace(/\s+/g, ' ')
         .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
+/** What the judge read of a task, hashed: its title, text and fields. */
+export function taskTextHash(task: Task): string | undefined {
+    if (task.description === undefined && !task.fields) {
+        return undefined;
+    }
+    return createHash('sha256')
+        .update(
+            JSON.stringify([
+                task.title ?? '',
+                task.description ?? '',
+                task.fields ?? {},
+            ]),
+        )
+        .digest('hex');
 }

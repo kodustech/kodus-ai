@@ -111,14 +111,14 @@ describe('BusinessLogicReplies', () => {
         expect(service.classifyReply).not.toHaveBeenCalled();
     });
 
-    it("reads a reply in the comment's own thread, a quote of it or a named state as an answer", async () => {
+    it("reads a reply in the comment's own thread, a quote of it or the task's id as an answer", async () => {
         for (const reply of [
             { message: 'out of scope', threadId: '501' },
             {
                 message:
                     '> **Business Logic**: 1 missing\n\nout of scope for now',
             },
-            { message: 'that MISSING one is out of scope' },
+            { message: 'SAA-96 is out of scope here' },
         ]) {
             const { replies, service } = build({ intent: 'other' });
             await replies.handle({
@@ -128,6 +128,46 @@ describe('BusinessLogicReplies', () => {
             });
             expect(service.classifyReply).toHaveBeenCalled();
         }
+    });
+
+    it('leaves a question that only uses a state word, or a longer id, to the chat', async () => {
+        for (const message of [
+            'why is the null check missing in foo.ts?',
+            'SAA-961 is a different task',
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                message,
+            });
+            expect(service.classifyReply).not.toHaveBeenCalled();
+        }
+    });
+
+    it('asks who the sender is only when a reply accepts', async () => {
+        const access = jest.fn(async () => ({ canWrite: false }));
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+        });
+        const result = await replies.handle({
+            request,
+            message: 'Keyboard reordering is out of scope',
+            sender: { login: 'rafa', access },
+        });
+        expect(access).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({ handled: true });
+        expect(publisher.publish).not.toHaveBeenCalled();
+
+        const quiet = jest.fn();
+        const other = build({ intent: 'other' });
+        await other.replies.handle({
+            request,
+            message: 'what does this PR do?',
+            sender: { login: 'rafa', access: quiet },
+        });
+        expect(quiet).not.toHaveBeenCalled();
     });
 
     it('records who accepted (UC-37)', async () => {

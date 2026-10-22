@@ -41,6 +41,7 @@ export interface ValidationRunRecord {
     checkRunId?: string;
     pendingRecheck?: boolean;
     pendingSince?: Date;
+    previewId?: string;
     /** The author the PR's earliest run named, on a run read per PR. */
     firstAuthor?: RunAuthor;
     createdAt: Date;
@@ -128,6 +129,14 @@ export class ValidationRunRepository {
                 metadata: { id },
             });
         }
+    }
+
+    /** Whether a "Test on a pull request" preview was posted already. */
+    async previewPosted(
+        organizationId: string,
+        previewId: string,
+    ): Promise<boolean> {
+        return !!(await this.model.exists({ organizationId, previewId }));
     }
 
     /** The PR's last run that wrote a comment or a verdict: the one a re-check or a reply builds on. */

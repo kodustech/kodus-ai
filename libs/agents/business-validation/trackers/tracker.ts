@@ -8,7 +8,11 @@ import type {
 } from '../business-validation.types';
 import { createLogger } from '@libs/core/log/logger';
 
-import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
+import {
+    McpToolSession,
+    TaskNotFoundError,
+    ToolClosedError,
+} from './mcp-tool-session';
 import type { FoundByFinder } from './task-finder';
 
 export interface TrackerReadContext {
@@ -219,6 +223,15 @@ export abstract class McpTaskTracker implements TaskTracker {
             } catch (error) {
                 if (error instanceof TaskNotFoundError) {
                     return { status: 'not_found', tools: tools() };
+                }
+                if (error instanceof ToolClosedError) {
+                    // Turned off by the org: retrying can't open it.
+                    return {
+                        status: 'error',
+                        message: error.message,
+                        setup: true,
+                        tools: tools(),
+                    };
                 }
                 message =
                     error instanceof Error ? error.message : String(error);

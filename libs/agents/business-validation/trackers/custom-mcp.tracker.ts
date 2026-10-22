@@ -4,7 +4,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord, isEmpty } from '../value-utils';
+import { asRecord, answersNothing } from '../value-utils';
 import { MANY_ITEMS as MANY, wholeItem } from './whole-item';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import { describeTask, mentions, recordsIn } from './task-payload';
@@ -172,7 +172,7 @@ export class CustomMcpTracker extends McpTaskTracker {
             if (!mentions(payload, reference.id)) {
                 // An answer that never names the id: another shape, or
                 // another item. The finder may look; an empty one is a miss.
-                unread ||= !isEmpty(payload);
+                unread ||= !answersNothing(payload);
                 continue;
             }
             const item =

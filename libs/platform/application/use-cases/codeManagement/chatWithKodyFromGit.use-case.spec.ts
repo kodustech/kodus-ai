@@ -355,13 +355,14 @@ describe('ChatWithKodyFromGitUseCase', () => {
         const access = (userId: number, authorId = 9) =>
             (useCase as any).senderAccess(
                 {
-                    platformType: PlatformType.GITLAB,
+                    platformType: PlatformType.BITBUCKET,
                     payload: {
-                        user: { id: userId, name: 'someone' },
-                        merge_request: { author_id: authorId },
+                        actor: { account_id: userId, display_name: 'someone' },
+                        pullrequest: { author: { account_id: authorId } },
                     },
                 },
                 { organizationId: 'org-1' },
+                { id: 'repo-1' },
             );
         await expect(access(7)).resolves.toEqual({
             canWrite: true,
@@ -371,6 +372,52 @@ describe('ChatWithKodyFromGitUseCase', () => {
         await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
         getListMembers.mockRejectedValueOnce(new Error('403'));
         await expect(access(7)).resolves.toMatchObject({ canWrite: false });
+    });
+
+    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+        const getListMembers = jest.fn();
+        const userCanWrite = jest.fn(async () => false);
+        (useCase as any).codeManagementService = {
+            getListMembers,
+            userCanWrite,
+        };
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITLAB,
+                    payload: {
+                        user: { id: 7, name: 'guest' },
+                        merge_request: { author_id: 9 },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        expect(userCanWrite).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 7,
+                repository: { id: 'repo-1' },
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
+
+        getListMembers.mockResolvedValueOnce([]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.FORGEJO,
+                    payload: {
+                        sender: { id: 5, login: 'ana' },
+                        comment: { user: { id: 5, login: 'ana' } },
+                        pull_request: { user: { id: 5, login: 'ana' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toMatchObject({ isAuthor: true });
     });
 
     // A bare `#12` is read from the PR's repository, which needs its owner.

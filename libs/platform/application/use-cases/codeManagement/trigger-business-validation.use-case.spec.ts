@@ -722,7 +722,10 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             })),
             publish: jest.fn(async () => ({ outcome, comment: 'created' })),
         };
-        const runs = { create: jest.fn() };
+        const runs = {
+            create: jest.fn(),
+            previewPosted: jest.fn(async () => false),
+        };
         const integrationConfig = {
             findIntegrationConfigFormatted: jest.fn(async () => [
                 { id: 'repo-1', name: 'notes', organizationName: 'acme' },
@@ -837,6 +840,29 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('posts each preview once, and only while the PR is at the commit it checked', async () => {
+        const { useCase, publisher, runs } = build();
+        const { previewToken } = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+        });
+        runs.previewPosted.mockResolvedValueOnce(true);
+        await expect(
+            useCase.postPreview({ organizationAndTeamData, previewToken }),
+        ).rejects.toThrow('posted already');
+
+        publisher.headShaOf.mockResolvedValueOnce('def5678');
+        await expect(
+            useCase.postPreview({ organizationAndTeamData, previewToken }),
+        ).rejects.toThrow('changed since this preview');
+        expect(publisher.publish).not.toHaveBeenCalled();
+
+        await useCase.postPreview({ organizationAndTeamData, previewToken });
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({ previewId: expect.any(String) }),
+        );
     });
 
     it('never runs on another PR than the one asked for', async () => {

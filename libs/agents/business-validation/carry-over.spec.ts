@@ -1,16 +1,23 @@
 import type { BusinessValidationOutcome } from './business-validation.types';
-import { carryOver, matchPrevious } from './carry-over';
+import { carryOver, matchPrevious, taskTextHash } from './carry-over';
 import type { RunTask } from './runs/validation-run.model';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
 
+const TASK = {
+    tracker: 'Linear',
+    id: 'SAA-96',
+    description: 'Notes can be reordered with the keyboard.',
+};
+
 const now = (
     requirements: Validated['checks'][number]['verdict']['requirements'],
+    task: Validated['checks'][number]['task'] = TASK,
 ): Validated => ({
     kind: 'validated',
     checks: [
         {
-            task: { tracker: 'Linear', id: 'SAA-96' },
+            task,
             verdict: {
                 needsMoreInfo: false,
                 summary: '',
@@ -142,6 +149,7 @@ describe('carryOver', () => {
         const accepted: RunTask[] = [
             {
                 ...before[0],
+                textHash: taskTextHash(TASK),
                 requirements: [
                     {
                         requirement:
@@ -209,5 +217,55 @@ describe('matchPrevious', () => {
                 ['Logs the event', 'Logs the event'],
             ),
         ).toEqual([0, 1]);
+    });
+});
+
+describe('carryOver when the task changed', () => {
+    it('never moves an acceptance onto a requirement the edited task reworded', () => {
+        const ordersTask = {
+            ...TASK,
+            description: 'Show the export button on the orders page.',
+        };
+        const accepted: RunTask[] = [
+            {
+                ...before[0],
+                textHash: taskTextHash(ordersTask),
+                requirements: [
+                    {
+                        requirement:
+                            'The export button is shown on the orders page',
+                        state: 'missing',
+                        evidence: [],
+                        confidence: 'high',
+                        accepted: {
+                            by: 'nina',
+                            at: '2026-10-05T11:00:00.000Z',
+                        },
+                    },
+                ],
+            },
+        ];
+        const result = carryOver(
+            now(
+                [
+                    {
+                        requirement:
+                            'The export button is shown on the invoices page',
+                        state: 'missing',
+                        evidence: [],
+                        confidence: 'high',
+                    },
+                ],
+                {
+                    ...TASK,
+                    description: 'Show the export button on the invoices page.',
+                },
+            ),
+            accepted,
+        );
+        if (result.kind !== 'validated') throw new Error('expected validated');
+        expect(
+            result.checks[0].verdict.requirements![0].accepted,
+        ).toBeUndefined();
     });
 });

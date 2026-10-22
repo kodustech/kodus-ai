@@ -10,6 +10,7 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
 import {
     McpToolSession,
     TaskNotFoundError,
+    ToolClosedError,
     TrackerUnavailableError,
 } from './mcp-tool-session';
 
@@ -87,6 +88,36 @@ describe('McpToolSession', () => {
         await expect(
             session().call('get_issue', { id: 'SAA-9' }),
         ).rejects.toBeInstanceOf(TrackerUnavailableError);
+    });
+
+    it.each([
+        ['es', '{"message":"La incidencia no existe","statusCode":404}'],
+        ['de', '{"message":"Der Vorgang existiert nicht","statusCode":404}'],
+        ['a GitLab MCP', '{"message":"404 Not found"}'],
+        ['a malformed id', 'Invalid id format'],
+    ])(
+        'reads a missing task as not found whatever the language: %s',
+        async (_, text) => {
+            executeTool.mockResolvedValueOnce(errorResult(text));
+            await expect(
+                session().call('get_issue', { id: 'SAA-9' }),
+            ).rejects.toBeInstanceOf(TaskNotFoundError);
+        },
+    );
+
+    it('reads a 404 about something other than the task as unavailable', async () => {
+        executeTool.mockResolvedValueOnce(
+            errorResult('{"message":"Site not found","statusCode":404}'),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.not.toBeInstanceOf(TaskNotFoundError);
+    });
+
+    it('refuses a tool the org turned off as a setup problem', async () => {
+        await expect(session().call('list_teams', {})).rejects.toBeInstanceOf(
+            ToolClosedError,
+        );
     });
 
     it('reads "failed to retrieve … with id" as missing only when no cause follows', async () => {

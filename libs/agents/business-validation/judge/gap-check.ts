@@ -305,10 +305,10 @@ function prompt(input: GapCheckInput): string {
         fence('task', input.taskText),
         fence(
             'pr_diff',
-            diffFor(
-                input.diff,
-                (input.requirement.evidence ?? []).map((e) => e.file),
-            ) || '(none)',
+            diffFor(input.diff, {
+                files: (input.requirement.evidence ?? []).map((e) => e.file),
+                requirement: input.requirement.requirement,
+            }) || '(none)',
         ),
     ]
         .filter((line) => line !== '')

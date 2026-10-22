@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
@@ -87,6 +89,8 @@ export interface CliBusinessVerdict {
 
 /** What a preview carries to be posted later, as it was shown. */
 interface SealedPreview {
+    /** One per preview: posted once. */
+    id: string;
     organizationId: string;
     teamId?: string;
     repositoryId: string;
@@ -387,6 +391,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             comment: preview.comment,
             // Posting publishes this very result, sealed, not a second run.
             previewToken: sealPreview<SealedPreview>({
+                id: randomUUID(),
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
                 repositoryId: executionContext.repository.id,
@@ -426,12 +431,38 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             throw new BadRequestException('The preview is not one Kody made.');
         }
         await params.authorize?.(sealed.repositoryId);
+        if (
+            !sealed.id ||
+            (await this.runs.previewPosted(
+                params.organizationAndTeamData.organizationId,
+                sealed.id,
+            ))
+        ) {
+            throw new BadRequestException(
+                'This preview was posted already: run the check again to post a new one.',
+            );
+        }
+        const { repository, pullRequest, platformType } = sealed.request;
+        if (sealed.headSha && repository && pullRequest) {
+            const head = await this.businessLogicPublisher.headShaOf(
+                params.organizationAndTeamData,
+                { id: repository.id, name: repository.name },
+                pullRequest.number,
+                platformType,
+            );
+            if (head && head !== sealed.headSha) {
+                throw new BadRequestException(
+                    'The pull request changed since this preview: run the check again.',
+                );
+            }
+        }
         const published = await this.businessLogicPublisher.publish({
             request: sealed.request,
             result: sealed.result,
             settings: sealed.settings,
             trigger: 'command',
             headSha: sealed.headSha,
+            previewId: sealed.id,
         });
         return { posted: published.comment };
     }

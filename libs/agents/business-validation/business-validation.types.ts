@@ -17,7 +17,7 @@ export type ReferenceIntent = 'closes' | 'part_of' | 'mentions';
  * A task a PR points at, as written. Nothing here is confirmed: a reference
  * counts only once a tracker returns the task with this id.
  */
-export type TaskReference =
+export type TaskReference = (
     | {
           kind: 'key';
           /** `PROJ-12`, upper-cased. Jira, Linear and most custom trackers. */
@@ -75,7 +75,14 @@ export type TaskReference =
           source: ReferenceSource;
           intent: ReferenceIntent;
           url: string;
-      };
+      }
+) & {
+    /**
+     * Written after `Refs` or `See` in the body: cited on purpose, so a `#12`
+     * there counts as `Refs SAA-96` does when the PR states nothing else.
+     */
+    cited?: true;
+};
 
 /** A task as a tracker returned it. */
 export interface Task {
@@ -129,30 +136,31 @@ export interface FoundTask {
 }
 
 /** What one tracker said about one reference. */
-export type TrackerLookup = /**
- * `incomplete`: the record came back without the field the task's text
- * lives in (no `description` key at all), so the answer's shape moved.
- */
-(
-    | { status: 'found'; task: Task; incomplete?: boolean }
+export type TrackerLookup =
     /**
-     * `unread`: the server answered, but in a shape this tracker could not
-     * read; only then, or on an error, may an agent look again. A clean
-     * "no such task" costs nothing more.
+     * `incomplete`: the record came back without the field the task's text
+     * lives in (no `description` key at all), so the answer's shape moved.
      */
-    | { status: 'not_found'; unread?: boolean }
-    /**
-     * The tracker could not be reached or failed: outage, auth, timeout.
-     * `setup`: it answers, but is set up so no task can be read (a plugin
-     * with no tool that reads one by id); retrying won't help.
-     */
-    | { status: 'error'; message: string; setup?: boolean }
-) & {
-    /** The MCP tools called for this read, in order. */
-    tools?: string[];
-    /** The direct read missed; the task finder agent found it. */
-    byAgent?: boolean;
-};
+    (
+        | { status: 'found'; task: Task; incomplete?: boolean }
+        /**
+         * `unread`: the server answered, but in a shape this tracker could not
+         * read; only then, or on an error, may an agent look again. A clean
+         * "no such task" costs nothing more.
+         */
+        | { status: 'not_found'; unread?: boolean }
+        /**
+         * The tracker could not be reached or failed: outage, auth, timeout.
+         * `setup`: it answers, but is set up so no task can be read (a plugin
+         * with no tool that reads one by id); retrying won't help.
+         */
+        | { status: 'error'; message: string; setup?: boolean }
+    ) & {
+        /** The MCP tools called for this read, in order. */
+        tools?: string[];
+        /** The direct read missed; the task finder agent found it. */
+        byAgent?: boolean;
+    };
 
 export interface ResolutionAttempt {
     reference: string;
@@ -261,6 +269,11 @@ export interface TaskCheck {
     passed: boolean;
     /** When the task was read, so a later edit to it is visible (UC-25). */
     readAt: string;
+    /**
+     * The task's text as judged, hashed: carried by a run rebuilt from a
+     * stored one, whose task no longer has its text. See {@link taskTextHash}.
+     */
+    textHash?: string;
 }
 
 export type BusinessValidationOutcome =

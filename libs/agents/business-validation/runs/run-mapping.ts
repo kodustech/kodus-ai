@@ -5,6 +5,7 @@ import type {
 } from '../business-validation.types';
 import { deriveStatus } from '../judge/validation-verdict';
 import type { CheckedCommit } from '../render';
+import { taskTextHash } from '../carry-over';
 import type { RunAuthor, RunTask } from './validation-run.model';
 import type {
     NewValidationRun,
@@ -73,6 +74,7 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
             ...(check.verdict.scopeMismatch ? { scopeMismatch: true } : {}),
             requirements: check.verdict.requirements ?? [],
             outOfScope: check.verdict.outOfScope ?? [],
+            textHash: check.textHash ?? taskTextHash(check.task),
         }));
     }
     return [];
@@ -87,6 +89,8 @@ export function buildRun(
         author?: RunAuthor;
         /** The first skip of the re-checks this run continues. */
         pendingSince?: Date;
+        /** The preview this run posts, from "Test on a pull request". */
+        previewId?: string;
     } = {},
 ): NewValidationRun {
     const { outcome } = result;
@@ -100,6 +104,7 @@ export function buildRun(
         door: request.door,
         ...(extra.trigger ? { trigger: extra.trigger } : {}),
         ...(extra.headSha ? { headSha: extra.headSha } : {}),
+        ...(extra.previewId ? { previewId: extra.previewId } : {}),
         outcome: outcome.kind,
         ...(outcome.kind === 'skipped' ? { skipReason: outcome.reason } : {}),
         ...(outcome.kind === 'validated' ? { passed: outcome.passed } : {}),
@@ -173,6 +178,7 @@ export function outcomeFromRun(
             verdict,
             passed: t.passed,
             readAt: t.readAt,
+            ...(t.textHash ? { textHash: t.textHash } : {}),
         };
     });
     return {

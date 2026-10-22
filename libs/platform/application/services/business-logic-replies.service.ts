@@ -34,6 +34,11 @@ export interface BusinessLogicReplyInput {
         canWrite?: boolean;
         /** The sender opened the pull request. */
         isAuthor?: boolean;
+        /**
+         * `canWrite` and `isAuthor`, asked only when a reply accepts: the
+         * platform call is not made for every Kody mention.
+         */
+        access?: () => Promise<{ canWrite?: boolean; isAuthor?: boolean }>;
     };
     /**
      * The thread the comment was posted in, where the platform has threads
@@ -141,9 +146,13 @@ export class BusinessLogicReplies {
                 request.organizationAndTeamData,
                 text,
             );
+        const sender = {
+            ...input.sender,
+            ...(await input.sender.access?.().catch(() => ({}))),
+        };
         // With the comment as the only signal, a PR must not clear itself:
         // the author disputes, someone else accepts.
-        if (input.sender.isAuthor) {
+        if (sender.isAuthor) {
             return {
                 handled: true,
                 reply: await say(
@@ -152,7 +161,7 @@ export class BusinessLogicReplies {
             };
         }
         // A drive-by commenter without write access can't either.
-        if (input.sender.canWrite === false) {
+        if (sender.canWrite === false) {
             return {
                 handled: true,
                 reply: await say(
@@ -370,14 +379,23 @@ function answersTheComment(
     if (/^\s*>/m.test(input.message) && /business logic/i.test(input.message)) {
         return true;
     }
-    if (/\b(?:missing|partial|not in task|check manually)\b/i.test(message)) {
-        return true;
-    }
     return open.some(
         ({ finding }) =>
-            message.includes(normalized(finding.taskId)) ||
+            namesId(message, normalized(finding.taskId)) ||
             sharesWords(message, normalized(finding.text), 4),
     );
+}
+
+/** The id as a whole word: `#1` is not in `#12`, nor `KOD-1` in `KOD-10`. */
+function namesId(message: string, id: string): boolean {
+    if (!id) {
+        return false;
+    }
+    const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(
+        `(?<![\\p{L}\\p{N}#-])${escaped}(?![\\p{L}\\p{N}-])`,
+        'u',
+    ).test(message);
 }
 
 function normalized(text: string): string {

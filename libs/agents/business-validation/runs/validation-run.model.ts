@@ -32,6 +32,8 @@ export interface RunTask {
     scopeMismatch?: boolean;
     requirements: RequirementVerdict[];
     outOfScope: OutOfScopeChange[];
+    /** The task's text as judged, hashed: a re-check carries acceptances by likeness only onto the same text. */
+    textHash?: string;
 }
 
 /** The PR comment a run wrote, with the ids each platform needs to edit it. */
@@ -137,6 +139,10 @@ export class BusinessValidationRunModel extends CoreDocument {
     @Prop({ type: Date, required: false })
     pendingSince?: Date;
 
+    /** The "Test on a pull request" preview this run posted: each one posts once. */
+    @Prop({ type: String, required: false })
+    previewId?: string;
+
     /** Set by `timestamps`. */
     createdAt?: Date;
 }
@@ -171,3 +177,12 @@ export const BusinessValidationRunModelInstance = {
     name: BusinessValidationRunModel.name,
     schema: BusinessValidationRunSchema,
 };
+// One run per posted preview: a second post of the same seal is refused.
+BusinessValidationRunSchema.index(
+    { previewId: 1 },
+    {
+        name: 'uniq_preview_id',
+        unique: true,
+        partialFilterExpression: { previewId: { $exists: true } },
+    },
+);

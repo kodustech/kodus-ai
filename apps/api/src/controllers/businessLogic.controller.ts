@@ -83,12 +83,24 @@ export class BusinessLogicController {
         private readonly authorization: AuthorizationService,
     ) {}
 
-    /** Throws unless the caller may do `action` on this repository's settings. */
+    /**
+     * Throws unless the caller may do `action` on this repository's settings.
+     * With `orgWide`, no repository named means the organization's settings,
+     * which a repository-scoped role may not act on.
+     */
     private async ensureRepository(
         action: Action,
         repositoryId: string | undefined,
+        { orgWide = false }: { orgWide?: boolean } = {},
     ): Promise<void> {
         if (!repositoryId || repositoryId === 'global') {
+            if (orgWide) {
+                await this.authorization.ensure({
+                    user: this.request.user,
+                    action,
+                    resource: ResourceType.CodeReviewSettings,
+                });
+            }
             return;
         }
         await this.authorization.ensure({
@@ -187,7 +199,11 @@ export class BusinessLogicController {
         if (!body?.teamId || !body?.task?.trim()) {
             throw new BadRequestException('teamId and task are required');
         }
-        await this.ensureRepository(Action.Update, body.repositoryId);
+        // A task is read with the org's tracker credentials, on its model:
+        // with no repository named, only an org-wide role may.
+        await this.ensureRepository(Action.Update, body.repositoryId, {
+            orgWide: true,
+        });
         return this.triggerBusinessValidation.tryReadTask({
             organizationAndTeamData: {
                 organizationId: this.organizationId(),

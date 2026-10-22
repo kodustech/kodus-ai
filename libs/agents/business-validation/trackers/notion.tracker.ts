@@ -2,7 +2,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord, isEmpty } from '../value-utils';
+import { asRecord, answersNothing } from '../value-utils';
 import { McpToolSession } from './mcp-tool-session';
 import { recordsIn, textField } from './task-payload';
 import { McpTaskTracker } from './tracker';
@@ -43,7 +43,7 @@ export class NotionTracker extends McpTaskTracker {
         if (!description) {
             // A page answered with none of the fields its text lives in is
             // a shape this tracker can't read; an empty page is just empty.
-            return text === undefined && !isEmpty(payload)
+            return text === undefined && !answersNothing(payload)
                 ? { status: 'not_found', unread: true }
                 : { status: 'not_found' };
         }

@@ -9,6 +9,7 @@ import {
 import { GitIssuesTracker } from './git-issues.tracker';
 import { LinearTracker } from './linear.tracker';
 import {
+    ToolClosedError,
     TrackerUnavailableError,
     type McpToolSession,
 } from './mcp-tool-session';
@@ -277,6 +278,45 @@ describe('McpTaskTracker', () => {
         expect(calls).toBe(2);
         expect(lookup.status).toBe('found');
     });
+
+    it('reads a tool the org turned off as setup, not an outage, without retrying', async () => {
+        let calls = 0;
+        const s = session({
+            call: () => {
+                calls += 1;
+                throw new ToolClosedError('Tool get_issue is not open');
+            },
+        });
+        const lookup = await new LinearTracker(s).read(ref('SAA-96'), {
+            organizationAndTeamData: {} as any,
+        });
+        expect(calls).toBe(1);
+        expect(lookup).toMatchObject({ status: 'error', setup: true });
+    });
+
+    it.each([
+        { tasks: [] },
+        { message: 'No results' },
+        '{"items":[],"total":0}',
+    ])(
+        'reads an answer with nothing in it as a clean miss: %j',
+        async (answer) => {
+            const getTask = tool(
+                'get_task',
+                { properties: { id: { type: 'string' } }, required: ['id'] },
+                { readOnlyHint: true },
+            );
+            const s = session({ tools: [getTask], call: () => answer });
+            const lookup = await new CustomMcpTracker('Plugin', s).read(
+                ref('SHA-256'),
+                { organizationAndTeamData: {} as any },
+            );
+            expect(lookup).toEqual(
+                expect.objectContaining({ status: 'not_found' }),
+            );
+            expect(lookup).not.toHaveProperty('unread');
+        },
+    );
 
     it('says which tools it called to read a task, for the test on a PR', async () => {
         const s = session({

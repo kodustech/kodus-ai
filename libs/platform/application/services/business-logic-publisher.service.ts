@@ -78,6 +78,8 @@ export interface PublishInput {
     dryRun?: boolean;
     /** A re-check's first skip, carried so its window closes (UC-22). */
     pendingSince?: Date;
+    /** The preview posted, so the same seal never posts twice. */
+    previewId?: string;
 }
 
 /** What a publish would put on the PR, without writing anything. */
@@ -371,6 +373,7 @@ export class BusinessLogicPublisher {
                 headSha: input.headSha,
                 author: detectAuthor(input.commits, input.authorLogin),
                 pendingSince: input.pendingSince,
+                previewId: input.previewId,
             }),
             ...(comment ? { comment } : {}),
         });

@@ -77,13 +77,15 @@ export const GAP_DIFF_CHARS = 24_000;
 
 /**
  * The diff for a second look at one requirement: whole when it is small;
- * otherwise the files its evidence cites first, then others while they fit,
- * and the names of the rest for `read_file`. Sent on every step of up to
- * eight checks, the whole diff of a large PR cost millions of tokens a run.
+ * otherwise the files its evidence cites first, then the ones that share the
+ * most words with the requirement (a MISSING one rarely cites any), while
+ * they fit, and the names of the rest for `read_file`. A file too large for
+ * the room left is cut, not dropped. Sent on every step of up to eight
+ * checks, the whole diff of a large PR cost millions of tokens a run.
  */
 export function diffFor(
     diff: string,
-    files: string[],
+    focus: { files?: string[]; requirement?: string },
     budget = GAP_DIFF_CHARS,
 ): string {
     if (diff.length <= budget) {
@@ -93,19 +95,33 @@ export function diffFor(
     if (!chunks.length) {
         return `${diff.slice(0, budget)}\n… (cut)`;
     }
-    const cited = new Set(files);
+    const cited = new Set(focus.files ?? []);
+    const terms = requirementTerms(focus.requirement ?? '');
+    const score = (chunk: { file: string; text: string }) => {
+        const text = chunk.text.toLowerCase();
+        return terms.filter((term) => text.includes(term)).length;
+    };
     const ordered = [
         ...chunks.filter((c) => cited.has(c.file)),
-        ...chunks.filter((c) => !cited.has(c.file)),
+        ...chunks
+            .filter((c) => !cited.has(c.file))
+            .map((chunk, at) => ({ chunk, at, score: score(chunk) }))
+            .sort((a, b) => b.score - a.score || a.at - b.at)
+            .map(({ chunk }) => chunk),
     ];
     const kept: string[] = [];
     const left: string[] = [];
     const room = Math.min(OMITTED_FILES_CHARS, Math.floor(budget / 10));
     let used = room;
     for (const chunk of ordered) {
-        if (used + chunk.text.length <= budget) {
+        const free = budget - used;
+        if (chunk.text.length <= free) {
             kept.push(chunk.text);
             used += chunk.text.length;
+        } else if (free >= MIN_CUT_CHARS) {
+            const cut = `\n… (cut: read the rest of ${chunk.file} with read_file)\n`;
+            kept.push(chunk.text.slice(0, free - cut.length) + cut);
+            used = budget;
         } else {
             left.push(chunk.file);
         }
@@ -113,6 +129,26 @@ export function diffFor(
     return left.length
         ? `${kept.join('')}${omittedFiles(left, room)}`
         : kept.join('');
+}
+
+/** Less room than this left for a file, and it is only named. */
+const MIN_CUT_CHARS = 1_500;
+
+/**
+ * The requirement's words worth looking for in a file, longer than three
+ * letters, without their last two past five ("exported" finds `export`,
+ * "invoices" finds `invoice`).
+ */
+function requirementTerms(requirement: string): string[] {
+    return [
+        ...new Set(
+            requirement
+                .toLowerCase()
+                .split(/[^\p{L}\p{N}]+/u)
+                .filter((word) => word.length > 3)
+                .map((word) => (word.length > 5 ? word.slice(0, -2) : word)),
+        ),
+    ];
 }
 
 /** Most room kept for the names of the files left out, so the whole stays in budget. */

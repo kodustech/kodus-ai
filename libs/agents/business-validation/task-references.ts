@@ -98,6 +98,9 @@ export function extractTaskReferences(
             // "feat(SAA-96)" in the title and "Part of SAA-96" in the body:
             // the PR said it delivers a slice, so that is what counts.
             earlier.intent = strongerIntent(earlier.intent, reference.intent);
+            if (reference.cited) {
+                earlier.cited = true;
+            }
             // `feat(kod-10)` in the title and `nina/kod-10-…` as the branch:
             // stated where keys are trusted, it is no longer loose.
             if (
@@ -165,11 +168,22 @@ export function selectReferences(
         (r) => r.source !== 'body' || r.intent !== 'mentions',
     );
     // A `#45` the body only mentions is another issue or PR far more often
-    // than the PR's own task: it is never judged unless the PR states it.
+    // than the PR's own task: it is never judged unless the PR states it, or
+    // cites it (`Refs #45`) the way some teams name the PR's own task.
     const chosen = stated.length
         ? stated
-        : references.filter((r) => r.kind !== 'git_issue');
+        : references.filter((r) => r.kind !== 'git_issue' || r.cited);
     return chosen.length > max ? undefined : chosen;
+}
+
+/** The text right before a reference, on its own line. */
+function lineBefore(text: string, index: number): string {
+    const window = text.slice(Math.max(0, index - 40), index);
+    return window.slice(window.lastIndexOf('\n') + 1);
+}
+
+function citedBefore(text: string, index: number): boolean {
+    return MENTIONS.test(lineBefore(text, index));
 }
 
 function intentBefore(
@@ -178,8 +192,7 @@ function intentBefore(
     source: ReferenceSource,
 ): ReferenceIntent {
     // The 40 characters before it, on its own line.
-    const window = text.slice(Math.max(0, index - 40), index);
-    const before = window.slice(window.lastIndexOf('\n') + 1);
+    const before = lineBefore(text, index);
     if (PART_OF.test(before)) {
         return 'part_of';
     }
@@ -233,6 +246,7 @@ function extractFromText(
                 reference: {
                     ...candidate,
                     intent: intentBefore(text, index, source),
+                    ...(citedBefore(text, index) ? { cited: true } : {}),
                 } as TaskReference,
             });
         }
@@ -276,6 +290,9 @@ function extractFromText(
                         raw: m.text,
                         source,
                         intent: intentBefore(text, index, source),
+                        ...(citedBefore(text, index)
+                            ? { cited: true as const }
+                            : {}),
                         teamPattern: true,
                     },
                 });

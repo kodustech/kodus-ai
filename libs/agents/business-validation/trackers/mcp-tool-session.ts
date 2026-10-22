@@ -16,6 +16,28 @@ export class TaskNotFoundError extends Error {}
 /** The tracker could not be reached, or failed for a reason other than "not found". */
 export class TrackerUnavailableError extends Error {}
 
+/**
+ * A tool the org turned off on the connection: the tracker answers, but is
+ * set up so this read can't run. A setup problem, never an outage.
+ */
+export class ToolClosedError extends TrackerUnavailableError {}
+
+/**
+ * The tracker refused the id's shape (`Invalid id format`): whatever was
+ * asked for is not one of its tasks, so no agent looks for it.
+ */
+const INVALID_ID =
+    /\b(?:invalid|malformed|bad)\b[^.\n]{0,20}?\b(?:id|ids|key|identifier)\b/i;
+
+/**
+ * The tracker's own 404 for the item (`"statusCode": 404`, `404 Not found`):
+ * no such item, in whatever language the rest of the message is written. A
+ * client's `Request failed with status code 404` may be a wrong endpoint,
+ * so it stays unavailable.
+ */
+const STATUS_404 =
+    /\bstatus(?:_?code)?["']?\s*[:=]\s*404\b|\b404\W{0,3}not[\s_-]?found\b/i;
+
 const NOT_FOUND_PATTERN =
     /\b(?:not[\s_-]?found|object_not_found|does(?: not|n't) exist|could(?: not|n't) find|unable to find|no (?:such )?(?:issue|task|ticket|work ?item|page|record)s?\b|404)\b/i;
 /**
@@ -74,7 +96,7 @@ export class McpToolSession {
         // Listing filters by `allowedTools`; executing does not. Enforce it
         // here, against what the org allows too.
         if (this.restricted && !this.allowed?.includes(name)) {
-            throw new TrackerUnavailableError(
+            throw new ToolClosedError(
                 `Tool ${name} is not open to this session`,
             );
         }
@@ -177,7 +199,8 @@ const NOT_THE_TASK =
 
 /**
  * "Not found" counts as "no such task" only when it is about the task asked
- * for: the message names it, or a task, and nothing else is missing. Anything
+ * for: the message names it, or a task, or carries a 404 status (a tracker
+ * answering in its user's language), and nothing else is missing. Anything
  * else is a tracker that could not read it, so the owners hear about it and
  * the PR is checked again, instead of a typo comment on the PR.
  */
@@ -189,9 +212,13 @@ function trackerError(message: string, args: Record<string, unknown>): Error {
     ) {
         return new TaskNotFoundError(message);
     }
-    return NOT_FOUND_PATTERN.test(message) &&
-        !NOT_THE_TASK.test(answer) &&
-        (TASK_NOUN.test(answer) || namesAsked(answer, args))
+    if (NOT_THE_TASK.test(answer)) {
+        return new TrackerUnavailableError(message);
+    }
+    return STATUS_404.test(answer) ||
+        INVALID_ID.test(answer) ||
+        (NOT_FOUND_PATTERN.test(message) &&
+            (TASK_NOUN.test(answer) || namesAsked(answer, args)))
         ? new TaskNotFoundError(message)
         : new TrackerUnavailableError(message);
 }
