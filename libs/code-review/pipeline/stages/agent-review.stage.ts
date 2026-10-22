@@ -10,8 +10,12 @@ import {
     DEDUP_EMBEDDING_LOW,
     DEDUP_EMBEDDING_HIGH,
     DEDUP_TIEBREAK_SCHEMA,
+    DEDUP_FOLLOWUP_SCHEMA,
+    applyDedupFollowup,
+    buildDedupFollowupPrompt,
     buildDedupPrompt,
     buildTiebreakPrompt,
+    unclassifiedDedupIndices,
     contentSimilarity,
     cosineSimilarity,
     dedupEmbeddingText,
@@ -2851,9 +2855,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const dedupOutput = (await LLM.run({
                 byokConfig: resolvedSlot,
                 schema: jsonSchema(DEDUP_SCHEMA as any),
-                user: buildDedupPrompt(suggestions, (sev) =>
-                    this.normalizeSeverity(sev),
-                ),
+                user: buildDedupPrompt(suggestions),
                 runName: 'code-review-dedup',
                 spanName: 'code-review::dedup',
                 organizationId: telemetryMeta?.organizationId,
@@ -2897,25 +2899,110 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // favours its own prose over a scanner's, and the longest text over
             // the one on the defective lines. Re-seat the roles so a
             // deterministic finding survives the group it was merged into, and
-            // otherwise the finding anchored on the lines at fault.
-            const groups: Array<{
+            // otherwise the finding anchored on the lines at fault. The
+            // follow-up sees the scanner re-seat; the rest runs on the final
+            // groups below.
+            let groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = keepOwnFindingsApart(
+            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
+            let unique: number[] = normalizedDedup?.unique || [];
+
+            // A model can stop partway through the list. The left-out
+            // suggestions go back in one short call that sees what was already
+            // decided; any still left out falls to the safety net below.
+            const leftOut =
+                groups.length || unique.length
+                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    : [];
+            // Kept in the dedup trace: a failed follow-up keeps those
+            // suggestions as they were (a duplicate may reach the PR), the same
+            // way a failed dedup keeps everything, without degrading the review.
+            let followupError: string | undefined;
+            if (leftOut.length > 0) {
+                try {
+                    // The same shape recovery as the first answer (#1786): a
+                    // wrapped, bare-array or stringified answer still counts,
+                    // and one with no assignments fails like a failed call.
+                    const followupOutput = await LLM.run({
+                        byokConfig: resolvedSlot,
+                        schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
+                        user: buildDedupFollowupPrompt(
+                            suggestions,
+                            groups,
+                            unique,
+                            leftOut,
+                        ),
+                        runName: 'code-review-dedup-followup',
+                        spanName: 'code-review::dedup',
+                        organizationId: telemetryMeta?.organizationId,
+                        telemetryMetadata: telemetryMeta,
+                        attrs: {
+                            type: dedupSlot ? 'byok' : 'system',
+                            prNumber,
+                            ...(telemetryMeta?.teamId
+                                ? { teamId: telemetryMeta.teamId }
+                                : {}),
+                        },
+                    });
+                    const followup = normalizeEnvelope(
+                        followupOutput,
+                        'assignments',
+                        [],
+                        {
+                            onRecover: (reason) =>
+                                this.logger.warn({
+                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
+                                    context: this.stageName,
+                                }),
+                        },
+                    ) as any;
+                    if (!Array.isArray(followup?.assignments)) {
+                        throw new Error(
+                            'the follow-up answer has no assignments',
+                        );
+                    }
+                    ({ groups, unique } = applyDedupFollowup(
+                        suggestions.length,
+                        groups,
+                        unique,
+                        leftOut,
+                        followup.assignments,
+                    ));
+                    this.logger.log({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
+                        context: this.stageName,
+                    });
+                } catch (error) {
+                    followupError =
+                        error instanceof Error ? error.message : String(error);
+                    this.logger.warn({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
+                        context: this.stageName,
+                        error,
+                        metadata: {
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                            prNumber,
+                            leftOutCount: leftOut.length,
+                        },
+                    });
+                }
+            }
+
+            // After the follow-up, so a custom agent's finding taken back out
+            // of a group is not sent to it again and stays unique.
+            groups = keepOwnFindingsApart(
                 preferCustomAgentKeep(
                     preferSpecificKeep(
-                        preferAnalyzerKeep(
-                            normalizedDedup?.groups || [],
-                            suggestions,
-                        ),
+                        preferAnalyzerKeep(groups, suggestions),
                         suggestions,
-                        normalizedDedup?.unique || [],
+                        unique,
                     ),
                     suggestions,
                 ),
                 suggestions,
             );
-            const unique: number[] = normalizedDedup?.unique || [];
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
             // is inconclusive we compare description embeddings, and only escalate
@@ -3195,6 +3282,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     uniqueCount: uniqueSuggestions.length,
                     groupsCount: groupSummaries.length,
                     removedCount: totalRemoved,
+                    ...(followupError ? { followupError } : {}),
                     groups: groupSummaries,
                     unique: uniqueSuggestions,
                 },

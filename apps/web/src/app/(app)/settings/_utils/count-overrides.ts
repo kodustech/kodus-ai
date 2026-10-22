@@ -34,6 +34,7 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
     "kody-rules": [
         "kodyKnowledgeApproval",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
         "kodyLearningExcludedReviewers",
     ],
 };

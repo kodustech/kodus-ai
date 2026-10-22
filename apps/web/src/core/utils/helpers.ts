@@ -201,6 +201,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "summary",
         "isRequestChangesActive",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
         "kodyLearningExcludedReviewers",
         "kodyKnowledgeApproval",
         "runOnDraft",

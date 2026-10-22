@@ -53,6 +53,7 @@ import { inferRuleOrigin } from "src/core/utils/kody-rules/infer-origin";
 import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
 import type { KodyRuleHealthRow } from "src/features/ee/cockpit/_services/analytics/review/fetch";
 
+import { autoPauseTitle } from "./auto-pause-notice";
 import { OriginBadge } from "./origin-badge";
 import { ATTENTION_STATES, RuleHealthChip } from "./rule-health";
 
@@ -287,8 +288,12 @@ export const RuleStatus = ({
         return (
             <StatusPill
                 tone="warning"
-                label="Paused"
-                title={`This ${entityLabel} is paused: it stays in your list but is skipped on every new PR.`}
+                label={rule.autoPause ? "Paused by Kody" : "Paused"}
+                title={
+                    rule.autoPause
+                        ? autoPauseTitle(rule.autoPause)
+                        : `This ${entityLabel} is paused: it stays in your list but is skipped on every new PR.`
+                }
             />
         );
     }

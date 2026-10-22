@@ -154,48 +154,246 @@ export function collapseNearDuplicates<T extends DedupSuggestionLike>(
 }
 
 /**
- * Build the per-suggestion summary block the dedup model sees. `normalizeSeverity`
- * is injected so production keeps its exact severity normalization; callers that
- * don't need it (the eval) can pass an identity function.
+ * Build the per-suggestion block the dedup model sees. No severity: the
+ * finder's self-declared severity is unreliable, and severity is assigned
+ * later, at enrichment. The whole suggestionContent goes in: the finder no
+ * longer writes a oneSentenceSummary, and a 200-char cut usually stopped
+ * before the problem itself (#1821).
  */
 export function buildDedupSummaries(
     suggestions: DedupSuggestionLike[],
-    normalizeSeverity: (severity?: string) => string,
+    opts?: { withCode?: boolean },
 ): string {
-    return suggestions
-        .map(
-            (s, i) =>
-                `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}/${normalizeSeverity(s.severity)}]: ${s.oneSentenceSummary || s.suggestionContent?.substring(0, 200)}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}`,
-        )
-        .join('\n');
+    return suggestions.map((s, i) => dedupSummaryLine(s, i, opts)).join('\n');
 }
 
-/** Full dedup prompt (instructions + the suggestion summaries). */
-export function buildDedupPrompt(
-    suggestions: DedupSuggestionLike[],
-    normalizeSeverity: (severity?: string) => string,
+function dedupSummaryLine(
+    s: DedupSuggestionLike,
+    i: number,
+    opts?: { withCode?: boolean },
 ): string {
-    const summaries = buildDedupSummaries(suggestions, normalizeSeverity);
-    return `You have ${suggestions.length} code review suggestions across multiple files in a PR. Identify duplicates and group them.
+    const text = (s.suggestionContent || s.oneSentenceSummary || '')
+        .trim()
+        .replace(/\n+/g, '\n    ');
+    return `[${i}] ${s.relevantFile || 'unknown'}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label || 'unknown'}]: ${text}${s.improvedCode ? `\n    fix: ${s.improvedCode.substring(0, 100)}` : ''}${opts?.withCode && s.existingCode ? `\n    code: ${s.existingCode.substring(0, 400)}` : ''}`;
+}
 
-BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug.
+const DEDUP_CONSERVATIVE = `BE CONSERVATIVE — when in doubt, do NOT group. Only group when you are highly confident they describe the exact same bug or the exact same systemic mistake.
 
-There are TWO types of duplicates:
+`;
+
+const DEDUP_CRITERIA = `There are FOUR types of duplicates:
 
 1. **EXACT DUPLICATES** (same bug, same location): Multiple suggestions pointing to the same file and overlapping lines describing the same issue. Keep the one with the most detail, discard the rest.
 
 2. **CROSS-LOCATION DUPLICATES** (same bug pattern, different locations): Suggestions describing the EXACT SAME code pattern/bug but applied in different files (e.g., "forEach with async callback" found in 3 different files, or "missing null check on the same API call" in 2 files). These should be GROUPED — keep the best one as representative, list the others as duplicates.
 
+3. **SYSTEMIC ROOT-CAUSE DUPLICATES** (same underlying mistake, repeated): The
+same wrong pattern applied at several call sites, methods or files — e.g. the
+same incorrect metric call copy-pasted into Create, Update and Delete, or the
+same inverted condition in three branches. One fix (or one find-and-replace)
+would resolve all of them. GROUP them — keep the clearest instance as
+representative; the other locations will be listed on the kept comment.
+
+4. **UMBRELLA DUPLICATES** (one suggestion already covers the others): One
+suggestion describes several problems that other suggestions describe
+separately. For example:
+   - suggestion 1: a problem A in parseOrder and a problem B in parseInvoice
+   - suggestion 2: a problem C in parseRefund
+   - suggestion 3: problems A, B and C together
+Suggestion 3 already says everything 1 and 2 say. GROUP all three and keep
+suggestion 3 — the one with the most complete content — as representative,
+because it stands for the whole group. This applies even when A, B and C are
+different problems: what matters is that the kept suggestion covers each of
+them.
+
 NOT duplicates (keep both):
-- Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs)
+- Different bugs in the same file or nearby lines (e.g., "nil pointer" and "missing validation" in the same controller — these are DIFFERENT bugs), unless another suggestion already covers both (type 4)
 - Different root causes even if they sound similar (e.g., "add nil check" vs "fix typo" — different problems)
-- Suggestions about different code even if the description sounds similar
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
 The "deterministic" label marks a finding a scanner produced rather than an agent. It is not a different kind of bug: when a deterministic finding and an agent finding describe the same defect, they ARE duplicates and must be grouped.
 Prefer keeping the suggestion with the most detail or clearest fix as the representative.
 
+`;
+
+/** Full dedup prompt (instructions + the suggestion summaries).
+ *
+ *  Four merge classes, the third being the SAME systemic mistake repeated
+ *  across N call sites/methods (e.g. the same wrong metric call copy-pasted in
+ *  Create/Update/Delete). It was an off-by-default A/B knob; measured on the
+ *  dedup gold (#1821) it is how the gold groups those repeats, and the old
+ *  "different code never merges" rule kept them, and cross-file duplicates,
+ *  apart. The fourth groups the suggestions that one broader suggestion
+ *  already covers (#1821: Muse split those and left the umbrella alone). */
+export function buildDedupPrompt(
+    suggestions: DedupSuggestionLike[],
+    /** withCode (#1821 eval): each summary also shows the finding's existingCode. */
+    opts?: { withCode?: boolean },
+): string {
+    const summaries = buildDedupSummaries(suggestions, { withCode: opts?.withCode });
+    return `You have ${suggestions.length} code review suggestions across multiple files in a PR. Identify duplicates and group them.
+
+${DEDUP_CONSERVATIVE}${DEDUP_CRITERIA}Every index from 0 to ${suggestions.length - 1} must appear EXACTLY ONCE in your answer: as a group's keep, inside a group's duplicates, or in unique. Do not skip any index and do not repeat one.
+
 ${summaries}`;
+}
+
+// ── Follow-up for left-out indices (#1821) ──────────────────────────────────
+// A model can stop partway through the list (Muse left 20 of 24 out of one PR).
+// The left-out suggestions go back in one short call that sees what was
+// already decided; whatever is still left out falls to the stage safety net.
+
+type DedupGroup = { keep: number; duplicates: number[] };
+
+/** Indices the dedup answer left out of every keep, duplicates and unique. */
+export function unclassifiedDedupIndices(
+    n: number,
+    groups: DedupGroup[],
+    unique: number[],
+): number[] {
+    const seen = new Set<number>();
+    for (const i of unique || []) seen.add(i);
+    for (const g of groups || []) {
+        seen.add(g?.keep);
+        for (const d of g?.duplicates || []) seen.add(d);
+    }
+    return Array.from({ length: n }, (_, i) => i).filter((i) => !seen.has(i));
+}
+
+export const DEDUP_FOLLOWUP_SCHEMA = {
+    type: 'object',
+    properties: {
+        assignments: {
+            type: 'array',
+            description: 'One entry per left-out suggestion.',
+            items: {
+                type: 'object',
+                properties: {
+                    index: {
+                        type: 'number',
+                        description: 'Index of the left-out suggestion',
+                    },
+                    joinWith: {
+                        type: 'number',
+                        description:
+                            'Index of the suggestion it duplicates (a kept suggestion, a unique one or another left-out one), or -1 when it duplicates none',
+                    },
+                },
+                required: ['index', 'joinWith'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['assignments'],
+    additionalProperties: false,
+} as const;
+
+export function buildDedupFollowupPrompt(
+    suggestions: DedupSuggestionLike[],
+    groups: DedupGroup[],
+    unique: number[],
+    leftOut: number[],
+): string {
+    const ok = (i: number) => Number.isInteger(i) && i >= 0 && i < suggestions.length;
+    const line = (i: number) => dedupSummaryLine(suggestions[i], i);
+    const groupLines = (groups || [])
+        .filter((g) => ok(g?.keep))
+        .map((g) => {
+            const dups = (g.duplicates || []).filter(ok);
+            return `${line(g.keep)}${dups.length ? `\n    duplicates already in this group: ${dups.map((d) => `[${d}]`).join(', ')}` : ''}`;
+        });
+    const uniqueLines = (unique || []).filter(ok).map(line);
+    return `You grouped the duplicate code review suggestions of a PR, but your answer left out ${leftOut.length} of them: ${leftOut.map((i) => `[${i}]`).join(', ')}. Classify ONLY those now.
+
+For each left-out suggestion give joinWith:
+- the index of the suggestion it duplicates: a group's kept suggestion, a suggestion left unique, or another left-out suggestion;
+- -1 when it duplicates none of them.
+
+${DEDUP_CONSERVATIVE}${DEDUP_CRITERIA}Every left-out index must appear EXACTLY ONCE in assignments.
+
+Groups already formed (kept suggestion):
+${groupLines.join('\n') || '(none)'}
+
+Suggestions left unique:
+${uniqueLines.join('\n') || '(none)'}
+
+Left-out suggestions to classify:
+${leftOut.map(line).join('\n')}`;
+}
+
+/**
+ * Folds the follow-up answer into the first answer. A left-out suggestion that
+ * joins a group becomes one of its duplicates; one that joins a unique
+ * suggestion forms a new group kept by that suggestion; left-out suggestions
+ * that only join each other form a group kept by the lowest index; joinWith -1
+ * makes it unique. One left out again stays out (the stage keeps it).
+ */
+export function applyDedupFollowup(
+    n: number,
+    groups: DedupGroup[],
+    unique: number[],
+    leftOut: number[],
+    assignments: Array<{ index: number; joinWith: number }>,
+): { groups: DedupGroup[]; unique: number[] } {
+    const valid = (i: number) => Number.isInteger(i) && i >= 0 && i < n;
+    const outGroups = (groups || []).map((g) => ({
+        keep: g.keep,
+        duplicates: [...(g.duplicates || [])],
+    }));
+    let outUnique = [...(unique || [])];
+    const pending = new Set(leftOut.filter(valid));
+    const parent = Array.from({ length: n }, (_, i) => i);
+    // Bounded by the number of suggestions: a root is at most n - 1 links away.
+    const find = (i: number): number => {
+        for (let step = 0; step < n && parent[i] !== i; step++) {
+            i = parent[i] = parent[parent[i]];
+        }
+        return i;
+    };
+    const unite = (a: number, b: number) => {
+        parent[find(a)] = find(b);
+    };
+    for (const g of outGroups) {
+        if (!valid(g.keep)) continue;
+        for (const d of g.duplicates) if (valid(d)) unite(d, g.keep);
+    }
+    const answered = new Set<number>();
+    for (const a of assignments || []) {
+        if (!pending.has(a?.index) || answered.has(a.index)) continue;
+        answered.add(a.index);
+        if (valid(a.joinWith) && a.joinWith !== a.index) unite(a.index, a.joinWith);
+    }
+    // A left-out suggestion the follow-up did not answer stays out (the stage
+    // keeps it), unless an answered one joined it: then it is in that group.
+    const answeredRoots = new Set([...answered].map(find));
+    const byRoot = new Map<number, number[]>();
+    for (const i of pending) {
+        const root = find(i);
+        if (!answered.has(i) && !answeredRoots.has(root)) continue;
+        byRoot.set(root, [...(byRoot.get(root) || []), i]);
+    }
+    const groupByRoot = new Map<number, DedupGroup>();
+    for (const g of outGroups) if (valid(g.keep)) groupByRoot.set(find(g.keep), g);
+    const uniqueByRoot = new Map<number, number>();
+    for (const x of outUnique) if (valid(x)) uniqueByRoot.set(find(x), x);
+    for (const [r, members] of byRoot) {
+        const g = groupByRoot.get(r);
+        if (g) {
+            for (const i of members) if (i !== g.keep && !g.duplicates.includes(i)) g.duplicates.push(i);
+            continue;
+        }
+        const u = uniqueByRoot.get(r);
+        if (u !== undefined) {
+            outUnique = outUnique.filter((x) => x !== u);
+            outGroups.push({ keep: u, duplicates: members.filter((i) => i !== u) });
+            continue;
+        }
+        const all = [...new Set(members)].sort((a, b) => a - b);
+        if (all.length === 1) outUnique.push(all[0]);
+        else outGroups.push({ keep: all[0], duplicates: all.slice(1) });
+    }
+    return { groups: outGroups, unique: outUnique };
 }
 
 // ── Semantic tier (PR #1527) ────────────────────────────────────────────────
@@ -246,8 +444,18 @@ export function buildTiebreakPrompt(
     a: DedupSuggestionLike,
     b: DedupSuggestionLike,
 ): string {
+    // Only the fields that carry something: the lean finder output has no
+    // summary or code, and empty labels cost tokens on every ambiguous pair.
     const fmt = (f: DedupSuggestionLike) =>
-        `Summary: ${f?.oneSentenceSummary || ''}\nDetails: ${f?.suggestionContent || ''}\nExisting code: ${f?.existingCode || ''}\nSuggested fix: ${f?.improvedCode || ''}`;
+        [
+            ['Summary', f?.oneSentenceSummary],
+            ['Details', f?.suggestionContent],
+            ['Existing code', f?.existingCode],
+            ['Suggested fix', f?.improvedCode],
+        ]
+            .filter(([, v]) => String(v || '').trim())
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\n');
     return `Two code review findings on the same PR. Decide whether posting both would be a REDUNDANT DUPLICATE (same underlying defect) or whether they are DIFFERENT bugs that both deserve a comment.
 
 First, in one short phrase each, state the single root-cause defect of A and of B. Then compare:

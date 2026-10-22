@@ -313,7 +313,6 @@ describe("#1916 — the issue's own call, end to end", () => {
                     oneSentenceSummary: 'POST /complete can be replayed, no guard',
                 },
             ],
-            (severity) => severity ?? 'medium',
         );
 
         const wire = await captureByokWire(

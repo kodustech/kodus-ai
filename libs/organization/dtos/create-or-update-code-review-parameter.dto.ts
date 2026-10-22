@@ -839,6 +839,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     kodyRulesGeneratorEnabled?: boolean;
 
     @IsOptional()
+    @IsBoolean()
+    kodyRulesAutoPauseEnabled?: boolean;
+
+    @IsOptional()
     @IsArray()
     @IsString({ each: true })
     kodyLearningExcludedReviewers?: string[];

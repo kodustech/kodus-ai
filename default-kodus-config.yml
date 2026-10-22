@@ -1171,6 +1171,7 @@ summary:
 
 # kody rules
 kodyRulesGeneratorEnabled: true
+kodyRulesAutoPauseEnabled: false
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false

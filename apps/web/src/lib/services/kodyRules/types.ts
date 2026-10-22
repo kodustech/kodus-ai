@@ -7,6 +7,19 @@ export enum KodyRuleInheritanceOrigin {
     DIRECTORY = 'directory',
 }
 
+export type KodyRuleAutoPause = {
+    state: 'ignored' | 'noisy';
+    /** ISO timestamps from the API. */
+    pausedAt: string;
+    windowStart: string;
+    windowEnd: string;
+    triggers: number;
+    implemented: number;
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+};
+
 export type KodyRule = {
     uuid?: string;
     status: KodyRulesStatus;
@@ -30,6 +43,11 @@ export type KodyRule = {
     lockedByPlan?: boolean;
     /** The rule's .kody/rules file stopped parsing; the rule keeps its last text. */
     sourceFileIssue?: "not_a_rule_template" | null;
+    /**
+     * Set while the rule is paused because Kody judged it ignored or noisy
+     * (`kodyRulesAutoPauseEnabled`). Cleared on resume.
+     */
+    autoPause?: KodyRuleAutoPause | null;
     centralizedConfig?: {
         path: string;
         status: KodyRuleCentralizedStatus;
