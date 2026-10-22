@@ -65,6 +65,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const codeManagementService = {
+            getPullRequest: jest.fn(),
             getPullRequestReviewThreads: jest.fn(),
             getPullRequestReviewComments: jest.fn().mockResolvedValue([]),
             getFilesByPullRequestId: jest.fn(),
@@ -266,7 +267,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 organizationId: 'org-1',
                 teamId: 'team-1',
             },
-            pr: makeOpenPr(77, 'repo-b'),
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 'c-1' } }],
+            },
             codeReviewConfig: {
                 reviewCadence: { type: ReviewCadenceType.AUTOMATIC },
                 configLevel: 'repository',
@@ -278,6 +282,28 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).toHaveBeenCalled();
+    });
+
+    it('skips clean PRs without a label scope before provider and execution reads', async () => {
+        const { cron, deps } = makeCron();
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: { pullRequestApprovalActive: true },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.automationExecutionService.findLatestExecutionByFilters,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.getPullRequest,
+        ).not.toHaveBeenCalled();
     });
 
     it('approves a clean zero-comment PR after its configured label is added', async () => {
@@ -615,7 +641,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 organizationId: 'org-1',
                 teamId: 'team-1',
             },
-            pr: makeOpenPr(77, 'repo-b'),
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 1 } }],
+            },
             codeReviewConfig: {
                 pullRequestApprovalActive: true,
                 approvalRiskActive: false,
@@ -732,7 +761,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 organizationId: 'org-1',
                 teamId: 'team-1',
             },
-            pr: makeOpenPr(77, 'repo-b'),
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 'c-1' } }],
+            },
             codeReviewConfig: {
                 configLevel: 'repository',
             },
@@ -861,6 +893,53 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect.objectContaining({ id: 'repo-a' }),
             [{ filename: 'src/auth/file-2.ts' }],
         );
+    });
+
+    it('reuses directory file paths until the reviewed head changes', async () => {
+        const { cron, deps } = makeCron();
+        deps.parametersService.findOne.mockResolvedValue({
+            team: { uuid: 'team-1' },
+            configValue: {
+                repositories: [
+                    {
+                        id: 'repo-a',
+                        name: 'Repo A',
+                        directories: [{ path: 'src/auth', configs: {} }],
+                    },
+                ],
+            },
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a')],
+        );
+        deps.automationExecutionService.findLatestExecutionByFilters
+            .mockResolvedValueOnce({
+                dataExecution: { lastAnalyzedCommit: 'head-1' },
+            })
+            .mockResolvedValueOnce({
+                dataExecution: { lastAnalyzedCommit: 'head-1' },
+            })
+            .mockResolvedValueOnce({
+                dataExecution: { lastAnalyzedCommit: 'head-2' },
+            });
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            { filename: 'src/auth/session.ts' },
+        ]);
+        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+
+        await cron.handleCron();
+        await cron.handleCron();
+        expect(
+            deps.codeManagementService.getFilesByPullRequestId,
+        ).toHaveBeenCalledTimes(1);
+
+        await cron.handleCron();
+        expect(
+            deps.codeManagementService.getFilesByPullRequestId,
+        ).toHaveBeenCalledTimes(2);
     });
 
     it("approves none of a repository's PRs when its config turns approval off", async () => {

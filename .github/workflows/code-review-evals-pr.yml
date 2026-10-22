@@ -56,6 +56,11 @@ on:
             - "docker/Dockerfile"
     workflow_dispatch:
         inputs:
+            run_full_approval_eval:
+                description: "Run paid 200-case approval-risk evaluation"
+                required: false
+                type: boolean
+                default: false
             approval_case_ids:
                 description: "Comma-separated approval-risk case IDs to rerun (empty = all 200)"
                 required: false
@@ -129,7 +134,7 @@ jobs:
                   gcp_project: ${{ vars.GCP_PROJECT }}
 
     approval-risk-full:
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.run_full_approval_eval
         name: "approval risk · 200 snapshots"
         runs-on: ubuntu-latest
         timeout-minutes: 120

@@ -1,6 +1,11 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import { Inject, Injectable } from '@nestjs/common';
+import {
+    formatApprovalReasonComment,
+    isApprovalReasonComment,
+} from '@libs/code-review/infrastructure/approval/approval-reason-comment';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -116,12 +121,36 @@ export class CommentManagerService implements ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
     ): Promise<void> {
-        await this.codeManagementService.createIssueComment({
+        const request = {
             organizationAndTeamData,
             prNumber,
             repository,
-            body: `**Automatic approval held:** ${reason}`,
-        });
+        };
+        const body = formatApprovalReasonComment('hold', reason);
+        const comments = await runWithBoundedTimeout(
+            this.codeManagementService.getAllCommentsInPullRequest(request),
+            10_000,
+            'approval hold comment lookup',
+        );
+        const existing = comments?.find(isApprovalReasonComment);
+        const commentId =
+            existing?.id ?? existing?.commentId ?? existing?.note_id;
+        if (typeof commentId === 'number') {
+            if ((existing.body ?? existing.note ?? existing.content) === body) {
+                return;
+            }
+            await this.codeManagementService.updateIssueComment({
+                ...request,
+                body,
+                commentId,
+                noteId: commentId,
+            });
+        } else {
+            await this.codeManagementService.createIssueComment({
+                ...request,
+                body,
+            });
+        }
     }
 
     /**

@@ -55,11 +55,7 @@ function EligibilityFields() {
                                 <FormControl.Input>
                                     <TagInput
                                         id={field.name}
-                                        disabled={
-                                            field.disabled ||
-                                            (name === "approvalLabels" &&
-                                                labelsUnavailable)
-                                        }
+                                        disabled={field.disabled}
                                         tags={field.value ?? []}
                                         maxTags={maxTags}
                                         placeholder={placeholder}
@@ -69,7 +65,7 @@ function EligibilityFields() {
                                 <FormControl.Helper className="text-xs leading-5">
                                     {name === "approvalLabels" &&
                                     labelsUnavailable
-                                        ? "Bitbucket PRs do not support approval labels. Use authors to limit approval."
+                                        ? "Bitbucket and Azure Repos cannot verify PR labels. PRs on those providers need a person while labels are configured. You can remove saved labels here."
                                         : help}
                                 </FormControl.Helper>
                             </FormControl.Root>

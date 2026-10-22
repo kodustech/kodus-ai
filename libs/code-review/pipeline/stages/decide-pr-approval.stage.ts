@@ -13,6 +13,7 @@ import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
     evaluateApproval,
+    matchesApprovalScope,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
@@ -49,7 +50,9 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         const configuredPolicy = approvalPolicyFromConfig(config);
         if (
-            context.platformType === PlatformType.BITBUCKET &&
+            [PlatformType.BITBUCKET, PlatformType.AZURE_REPOS].includes(
+                context.platformType,
+            ) &&
             configuredPolicy.labels?.length
         ) {
             return this.updateContext(context, (draft) => {
@@ -102,6 +105,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             organizationAndTeamData,
             repository,
             prNumber: pullRequest.number,
+            includeLabels: !!policy.labels?.length,
         });
         if (
             !livePr ||
@@ -117,6 +121,20 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         }
         labels = livePr.labels ?? labels;
         author = livePr.user?.login ?? author;
+        const authorScope = matchesApprovalScope({
+            policy: { authors: policy.authors },
+            author,
+        });
+        if (!authorScope.matches) {
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    kind: 'out-of-scope',
+                    reason:
+                        authorScope.reason ??
+                        'The PR author is outside the approval scope.',
+                };
+            });
+        }
 
         // Incremental reviews may contain only files changed since Kody's last
         // run. Approval and team path vetoes apply to the entire current PR.

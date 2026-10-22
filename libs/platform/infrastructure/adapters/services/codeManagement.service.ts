@@ -989,6 +989,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: Partial<Repository>;
             prNumber: number;
+            includeLabels?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequest | null> {

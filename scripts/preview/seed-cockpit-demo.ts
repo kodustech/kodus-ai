@@ -237,7 +237,7 @@ async function main(): Promise<void> {
     }
     operation = 'verify area map';
     const map = await fetch(
-        `${api}/code-management/area-risk-map?repositoryId=${repositoryId}`,
+        `${api}/code-management/area-risk-map?repositoryId=${repositoryId}&teamId=${teamId}`,
         { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
     );
     if (!map.ok) throw new Error(`area map returned ${map.status}`);

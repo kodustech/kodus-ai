@@ -42,7 +42,7 @@ CodeAreaHistoryPrSchema.index(
 
 @Schema({ collection: 'codeAreaHistorySync', timestamps: true })
 export class CodeAreaHistorySyncModel {
-    @Prop({ type: Number, default: 2 })
+    @Prop({ type: Number, default: 3 })
     version: number;
 
     @Prop({ type: String, required: true })
@@ -68,6 +68,9 @@ export class CodeAreaHistorySyncModel {
 
     @Prop({ type: Number, default: 0 })
     offset: number;
+
+    @Prop({ type: [Number], default: null })
+    windowPrNumbers: number[] | null;
 
     @Prop({ type: Number, default: 0 })
     discoveredMergedPrs: number;

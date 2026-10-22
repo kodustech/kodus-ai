@@ -20,7 +20,7 @@ if (!password)
 async function main() {
     const repositoryId = `preview-area-map-smoke-${randomUUID()}`;
     activeRepositoryId = repositoryId;
-    const path = `/code-management/area-risk-map?repositoryId=${repositoryId}`;
+    let path = `/code-management/area-risk-map?repositoryId=${repositoryId}`;
     operation = 'unauthenticated area-map read';
     const unauthenticated = await fetch(`${api}${path}`, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -57,6 +57,20 @@ async function main() {
         throw new Error('Preview token has no organization');
     }
     activeOrganizationId = organizationId;
+
+    operation = 'read preview teams';
+    const teamsResponse = await fetch(`${api}/team`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!teamsResponse.ok) {
+        throw new Error(`GET /team returned ${teamsResponse.status}`);
+    }
+    const teamsBody = await teamsResponse.json();
+    const teams = teamsBody?.data ?? teamsBody;
+    const teamId = Array.isArray(teams) ? teams[0]?.uuid : teams?.uuid;
+    if (!teamId) throw new Error('preview has no team');
+    path += `&teamId=${encodeURIComponent(teamId)}`;
 
     const now = Date.now();
     const snapshot = buildCodeAreaRiskMap({

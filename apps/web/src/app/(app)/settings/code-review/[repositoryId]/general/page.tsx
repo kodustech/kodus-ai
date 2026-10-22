@@ -303,7 +303,9 @@ export default function General() {
                         conditionalApprovalEnabled={conditionalApprovalEnabled}
                     />
                     {conditionalApprovalEnabled ? (
-                        <ApprovalPolicySettings />
+                        <AsyncBoundary errorVariant="minimal">
+                            <ApprovalPolicySettings />
+                        </AsyncBoundary>
                     ) : (
                         <div className="border-card-lv3/60 border-t px-5 py-4 sm:px-6">
                             <p className="text-text-primary flex items-center gap-2 text-sm font-medium">

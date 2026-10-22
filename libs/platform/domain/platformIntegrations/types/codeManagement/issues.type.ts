@@ -39,7 +39,7 @@ export type ListIssuesParams = {
 
 export type GetIssueParams = {
     organizationAndTeamData: OrganizationAndTeamData;
-    repository: { owner: string; name: string };
+    repository: { id?: string; owner: string; name: string };
     issueNumber: number;
 };
 

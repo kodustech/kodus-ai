@@ -6,4 +6,9 @@ export class AreaRiskMapQueryDto {
     @IsString()
     @IsNotEmpty()
     repositoryId: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    teamId: string;
 }

@@ -35,7 +35,6 @@ import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron'
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
-import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { FeatureGateModule } from '@libs/feature-gate';
 import { LicenseModule } from '@libs/ee/license/license.module';
@@ -77,7 +76,6 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
         SpendLimitAlertCronProvider,
         KodusCreditsSweepCronProvider,
         StaleReviewWatchdogCronProvider,
-        RefreshCodeAreaRiskMapCron,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration
         // pattern as code-review-pipeline.module — the factory is not

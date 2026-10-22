@@ -10,6 +10,7 @@ import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import { CodeReviewDashboardModule } from '@libs/code-review/modules/code-review-dashboard.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
@@ -209,6 +210,10 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CockpitReviewAnalyticsController,
         NotificationController,
     ],
-    providers: [LangfuseShutdownProvider, TrialExtensionNotifierService],
+    providers: [
+        LangfuseShutdownProvider,
+        TrialExtensionNotifierService,
+        ConditionalApprovalAccessService,
+    ],
 })
 export class ApiModule {}

@@ -13,7 +13,7 @@ import {
     cloudFallbackOnPosthogError,
     evaluateCatalogGate,
 } from '../domain/decision';
-import type { FeatureKey } from '../domain/feature-keys';
+import { FEATURE_KEYS, type FeatureKey } from '../domain/feature-keys';
 import type { ReleaseTrack } from '../domain/release-track';
 import type { FeaturesSnapshot } from '../domain/snapshot.types';
 import { loadSnapshot } from '../infrastructure/feature-snapshot.loader';
@@ -68,11 +68,18 @@ export class FeatureGateService {
     ): Promise<boolean> {
         const entry = this.snapshot.features[feature];
         const audience = environment.API_CLOUD_MODE ? 'cloud' : 'self-hosted';
+        const releaseTrackBeta = feature === FEATURE_KEYS.conditionalPrApproval;
         const decision = evaluateCatalogGate({
             entry,
             audience,
-            track: ctx.releaseTrack,
-            selfHostedBetaEnabled: this.betaFeaturesEnabled,
+            track:
+                entry?.stage === 'beta' && !releaseTrackBeta
+                    ? 'beta'
+                    : ctx.releaseTrack,
+            selfHostedBetaEnabled:
+                releaseTrackBeta || entry?.stage !== 'beta'
+                    ? this.betaFeaturesEnabled
+                    : true,
         });
 
         if (decision === 'deny') return false;
@@ -83,7 +90,7 @@ export class FeatureGateService {
 
         // Beta is controlled by the release track in the catalog. PostHog
         // remains available for private alpha and legacy rollout flags.
-        if (entry?.stage === 'beta') return true;
+        if (entry?.stage === 'beta' && releaseTrackBeta) return true;
 
         const evaluationContext: FeatureEvaluationContext | undefined =
             ctx.groups ? { groups: ctx.groups } : undefined;

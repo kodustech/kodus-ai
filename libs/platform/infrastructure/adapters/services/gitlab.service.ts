@@ -563,7 +563,8 @@ export class GitlabService implements Omit<
         }
 
         const gitlabAPI = this.instanceGitlabApi(authDetail);
-        const projectId = `${repository.owner}/${repository.name}`;
+        const projectId =
+            repository.id ?? `${repository.owner}/${repository.name}`;
 
         try {
             const issue = await gitlabAPI.Issues.show(issueNumber, {

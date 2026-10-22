@@ -141,6 +141,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null>;
     getRepositories(params: {
         organizationAndTeamData: OrganizationAndTeamData;

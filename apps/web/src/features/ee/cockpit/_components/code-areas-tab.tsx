@@ -225,7 +225,7 @@ export function CodeAreasTab({
 
     const { data, isLoading, isError } = useFetch<AreaMapResponse>(
         CODE_MANAGEMENT_API_PATHS.GET_AREA_RISK_MAP,
-        { params: { repositoryId: repository?.id } },
+        { params: { repositoryId: repository?.id, teamId } },
         !!repository?.id,
     );
     const areas = useMemo(() => {
@@ -288,6 +288,7 @@ export function CodeAreasTab({
     const unknown = classified.unknown.filter((area) =>
         area.path.toLowerCase().includes(query.trim().toLowerCase()),
     );
+    const visibleUnknown = unknown.slice(0, 100);
     const coverage = data?.map?.coverage;
     const structureCoverage = data?.map?.structureCoverage;
     const group = (
@@ -671,7 +672,7 @@ export function CodeAreasTab({
                                 </label>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                                {unknown.map((area) => (
+                                {visibleUnknown.map((area) => (
                                     <AreaChoice
                                         key={area.path}
                                         area={area}
@@ -684,6 +685,12 @@ export function CodeAreasTab({
                                     />
                                 ))}
                             </div>
+                            {unknown.length > visibleUnknown.length && (
+                                <p className="text-text-tertiary mt-3 text-xs">
+                                    Showing the first 100 matches. Narrow the
+                                    directory search to see more.
+                                </p>
+                            )}
                             {!unknown.length && (
                                 <p className="text-text-tertiary text-xs">
                                     No matching directories.

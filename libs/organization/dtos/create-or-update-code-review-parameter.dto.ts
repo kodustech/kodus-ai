@@ -819,11 +819,13 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @IsOptional()
     @IsArray()
+    @ArrayMaxSize(50)
     @IsString({ each: true })
     approvalLabels?: string[];
 
     @IsOptional()
     @IsArray()
+    @ArrayMaxSize(50)
     @IsString({ each: true })
     approvalAuthors?: string[];
 
@@ -833,10 +835,12 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @IsOptional()
     @IsString()
+    @MaxLength(4000)
     approvalRiskInstructions?: string;
 
     @IsOptional()
     @IsArray()
+    @ArrayMaxSize(100)
     @IsString({ each: true })
     approvalSensitivePaths?: string[];
 

@@ -130,6 +130,35 @@ describe("isFeatureEnabled (web resolver)", () => {
         expect(isFeatureEnabledMock).not.toHaveBeenCalled();
     });
 
+    it("keeps PostHog rollout for other cloud beta features", async () => {
+        featureMock.current = { ...baseFeature, stage: "beta" };
+        authMock.mockResolvedValue({
+            user: { userId: "user-42", organizationId: "org-9" },
+        });
+        isFeatureEnabledMock.mockResolvedValue(false);
+
+        expect(
+            await isFeatureEnabled({
+                feature: "custom-agents",
+                releaseTrack: "stable",
+            }),
+        ).toBe(false);
+        expect(isFeatureEnabledMock).toHaveBeenCalledWith(
+            "custom-agents",
+            "user-42",
+            { groups: { organization: "org-9" } },
+        );
+    });
+
+    it("keeps other beta features available on self-hosted", async () => {
+        process.env.WEB_NODE_ENV = "self-hosted";
+        featureMock.current = { ...baseFeature, stage: "beta" };
+
+        expect(
+            await isFeatureEnabled({ feature: "github-enterprise-server-pat" }),
+        ).toBe(true);
+    });
+
     it("falls through permissively when WEB_POSTHOG_KEY is unset in cloud", async () => {
         delete process.env[ENV_KEY];
 

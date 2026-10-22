@@ -11,6 +11,7 @@ import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/t
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     buildCodeAreaRiskMap,
+    rankCodeAreas,
     type CodeAreaRiskMap,
     type HistoricalAreaPullRequest,
 } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
@@ -30,16 +31,18 @@ import {
 const WINDOW_DAYS = 7;
 const INITIAL_LOOKBACK_DAYS = 30;
 const RETENTION_DAYS = 365;
-const SYNC_VERSION = 2;
+const SYNC_VERSION = 3;
 const MAX_PRS_PER_BATCH = 10;
 const MAX_PRS_PER_WINDOW = 100;
+const MAX_FILES_PER_PR = 100;
+const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 const MAX_STRUCTURE_FILES = 60;
 const MAX_FILES_PER_DIRECTORY = 3;
 const STRUCTURE_FETCH_CONCURRENCY = 5;
 const STRUCTURE_FETCH_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOSING_REFERENCE =
-    /\b(?:fix(?:es)?|clos(?:e|es)|resolv(?:e|es))\s+#(\d+)\b/gi;
+    /\b(?:fix(?:es|ed)?|clos(?:e|es|ed)|resolv(?:e|es|ed))\b\s*:?\s*(?:#(\d+)|https?:\/\/[^\s)]+?\/issues\/(\d+))\b/gi;
 const BUG_LABEL = /\b(?:bug|defect|regression)\b/i;
 
 interface SyncState {
@@ -50,6 +53,7 @@ interface SyncState {
     cursorEnd: string;
     scanFloor: string;
     offset: number;
+    windowPrNumbers: number[] | null;
     discoveredMergedPrs: number;
     sampled: boolean;
     complete: boolean;
@@ -150,6 +154,7 @@ export class RefreshCodeAreaRiskMapService {
                 cursorEnd: now.toISOString(),
                 scanFloor: windowStart,
                 offset: 0,
+                windowPrNumbers: null,
                 discoveredMergedPrs: 0,
                 sampled: false,
                 complete: false,
@@ -206,6 +211,7 @@ export class RefreshCodeAreaRiskMapService {
                 windowEnd: now.toISOString(),
                 cursorEnd: now.toISOString(),
                 offset: 0,
+                windowPrNumbers: null,
                 complete: false,
             };
             await this.sync.updateOne(key, { $set: state });
@@ -216,33 +222,40 @@ export class RefreshCodeAreaRiskMapService {
             Date.parse(state.scanFloor ?? state.windowStart),
             rangeEnd - WINDOW_DAYS * DAY_MS,
         );
-        const listed = await with429Retry(
-            () =>
-                this.codeManagement.getPullRequestsByRepository({
-                    organizationAndTeamData,
-                    repository,
-                    filters: {
-                        startDate: new Date(rangeStart).toISOString(),
-                        endDate: new Date(rangeEnd).toISOString(),
-                        dateField: 'updated',
-                        maxResults: MAX_PRS_PER_WINDOW,
-                    },
-                }),
-            { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
-        );
-        if (!Array.isArray(listed)) {
-            throw new Error('Could not list PR history for area map');
-        }
-        const ordered = listed
-            .filter((pr) => Number.isInteger(pr.number ?? pr.pull_number))
-            .sort(
-                (a, b) =>
-                    String(b.updated_at ?? b.created_at ?? '').localeCompare(
-                        String(a.updated_at ?? a.created_at ?? ''),
-                    ) ||
-                    (b.number ?? b.pull_number) - (a.number ?? a.pull_number),
+        let orderedNumbers = state.windowPrNumbers;
+        if (!orderedNumbers) {
+            const listed = await with429Retry(
+                () =>
+                    this.codeManagement.getPullRequestsByRepository({
+                        organizationAndTeamData,
+                        repository,
+                        filters: {
+                            startDate: new Date(rangeStart).toISOString(),
+                            endDate: new Date(rangeEnd).toISOString(),
+                            dateField: 'updated',
+                            maxResults: MAX_PRS_PER_WINDOW,
+                        },
+                    }),
+                { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
             );
-        const batch = ordered.slice(
+            if (!Array.isArray(listed)) {
+                throw new Error('Could not list PR history for area map');
+            }
+            orderedNumbers = listed
+                .filter((pr) => Number.isInteger(pr.number ?? pr.pull_number))
+                .sort(
+                    (a, b) =>
+                        String(
+                            b.updated_at ?? b.created_at ?? '',
+                        ).localeCompare(
+                            String(a.updated_at ?? a.created_at ?? ''),
+                        ) ||
+                        (b.number ?? b.pull_number) -
+                            (a.number ?? a.pull_number),
+                )
+                .map((pr) => pr.number ?? pr.pull_number);
+        }
+        const batch = orderedNumbers.slice(
             state.offset,
             state.offset + MAX_PRS_PER_BATCH,
         );
@@ -250,78 +263,106 @@ export class RefreshCodeAreaRiskMapService {
             .isIssuesSupported(organizationAndTeamData)
             .catch(() => false);
         let processed = 0;
-        for (const listedPr of batch) {
-            const number = listedPr.number ?? listedPr.pull_number;
-            const pr = listedPr.merged_at
-                ? listedPr
-                : await with429Retry(
-                      () =>
-                          this.codeManagement.getPullRequest({
-                              organizationAndTeamData,
-                              repository,
-                              prNumber: number,
-                          }),
-                      {
-                          maxAttempts: 4,
-                          baseDelayMs: 2_000,
-                          maxDelayMs: 30_000,
-                      },
-                  );
-            const mergedAt = pr?.merged_at ? Date.parse(pr.merged_at) : NaN;
-            if (!Number.isFinite(mergedAt)) continue;
-            const files = await with429Retry(
-                () =>
-                    this.codeManagement.getFilesByPullRequestId({
-                        organizationAndTeamData,
-                        repository,
-                        prNumber: number,
-                        headSha: pr.head?.sha,
-                    }),
-                { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
-            );
-            const linkedBugIssues = issuesSupported
-                ? await this.findLinkedBugIssues(
-                      organizationAndTeamData,
-                      String(pr.repository ?? repository.name),
-                      String(pr.body ?? ''),
-                      String(pr.prURL ?? ''),
-                  )
-                : null;
-            const evidence: HistoricalAreaPullRequest = {
-                number,
-                url: pr.prURL ?? '',
-                title: pr.title ?? '',
-                mergedAt: new Date(mergedAt).toISOString(),
-                linkedBugIssues,
-                files: Array.isArray(files)
-                    ? files
-                          .map((file) => file.filename ?? file.path)
-                          .filter((path): path is string => !!path)
-                    : [],
-                filesComplete: Array.isArray(files),
-            };
-            await this.history.updateOne(
-                { ...key, number },
-                { $set: evidence },
-                { upsert: true },
-            );
-            processed += 1;
+        let failed = false;
+        let truncatedFiles = false;
+        for (const number of batch) {
+            try {
+                const pr = await with429Retry(
+                    () =>
+                        this.codeManagement.getPullRequest({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber: number,
+                        }),
+                    {
+                        maxAttempts: 4,
+                        baseDelayMs: 2_000,
+                        maxDelayMs: 30_000,
+                    },
+                );
+                if (!pr) {
+                    failed = true;
+                    continue;
+                }
+                const mergedAt = pr?.merged_at ? Date.parse(pr.merged_at) : NaN;
+                if (!Number.isFinite(mergedAt)) continue;
+                const files = await with429Retry(
+                    () =>
+                        this.codeManagement.getFilesByPullRequestId({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber: number,
+                            headSha: pr.head?.sha,
+                        }),
+                    { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
+                );
+                const linkedBugIssues = issuesSupported
+                    ? await this.findLinkedBugIssues(
+                          organizationAndTeamData,
+                          repository,
+                          String(pr.body ?? ''),
+                          String(pr.prURL ?? ''),
+                      )
+                    : null;
+                const evidence: HistoricalAreaPullRequest = {
+                    number,
+                    url: pr.prURL ?? '',
+                    title: pr.title ?? '',
+                    mergedAt: new Date(mergedAt).toISOString(),
+                    linkedBugIssues,
+                    files: Array.isArray(files)
+                        ? files
+                              .map((file) => file.filename ?? file.path)
+                              .filter((path): path is string => !!path)
+                              .slice(0, MAX_FILES_PER_PR)
+                        : [],
+                    filesComplete:
+                        Array.isArray(files) &&
+                        files.length <= MAX_FILES_PER_PR,
+                };
+                if (Array.isArray(files) && files.length > MAX_FILES_PER_PR) {
+                    truncatedFiles = true;
+                }
+                await this.history.updateOne(
+                    { ...key, number },
+                    { $set: evidence },
+                    { upsert: true },
+                );
+                processed += 1;
+            } catch (error) {
+                failed = true;
+                this.logger.warn({
+                    message: 'Skipping unreadable PR in code-area history',
+                    context: RefreshCodeAreaRiskMapService.name,
+                    metadata: {
+                        organizationId,
+                        repositoryId: repository.id,
+                        number,
+                    },
+                    error,
+                });
+            }
         }
 
-        const finishedRange = state.offset + batch.length >= ordered.length;
+        const finishedRange =
+            state.offset + batch.length >= orderedNumbers.length;
         const nextState: SyncState = {
             ...state,
             offset: finishedRange ? 0 : state.offset + batch.length,
+            windowPrNumbers: finishedRange ? null : orderedNumbers,
             cursorEnd: finishedRange
                 ? new Date(rangeStart).toISOString()
                 : state.cursorEnd,
             discoveredMergedPrs: state.discoveredMergedPrs + processed,
-            sampled: state.sampled || listed.length >= MAX_PRS_PER_WINDOW,
+            sampled:
+                state.sampled ||
+                failed ||
+                truncatedFiles ||
+                orderedNumbers.length >= MAX_PRS_PER_WINDOW,
             complete:
                 finishedRange &&
                 rangeStart <= Date.parse(state.scanFloor ?? state.windowStart),
         };
-        await this.sync.updateOne(key, { $set: nextState });
         if (pruneBefore) {
             await this.history.deleteMany({
                 ...key,
@@ -382,12 +423,48 @@ export class RefreshCodeAreaRiskMapService {
                 .update(JSON.stringify(snapshot))
                 .digest('hex');
         }
+        this.boundSnapshot(snapshot);
         await this.maps.save(organizationId, repository.id, snapshot);
+        await this.sync.updateOne(key, { $set: nextState });
         return {
             complete: nextState.complete,
             processed,
             cursorEnd: nextState.cursorEnd,
         };
+    }
+
+    private boundSnapshot(snapshot: CodeAreaRiskMap): void {
+        if (Buffer.byteLength(JSON.stringify(snapshot)) <= MAX_SNAPSHOT_BYTES) {
+            return;
+        }
+        snapshot.coverage.sampled = true;
+        snapshot.files = rankCodeAreas(snapshot.files).slice(0, 1000);
+        snapshot.directDirectories = rankCodeAreas(
+            snapshot.directDirectories,
+        ).slice(0, 500);
+        snapshot.directories = rankCodeAreas(snapshot.directories).slice(
+            0,
+            500,
+        );
+        while (
+            Buffer.byteLength(JSON.stringify(snapshot)) > MAX_SNAPSHOT_BYTES
+        ) {
+            snapshot.files = snapshot.files.slice(
+                0,
+                Math.floor(snapshot.files.length / 2),
+            );
+            snapshot.directories = snapshot.directories.slice(
+                0,
+                Math.floor(snapshot.directories.length / 2),
+            );
+            snapshot.directDirectories = snapshot.directDirectories.slice(
+                0,
+                Math.floor(snapshot.directDirectories.length / 2),
+            );
+        }
+        snapshot.version = createHash('sha256')
+            .update(JSON.stringify({ ...snapshot, version: '' }))
+            .digest('hex');
     }
 
     private async addCodeStructureSample(
@@ -564,11 +641,11 @@ export class RefreshCodeAreaRiskMapService {
 
     private async findLinkedBugIssues(
         organizationAndTeamData: OrganizationAndTeamData,
-        repositoryName: string,
+        repository: { id: string; name: string },
         body: string,
         prUrl: string,
     ): Promise<string[] | null> {
-        let pathParts = repositoryName.split('/').filter(Boolean);
+        let pathParts = repository.name.split('/').filter(Boolean);
         try {
             const urlParts = new URL(prUrl).pathname.split('/').filter(Boolean);
             const boundary = urlParts.findIndex((part) =>
@@ -584,7 +661,7 @@ export class RefreshCodeAreaRiskMapService {
         const numbers = [
             ...new Set(
                 [...body.matchAll(CLOSING_REFERENCE)]
-                    .map((match) => Number(match[1]))
+                    .map((match) => Number(match[1] ?? match[2]))
                     .filter(
                         (number) => Number.isSafeInteger(number) && number > 0,
                     ),
@@ -597,7 +674,7 @@ export class RefreshCodeAreaRiskMapService {
                     () =>
                         this.codeManagement.getIssue({
                             organizationAndTeamData,
-                            repository: { owner, name },
+                            repository: { id: repository.id, owner, name },
                             issueNumber,
                         }),
                     { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },

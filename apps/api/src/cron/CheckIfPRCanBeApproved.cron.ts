@@ -31,7 +31,10 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
-import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfig,
+    FileChange,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
@@ -39,6 +42,10 @@ import {
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import {
+    formatApprovalReasonComment,
+    isApprovalReasonComment,
+} from '@libs/code-review/infrastructure/approval/approval-reason-comment';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
@@ -97,11 +104,15 @@ const TEAM_CONCURRENCY = 10;
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
-const APPROVAL_REASON_MARKER = '<!-- kodus-conditional-approval -->';
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
+const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
+    private readonly directoryFilesByReviewedHead = new Map<
+        string,
+        { files: Array<Pick<FileChange, 'filename'>>; fetchedAt: number }
+    >();
     private readonly logger = createLogger(
         CheckIfPRCanBeApprovedCronProvider.name,
     );
@@ -438,24 +449,88 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         codeReviewConfigFromRepo.directories
                                             ?.length
                                     ) {
-                                        const files =
-                                            await this.codeManagementService.getFilesByPullRequestId(
+                                        const execution =
+                                            await this.automationExecutionService.findLatestExecutionByFilters(
                                                 {
-                                                    organizationAndTeamData,
-                                                    repository: {
-                                                        id: repository.id,
-                                                        name: repository.name,
+                                                    status: AutomationStatus.SUCCESS,
+                                                    teamAutomation: {
+                                                        uuid: teamAutomation.uuid,
                                                     },
-                                                    prNumber: pr.number,
+                                                    pullRequestNumber:
+                                                        pr.number,
+                                                    repositoryId: repository.id,
                                                 },
-                                                pr.provider as PlatformType,
                                             );
+                                        const reviewedHead =
+                                            this.getLastAnalyzedCommitSha(
+                                                execution?.dataExecution
+                                                    ?.lastAnalyzedCommit,
+                                            );
+                                        const cacheKey = reviewedHead
+                                            ? `${organizationId}:${repository.id}:${pr.number}:${reviewedHead}`
+                                            : null;
+                                        const cached = cacheKey
+                                            ? this.directoryFilesByReviewedHead.get(
+                                                  cacheKey,
+                                              )
+                                            : undefined;
+                                        let files =
+                                            cached &&
+                                            Date.now() - cached.fetchedAt <
+                                                DIRECTORY_FILE_CACHE_TTL_MS
+                                                ? cached.files
+                                                : undefined;
+                                        if (!files) {
+                                            const liveFiles =
+                                                await this.codeManagementService.getFilesByPullRequestId(
+                                                    {
+                                                        organizationAndTeamData,
+                                                        repository: {
+                                                            id: repository.id,
+                                                            name: repository.name,
+                                                        },
+                                                        prNumber: pr.number,
+                                                        headSha:
+                                                            reviewedHead ??
+                                                            undefined,
+                                                    },
+                                                    pr.provider as PlatformType,
+                                                );
+                                            files = liveFiles?.map((file) => ({
+                                                filename:
+                                                    file.filename ?? file.path,
+                                            }));
+                                            if (cacheKey && files?.length) {
+                                                if (
+                                                    this
+                                                        .directoryFilesByReviewedHead
+                                                        .size >= 1000
+                                                ) {
+                                                    const oldest =
+                                                        this.directoryFilesByReviewedHead
+                                                            .keys()
+                                                            .next().value;
+                                                    if (oldest) {
+                                                        this.directoryFilesByReviewedHead.delete(
+                                                            oldest,
+                                                        );
+                                                    }
+                                                }
+                                                this.directoryFilesByReviewedHead.set(
+                                                    cacheKey,
+                                                    {
+                                                        files,
+                                                        fetchedAt: Date.now(),
+                                                    },
+                                                );
+                                            }
+                                        }
                                         if (!files?.length) return;
                                         resolvedConfig =
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
                                                 repository,
-                                                files,
+                                                files as FileChange[],
                                             );
                                     } else {
                                         if (
@@ -548,22 +623,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
             prNumber: prNumber,
         };
 
-        const lastExecution =
-            await this.automationExecutionService.findLatestExecutionByFilters({
-                status: AutomationStatus.SUCCESS,
-                teamAutomation: { uuid: teamAutomationId },
-                pullRequestNumber: prNumber,
-                repositoryId: repository?.id,
-            });
-
-        const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
-            lastExecution?.dataExecution?.lastAnalyzedCommit,
-        );
         const configuredPolicy = codeReviewConfig
             ? approvalPolicyFromConfig(codeReviewConfig)
             : undefined;
         if (
-            platformType === PlatformType.BITBUCKET &&
+            [PlatformType.BITBUCKET, PlatformType.AZURE_REPOS].includes(
+                platformType,
+            ) &&
             configuredPolicy?.labels?.length
         ) {
             return false;
@@ -588,8 +654,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
             return false;
         }
         let conditionalDecision: ApprovalDecision | undefined;
-        const allowNoComments =
-            !!policy?.labels?.length && (pr?.suggestions?.length ?? 0) === 0;
+        const noSuggestions =
+            Array.isArray(pr?.suggestions) && pr.suggestions.length === 0;
+        const allowNoComments = !!policy?.labels?.length && noSuggestions;
+        if (noSuggestions && !allowNoComments) {
+            return false;
+        }
+        const lastExecution =
+            await this.automationExecutionService.findLatestExecutionByFilters({
+                status: AutomationStatus.SUCCESS,
+                teamAutomation: { uuid: teamAutomationId },
+                pullRequestNumber: prNumber,
+                repositoryId: repository?.id,
+            });
+        const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
+            lastExecution?.dataExecution?.lastAnalyzedCommit,
+        );
         let changedPaths: string[] = [];
         if (
             allowNoComments &&
@@ -611,6 +691,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             name: repository?.name,
                         },
                         prNumber: prNumber,
+                        includeLabels: !!policy.labels?.length,
                     },
                     platformType,
                 );
@@ -678,11 +759,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
                 conditionalDecision = decision;
                 if (decision.kind !== 'approve') {
-                    await this.postConditionalApprovalReason(
-                        codeManagementRequestData,
-                        platformType,
-                        decision,
-                    );
+                    if (decision.kind === 'hold') {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            decision,
+                        );
+                    }
                     this.logger.log({
                         message: `Holding cron approval for PR#${prNumber}: ${decision.reason}`,
                         context: CheckIfPRCanBeApprovedCronProvider.name,
@@ -892,7 +975,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     // made at the start of this cron pass.
                     const latestPullRequest = await runWithBoundedTimeout(
                         this.codeManagementService.getPullRequest(
-                            codeManagementRequestData,
+                            {
+                                ...codeManagementRequestData,
+                                includeLabels: !!policy?.labels?.length,
+                            },
                             platformType,
                         ),
                         FINAL_PROVIDER_TIMEOUT_MS,
@@ -987,11 +1073,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
     ): Promise<void> {
         let operation = 'getAllCommentsInPullRequest';
         try {
-            const quotedReason = decision.reason
-                .split(/\r?\n/)
-                .map((line) => `> ${line}`)
-                .join('\n');
-            const body = `${APPROVAL_REASON_MARKER}\n**Automatic approval ${decision.kind === 'approve' ? 'completed' : 'held'}**\n\nKody's assessment:\n${quotedReason}`;
+            const body = formatApprovalReasonComment(
+                decision.kind === 'approve' ? 'approve' : 'hold',
+                decision.reason,
+            );
             // The lookup is only for keeping one reason comment current. A
             // timed-out read may finish later, but cannot post a comment: the
             // write happens only after this bounded await resolves.
@@ -1003,13 +1088,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
                 'conditional approval comment lookup',
             );
-            const existing = comments?.find((comment) => {
-                const text = comment?.body ?? comment?.note ?? comment?.content;
-                return (
-                    typeof text === 'string' &&
-                    text.includes(APPROVAL_REASON_MARKER)
-                );
-            });
+            const existing = comments?.find(isApprovalReasonComment);
             const commentId =
                 existing?.id ?? existing?.commentId ?? existing?.note_id;
             if (typeof commentId === 'number') {

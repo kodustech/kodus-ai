@@ -1802,6 +1802,7 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -1865,35 +1866,39 @@ export class ForgejoService implements Omit<
             // field on that response as an empty label list.
             const labelTimeoutMs = 5000;
             let labels: string[] | undefined;
-            try {
-                const issue = await issueGetIssue({
-                    client,
-                    timeout: labelTimeoutMs,
-                    path: {
-                        owner: repoInfo.owner,
-                        repo: repoInfo.repo,
-                        index: params.prNumber,
-                    },
-                });
-                if (issue.error) throw issue.error;
-                labels = issue.data?.labels
-                    ?.map((label) => label.name)
-                    .filter((name): name is string => typeof name === 'string');
-            } catch (error) {
-                this.logger.warn({
-                    message:
-                        'Forgejo issue labels unavailable for pull request',
-                    context: ForgejoService.name,
-                    error,
-                    metadata: {
-                        repository: params.repository.name,
-                        prNumber: params.prNumber,
-                        organizationId:
-                            params.organizationAndTeamData.organizationId,
-                        teamId: params.organizationAndTeamData.teamId,
-                        timeoutMs: labelTimeoutMs,
-                    },
-                });
+            if (params.includeLabels) {
+                try {
+                    const issue = await issueGetIssue({
+                        client,
+                        timeout: labelTimeoutMs,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                    });
+                    if (issue.error) throw issue.error;
+                    labels = issue.data?.labels
+                        ?.map((label) => label.name)
+                        .filter(
+                            (name): name is string => typeof name === 'string',
+                        );
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Forgejo issue labels unavailable for pull request',
+                        context: ForgejoService.name,
+                        error,
+                        metadata: {
+                            repository: params.repository.name,
+                            prNumber: params.prNumber,
+                            organizationId:
+                                params.organizationAndTeamData.organizationId,
+                            teamId: params.organizationAndTeamData.teamId,
+                            timeoutMs: labelTimeoutMs,
+                        },
+                    });
+                }
             }
             return this.transformPullRequest(
                 result.data,

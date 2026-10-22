@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ForbiddenException,
     Body,
     Controller,
     Delete,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import {
     CheckPolicies,
     PolicyGuard,
@@ -95,6 +97,7 @@ export class CodeManagementController {
         private readonly codeAreaRiskMaps: ICodeAreaRiskMapService,
         @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
         private readonly codeAreaRiskRefresh: IRefreshCodeAreaRiskMapService,
+        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -111,11 +114,20 @@ export class CodeManagementController {
     )
     @ApiOperation({ summary: 'Read historical code-area risk evidence' })
     @ApiQuery({ name: 'repositoryId', required: true })
+    @ApiQuery({ name: 'teamId', required: true })
     public async getAreaRiskMap(@Query() query: AreaRiskMapQueryDto) {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId)
             throw new BadRequestException('organizationId required');
         const { repositoryId } = query;
+        if (
+            !(await this.conditionalApprovalAccess.isEnabled({
+                organizationId,
+                teamId: query.teamId,
+            }))
+        ) {
+            throw new ForbiddenException('Code-area history is unavailable');
+        }
         const [map, sync] = await Promise.all([
             this.codeAreaRiskMaps.read(organizationId, repositoryId),
             this.codeAreaRiskRefresh.readStatus(organizationId, repositoryId),

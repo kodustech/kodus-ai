@@ -39,6 +39,24 @@ describe('tenant isolation — organizationId comes from the principal', () => {
         );
     });
 
+    it('does not read code-area history without beta and paid access', async () => {
+        const controller: any = Object.create(
+            CodeManagementController.prototype,
+        );
+        controller.request = {
+            user: { organization: { uuid: principalOrg } },
+        };
+        controller.conditionalApprovalAccess = {
+            isEnabled: jest.fn().mockResolvedValue(false),
+        };
+        controller.codeAreaRiskMaps = { read: jest.fn() };
+
+        await expect(
+            controller.getAreaRiskMap({ repositoryId: 'repo', teamId: 'team' }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(controller.codeAreaRiskMaps.read).not.toHaveBeenCalled();
+    });
+
     it('current-user ignores a query-supplied organizationId', async () => {
         const controller: any = Object.create(
             CodeManagementController.prototype,

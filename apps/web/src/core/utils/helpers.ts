@@ -247,9 +247,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
 export const waitFor = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-// Trailing comma on the generic <T,> disambiguates from JSX for
-// SWC/Turbopack's edge-runtime parser when this module is imported
-// from middleware.ts.
+// This module is also imported from middleware.ts in the edge runtime.
 export const unformatConfig = <T>(node: FormattedConfig<T>): T => {
     const unformattedConfig: Partial<T> = {};
 

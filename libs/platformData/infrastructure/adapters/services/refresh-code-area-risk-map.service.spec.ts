@@ -39,6 +39,14 @@ it('scans by update time, saves merged PR evidence, and advances a resumable cur
                 head: { sha: 'abc' },
             },
         ]),
+        getPullRequest: jest.fn().mockResolvedValue({
+            number: 10,
+            title: 'Fix retry bug',
+            merged_at: recent,
+            prURL: 'https://github.com/acme/api/pull/10',
+            body: '',
+            head: { sha: 'abc' },
+        }),
         isIssuesSupported: jest.fn().mockResolvedValue(false),
         getFilesByPullRequestId: jest
             .fn()
@@ -72,7 +80,7 @@ it('scans by update time, saves merged PR evidence, and advances a resumable cur
     expect(Date.now() - Date.parse(state!.windowStart)).toBeLessThan(
         31 * 24 * 60 * 60 * 1000,
     );
-    expect(state!.version).toBe(2);
+    expect(state!.version).toBe(3);
     expect(records[0]).toMatchObject({
         number: 10,
         files: ['src/retry.ts'],
@@ -144,7 +152,7 @@ it('resets an older year-long scan to a bounded recent bootstrap', async () => {
         repositoryId: 'repo',
     });
     const reset = sync.updateOne.mock.calls[0][1].$set;
-    expect(reset.version).toBe(2);
+    expect(reset.version).toBe(3);
     expect(reset.discoveredMergedPrs).toBe(0);
     expect(Date.now() - Date.parse(reset.windowStart)).toBeGreaterThan(
         29 * 24 * 60 * 60 * 1000,
@@ -158,7 +166,7 @@ it('marks a capped weekly listing as sampled', async () => {
     const now = new Date();
     const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const state = {
-        version: 2,
+        version: 3,
         source: PlatformType.GITHUB,
         windowStart: start.toISOString(),
         windowEnd: now.toISOString(),
@@ -212,11 +220,158 @@ it('marks a capped weekly listing as sampled', async () => {
     );
 });
 
+it('keeps a stable weekly PR list and advances past an unreadable PR', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    let state: Record<string, any> = {
+        version: 3,
+        source: PlatformType.GITHUB,
+        windowStart: start.toISOString(),
+        windowEnd: now.toISOString(),
+        cursorEnd: now.toISOString(),
+        scanFloor: start.toISOString(),
+        offset: 0,
+        windowPrNumbers: null,
+        discoveredMergedPrs: 0,
+        sampled: false,
+        complete: false,
+    };
+    const sync = {
+        findOne: jest.fn(() => ({ lean: () => ({ exec: async () => state }) })),
+        updateOne: jest.fn(async (_key, update) => {
+            state = { ...state, ...update.$set };
+        }),
+    };
+    const history = {
+        deleteMany: jest.fn(),
+        updateOne: jest.fn(),
+        find: jest.fn(() => ({ lean: () => ({ exec: async () => [] }) })),
+    };
+    const codeManagement = {
+        getPullRequestsByRepository: jest.fn().mockResolvedValue(
+            Array.from({ length: 12 }, (_, index) => ({
+                number: index + 1,
+                updated_at: new Date(
+                    now.getTime() - index * 1000,
+                ).toISOString(),
+            })),
+        ),
+        getPullRequest: jest.fn(async ({ prNumber }) => {
+            if (prNumber === 1) throw new Error('unreadable diff');
+            return { merged_at: null };
+        }),
+        isIssuesSupported: jest.fn().mockResolvedValue(false),
+        getDefaultBranch: jest.fn().mockResolvedValue(null),
+    };
+    const maps = { read: jest.fn().mockResolvedValue(null), save: jest.fn() };
+    const service = new RefreshCodeAreaRiskMapService(
+        codeManagement as any,
+        maps as any,
+        history as any,
+        sync as any,
+    );
+    const params = {
+        organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
+        repository: { id: 'repo', name: 'api' },
+    };
+
+    await service.refreshOneBatch(params);
+    expect(state.offset).toBe(10);
+    expect(state.sampled).toBe(true);
+    expect(state.windowPrNumbers).toHaveLength(12);
+
+    await service.refreshOneBatch(params);
+    expect(codeManagement.getPullRequestsByRepository).toHaveBeenCalledTimes(1);
+    expect(codeManagement.getPullRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ prNumber: 11 }),
+    );
+    expect(codeManagement.getPullRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ prNumber: 12 }),
+    );
+    expect(state.windowPrNumbers).toBeNull();
+});
+
+it('recognizes closing references and resolves GitLab issues by project ID', async () => {
+    const codeManagement = {
+        getIssue: jest.fn().mockResolvedValue({
+            labels: ['bug'],
+            url: 'https://host/gitlab/g/p/-/issues/12',
+        }),
+    };
+    const service = new RefreshCodeAreaRiskMapService(
+        codeManagement as any,
+        {} as any,
+        {} as any,
+        {} as any,
+    );
+
+    const urls = await (service as any).findLinkedBugIssues(
+        { organizationId: 'org', teamId: 'team' },
+        { id: '42', name: 'p' },
+        'Fixed: https://host/gitlab/g/p/-/issues/12',
+        'https://host/gitlab/g/p/-/merge_requests/1',
+    );
+
+    expect(urls).toEqual(['https://host/gitlab/g/p/-/issues/12']);
+    expect(codeManagement.getIssue).toHaveBeenCalledWith(
+        expect.objectContaining({
+            repository: expect.objectContaining({ id: '42' }),
+            issueNumber: 12,
+        }),
+    );
+});
+
+it('bounds a large area snapshot before MongoDB storage', () => {
+    const service = new RefreshCodeAreaRiskMapService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+    );
+    const area = (number: number) => ({
+        path: `src/area-${number}.ts`,
+        changedPrs: 1,
+        linkedBugFixPrs: 0,
+        titleBugFixPrs: 0,
+        recentEvidence: [
+            {
+                prNumber: number,
+                prUrl: 'x'.repeat(10_000),
+                mergedAt: '2026-01-01',
+            },
+        ],
+    });
+    const snapshot: any = {
+        version: 'old',
+        source: 'github',
+        windowStart: '2026-01-01',
+        windowEnd: '2026-02-01',
+        refreshedAt: '2026-02-01',
+        coverage: {
+            discoveredMergedPrs: 1000,
+            scannedPrs: 1000,
+            prsWithCompleteFiles: 1000,
+            prsWithIssueSupport: 0,
+            scanComplete: true,
+        },
+        files: Array.from({ length: 1000 }, (_, index) => area(index)),
+        directories: [],
+        directDirectories: [],
+    };
+
+    (service as any).boundSnapshot(snapshot);
+
+    expect(snapshot.coverage.sampled).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThanOrEqual(
+        8 * 1024 * 1024,
+    );
+});
+
 it('retains accumulated history for at most one year as new PRs arrive', async () => {
     const daysAgo = (days: number) =>
         new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const state = {
-        version: 2,
+        version: 3,
         source: PlatformType.GITHUB,
         windowStart: daysAgo(400),
         windowEnd: daysAgo(2),
@@ -268,7 +423,7 @@ it('adds a bounded structural sample when a history scan completes', async () =>
     const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     const mergedAt = new Date(end.getTime() - 60 * 60 * 1000).toISOString();
     const state = {
-        version: 2,
+        version: 3,
         source: PlatformType.GITHUB,
         windowStart: start.toISOString(),
         windowEnd: end.toISOString(),

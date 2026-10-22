@@ -51,8 +51,11 @@ export function useShouldHideHiddenComments(): boolean {
     return platforms.size > 0 && !platforms.has(PlatformType.GITHUB);
 }
 
-/** Label eligibility cannot apply when every connection is Bitbucket. */
+/** These providers do not expose PR labels for conditional approval. */
 export function useApprovalLabelsUnavailable(): boolean {
     const platforms = useCodeManagementPlatforms();
-    return platforms.size === 1 && platforms.has(PlatformType.BITBUCKET);
+    return (
+        platforms.has(PlatformType.BITBUCKET) ||
+        platforms.has(PlatformType.AZURE_REPOS)
+    );
 }

@@ -12,6 +12,9 @@ import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
 import { getReviewedPullRequestCount } from "@services/pull-requests/fetch";
+import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
+import { FEATURE_KEYS } from "@libs/feature-gate/domain/feature-keys";
+import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import type { CookieName } from "src/core/utils/cookie";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
@@ -183,6 +186,11 @@ async function CockpitLayoutBody({
     }
 
     const [analyticsResult, metricsVisibility] = await analyticsPromise;
+    const codeAreasEnabled = await isFeatureEnabled({
+        feature: FEATURE_KEYS.conditionalPrApproval,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    });
 
     const data = extractApiData(analyticsResult);
     const hasAnalyticsData = data?.hasData;
@@ -202,7 +210,7 @@ async function CockpitLayoutBody({
     const tabsVisibility: Record<TabValue, boolean> = {
         "kodus-review": showKodusReview,
         "productivity": showProductivity || !showKodusReview,
-        "code-areas": true,
+        "code-areas": codeAreasEnabled,
     };
     const defaultTab: TabValue = showKodusReview
         ? "kodus-review"

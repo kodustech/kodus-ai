@@ -105,6 +105,16 @@ it('does not fetch file content for a label-only policy', async () => {
     expect(codeManagement.getFilesByPullRequestId).not.toHaveBeenCalled();
 });
 
+it('skips risk assessment for an author outside the approval scope', async () => {
+    const result = await stage.execute(
+        context({ approvalAuthors: ['bob'], approvalRiskActive: true }),
+    );
+
+    expect(result.approvalDecision?.kind).toBe('out-of-scope');
+    expect(codeManagement.getFilesByPullRequestId).not.toHaveBeenCalled();
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
 it('judges an in-scope PR with the review model and records the map version', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',
