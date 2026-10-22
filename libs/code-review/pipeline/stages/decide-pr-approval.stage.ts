@@ -16,7 +16,10 @@ import {
     matchesApprovalScope,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
-import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import {
+    CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+    IConditionalApprovalAccessService,
+} from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 @Injectable()
@@ -32,7 +35,8 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         private readonly codeManagement: CodeManagementService,
         @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
         private readonly areaMaps: ICodeAreaRiskMapService,
-        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
+        @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
+        private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
     ) {
         super();
     }

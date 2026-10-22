@@ -7,13 +7,14 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { IConditionalApprovalAccessService } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import {
     IOrganizationService,
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 
 @Injectable()
-export class ConditionalApprovalAccessService {
+export class ConditionalApprovalAccessService implements IConditionalApprovalAccessService {
     private readonly logger = createLogger(
         ConditionalApprovalAccessService.name,
     );

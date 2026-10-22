@@ -1,6 +1,5 @@
 import {
     BadRequestException,
-    ForbiddenException,
     Body,
     Controller,
     Delete,
@@ -12,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
-import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
     CheckPolicies,
     PolicyGuard,
@@ -65,13 +64,6 @@ import {
     CodeManagementWebhookStatusResponseDto,
 } from '../dtos/code-management.response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
-import {
-    CODE_AREA_RISK_MAP_SERVICE_TOKEN,
-    ICodeAreaRiskMapService,
-    IRefreshCodeAreaRiskMapService,
-    REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
-} from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
-import { rankCodeAreas } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
@@ -93,11 +85,7 @@ export class CodeManagementController {
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
-        @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
-        private readonly codeAreaRiskMaps: ICodeAreaRiskMapService,
-        @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
-        private readonly codeAreaRiskRefresh: IRefreshCodeAreaRiskMapService,
-        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
+        private readonly getAreaRiskMapUseCase: GetAreaRiskMapUseCase,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -119,31 +107,11 @@ export class CodeManagementController {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId)
             throw new BadRequestException('organizationId required');
-        const { repositoryId } = query;
-        if (
-            !(await this.conditionalApprovalAccess.isEnabled({
-                organizationId,
-                teamId: query.teamId,
-            }))
-        ) {
-            throw new ForbiddenException('Code-area history is unavailable');
-        }
-        const [map, sync] = await Promise.all([
-            this.codeAreaRiskMaps.read(organizationId, repositoryId),
-            this.codeAreaRiskRefresh.readStatus(organizationId, repositoryId),
-        ]);
-        const rankedAreas = map ? rankCodeAreas(map.directDirectories) : [];
-        return {
-            map,
-            sync,
-            rankedAreaPaths: rankedAreas.map((area) => area.path),
-            topAreas: map
-                ? rankedAreas.slice(
-                      0,
-                      Math.ceil(map.directDirectories.length * 0.2),
-                  )
-                : [],
-        };
+        return this.getAreaRiskMapUseCase.execute({
+            organizationId,
+            teamId: query.teamId,
+            repositoryId: query.repositoryId,
+        });
     }
 
     @Get('/repositories/org')

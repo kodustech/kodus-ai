@@ -41,7 +41,10 @@ import {
     evaluateApproval,
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
-import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import {
+    CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+    IConditionalApprovalAccessService,
+} from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import {
     formatApprovalReasonComment,
     isApprovalReasonComment,
@@ -105,6 +108,7 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
+const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
@@ -140,7 +144,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
         private readonly distributedLockService: DistributedLockService,
-        private readonly conditionalApprovalAccess: ConditionalApprovalAccessService,
+        @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
+        private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
     ) {}
 
     @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
@@ -481,21 +486,51 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 ? cached.files
                                                 : undefined;
                                         if (!files) {
-                                            const liveFiles =
-                                                await this.codeManagementService.getFilesByPullRequestId(
-                                                    {
-                                                        organizationAndTeamData,
-                                                        repository: {
-                                                            id: repository.id,
-                                                            name: repository.name,
-                                                        },
+                                            let liveFiles: Awaited<
+                                                ReturnType<
+                                                    CodeManagementService['getFilesByPullRequestId']
+                                                >
+                                            >;
+                                            try {
+                                                liveFiles =
+                                                    await runWithBoundedTimeout(
+                                                        this.codeManagementService.getFilesByPullRequestId(
+                                                            {
+                                                                organizationAndTeamData,
+                                                                repository: {
+                                                                    id: repository.id,
+                                                                    name: repository.name,
+                                                                },
+                                                                prNumber:
+                                                                    pr.number,
+                                                                headSha:
+                                                                    reviewedHead ??
+                                                                    undefined,
+                                                            },
+                                                            pr.provider as PlatformType,
+                                                        ),
+                                                        APPROVAL_FILES_TIMEOUT_MS,
+                                                        'approval directory files',
+                                                    );
+                                            } catch (error) {
+                                                this.logger.warn({
+                                                    message:
+                                                        'Could not load PR files for directory approval policy',
+                                                    context:
+                                                        CheckIfPRCanBeApprovedCronProvider.name,
+                                                    error,
+                                                    metadata: {
+                                                        ...organizationAndTeamData,
+                                                        repositoryId:
+                                                            repository.id,
                                                         prNumber: pr.number,
-                                                        headSha:
-                                                            reviewedHead ??
-                                                            undefined,
+                                                        reviewedHead,
+                                                        timeoutMs:
+                                                            APPROVAL_FILES_TIMEOUT_MS,
                                                     },
-                                                    pr.provider as PlatformType,
-                                                );
+                                                });
+                                                return;
+                                            }
                                             files = liveFiles?.map((file) => ({
                                                 filename:
                                                     file.filename ?? file.path,
@@ -732,14 +767,39 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     return false;
                 }
                 if (policy.sensitivePaths?.length) {
-                    const files =
-                        await this.codeManagementService.getFilesByPullRequestId(
-                            {
-                                ...codeManagementRequestData,
-                                headSha: currentHeadSha,
-                            },
-                            platformType,
+                    let files: Awaited<
+                        ReturnType<
+                            CodeManagementService['getFilesByPullRequestId']
+                        >
+                    >;
+                    try {
+                        files = await runWithBoundedTimeout(
+                            this.codeManagementService.getFilesByPullRequestId(
+                                {
+                                    ...codeManagementRequestData,
+                                    headSha: currentHeadSha,
+                                },
+                                platformType,
+                            ),
+                            APPROVAL_FILES_TIMEOUT_MS,
+                            'approval sensitive paths files',
                         );
+                    } catch (error) {
+                        this.logger.warn({
+                            message:
+                                'Could not load PR files for sensitive-path approval policy',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: {
+                                ...organizationAndTeamData,
+                                repositoryId: repository?.id,
+                                prNumber,
+                                reviewedHead: currentHeadSha,
+                                timeoutMs: APPROVAL_FILES_TIMEOUT_MS,
+                            },
+                        });
+                        return false;
+                    }
                     if (!files) return false;
                     changedPaths = files
                         .map((file) => file.filename ?? file.path)

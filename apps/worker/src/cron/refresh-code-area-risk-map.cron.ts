@@ -6,7 +6,10 @@ import { IntegrationCategory } from '@libs/core/domain/enums/integration-categor
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import {
+    CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+    IConditionalApprovalAccessService,
+} from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
@@ -36,7 +39,8 @@ export class RefreshCodeAreaRiskMapCron {
         @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
         private readonly refresh: IRefreshCodeAreaRiskMapService,
         private readonly locks: DistributedLockService,
-        private readonly access: ConditionalApprovalAccessService,
+        @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
+        private readonly access: IConditionalApprovalAccessService,
     ) {}
 
     @Cron('0 */2 * * *', {

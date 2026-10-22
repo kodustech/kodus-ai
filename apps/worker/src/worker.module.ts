@@ -28,6 +28,7 @@ import { SelfHostedBeaconModule } from '@libs/telemetry/modules/self-hosted-beac
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
 import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
@@ -106,7 +107,10 @@ export class WorkerModule {
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
                     SelfHostedBeaconCron,
-                    ConditionalApprovalAccessService,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
                     RefreshCodeAreaRiskMapCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],

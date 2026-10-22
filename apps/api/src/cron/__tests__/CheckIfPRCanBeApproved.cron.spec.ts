@@ -942,6 +942,44 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).toHaveBeenCalledTimes(2);
     });
 
+    it('stops approval when the directory file lookup stalls', async () => {
+        jest.useFakeTimers();
+        try {
+            const { cron, deps } = makeCron();
+            deps.parametersService.findOne.mockResolvedValue({
+                team: { uuid: 'team-1' },
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-a',
+                            name: 'Repo A',
+                            directories: [{ path: 'src/auth', configs: {} }],
+                        },
+                    ],
+                },
+            });
+            deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+                [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+            );
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [makeOpenPr(1, 'repo-a')],
+            );
+            deps.codeManagementService.getFilesByPullRequestId.mockReturnValue(
+                new Promise(() => {}),
+            );
+            const shouldApprove = jest.spyOn(cron as any, 'shouldApprovePR');
+
+            const run = cron.handleCron();
+            await jest.advanceTimersByTimeAsync(10_000);
+            await run;
+
+            expect(shouldApprove).not.toHaveBeenCalled();
+            expect(deps.distributedLockService.acquire).toHaveBeenCalled();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it("approves none of a repository's PRs when its config turns approval off", async () => {
         const { cron, deps } = makeCron();
 
