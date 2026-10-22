@@ -691,7 +691,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             name: repository?.name,
                         },
                         prNumber: prNumber,
-                        includeLabels: !!policy.labels?.length,
+                        includeLabels: !!policy?.labels?.length,
                     },
                     platformType,
                 );
@@ -727,7 +727,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     !lastExecution ||
                     !lastAnalyzedCommitSha ||
                     !currentHeadSha ||
-                    (policy.labels?.length && !currentPullRequest?.labels)
+                    (policy?.labels?.length && !currentPullRequest?.labels)
                 ) {
                     return false;
                 }
