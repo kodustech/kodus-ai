@@ -78,5 +78,10 @@
         "type": "custom_agent",
         "name": "Custom Agent",
         "description": "Findings from a review agent your team defined, with its own instructions and scope."
+    },
+    {
+        "type": "duplicate_logic",
+        "name": "Duplicate Logic",
+        "description": "Logic drift between sibling or duplicate functions: one twin performs business operations the other omits or implements inconsistently."
     }
 ]

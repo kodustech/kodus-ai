@@ -19,6 +19,8 @@ export enum LabelType {
     DETERMINISTIC = 'deterministic',
     /** A team-defined custom agent's finding; the agent's own name and color are on the suggestion. */
     CUSTOM_AGENT = 'custom_agent',
+    /** Twin logic drift found by the dedicated duplicate-logic agent. */
+    DUPLICATE_LOGIC = 'duplicate_logic',
 }
 
 enum ShieldColor {
@@ -80,6 +82,8 @@ const getLabelShield = (label: string) => {
             return `${shield}${ShieldColor.INDIGO})`;
         case LabelType.CUSTOM_AGENT:
             return `${shield}${ShieldColor.BLUE})`;
+        case LabelType.DUPLICATE_LOGIC:
+            return `${shield}${ShieldColor.LIGHT_PURPLE})`;
         default:
             return '';
     }

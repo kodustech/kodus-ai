@@ -282,6 +282,7 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
     const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
     const { ReviewOrchestratorService } = lib('code-review/infrastructure/agents/review-orchestrator.service.ts');
     const { GeneralistAgentProvider } = lib('code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
+    const { DuplicateLogicAgentProvider } = lib('code-review/infrastructure/agents/providers/duplicate-logic-agent.provider.ts');
     const { BugAgentProvider } = lib('code-review/infrastructure/agents/providers/bug-agent.provider.ts');
     const { SecurityAgentProvider } = lib('code-review/infrastructure/agents/providers/security-agent.provider.ts');
     const { PerformanceAgentProvider } = lib('code-review/infrastructure/agents/providers/performance-agent.provider.ts');
@@ -302,6 +303,7 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
         // with none runs exactly as before. No MCP manager: no eval team
         // selects plugin tools.
         new CustomAgentProviderFactory(permissionService, {}),
+        agent(DuplicateLogicAgentProvider),
     );
     // No repository record with a ready AST graph: the stage builds the call
     // graph from the checkout (GraphContextService.generateContextLegacy).

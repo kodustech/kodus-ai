@@ -55,12 +55,12 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
 
     protected getAllowedSuggestionLabels(
         input: ReviewAgentInput,
-    ): Array<'bug' | 'security' | 'performance' | 'duplicate_logic'> {
+    ): Array<'bug' | 'security' | 'performance'> {
         if (input.requestedCategories?.length) {
             return input.requestedCategories;
         }
 
-        return ['bug', 'security', 'performance', 'duplicate_logic'];
+        return ['bug', 'security', 'performance'];
     }
 
     protected getCategoryPrompt(): string {

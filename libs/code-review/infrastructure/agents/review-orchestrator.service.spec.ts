@@ -31,13 +31,17 @@ function setup() {
     const security = makeAgent(calls, 'security');
     const performance = makeAgent(calls, 'performance');
     const generalist = makeAgent(calls, 'generalist');
+    const duplicateLogic = makeAgent(calls, 'duplicate_logic');
     const service = new ReviewOrchestratorService(
         bug,
         security,
         performance,
         generalist,
+        undefined,
+        undefined,
+        duplicateLogic,
     );
-    return { service, calls, bug, security, performance, generalist };
+    return { service, calls, bug, security, performance, generalist, duplicateLogic };
 }
 
 const ALL_ON: ReviewOptions = {
@@ -120,6 +124,56 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(security.execute).toHaveBeenCalledTimes(1);
         expect(performance.execute).toHaveBeenCalledTimes(1);
         expect(generalist.execute).not.toHaveBeenCalled();
+    });
+
+    it('runs the dedicated duplicate-logic agent in normal mode too', async () => {
+        const { service, duplicateLogic, generalist, calls } = setup();
+
+        await service.execute(
+            inputFor({ ...ALL_ON, duplicate_logic: true }),
+        );
+
+        expect(duplicateLogic.execute).toHaveBeenCalledTimes(1);
+        expect(generalist.execute).toHaveBeenCalledTimes(1);
+        // The generalist never claims duplicate_logic — otherwise both agents
+        // hunt the same drift and the PR gets duplicate comments.
+        expect(
+            calls.get('generalist')?.requestedCategories,
+        ).not.toContain('duplicate_logic');
+    });
+
+    it('runs the duplicate-logic agent exactly once in deep mode', async () => {
+        const { service, duplicateLogic } = setup();
+
+        await service.execute(
+            inputFor({ ...ALL_ON, duplicate_logic: true }, 'deep'),
+        );
+
+        expect(duplicateLogic.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs the duplicate-logic agent alone when it is the only category', async () => {
+        const { service, duplicateLogic, generalist } = setup();
+
+        await service.execute(
+            inputFor({
+                bug: false,
+                security: false,
+                performance: false,
+                duplicate_logic: true,
+            }),
+        );
+
+        expect(duplicateLogic.execute).toHaveBeenCalledTimes(1);
+        expect(generalist.execute).not.toHaveBeenCalled();
+    });
+
+    it('does not run the duplicate-logic agent when the flag is off', async () => {
+        const { service, duplicateLogic } = setup();
+
+        await service.execute(inputFor(ALL_ON));
+
+        expect(duplicateLogic.execute).not.toHaveBeenCalled();
     });
 
     it('dispatches nothing when every category is disabled', async () => {

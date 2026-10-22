@@ -143,12 +143,13 @@ export class ReviewOrchestratorService {
         private readonly securityAgent: SecurityAgentProvider,
         private readonly performanceAgent: PerformanceAgentProvider,
         private readonly generalistAgent: GeneralistAgentProvider,
-        @Inject(DUPLICATE_LOGIC_AGENT_TOKEN)
-        private readonly duplicateLogicAgent: BaseCodeReviewAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
         @Optional()
         private readonly customAgentFactory?: CustomAgentProviderFactory,
+        @Optional()
+        @Inject(DUPLICATE_LOGIC_AGENT_TOKEN)
+        private readonly duplicateLogicAgent?: BaseCodeReviewAgentProvider,
     ) {}
 
     async execute(input: OrchestratorInput): Promise<OrchestratorOutput> {
@@ -198,8 +199,8 @@ export class ReviewOrchestratorService {
             reviewOptions.bug !== false && 'bug',
             reviewOptions.security !== false && 'security',
             reviewOptions.performance !== false && 'performance',
-            reviewOptions.duplicate_logic === true && 'duplicate_logic',
-        ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
+        ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
+        const duplicateLogicEnabled = reviewOptions.duplicate_logic === true;
 
         if (!builtInAgents) {
             // Only the requested custom agent runs (below).
@@ -225,18 +226,6 @@ export class ReviewOrchestratorService {
                     knowledge: mainKnowledge,
                 });
             }
-            if (enabledCategories.includes('duplicate_logic')) {
-                agentTasks.push({
-                    name: 'duplicate_logic',
-                    provider: this.duplicateLogicAgent,
-                });
-            }
-            if (enabledCategories.includes('duplicate_logic')) {
-                agentTasks.push({
-                    name: 'duplicate_logic',
-                    provider: this.duplicateLogicAgent,
-                });
-            }
         } else if (enabledCategories.length > 0) {
             agentTasks.push({
                 name: 'generalist',
@@ -247,6 +236,15 @@ export class ReviewOrchestratorService {
                             requestedCategories: enabledCategories,
                         }),
                 },
+                knowledge: mainKnowledge,
+            });
+        }
+
+        // Dispatched in every review mode when the flag is on
+        if (builtInAgents && duplicateLogicEnabled && this.duplicateLogicAgent) {
+            agentTasks.push({
+                name: 'duplicate_logic',
+                provider: this.duplicateLogicAgent,
                 knowledge: mainKnowledge,
             });
         }

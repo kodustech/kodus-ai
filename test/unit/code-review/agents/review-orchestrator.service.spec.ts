@@ -117,6 +117,8 @@ describe('ReviewOrchestratorService', () => {
             mockSecurityAgent,
             mockPerformanceAgent,
             mockGeneralistAgent,
+            undefined,
+            undefined,
             mockDuplicateLogicAgent,
         );
     });
