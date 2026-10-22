@@ -34,7 +34,7 @@ const ROOT = path.join(__dirname, '..');
 // the rest. Every WEEKLY_EVALS id is in one part (evals/weekly.spec.ts).
 const PARTS = [
     { part: 'finder', evals: ['finder-recall'] },
-    { part: 'kody-rules', evals: ['kody-rules'] },
+    { part: 'kody-rules', evals: ['kody-rules', 'repo-instructions'] },
     { part: 'funnel', evals: ['funnel-verify', 'funnel-dedup', 'funnel-severity'] },
     { part: 'conversation', evals: ['conversation', 'thread-rule', 'thread-memory', 'reply-addressing'] },
     { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic', 'custom-agents'], tests: true },

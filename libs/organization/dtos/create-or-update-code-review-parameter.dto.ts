@@ -848,24 +848,22 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     isRequestChangesActive?: boolean;
 
-    @IsOptional()
-    @IsBoolean()
-    ideRulesSyncEnabled?: boolean;
-
     /**
-     * Only consulted when `ideRulesSyncEnabled` transitions from `true` to
-     * `false`. Picks what happens to imported rules. See
-     * `IdeSyncDisableAction` for semantics. Defaults to `'keep'` (least
-     * destructive) when callers omit it — historically this transition
-     * silently deleted rules, which surprised users.
+     * Whether reviews read the repository's coding-agent instructions
+     * (CLAUDE.md, AGENTS.md, .cursor/rules, ...) and report changes that break
+     * them. It never turns those files into Kody Rules.
      */
     @IsOptional()
-    @IsIn(['keep', 'pause', 'delete'])
-    ideSyncDisableAction?: 'keep' | 'pause' | 'delete';
+    @IsBoolean()
+    repoInstructionsEnabled?: boolean;
 
     @IsOptional()
     @IsBoolean()
     kodyRulesGeneratorEnabled?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    kodyRulesAutoPauseEnabled?: boolean;
 
     @IsOptional()
     @IsArray()

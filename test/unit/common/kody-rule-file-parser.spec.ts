@@ -198,10 +198,20 @@ describe('isKodyRuleTemplateFile', () => {
         ['rules/naming.txt', false],
         ['rules/.md', true],
         ['xrules/foo.md', false],
-        ['foo/.rules/bar.md', false],
+        ['foo/.rules/bar.md', true],
+        ['.rules/bar.md', true],
         ['.kody/other/file.md', false],
         ['CLAUDE.md', false],
-        ['docs/coding-standards/style.md', false],
+        ['.claude/skills/review/rules/_template.md', false],
+        ['apps/api/.claude/skills/db/rules/naming.md', false],
+        ['docs/coding-standards/style.md', true],
+        ['apps/api/docs/coding-standards/errors.md', true],
+        ['docs/coding-standards', false],
+        // A coding-agent location, even though it ends in `rules/`.
+        ['.agents/rules/architecture.md', false],
+        ['apps/x/.agents/rules/style.md', false],
+        ['.cursor/rules/a.mdc', false],
+        ['src/rules.md', false],
         [null, false],
     ])('%s → %s', (filePath, expected) => {
         expect(isKodyRuleTemplateFile(filePath as any)).toBe(expected);

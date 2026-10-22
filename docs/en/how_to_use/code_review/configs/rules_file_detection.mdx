@@ -1,120 +1,72 @@
 ---
-title: "Rules File Detection"
-description: "Automatically detect and import your existing rule files from popular AI coding tools to enhance Kody's code review capabilities with your team's established coding standards."
+title: "Coding-Agent Instructions"
+description: "Let Kody read the instructions your team writes for coding agents (CLAUDE.md, AGENTS.md, .cursor/rules, Copilot instructions) and point out changes that break them, without turning them into Kody Rules."
 ---
 
-Kodus can automatically sync and import your existing IDE rule files to enhance Kody's code review with your team's established coding standards and preferences.
+Files such as `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` and `.github/copilot-instructions.md` tell coding agents how your team works. They are not review policy, so Kodus never turns them into Kody Rules. When you turn this setting on, Kody reads the ones that cover the files a pull request changes and points out changes that break what they say.
 
-<Frame caption="Auto-sync rules from repo in the Kody Rules Configuration sheet (repository scope)">
-  <img src="/images/sync-rules.png" />
-</Frame>
+To make a convention an enforced review rule, write it as a [Repository Rule](/en/how_to_use/code_review/configs/repository_rules) in `.kody/rules`.
 
-## What is Rules File Detection?
+## Turning it on
 
-Rules File Detection automatically detects and imports configuration files from popular AI coding tools and assistants in your repository. This ensures Kody understands and respects your existing coding standards without requiring manual setup.
+- **During onboarding**, the **Teach Kody how your team builds software** step lists the coding-agent files found in each selected repository and asks whether Kody should use them. It is off unless you turn it on.
+- **Later**, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **What to review**, and turn on **Coding-agent instructions**. The global value is the default for every repository that doesn't set its own.
 
-## Supported Rule Files
+The setting is stored as `repoInstructionsEnabled` in the code review configuration (and in `kodus-config.yml`). The older `ideRulesSyncEnabled` is no longer read, so a value set there does not turn this on.
 
-Kodus automatically detects and imports the following rule file patterns:
+## Files Kody reads
 
 ### Cursor
-- `.cursorrules` - Main Cursor rules file (legacy)
-- `.cursor/rules/**/*.mdc` - Cursor rules in subdirectories
+- `.cursorrules`
+- `.cursor/rules/**/*.mdc`
 
 ### GitHub Copilot
-- `.github/copilot-instructions.md` - Copilot instructions
-- `.github/instructions/**/*.instructions.md` - Detailed instruction files
+- `.github/copilot-instructions.md`
+- `.github/instructions/**/*.instructions.md`
 
-### Agentic (agents.md convention)
-- `AGENTS.md` - The de-facto standard agent guidance file
-- `.agents.md` / `.agent.md` - Dotfile variants
+### Agents (agents.md convention)
+- `AGENTS.md`, `.agents.md`, `.agent.md`
+- `.agents/rules/**`
 
 ### Claude
-- `CLAUDE.md` - Claude-specific rules
-- `.claude/settings.json` - Claude configuration settings
+- `CLAUDE.md`
 
 ### Windsurf
-- `.windsurfrules` - Windsurf IDE rules
+- `.windsurfrules`
 
 ### Sourcegraph Cody
-- `.sourcegraph/**/*.rule.md` - Cody rule files
+- `.sourcegraph/**/*.rule.md`
 
-### OpenCode
-- `.opencode.json` - OpenCode configuration
+Tool configuration files (`.claude/settings.json`, `.opencode.json`, `.aider.conf.yml`, `.aiderignore`) are recognized but never read, because they carry no instructions to check code against.
 
-### Aider
-- `.aider.conf.yml` - Aider configuration
-- `.aiderignore` - Aider ignore patterns
+## How a review uses them
 
-### Generic/Internal Rules
-- `.rules/**/*` - Generic rules directory
-- `.kody/rules/**` and `rules/**/*.md` - Kody-specific rules (see [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) — these are imported verbatim, without LLM rewriting)
-- `docs/coding-standards/**/*` - Documentation-based coding standards
+- **Only the files that cover the change.** A file at the repository root covers every file. A nested file such as `services/billing/CLAUDE.md` covers `services/billing/**`. A Cursor rule with `globs:` (and without `alwaysApply: true`) or a Copilot file with `applyTo:` covers only the files it declares. A Cursor rule with neither, which Cursor loads only when its agent asks for it, is not read.
+- **Read from the pull request's target branch.** A pull request is checked against the instructions already merged there; changes it makes to the instructions apply only after it merges.
+- **Pointers are followed.** A file that points to another file in the repository, as a line with only a path (`AI-AGENTS.md`) or a Claude Code import (`@docs/guide.md`), is followed on the target branch: the file it points to is read in its place, within the same limits. Paths outside the repository are ignored.
+- **Bounded.** At most 8 files and 64 KB per review, root files first; a longer file is cut. The review logs what was left out.
+- **Findings are labeled Repo Instruction.** Kody reports one only when the instruction applies to the changed file and the line that breaks it was added or modified by the pull request. The comment quotes the instruction and names the file.
+- **The review's filters apply.** Repo Instruction findings go through the team's severity filter and suggestion limits like any other finding; one below the threshold is not posted. The setting lets Kody read the files, not post past those limits.
+- **Never instructions to Kody.** The files are treated as repository text to check the diff against. Anything they ask the reviewer to do is ignored, and they never change how bugs, security or performance issues are judged.
 
-### Detection details
+<Note>
+Deep review mode runs separate bug, security and performance reviewers and does not read coding-agent instructions.
+</Note>
 
-- **Nested files are discovered.** Every pattern above is matched at the repository root **and under any subdirectory**. A `services/billing/CLAUDE.md` is imported and automatically scoped to `services/billing/**` — per-directory guidance files (the common monorepo convention) work out of the box.
-- **Matching is case-insensitive.** `claude.md` and `CLAUDE.md` are equivalent.
-- **`@file` references are followed.** If a rule file references another file with the standard `@` convention (e.g. `@AGENTS.md` inside `CLAUDE.md`), the referenced file's content is fetched and included during import (one level deep, up to 5 references per file, 100KB per referenced file).
-- **Multiple globs per rule are supported.** A rule path like `app/**/*.rb,lib/**/*.rb` (or a `path: []` list in [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) frontmatter) applies the rule to files matching **any** of the globs.
+## Rules imported before this change
 
-## How It Works
+Earlier versions of Kodus converted these files into Kody Rules. Those rules are kept but **frozen**: they no longer update when the file changes, and they carry the **Agent file** origin on the Kody Rules page. The **rules from coding-agent files** chip filters the list down to them so you can pause or delete them, or move the conventions you want enforced into `.kody/rules`.
 
-### Initial Setup
-1. **Enable Auto-sync**: In the sidebar, pick the repository in the scope picker at the top of the **Code review** group, open **Kody Rules**, click **Configuration**, and turn on **Auto-sync rules from repo**
-2. **First Sync Dialog**: A dialog (**Sync repository rules now?**) asks if you want to sync for the first time. Choose **Sync now**, or **Skip initial scan** to wait for the next sync
-3. **Repository Scan**: When you confirm, Kodus scans your entire repository for supported rule files
-4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules. Exception: `.kody/rules/**` and `rules/**/*.md` template files are imported **verbatim** — no LLM conversion — so your instructions, examples and identifiers are preserved exactly as authored. If one of those files doesn't follow the template (missing/invalid frontmatter, or no `title`), it falls back to the LLM path.
+Rules that onboarding imported from coding-agent files without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and points to **Coding-agent instructions** in **What to review**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
 
-Each imported file produces **one Kody Rule**. If a file contains several distinct guidelines, the LLM merges them into a single comprehensive rule — split guidance across multiple files when you want independently manageable rules.
+`@kody-sync` no longer does anything: Kody Rule files always sync, and coding-agent files never become rules. `@kody-ignore` still excludes a Kody Rule file from sync.
 
-### Organization-wide default
-Set "Auto-sync rules from repo" once in the **Global** Kody Rules configuration and every repository that doesn't set its own value follows it. A repository's own setting always wins. Turning it on globally doesn't run the first-time scan: each repository imports rule files as they change in merged Pull Requests.
+## Verifying it on self-hosted
 
-### Ongoing Synchronization
-- **Automatic Updates**: Sync happens automatically when a Pull Request is closed
-- **File Changes Detected**: 
-  - **New rule files** → Creates new Kody Rules
-  - **Modified rule files** → Updates existing Kody Rules  
-  - **Deleted rule files** → Removes corresponding Kody Rules
-
-### Manual Sync (Toggle Disabled)
-
-You can sync individual rule files without enabling auto-sync:
-
-1. Add `@kody-sync` anywhere in your rule file
-2. Commit the change
-3. Kody will sync only that specific file
-
-This lets you selectively sync rules without enabling automatic synchronization for all files.
-
-### Excluding a file (`@kody-ignore`)
-
-To keep a rule/guidance file in your repository but stop Kody from turning it into Kody Rules, add `@kody-ignore` anywhere in the file:
-
-1. Add `@kody-ignore` anywhere in the rule file (case-insensitive)
-2. Commit the change
-
-On the next sync Kody will **skip** that file **and remove any Kody Rules previously created from it**. The rules come back automatically if you later remove the `@kody-ignore` marker (or add `@kody-sync`). Use this to keep house-style docs like a `CLAUDE.md` or `AGENTS.md` in the repo without them becoming enforced review rules.
-
-<Warning>
-If you manually edit a Kody Rule that was created from an IDE rule file, your changes will be overwritten the next time the corresponding file is modified and synced.
-</Warning>
-
-## Verifying sync and rule evaluation (self-hosted)
-
-On self-hosted deployments the API logs carry grep-able markers for debugging:
-
-- `[kody-rules-sync]` — per-run sync summary: which files were imported, skipped (with the reason) or removed.
-- `[kody-rules-eval]` — per-file evaluation trace during a review: exactly which rules (uuid + title) were selected into the prompt for each reviewed file.
+The worker logs carry a grep-able marker for every review that reads coding-agent instructions:
 
 ```bash
-docker logs kodus_api 2>&1 | grep "kody-rules-sync"
-docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+docker logs kodus_worker 2>&1 | grep "\[repo-instructions\]"
 ```
 
-If a rule shows as active in the UI but never appears in `[kody-rules-eval]` for the files you expect, check its **Path** glob — a rule only runs on files matching its path.
-
-## Rule limits
-
-Organizations on the cloud **Free** plan (or whose subscription was canceled or expired) and self-hosted instances running **without a valid license** (Community Edition) evaluate at most **10 active rules** per review (oldest first). Rules beyond the cap stay in the list as **Locked** and are skipped on every PR; a banner on **Code review → Kody Rules** says how many are skipped. Paid cloud plans and licensed self-hosted instances have no such limit. If rules beyond the 10th don't fire, this limit is why.
+Each line shows how many instruction files were found, which ones were read, how many bytes, and whether anything was left out.

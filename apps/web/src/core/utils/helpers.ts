@@ -191,13 +191,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "reviewCadence",
         "baseBranches",
         "ignoredTitleKeywords",
-        "ideRulesSyncEnabled",
-        // Action picked in the toggle-off confirmation modal. Without it
-        // here, the stripper would silently drop the field and the
-        // backend would never see whether the user chose keep / pause /
-        // delete — which produced the production bug where rules stayed
-        // ACTIVE after the user chose Delete.
-        "ideSyncDisableAction",
+        "repoInstructionsEnabled",
         "ignorePaths",
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",
@@ -211,6 +205,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "summary",
         "isRequestChangesActive",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
         "kodyLearningExcludedReviewers",
         "kodyKnowledgeApproval",
         "runOnDraft",

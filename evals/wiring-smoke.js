@@ -33,6 +33,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { startFakeLlmServer } = require('./shared/fake-llm-server');
 const { readTrace, uncovered } = require('./shared/engine-files');
+const { DECOY: REPO_INSTRUCTIONS_DECOY } = require('./repo-instructions/cases');
 const { resultProblems, tokensProblems } = require('./shared/eval-result');
 
 const ROOT = path.join(__dirname, '..');
@@ -334,6 +335,37 @@ async function main() {
                 '--cases=typeorm/typeorm#12421::no-any-type',
             ],
         },
+        // The finder reads the target branch's CLAUDE.md through
+        // readRepoInstruction; the verifier receives that instruction.
+        {
+            name: 'repo-instructions',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/repo-instructions/run.js',
+                '--model=eval-fake',
+                '--cases=typeorm/typeorm#12421::no-any-type',
+            ],
+            check: ({ verdictPrompts, finderToolResults }) => {
+                if (
+                    !finderToolResults.some((result) =>
+                        result.includes(REPO_INSTRUCTIONS_DECOY),
+                    )
+                ) {
+                    return 'expected the finder to read the CLAUDE.md through readRepoInstruction, no tool result carried it';
+                }
+                if (
+                    !verdictPrompts.some(
+                        (prompt) =>
+                            prompt.includes('labeled repo_instruction') &&
+                            prompt.includes(REPO_INSTRUCTIONS_DECOY),
+                    )
+                ) {
+                    return `expected a verifier prompt carrying the CLAUDE.md, got ${verdictPrompts.length} verifier prompt(s) without it`;
+                }
+                return null;
+            },
+        },
         {
             name: 'pr-summary',
             result: 'shared',
@@ -420,6 +452,8 @@ async function main() {
                 : step.args;
         const before = server.stats.requests;
         const modelsBefore = { ...server.stats.byModel };
+        const verdictsBefore = server.stats.verdictPrompts.length;
+        const toolResultsBefore = server.stats.finderToolResults.length;
         // eslint-disable-next-line no-await-in-loop
         const { code, timedOut, output, ms } = await run(
             process.execPath,
@@ -437,7 +471,15 @@ async function main() {
             problem = `did not exit within ${STEP_TIMEOUT_MS / 60000} min`;
         else if (code !== 0) problem = `exit ${code}`;
         else if (step.model && calls === 0) problem = 'never reached the model';
-        else if (step.check) problem = step.check({ models });
+        else if (step.check) {
+            problem = step.check({
+                models,
+                verdictPrompts:
+                    server.stats.verdictPrompts.slice(verdictsBefore),
+                finderToolResults:
+                    server.stats.finderToolResults.slice(toolResultsBefore),
+            });
+        }
         if (!problem && step.result) problem = resultProblem(step, resultFile);
         results.push({ step, problem, calls, ms, output });
         console.log(

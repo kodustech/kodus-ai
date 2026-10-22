@@ -55,14 +55,10 @@ export const KodyRuleItem = ({
     onAnyChange,
     showSuggestionsButton = false,
     selection,
-    syncEnabledForRepo,
 }: {
     rule: KodyRuleWithInheritanceDetails;
     onAnyChange: () => void;
     showSuggestionsButton?: boolean;
-    /** Repo's `ideRulesSyncEnabled`; forwarded to OriginBadge so it can
-     *  show the @kody-sync / Orphan maintenance badge only when off. */
-    syncEnabledForRepo?: boolean;
     /** Optional bulk-selection wiring. When omitted the row renders
      *  without a checkbox (legacy / read-only views). When the rule
      *  isn't eligible (inherited / no uuid), pass `eligible: false`. */
@@ -198,10 +194,7 @@ export const KodyRuleItem = ({
                             />
                         )}
 
-                        <OriginBadge
-                            rule={rule}
-                            syncEnabledForRepo={syncEnabledForRepo}
-                        />
+                        <OriginBadge rule={rule} />
 
                         {isLockedByPlan ? (
                             <KodyRulesLimitPopover limit={10} ruleTitle={rule.title}>

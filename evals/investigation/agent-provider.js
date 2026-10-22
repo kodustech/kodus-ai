@@ -77,7 +77,9 @@ function reviewOptionsFromEnv() {
 // member writes them (stored by production's write, shared/review-stage.js
 // teamStore), and the review options and prompt overrides it saved. A run's
 // `--team-config` (run-recall.js, shared/team-config.js) is saved over the
-// case's own keys, as a team saving those keys would.
+// case's own keys, as a team saving those keys would: "Use coding-agent
+// instructions in reviews" is one of them (evals/repo-instructions/team-config.json).
+// The instruction files a case gives are the repository's (prOf), on either way.
 function teamOf(caseData, teamConfig = null) {
     if (process.env.RECALL_HEAVY === '1') {
         throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
@@ -96,6 +98,18 @@ function teamOf(caseData, teamConfig = null) {
         memories: memories.map((m) => ({ title: m.title, rule: m.rule, path: m.path ?? null })),
         codeReviewConfig: Object.keys(configs).length ? { configs, repositories: [] } : null,
     };
+}
+
+// The coding-agent instruction files the case's target branch holds, as
+// { path: text }: the recorded branch (targetBranchFiles: its instruction
+// files and the files they point to, from RECALL_REPO_INSTRUCTIONS), else the
+// collected list (the repo-instructions eval's cases). Production's stage
+// selects and reads them.
+function instructionFilesOf(caseData) {
+    const recorded = parseMaybeJson(caseData.targetBranchFiles);
+    if (recorded && Object.keys(recorded).length) return recorded;
+    const files = parseMaybeJson(caseData.repoInstructions)?.files || [];
+    return Object.fromEntries(files.map((f) => [f.path, f.content]));
 }
 
 // The PR as the platform returns it: the adapter output recorded for a real PR
@@ -119,6 +133,7 @@ function prOf(caseData) {
         commits: parseMaybeJson(caseData.prCommits) || [],
         repoFiles,
         repoBase: repoFiles ? repoBase : undefined,
+        targetBranchFiles: instructionFilesOf(caseData),
     };
 }
 
@@ -148,8 +163,20 @@ function combineLoops(loops) {
         coverage: results.map((r) => r.coverage),
         anomalies: results.map((r) => r.anomalies),
         verification: results.map((r) => r.verification),
+        droppedByVerify: results.flatMap((r) => r.droppedByVerify || []),
         toolCalls: results.flatMap((r) => r.toolCalls || []),
     };
+}
+
+// What the verifier refuted, so a missed known bug can be told apart: never
+// reported, or reported and refuted.
+function refutedFindings(agentResult) {
+    return (agentResult.droppedByVerify || []).map((f) => ({
+        path: f.relevantFile,
+        startLine: f.relevantLinesStart ?? null,
+        endLine: f.relevantLinesEnd ?? null,
+        description: f.suggestionContent || '',
+    }));
 }
 
 function agentRunFailure(agentResult) {
@@ -237,6 +264,7 @@ class InvestigationAgentProvider {
                     coverage: agentResult.coverage,
                     anomalies: agentResult.anomalies,
                     verification: agentResult.verification,
+                    droppedByVerify: refutedFindings(agentResult),
                     toolCalls: (agentResult.toolCalls || []).map((call) => ({ tool: call.toolName || call.tool, args: call.args || {} })),
                     production: {
                         route: route.route,
@@ -286,4 +314,4 @@ class InvestigationAgentProvider {
 
 module.exports = InvestigationAgentProvider;
 // For the specs: how a case reaches production's review.
-module.exports.internals = { resolveRoute, evalPermissionService, reviewOptionsFromEnv, combineLoops, teamOf, prOf, NotAProductionRoute };
+module.exports.internals = { resolveRoute, evalPermissionService, reviewOptionsFromEnv, combineLoops, refutedFindings, teamOf, prOf, NotAProductionRoute };

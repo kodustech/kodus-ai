@@ -205,6 +205,36 @@ const STAGES = [
         },
     },
     {
+        id: 'repo-instructions',
+        name: 'Agent instructions',
+        short: "Checks the repo's coding-agent instructions",
+        group: 'The agents, side by side',
+        does: "Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.",
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which files govern the change, the read tool, the quote check',
+                specs: [
+                    'libs/code-review/infrastructure/agents/collaborators/repo-instructions.spec.ts',
+                    'libs/code-review/infrastructure/agents/adapters/repo-instruction-tool.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-with-verify.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
+        ],
+        eval: {
+            path: 'evals/repo-instructions',
+            metric: 'of violation lines the review posts',
+            sets: {
+                controlled: 'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
+                full: 'every such PR (14)',
+            },
+            nightly: 'shared',
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+        },
+    },
+    {
         id: 'parse',
         name: 'Output parsing',
         short: "Turns the finder's output into findings",

@@ -19,6 +19,12 @@
  *                                        this public repository (customer code)
  *
  * An unknown set name fails: it never measures the default set instead.
+ *
+ * RECALL_REPO_INSTRUCTIONS=<file.json> puts on each case's target branch the
+ * coding-agent instruction files recorded for it ({ [caseId]: { repoInstructions,
+ * targetBranchFiles } }). The review reads them only when the team turns the
+ * setting on (--team-config=evals/repo-instructions/team-config.json). Cases with
+ * no instruction files run without, like a repository that has none.
  */
 const fs = require('fs');
 const path = require('path');
@@ -117,6 +123,16 @@ const CASE_SETS = {
     full: FULL_CASES,
 };
 
+function loadRepoInstructions() {
+    const file = process.env.RECALL_REPO_INSTRUCTIONS;
+    if (!file) return null;
+    try {
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (err) {
+        throw new Error(`RECALL_REPO_INSTRUCTIONS: cannot read ${file}: ${err.message}`);
+    }
+}
+
 // The sets of their own: each folder of sets/ holding at least one dataset.
 function namedSets(dir = SETS_DIR) {
     if (!fs.existsSync(dir)) return [];
@@ -149,6 +165,7 @@ function setFiles(setName, dir = SETS_DIR) {
 }
 
 module.exports = async () => {
+    const instructionsByCase = loadRepoInstructions();
     const setName = process.env.RECALL_SET || 'pr';
     const { files, ids } = setFiles(setName);
     // A set of its own, `full`, or RECALL_ALL: every dataset it reads.
@@ -184,9 +201,16 @@ module.exports = async () => {
               : selectedSet.includes(caseId);
         if (!include) continue;
 
+        const recorded = instructionsByCase?.[caseId];
+        const repoInstructions = recorded?.repoInstructions;
+        // targetBranchFiles: every instruction file on the target branch and
+        // every file one points to, for production's stage to select and read.
+        const targetBranchFiles = recorded?.targetBranchFiles;
         tests.push({
             description: `recall: ${caseId}`,
-            vars: c.vars,
+            vars: repoInstructions?.files?.length
+                ? { ...c.vars, repoInstructions, ...(targetBranchFiles ? { targetBranchFiles } : {}) }
+                : c.vars,
             assert: [{ type: 'javascript', value: 'file://recall-assertion.js' }],
         });
     }

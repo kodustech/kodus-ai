@@ -18,7 +18,9 @@ const suggestionSchema = z.object({
     revisesSuggestionId: z.string().optional(),
     relevantFile: z.string(),
     language: z.string().optional(),
-    label: z.enum(['bug', 'security', 'performance']).optional(),
+    label: z
+        .enum(['bug', 'security', 'performance', 'repo_instruction'])
+        .optional(),
     suggestionContent: z.string(),
     existingCode: z.string(),
     improvedCode: z.string(),

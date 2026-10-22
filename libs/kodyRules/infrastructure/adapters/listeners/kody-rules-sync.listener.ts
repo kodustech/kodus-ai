@@ -17,10 +17,6 @@ import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-cl
 import { KodyRulesSyncService } from '../services/kodyRulesSync.service';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    IDE_RULES_SYNC_DISABLED_EVENT,
-    IdeRulesSyncDisabledEvent,
-} from '@libs/kodyRules/domain/events/ide-rules-sync.events';
 
 // Advisory-lock TTL: 5 min covers the worst observed sync (large repo +
 // global scan + LLM per file). If a process crashes mid-sync the lock is
@@ -181,58 +177,6 @@ export class KodyRulesSyncListener {
             // pinned connection is already back in the pool by that point,
             // and the TTL (or session teardown) frees the advisory lock.
             await lock.release().catch(() => undefined);
-        }
-    }
-
-    @OnEvent(IDE_RULES_SYNC_DISABLED_EVENT)
-    async handleIdeRulesSyncDisabled(
-        event: IdeRulesSyncDisabledEvent,
-    ): Promise<void> {
-        if (!event?.repositoryIds?.length) {
-            this.logger.warn({
-                message:
-                    'Received ide-rules-sync.disabled event without repositories, skipping',
-                context: KodyRulesSyncListener.name,
-                metadata: { event },
-            });
-            return;
-        }
-
-        // Action defaults to 'keep' (least destructive) when missing — matches
-        // the use-case behaviour for callers that don't pass it explicitly.
-        const action = event.action ?? 'keep';
-
-        this.logger.log({
-            message: `Handling ide-rules-sync.disabled event with action=${action}`,
-            context: KodyRulesSyncListener.name,
-            metadata: {
-                repositoryIds: event.repositoryIds,
-                organizationAndTeamData: event.organizationAndTeamData,
-                action,
-            },
-        });
-
-        switch (action) {
-            case 'keep':
-                // No-op: the user only stopped automatic re-imports. Rules
-                // stay ACTIVE.
-                return;
-            case 'pause':
-                await this.kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories(
-                    {
-                        organizationAndTeamData: event.organizationAndTeamData,
-                        repositoryIds: event.repositoryIds,
-                    },
-                );
-                return;
-            case 'delete':
-                await this.kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories(
-                    {
-                        organizationAndTeamData: event.organizationAndTeamData,
-                        repositoryIds: event.repositoryIds,
-                    },
-                );
-                return;
         }
     }
 

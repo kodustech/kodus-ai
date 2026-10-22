@@ -70,8 +70,9 @@ function createService(opts: {
         {} as any, // contextReferenceDetectionService
     );
 
-    jest.spyOn(service as any, 'convertFileToKodyRules').mockResolvedValue([
-        {
+    jest.spyOn(service as any, 'templateFileToRule').mockResolvedValue({
+        kind: 'rule',
+        rule: {
             title: 'Global Rule',
             rule: fileContent,
             path: '**/*',
@@ -79,7 +80,7 @@ function createService(opts: {
             scope: 'file',
             examples: [],
         },
-    ]);
+    });
 
     return {
         service,
@@ -95,7 +96,7 @@ const globalSyncedRule = (over: Partial<any>) => ({
     repositoryId: 'global',
     origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
     sourceRepositoryId: 'repo-A',
-    sourcePath: 'CLAUDE.md',
+    sourcePath: '.kody/rules/standards.md',
     status: KodyRulesStatus.ACTIVE,
     createdAt: '2026-01-01T00:00:00.000Z',
     ...over,
@@ -166,14 +167,14 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
         const rules = [
             globalSyncedRule({
                 uuid: 'a1',
-                sourcePath: 'CLAUDE.md',
+                sourcePath: '.kody/rules/standards.md',
                 lastContentHash: 'sha1',
             }),
         ];
         const { service, kodyRulesService, deleteRuleInOrganizationByIdKodyRulesUseCase } =
             createService({
                 rules,
-                allFiles: [{ path: 'CLAUDE.md', sha: 'sha1' }],
+                allFiles: [{ path: '.kody/rules/standards.md', sha: 'sha1' }],
             });
 
         await service.syncRepositoryGlobal({
@@ -191,13 +192,13 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
         const rules = [
             globalSyncedRule({
                 uuid: 'a1',
-                sourcePath: 'CLAUDE.md',
+                sourcePath: '.kody/rules/standards.md',
                 lastContentHash: 'sha1',
             }),
         ];
         const { service, kodyRulesService } = createService({
             rules,
-            allFiles: [{ path: 'CLAUDE.md', sha: 'sha2' }],
+            allFiles: [{ path: '.kody/rules/standards.md', sha: 'sha2' }],
         });
 
         await service.syncRepositoryGlobal({
@@ -213,13 +214,13 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
             sourceRepositoryId: 'repo-A',
             lastContentHash: 'sha2',
             origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
-            sourcePath: 'CLAUDE.md',
+            sourcePath: '.kody/rules/standards.md',
         });
     });
 
     it('reconciles deletions: soft-deletes a global rule whose source file is gone at HEAD', async () => {
         const rules = [
-            globalSyncedRule({ uuid: 'gone', sourcePath: 'REMOVED.md' }),
+            globalSyncedRule({ uuid: 'gone', sourcePath: '.kody/rules/removed.md' }),
         ];
         const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
             createService({
@@ -244,7 +245,7 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
             globalSyncedRule({
                 uuid: 'b1',
                 sourceRepositoryId: 'repo-B',
-                sourcePath: 'OTHER.md',
+                sourcePath: '.kody/rules/other.md',
             }),
         ];
         const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
@@ -264,14 +265,14 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
         const rules = [
             globalSyncedRule({
                 uuid: 'a1',
-                sourcePath: 'CLAUDE.md',
+                sourcePath: '.kody/rules/standards.md',
                 lastContentHash: 'sha1',
                 status: KodyRulesStatus.REJECTED,
             }),
         ];
         const { service, kodyRulesService } = createService({
             rules,
-            allFiles: [{ path: 'CLAUDE.md', sha: 'sha2' }],
+            allFiles: [{ path: '.kody/rules/standards.md', sha: 'sha2' }],
         });
 
         await service.syncRepositoryGlobal({

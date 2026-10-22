@@ -48,6 +48,10 @@ import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import {
+    quotesRepoInstruction,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type {
     Verdict,
@@ -82,7 +86,7 @@ const HEAVY_RESAMPLE_EXTRA_RUNS = 2;
 export interface FinderSuggestion {
     relevantFile: string;
     language?: string;
-    label?: 'bug' | 'security' | 'performance';
+    label?: 'bug' | 'security' | 'performance' | 'repo_instruction';
     suggestionContent: string;
     existingCode: string;
     improvedCode: string;
@@ -118,7 +122,12 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                     language: { type: 'string' },
                     label: {
                         type: 'string',
-                        enum: ['bug', 'security', 'performance'],
+                        enum: [
+                            'bug',
+                            'security',
+                            'performance',
+                            'repo_instruction',
+                        ],
                     },
                     suggestionContent: { type: 'string' },
                     existingCode: { type: 'string' },
@@ -637,6 +646,9 @@ export interface RunFinderWithVerifyParams {
      *  (issue #1313). Forwarded to the LlmVerifier, which filters by file per
      *  candidate — see LlmVerifierParams. */
     previousDecisions?: PrDecisionRecord[];
+    /** Forwarded to the LlmVerifier as evidence for `repo_instruction`
+     *  candidates. */
+    repoInstructions?: RepoInstructionsContext;
     /** Second pass for convention findings (custom agents with linked guides).
      *  When set, `kind: 'convention'` findings take the quote check and the
      *  convention verifier instead of HV2. Absent → every finding takes HV2,
@@ -1004,6 +1016,7 @@ export async function verifyFindings(
         | 'agentName'
         | 'usageRunName'
         | 'previousDecisions'
+        | 'repoInstructions'
         | 'laneFocus'
     >,
     suggestions: FinderSuggestion[],
@@ -1026,6 +1039,7 @@ export async function verifyFindings(
         agentName: params.agentName,
         usageRunName: params.usageRunName,
         previousDecisions: params.previousDecisions,
+        repoInstructions: params.repoInstructions,
         laneFocus: params.laneFocus,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
@@ -1060,6 +1074,7 @@ export async function verifyFindings(
             agentName: params.agentName,
             usageRunName: params.usageRunName,
             previousDecisions: params.previousDecisions,
+            repoInstructions: params.repoInstructions,
             laneFocus: params.laneFocus,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
@@ -1082,6 +1097,45 @@ export async function verifyFindings(
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];
         gateUsage = { ...fullVerifier.usage };
+    }
+
+    // A repo_instruction finding must quote the instructions merged on the
+    // target branch. The verifier is told so but does not always hold to it
+    // (it kept quotes of a rule the PR itself adds to CLAUDE.md), so the quote
+    // is checked here.
+    const unquoted = kept.filter(
+        (f) =>
+            f.label === 'repo_instruction' &&
+            !quotesRepoInstruction(
+                f.suggestionContent,
+                params.repoInstructions,
+            ),
+    );
+    if (unquoted.length > 0) {
+        const unquotedSet = new Set(unquoted);
+        kept = kept.filter((f) => !unquotedSet.has(f));
+        dropped = [
+            ...dropped,
+            ...unquoted.map((candidate) => {
+                const verdict: Verdict = {
+                    ...verdictByFinding.get(candidate),
+                    keep: false,
+                    rationale:
+                        'The quoted instruction is not in the target-branch instruction files.',
+                };
+                verdictByFinding.set(candidate, verdict);
+                return { candidate, verdict };
+            }),
+        ];
+        finderLogger.log({
+            message: `Dropped ${unquoted.length} repo_instruction finding(s) whose quote is not in the target-branch instructions`,
+            context: 'finder.repo-instruction-quote',
+            metadata: {
+                ...params.telemetryMetadata,
+                agentName: params.agentName,
+                files: unquoted.map((f) => f.relevantFile),
+            },
+        });
     }
 
     return {
