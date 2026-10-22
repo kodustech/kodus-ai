@@ -13,6 +13,7 @@ import {
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -2213,6 +2214,79 @@ export class BitbucketCloudService implements Omit<
                 serviceName: 'getIncrementalChangedFilesSinceLastCommit',
                 error,
                 metadata: { params },
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const bitbucketAuthDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!bitbucketAuthDetails) return null;
+
+            const repo = await this.getRepoById(
+                organizationAndTeamData,
+                repository.id,
+            );
+            const bitbucketAPI =
+                this.instanceBitbucketApi(bitbucketAuthDetails);
+
+            const pr = await bitbucketAPI.pullrequests
+                .get({
+                    pull_request_id: prNumber,
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                })
+                .then((res) => res.data);
+            const destination = pr.destination?.commit?.hash;
+            if (!destination) {
+                throw new Error('PR has no destination commit');
+            }
+
+            // `head..destination` is a topic diff: from their merge base to
+            // `head`, the same spec the PR's own diff is read with.
+            const diff = await bitbucketAPI.commits
+                .getDiff({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    spec: `${headSha}..${destination}`,
+                })
+                .then((res) => res.data as string);
+
+            return splitUnifiedDiff(diff).map(
+                (file) =>
+                    ({
+                        ...file,
+                        changes: file.additions + file.deletions,
+                    }) as FileChange,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: BitbucketCloudService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
             });
             return null;
         }

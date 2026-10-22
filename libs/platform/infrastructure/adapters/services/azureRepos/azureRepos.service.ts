@@ -1487,6 +1487,104 @@ export class AzureReposService implements Omit<
         }
     }
 
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+            if (!projectId) {
+                throw new Error('Repository project not found');
+            }
+
+            // Every push is an iteration that keeps its own source commit and
+            // merge base, so the earlier head is still readable after a rebase.
+            const iterations = await this.azureReposRequestHelper.getIterations(
+                {
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                },
+            );
+            const iteration = [...(iterations ?? [])]
+                .reverse()
+                .find((it) => it?.sourceRefCommit?.commitId === headSha);
+            const baseCommitId =
+                iteration?.commonRefCommit?.commitId ??
+                iteration?.targetRefCommit?.commitId;
+            if (!iteration || !baseCommitId) {
+                throw new Error('No PR iteration had this head');
+            }
+
+            const changes = await this.azureReposRequestHelper.getChanges({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                pullRequestId: prNumber,
+                iterationId: iteration.id,
+            });
+            const entries = (changes ?? []).filter(
+                (change) => change.item?.path || change?.originalPath,
+            );
+
+            const limit = pLimit(AzureReposService.FILE_CONTENT_CONCURRENCY);
+            const files = await Promise.all(
+                entries.map((change) =>
+                    limit(() =>
+                        this._generateFileDiffForAzure({
+                            orgName,
+                            token,
+                            projectId,
+                            repositoryId: repository.id,
+                            filePath: change.item?.path || change?.originalPath,
+                            baseCommitId,
+                            targetCommitId: headSha,
+                            changeType: change.changeType,
+                        }),
+                    ),
+                ),
+            );
+            if (files.some((file) => !file)) {
+                throw new Error('Some file diffs could not be built');
+            }
+
+            return files as FileChange[];
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: AzureReposService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
+            });
+            return null;
+        }
+    }
+
     async getChangedFilesSinceLastCommit(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; project: { id: string } };

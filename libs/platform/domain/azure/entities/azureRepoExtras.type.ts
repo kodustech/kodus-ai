@@ -152,6 +152,9 @@ export interface AzureRepoIteration {
     id?: number | string;
     createdDate?: string;
     lastUpdatedDate?: string;
+    sourceRefCommit?: { commitId: string };
+    targetRefCommit?: { commitId: string };
+    commonRefCommit?: { commitId: string };
 }
 
 /**

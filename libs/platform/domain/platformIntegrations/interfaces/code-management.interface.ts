@@ -1,6 +1,9 @@
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
@@ -177,6 +180,18 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
+    /**
+     * The PR's diff as it stood when `headSha` was its head: from the merge
+     * base of `baseBranch` and `headSha` to `headSha`. Null when the host
+     * can't give it whole (commit gone, response capped, no such API).
+     */
+    getPullRequestFilesAtCommit(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; project?: { id: string } };
+        prNumber: number;
+        baseBranch: string;
+        headSha: string;
+    }): Promise<FileChange[] | null>;
     createReviewComment(params: any): Promise<any | null>;
     createCommentInPullRequest(params): Promise<any[] | null>;
     getRepositoryContentFile(params: any): Promise<any | null>;
