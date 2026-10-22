@@ -1400,6 +1400,7 @@ export class CodeManagementService implements ICodeManagementService {
                 number?: number;
                 branch?: string;
                 dateField?: 'created' | 'updated';
+                maxResults?: number;
             };
         },
         type?: PlatformType,

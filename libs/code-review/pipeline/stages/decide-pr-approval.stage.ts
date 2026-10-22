@@ -152,10 +152,16 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         if (policy.assessRisk && !sensitive && headSha) {
             let areaMap;
             try {
-                areaMap = await this.areaMaps.read(
+                const storedMap = await this.areaMaps.read(
                     organizationId,
                     repository.id,
                 );
+                // A partial backfill can overstate safety in untouched areas.
+                areaMap =
+                    storedMap?.coverage.scanComplete &&
+                    !storedMap.coverage.sampled
+                        ? storedMap
+                        : null;
             } catch (error) {
                 this.logger.warn({
                     message: 'Area map unavailable during approval assessment',

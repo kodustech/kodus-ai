@@ -42,6 +42,9 @@ CodeAreaHistoryPrSchema.index(
 
 @Schema({ collection: 'codeAreaHistorySync', timestamps: true })
 export class CodeAreaHistorySyncModel {
+    @Prop({ type: Number, default: 2 })
+    version: number;
+
     @Prop({ type: String, required: true })
     organizationId: string;
 
@@ -68,6 +71,9 @@ export class CodeAreaHistorySyncModel {
 
     @Prop({ type: Number, default: 0 })
     discoveredMergedPrs: number;
+
+    @Prop({ type: Boolean, default: false })
+    sampled: boolean;
 
     @Prop({ type: Boolean, default: false })
     complete: boolean;

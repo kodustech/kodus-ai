@@ -113,7 +113,7 @@ it('judges an in-scope PR with the review model and records the map version', as
     areaMaps.read.mockResolvedValue({
         version: 'map-1',
         files: [],
-        coverage: { scannedPrs: 0 },
+        coverage: { scannedPrs: 1, scanComplete: true },
     });
     const result = await stage.execute(
         context({
@@ -128,6 +128,49 @@ it('judges an in-scope PR with the review model and records the map version', as
         areaMapVersion: 'map-1',
     });
     expect(LLM.run).toHaveBeenCalledTimes(1);
+});
+
+it('does not pass an unfinished history scan into the risk judgment', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'medium',
+        reason: 'The change needs human review.',
+    });
+    areaMaps.read.mockResolvedValue({
+        version: 'partial-map',
+        files: [{ path: 'src/auth/login.ts', linkedBugFixPrs: 0 }],
+        coverage: { scannedPrs: 1, scanComplete: false },
+    });
+
+    const result = await stage.execute(context({ approvalRiskActive: true }));
+
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.approvalRisk?.areaMapVersion).toBeUndefined();
+    const request = (LLM.run as jest.Mock).mock.calls[0][0];
+    expect(JSON.parse(request.user)).toMatchObject({
+        historyCoverage: null,
+        historyWindow: null,
+    });
+});
+
+it('does not pass capped historical coverage into the risk judgment', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Small isolated change.',
+    });
+    areaMaps.read.mockResolvedValue({
+        version: 'sampled-map',
+        files: [{ path: 'src/auth/login.ts', linkedBugFixPrs: 0 }],
+        coverage: { scannedPrs: 100, scanComplete: true, sampled: true },
+    });
+
+    const result = await stage.execute(context({ approvalRiskActive: true }));
+
+    expect(result.approvalRisk?.areaMapVersion).toBeUndefined();
+    const request = (LLM.run as jest.Mock).mock.calls[0][0];
+    expect(JSON.parse(request.user)).toMatchObject({
+        historyCoverage: null,
+        historyWindow: null,
+    });
 });
 
 it('vetoes a sensitive path before paying for a model call', async () => {

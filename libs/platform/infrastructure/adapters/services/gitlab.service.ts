@@ -4540,6 +4540,7 @@ export class GitlabService implements Omit<
             startDate: string;
             endDate: string;
             dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<any[]> {
         try {
@@ -4557,6 +4558,17 @@ export class GitlabService implements Omit<
 
             const mergeRequests = await gitlabAPI.MergeRequests.all({
                 projectId: repository.id,
+                ...(filters?.maxResults
+                    ? {
+                          perPage: filters.maxResults,
+                          maxPages: 1,
+                          orderBy:
+                              filters.dateField === 'updated'
+                                  ? ('updated_at' as const)
+                                  : ('created_at' as const),
+                          sort: 'desc' as const,
+                      }
+                    : {}),
                 ...(filters?.dateField === 'updated'
                     ? {
                           updatedAfter: filters.startDate,

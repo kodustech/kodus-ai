@@ -28,8 +28,11 @@ import {
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
 const WINDOW_DAYS = 7;
-const LOOKBACK_DAYS = 365;
-const MAX_PRS_PER_BATCH = 20;
+const INITIAL_LOOKBACK_DAYS = 30;
+const RETENTION_DAYS = 365;
+const SYNC_VERSION = 2;
+const MAX_PRS_PER_BATCH = 10;
+const MAX_PRS_PER_WINDOW = 100;
 const MAX_STRUCTURE_FILES = 60;
 const MAX_FILES_PER_DIRECTORY = 3;
 const STRUCTURE_FETCH_CONCURRENCY = 5;
@@ -40,6 +43,7 @@ const CLOSING_REFERENCE =
 const BUG_LABEL = /\b(?:bug|defect|regression)\b/i;
 
 interface SyncState {
+    version: number;
     source: string;
     windowStart: string;
     windowEnd: string;
@@ -47,6 +51,7 @@ interface SyncState {
     scanFloor: string;
     offset: number;
     discoveredMergedPrs: number;
+    sampled: boolean;
     complete: boolean;
 }
 
@@ -120,33 +125,36 @@ export class RefreshCodeAreaRiskMapService {
             );
         }
         const key = { organizationId, repositoryId: repository.id };
+        let pruneBefore: string | null = null;
         let state = (await this.sync.findOne(key).lean().exec()) as
             (SyncState & typeof key) | null;
-        if (!state) {
+        if (!state || state.version !== SYNC_VERSION) {
             const now = new Date();
+            const windowStart = new Date(
+                now.getTime() - INITIAL_LOOKBACK_DAYS * DAY_MS,
+            ).toISOString();
+            if (state) {
+                // Older previews began a year-long backfill. Reset that cursor
+                // and its records so the bounded bootstrap is actually applied.
+                await this.history.deleteMany(key);
+            }
             state = {
                 ...key,
+                version: SYNC_VERSION,
                 source:
                     (await this.codeManagement.getTypeIntegration(
                         organizationAndTeamData,
                     )) ?? 'unknown',
-                windowStart: new Date(
-                    now.getTime() - LOOKBACK_DAYS * DAY_MS,
-                ).toISOString(),
+                windowStart,
                 windowEnd: now.toISOString(),
                 cursorEnd: now.toISOString(),
-                scanFloor: new Date(
-                    now.getTime() - LOOKBACK_DAYS * DAY_MS,
-                ).toISOString(),
+                scanFloor: windowStart,
                 offset: 0,
                 discoveredMergedPrs: 0,
+                sampled: false,
                 complete: false,
             };
-            await this.sync.updateOne(
-                key,
-                { $setOnInsert: state },
-                { upsert: true },
-            );
+            await this.sync.updateOne(key, { $set: state }, { upsert: true });
         }
         if (
             ![PlatformType.GITHUB, PlatformType.GITLAB].includes(
@@ -182,8 +190,18 @@ export class RefreshCodeAreaRiskMapService {
                     cursorEnd: state.cursorEnd,
                 };
             }
+            const nextWindowStart = new Date(
+                Math.max(
+                    Date.parse(state.windowStart),
+                    now.getTime() - RETENTION_DAYS * DAY_MS,
+                ),
+            ).toISOString();
+            if (nextWindowStart !== state.windowStart) {
+                pruneBefore = nextWindowStart;
+            }
             state = {
                 ...state,
+                windowStart: nextWindowStart,
                 scanFloor: state.windowEnd,
                 windowEnd: now.toISOString(),
                 cursorEnd: now.toISOString(),
@@ -207,6 +225,7 @@ export class RefreshCodeAreaRiskMapService {
                         startDate: new Date(rangeStart).toISOString(),
                         endDate: new Date(rangeEnd).toISOString(),
                         dateField: 'updated',
+                        maxResults: MAX_PRS_PER_WINDOW,
                     },
                 }),
             { maxAttempts: 4, baseDelayMs: 2_000, maxDelayMs: 30_000 },
@@ -248,7 +267,8 @@ export class RefreshCodeAreaRiskMapService {
                           maxDelayMs: 30_000,
                       },
                   );
-            if (!pr?.merged_at) continue;
+            const mergedAt = pr?.merged_at ? Date.parse(pr.merged_at) : NaN;
+            if (!Number.isFinite(mergedAt)) continue;
             const files = await with429Retry(
                 () =>
                     this.codeManagement.getFilesByPullRequestId({
@@ -271,7 +291,7 @@ export class RefreshCodeAreaRiskMapService {
                 number,
                 url: pr.prURL ?? '',
                 title: pr.title ?? '',
-                mergedAt: pr.merged_at,
+                mergedAt: new Date(mergedAt).toISOString(),
                 linkedBugIssues,
                 files: Array.isArray(files)
                     ? files
@@ -296,11 +316,18 @@ export class RefreshCodeAreaRiskMapService {
                 ? new Date(rangeStart).toISOString()
                 : state.cursorEnd,
             discoveredMergedPrs: state.discoveredMergedPrs + processed,
+            sampled: state.sampled || listed.length >= MAX_PRS_PER_WINDOW,
             complete:
                 finishedRange &&
                 rangeStart <= Date.parse(state.scanFloor ?? state.windowStart),
         };
         await this.sync.updateOne(key, { $set: nextState });
+        if (pruneBefore) {
+            await this.history.deleteMany({
+                ...key,
+                mergedAt: { $lt: pruneBefore },
+            });
+        }
         const records = await this.history.find(key).lean().exec();
         const snapshot = buildCodeAreaRiskMap({
             source: state.source,
@@ -309,6 +336,7 @@ export class RefreshCodeAreaRiskMapService {
             refreshedAt: new Date().toISOString(),
             discoveredMergedPrs: nextState.discoveredMergedPrs,
             scanComplete: nextState.complete,
+            sampled: nextState.sampled,
             pullRequests: records,
         });
         const previous = await this.maps.read(organizationId, repository.id);

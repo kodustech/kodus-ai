@@ -54,6 +54,7 @@ type AreaMapResponse = {
         coverage: {
             scannedPrs: number;
             scanComplete: boolean;
+            sampled?: boolean;
             prsWithIssueSupport: number;
         };
         structureCoverage?: {
@@ -437,6 +438,11 @@ export function CodeAreasTab({
                                 · History scan in progress
                             </span>
                         )}
+                        {coverage?.sampled && (
+                            <span className="text-text-secondary">
+                                · Sampled history (up to 100 PRs per week)
+                            </span>
+                        )}
                     </div>
 
                     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
@@ -696,6 +702,11 @@ export function CodeAreasTab({
                                 data was available for{" "}
                                 {coverage?.prsWithIssueSupport ?? 0} of those
                                 PRs.
+                            </p>
+                            <p>
+                                The first scan covers the previous 30 days.
+                                New merged PRs extend the history, up to one
+                                year.
                             </p>
                             <p>
                                 Structural checks analyzed{" "}

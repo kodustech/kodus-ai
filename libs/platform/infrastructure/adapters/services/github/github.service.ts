@@ -6972,6 +6972,7 @@ This is an experimental feature that generates committable changes. Review the d
             startDate: string;
             endDate: string;
             dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<PullRequest[]> {
         try {
@@ -6992,6 +6993,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const dateField =
                 filters?.dateField === 'updated' ? 'updated_at' : 'created_at';
+            let collected = 0;
             // The list comes back sorted by the selected date desc, so once we hit a PR
             // older than startDate every remaining page is older too — stop
             // paginating instead of pulling the whole repo history into memory
@@ -7021,6 +7023,14 @@ This is an experimental feature that generates committable changes. Review the d
                             continue;
                         }
                         inWindow.push(pr);
+                        collected += 1;
+                        if (
+                            filters?.maxResults &&
+                            collected >= filters.maxResults
+                        ) {
+                            done();
+                            break;
+                        }
                     }
                     return inWindow;
                 },

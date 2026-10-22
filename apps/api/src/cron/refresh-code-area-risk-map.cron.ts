@@ -6,6 +6,7 @@ import { IntegrationCategory } from '@libs/core/domain/enums/integration-categor
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
 import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
@@ -20,7 +21,7 @@ import {
     REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
-const MAX_REPOSITORIES_PER_RUN = 20;
+const MAX_REPOSITORIES_PER_RUN = 5;
 const RUN_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
@@ -35,6 +36,7 @@ export class RefreshCodeAreaRiskMapCron {
         @Inject(REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN)
         private readonly refresh: IRefreshCodeAreaRiskMapService,
         private readonly locks: DistributedLockService,
+        private readonly access: ConditionalApprovalAccessService,
     ) {}
 
     @Cron('0 */2 * * *', {
@@ -65,6 +67,14 @@ export class RefreshCodeAreaRiskMapCron {
             for (const team of teams ?? []) {
                 const organizationId = team.organization?.uuid;
                 if (!organizationId) continue;
+                if (
+                    !(await this.access.isEnabled({
+                        organizationId,
+                        teamId: team.uuid,
+                    }))
+                ) {
+                    continue;
+                }
                 const config = await this.parameters.findOne({
                     configKey: ParametersKey.CODE_REVIEW_CONFIG,
                     team: { uuid: team.uuid },
