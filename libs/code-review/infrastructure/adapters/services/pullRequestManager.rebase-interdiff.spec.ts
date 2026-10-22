@@ -51,7 +51,13 @@ describe('PullRequestHandlerService.getRebaseInterdiff', () => {
             baseBranch: 'main',
             headSha: 'old-head',
         });
-        expect(result?.files).toEqual([after]);
+        // `-c` was already removed before the rebase; only `+e` is new.
+        expect(result?.files).toEqual([
+            expect.objectContaining({
+                filename: 'src/edited.ts',
+                patch: '@@ -5,0 +5 @@\n+e',
+            }),
+        ]);
         expect(result?.unchangedFiles).toEqual(['src/same.ts']);
     });
 

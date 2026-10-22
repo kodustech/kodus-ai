@@ -88,6 +88,68 @@ describe('rebaseInterdiff', () => {
         expect(result.hunksDropped).toBe(1);
     });
 
+    it('shows lines already reviewed as context, like a normal push, when new lines join their block', () => {
+        const before = hunk(
+            '@@ -7,3 +7,9 @@',
+            ' }',
+            '+',
+            '+function reserve() {',
+            '+    take();',
+            '+}',
+        );
+        const after = hunk(
+            '@@ -7,3 +7,13 @@ export function available()',
+            ' }',
+            '+',
+            '+function reserve() {',
+            '+    take();',
+            '+}',
+            '+',
+            '+function release() {',
+            '+    give();',
+            '+}',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/inventory.ts', after)],
+            [file('src/inventory.ts', before)],
+        );
+
+        expect(result.files).toHaveLength(1);
+        expect(result.files[0].patch).toBe(
+            hunk(
+                '@@ -7,5 +7,13 @@ export function available()',
+                ' }',
+                ' ',
+                ' function reserve() {',
+                '     take();',
+                ' }',
+                '+',
+                '+function release() {',
+                '+    give();',
+                '+}',
+            ),
+        );
+        expect(result.files[0].additions).toBe(4);
+        expect(result.files[0].deletions).toBe(0);
+        expect(result.partialFiles).toEqual(['src/inventory.ts']);
+    });
+
+    it('drops a removed line that was already reviewed from a hunk that stays', () => {
+        const before = hunk('@@ -1,3 +1,3 @@', ' a', '-old', '+mid', ' c');
+        const after = hunk('@@ -1,3 +1,3 @@', ' a', '-old', '+new', ' c');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.files[0].patch).toBe(
+            hunk('@@ -1,2 +1,3 @@', ' a', '+new', ' c'),
+        );
+        expect(result.files[0].deletions).toBe(0);
+    });
+
     it('keeps a file the PR did not touch before the rebase', () => {
         const added = file('src/new.ts', hunkB, { status: 'added' });
 

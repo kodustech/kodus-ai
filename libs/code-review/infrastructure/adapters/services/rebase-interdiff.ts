@@ -1,94 +1,109 @@
+import { diffArrays } from 'diff';
+
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /**
  * #2037: after a rebase the last reviewed commit is no longer in the PR, so
  * there is no `compare(last...head)` to say what is new. This gives the same
- * answer from the PR diff before and after the rebase: a hunk of the current
- * diff is already reviewed when each of its changes (a run of `-`/`+` lines)
- * was in the previous diff of the same file. Line numbers and context lines
- * are not compared, because the rebase moves both.
+ * answer from the PR diff before and after the rebase. A changed line (`-` or
+ * `+`) of the current diff is already reviewed when the previous diff of the
+ * same file has it in the same order (their longest common subsequence). Line
+ * numbers and context lines are not compared, because the rebase moves both.
+ *
+ * What is left reads like a normal push: an already reviewed `+` line stays
+ * as context, an already reviewed `-` line is left out, and a hunk with
+ * nothing new is dropped.
  */
 export interface RebaseInterdiffResult {
-    /** What is left to review: changed files, each with only its new hunks. */
+    /** What is left to review: changed files, each with only its new lines. */
     files: FileChange[];
-    /** Files whose every hunk was already reviewed. */
+    /** Files with nothing new. */
     unchangedFiles: string[];
-    /** Files that kept some hunks and lost others. */
+    /** Files that kept some of their diff and lost the rest. */
     partialFiles: string[];
     hunksKept: number;
     hunksDropped: number;
 }
 
 interface Hunk {
-    text: string;
-    changes: string[];
-    additions: number;
-    deletions: number;
+    header: string;
+    lines: string[];
 }
 
-const HUNK_HEADER = /^@@ /;
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+(?:,\d+)?) @@(.*)$/;
+
+const isChange = (line: string) => line.startsWith('+') || line.startsWith('-');
 
 function splitHunks(patch: string): Hunk[] {
     const hunks: Hunk[] = [];
-    let lines: string[] | null = null;
-    const close = () => {
-        if (lines) hunks.push(toHunk(lines));
-    };
+    let current: Hunk | null = null;
     for (const raw of patch.split('\n')) {
         const line = raw.replace(/\r$/, '');
         if (HUNK_HEADER.test(line)) {
-            close();
-            lines = [line];
-        } else if (lines) {
-            lines.push(line);
+            current = { header: line, lines: [] };
+            hunks.push(current);
+        } else if (current) {
+            current.lines.push(line);
         }
     }
-    close();
+    // Trailing empty lines come from the patch's final newline, not the hunk.
+    for (const hunk of hunks) {
+        while (hunk.lines.at(-1) === '') hunk.lines.pop();
+    }
     return hunks;
 }
 
-function toHunk(lines: string[]): Hunk {
-    const changes: string[] = [];
-    let run: string[] = [];
-    let additions = 0;
-    let deletions = 0;
-    const endRun = () => {
-        if (run.length) changes.push(run.join('\n'));
-        run = [];
-    };
-    for (const line of lines.slice(1)) {
-        if (line.startsWith('+')) additions++;
-        if (line.startsWith('-')) deletions++;
-        if (line.startsWith('+') || line.startsWith('-')) run.push(line);
-        else if (!line.startsWith('\\')) endRun();
+const changesOf = (hunks: Hunk[]) =>
+    hunks.flatMap((hunk) => hunk.lines.filter(isChange));
+
+/** For each change line of `current`, in order: was it in `previous`? */
+function reviewedFlags(current: string[], previous: string[]): boolean[] {
+    const flags: boolean[] = [];
+    for (const part of diffArrays(previous, current)) {
+        if (part.removed) continue;
+        for (let i = 0; i < part.value.length; i++) flags.push(!part.added);
     }
-    endRun();
-    // Trailing empty lines come from the patch's final newline, not the hunk.
-    while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-    return { text: lines.join('\n'), changes, additions, deletions };
+    return flags;
 }
 
-function countOf(hunks: Hunk[]): Map<string, number> {
-    const counts = new Map<string, number>();
-    for (const hunk of hunks) {
-        for (const change of hunk.changes) {
-            counts.set(change, (counts.get(change) ?? 0) + 1);
+/** The hunk with reviewed lines turned to context (`+`) or left out (`-`);
+ *  null when nothing in it is new. */
+function narrow(hunk: Hunk, reviewed: () => boolean): Hunk | null {
+    const lines: string[] = [];
+    let anyNew = false;
+    let narrowed = false;
+    for (const line of hunk.lines) {
+        if (!isChange(line)) {
+            lines.push(line);
+        } else if (!reviewed()) {
+            anyNew = true;
+            lines.push(line);
+        } else {
+            narrowed = true;
+            if (line.startsWith('+')) lines.push(` ${line.slice(1)}`);
         }
     }
-    return counts;
+    if (!anyNew) return null;
+    if (!narrowed) return hunk;
+
+    const [, oldStart, newRange, rest] = hunk.header.match(HUNK_HEADER)!;
+    const oldCount = lines.filter(
+        (l) => !l.startsWith('+') && !l.startsWith('\\'),
+    ).length;
+    return {
+        header: `@@ -${oldStart},${oldCount} +${newRange} @@${rest}`,
+        lines,
+    };
 }
 
-/** Takes the hunk's changes out of `available` only when all of them are there. */
-function consume(hunk: Hunk, available: Map<string, number>): boolean {
-    const needed = countOf([hunk]);
-    for (const [change, n] of needed) {
-        if ((available.get(change) ?? 0) < n) return false;
-    }
-    for (const [change, n] of needed) {
-        available.set(change, available.get(change)! - n);
-    }
-    return true;
-}
+const render = (hunks: Hunk[]) =>
+    hunks.map((h) => [h.header, ...h.lines].join('\n')).join('\n');
+
+const count = (hunks: Hunk[], marker: '+' | '-') =>
+    hunks.reduce(
+        (n, h) => n + h.lines.filter((l) => l.startsWith(marker)).length,
+        0,
+    );
 
 export function rebaseInterdiff(
     current: FileChange[],
@@ -115,22 +130,29 @@ export function rebaseInterdiff(
             continue;
         }
 
-        const available = countOf(splitHunks(before.patch));
-        const kept = hunks.filter((hunk) => !consume(hunk, available));
+        const flags = reviewedFlags(
+            changesOf(hunks),
+            changesOf(splitHunks(before.patch)),
+        );
+        let next = 0;
+        const reviewed = () => flags[next++];
+        const kept = hunks
+            .map((hunk) => narrow(hunk, reviewed))
+            .filter((hunk): hunk is Hunk => !!hunk);
         result.hunksKept += kept.length;
         result.hunksDropped += hunks.length - kept.length;
 
         if (!kept.length) {
             result.unchangedFiles.push(file.filename);
-        } else if (kept.length === hunks.length) {
+        } else if (!flags.some(Boolean)) {
             result.files.push(file);
         } else {
-            const additions = kept.reduce((n, h) => n + h.additions, 0);
-            const deletions = kept.reduce((n, h) => n + h.deletions, 0);
+            const additions = count(kept, '+');
+            const deletions = count(kept, '-');
             result.partialFiles.push(file.filename);
             result.files.push({
                 ...file,
-                patch: kept.map((h) => h.text).join('\n'),
+                patch: render(kept),
                 additions,
                 deletions,
                 changes: additions + deletions,
