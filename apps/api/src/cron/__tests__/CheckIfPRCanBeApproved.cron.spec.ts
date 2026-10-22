@@ -328,6 +328,46 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it('holds conditional approval when the provider status is unavailable', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalDecision: { kind: 'approve' },
+                },
+            },
+        );
+        deps.codeManagementService.getPullRequest = jest
+            .fn()
+            .mockResolvedValue({
+                head: { sha: 'same-sha' },
+                labels: ['ready'],
+                user: { login: 'alice' },
+            });
+        deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+            null,
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalLabels: ['ready'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
     it.each([
         ['head changes', { head: { sha: 'new-sha' }, labels: ['ready'] }],
         ['scope label is removed', { head: { sha: 'same-sha' }, labels: [] }],
@@ -335,6 +375,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         'holds approval if the %s before the provider call',
         async (_, latest) => {
             const { cron, deps } = makeCron();
+            deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+                PullRequestReviewState.PENDING,
+            );
             deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
                 {
                     dataExecution: {
@@ -457,6 +500,49 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
+    });
+
+    it('ignores a stale risk assessment when risk approval is disabled', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalRisk: {
+                        level: 'low',
+                        reason: 'Looks safe.',
+                        reviewedHeadSha: 'old-sha',
+                    },
+                },
+            },
+        );
+        deps.codeManagementService.getPullRequest = jest
+            .fn()
+            .mockResolvedValue({
+                head: { sha: 'same-sha' },
+                user: { login: 'alice' },
+            });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 1, isResolved: true }],
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalRiskActive: false,
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(true);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it('rechecks sensitive paths against live files before cron approval', async () => {

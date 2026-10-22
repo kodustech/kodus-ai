@@ -243,7 +243,7 @@ async function main(): Promise<void> {
                 await startPreviewTrial(token, teamId);
             } catch (error: any) {
                 console.warn(
-                    `seed:preview: billing trial unavailable (${error?.message ?? error})`,
+                    `seed:preview: billing trial unavailable for team ${teamId} (timeout 10000 ms): ${error?.message ?? error}`,
                 );
             }
         }

@@ -4,6 +4,7 @@ import type { FileChange } from '@libs/core/infrastructure/config/types/general/
 import type { CodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
+import { createLogger } from '@libs/core/log/logger';
 import type { ApprovalRiskAssessment } from './approval-decision';
 
 export const approvalRiskOutputSchema = z.object({
@@ -13,6 +14,7 @@ export const approvalRiskOutputSchema = z.object({
 
 const MAX_DIFF_CHARS = 50_000;
 const MAX_AREA_FILES = 100;
+const logger = createLogger('AssessApprovalRisk');
 
 /** The production risk judgment; eval runners call this same entry point. */
 export async function assessApprovalRisk(input: {
@@ -130,7 +132,17 @@ export async function assessApprovalRisk(input: {
             reviewedHeadSha: input.headSha,
             areaMapVersion: input.areaMap?.version,
         };
-    } catch {
+    } catch (error) {
+        logger.warn({
+            message: 'Approval risk assessment failed',
+            context: 'approval-risk',
+            error,
+            metadata: {
+                organizationId: input.organizationId,
+                prNumber: input.prNumber,
+                headSha: input.headSha,
+            },
+        });
         return {
             level: 'unknown',
             reason: 'Kody could not assess risk for this PR.',

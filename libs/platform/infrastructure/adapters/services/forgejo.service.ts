@@ -905,6 +905,7 @@ export class ForgejoService implements Omit<
             | Repositories
             | { id: string; name: string; default_branch?: string },
         organizationAndTeamData?: OrganizationAndTeamData,
+        labels?: string[],
     ): PullRequest {
         const state = this.mapPullRequestState(pr);
         const repoWithDefaults = {
@@ -925,9 +926,7 @@ export class ForgejoService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pr.title ?? '',
             body: pr.body ?? '',
-            labels: ((pr as { labels?: Array<{ name?: string }> }).labels ?? [])
-                .map((label) => label.name)
-                .filter((label): label is string => !!label),
+            labels,
             state,
             prURL: pr.html_url ?? '',
             repository: repositoryFullName,
@@ -1861,10 +1860,29 @@ export class ForgejoService implements Omit<
 
             if (!result.data) return null;
 
-            return this.transformPullRequest(result.data, {
-                id: params.repository.id || '',
-                name: params.repository.name!,
+            // Forgejo exposes labels on the issue endpoint. The SDK's PR
+            // response does not declare them, so avoid treating a missing
+            // field on that response as an empty label list.
+            const issue = await issueGetIssue({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    index: params.prNumber,
+                },
             });
+            const labels = issue.data?.labels
+                ?.map((label) => label.name)
+                .filter((name): name is string => typeof name === 'string');
+            return this.transformPullRequest(
+                result.data,
+                {
+                    id: params.repository.id || '',
+                    name: params.repository.name!,
+                },
+                undefined,
+                labels,
+            );
         } catch (error) {
             if ((error as any)?.status === 404) {
                 return null;

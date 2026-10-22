@@ -45,12 +45,16 @@ export function analyzeCodeStructure(
         true,
         kind,
     );
-    const diagnostics = (
-        source as ts.SourceFile & {
-            parseDiagnostics?: readonly ts.Diagnostic[];
-        }
-    ).parseDiagnostics;
-    if (diagnostics?.length) return null;
+    const diagnostics = ts.transpileModule(content, {
+        fileName: path,
+        reportDiagnostics: true,
+    }).diagnostics;
+    if (
+        diagnostics?.some(
+            (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+        )
+    )
+        return null;
 
     let functions = 0;
     let functionsNeedingAttention = 0;

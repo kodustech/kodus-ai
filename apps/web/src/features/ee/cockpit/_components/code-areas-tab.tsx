@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import {
     Select,
     SelectContent,
@@ -13,6 +12,7 @@ import {
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { CODE_MANAGEMENT_API_PATHS } from "@services/codeManagement/types";
 import { ArrowUpRight, FolderGit2, Search } from "lucide-react";
+import { useQueryState } from "nuqs";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFetch } from "src/core/utils/reactQuery";
 
@@ -193,8 +193,10 @@ export function CodeAreasTab({
     selectedRepository: string | null;
 }) {
     const { teamId } = useSelectedTeamId();
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
+    const [areaRepositoryId, setAreaRepositoryId] = useQueryState(
+        COCKPIT_PARAM.areaRepository,
+        { history: "replace", shallow: true },
+    );
     const { data: repositories = [], isLoading: repositoriesLoading } =
         useGetSelectedRepositories(teamId);
     const [localRepositoryId, setLocalRepositoryId] = useState("");
@@ -211,24 +213,14 @@ export function CodeAreasTab({
         : null;
     const repository =
         repositories.find(
-            (repo) =>
-                repo.id ===
-                (searchParams.get(COCKPIT_PARAM.areaRepository) ||
-                    localRepositoryId),
+            (repo) => repo.id === (areaRepositoryId || localRepositoryId),
         ) ??
         globalRepository ??
         repositories[0];
-    const areaRepositoryId = searchParams.get(COCKPIT_PARAM.areaRepository);
     useEffect(() => {
         if (!repository?.id || areaRepositoryId === repository.id) return;
-        const params = new URLSearchParams(window.location.search);
-        params.set(COCKPIT_PARAM.areaRepository, repository.id);
-        window.history.replaceState(
-            null,
-            "",
-            pathname + "?" + params.toString(),
-        );
-    }, [areaRepositoryId, pathname, repository?.id]);
+        setAreaRepositoryId(repository.id);
+    }, [areaRepositoryId, repository?.id, setAreaRepositoryId]);
 
     const { data, isLoading, isError } = useFetch<AreaMapResponse>(
         CODE_MANAGEMENT_API_PATHS.GET_AREA_RISK_MAP,
@@ -377,15 +369,7 @@ export function CodeAreasTab({
                                 setLocalRepositoryId(id);
                                 setSelectedPath("");
                                 setQuery("");
-                                const params = new URLSearchParams(
-                                    window.location.search,
-                                );
-                                params.set(COCKPIT_PARAM.areaRepository, id);
-                                window.history.replaceState(
-                                    null,
-                                    "",
-                                    pathname + "?" + params.toString(),
-                                );
+                                setAreaRepositoryId(id);
                             }}>
                             <SelectTrigger
                                 size="sm"

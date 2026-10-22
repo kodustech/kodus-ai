@@ -81,38 +81,32 @@ export function ApprovalPolicySettings() {
 
     return (
         <div>
-            <section className="border-card-lv3/60 grid border-b lg:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="border-card-lv3/60 bg-card-lv2/30 border-b px-5 py-5 sm:px-6 lg:border-r lg:border-b-0">
-                    <span className="text-text-tertiary font-mono text-[11px] tracking-widest uppercase">
-                        01 / Eligibility
-                    </span>
-                    <h3 className="text-text-primary mt-2 text-sm font-semibold">
-                        Which PRs qualify?
+            <section className="border-card-lv3/60 border-b px-5 py-6 sm:px-6">
+                <div className="mb-5">
+                    <h3 className="text-text-primary text-base font-semibold">
+                        Which PRs can be auto-approved?
                     </h3>
-                    <p className="text-text-secondary mt-1 text-xs leading-5">
-                        When both filters are set, a PR must match a label and
-                        an author.
+                    <p className="text-text-secondary mt-1 text-sm leading-6">
+                        After a clean review, all PRs are eligible by default.
+                        Add labels or authors to limit this. If you set both, a
+                        PR must match both.
                     </p>
                 </div>
-                <div className="min-w-0 px-5 py-5 sm:px-6 sm:py-6">
-                    <EligibilityFields />
-                </div>
+                <EligibilityFields />
             </section>
 
-            <section className="grid lg:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="border-card-lv3/60 bg-card-lv2/30 border-b px-5 py-5 sm:px-6 lg:border-r lg:border-b-0">
-                    <span className="text-text-tertiary font-mono text-[11px] tracking-widest uppercase">
-                        02 / Guardrails
-                    </span>
-                    <h3 className="text-text-primary mt-2 text-sm font-semibold">
-                        When does a person decide?
+            <section className="px-5 py-6 sm:px-6">
+                <div className="mb-5">
+                    <h3 className="text-text-primary text-base font-semibold">
+                        When is human approval required?
                     </h3>
-                    <p className="text-text-secondary mt-1 text-xs leading-5">
-                        These checks can hold approval even after a clean
-                        review.
+                    <p className="text-text-secondary mt-1 text-sm leading-6">
+                        Files matching a path below always need a person. Turn
+                        on risk assessment to also hold PRs Kody cannot judge
+                        low risk.
                     </p>
                 </div>
-                <div className="flex min-w-0 flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6">
+                <div className="flex min-w-0 flex-col gap-5">
                     <Controller
                         name="approvalSensitivePaths.value"
                         control={form.control}

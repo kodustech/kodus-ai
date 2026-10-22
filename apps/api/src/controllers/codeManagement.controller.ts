@@ -42,6 +42,7 @@ import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
 import { GetRepositoryTreeByDirectoryDto } from '@libs/platform/dtos/get-repository-tree-by-directory.dto';
 import { WebhookStatusQueryDto } from '../dtos/webhook-status-query.dto';
+import { AreaRiskMapQueryDto } from '../dtos/area-risk-map-query.dto';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -110,13 +111,11 @@ export class CodeManagementController {
     )
     @ApiOperation({ summary: 'Read historical code-area risk evidence' })
     @ApiQuery({ name: 'repositoryId', required: true })
-    public async getAreaRiskMap(@Query('repositoryId') repositoryId: string) {
+    public async getAreaRiskMap(@Query() query: AreaRiskMapQueryDto) {
         const organizationId = this.request?.user?.organization?.uuid;
-        if (!organizationId || !repositoryId) {
-            throw new BadRequestException(
-                'organizationId and repositoryId required',
-            );
-        }
+        if (!organizationId)
+            throw new BadRequestException('organizationId required');
+        const { repositoryId } = query;
         const [map, sync] = await Promise.all([
             this.codeAreaRiskMaps.read(organizationId, repositoryId),
             this.codeAreaRiskRefresh.readStatus(organizationId, repositoryId),

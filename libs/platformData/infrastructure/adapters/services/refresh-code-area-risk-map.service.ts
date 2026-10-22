@@ -1,10 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createLogger } from '@libs/core/log/logger';
 import { createHash } from 'node:crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import type { Model } from 'mongoose';
 
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
@@ -31,6 +33,7 @@ const MAX_PRS_PER_BATCH = 20;
 const MAX_STRUCTURE_FILES = 60;
 const MAX_FILES_PER_DIRECTORY = 3;
 const STRUCTURE_FETCH_CONCURRENCY = 5;
+const STRUCTURE_FETCH_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOSING_REFERENCE =
     /\b(?:fix(?:es)?|clos(?:e|es)|resolv(?:e|es))\s+#(\d+)\b/gi;
@@ -49,6 +52,7 @@ interface SyncState {
 
 @Injectable()
 export class RefreshCodeAreaRiskMapService {
+    private readonly logger = createLogger(RefreshCodeAreaRiskMapService.name);
     constructor(
         private readonly codeManagement: CodeManagementService,
         @Inject(CODE_AREA_RISK_MAP_SERVICE_TOKEN)
@@ -366,19 +370,21 @@ export class RefreshCodeAreaRiskMapService {
         const eligible = snapshot.files.filter((area) =>
             supportsCodeStructureAnalysis(area.path),
         );
+        const filesByDirectory = new Map<string, typeof eligible>();
+        for (const file of eligible) {
+            const slash = file.path.lastIndexOf('/');
+            const parent = slash < 0 ? '.' : file.path.slice(0, slash);
+            const files = filesByDirectory.get(parent) ?? [];
+            files.push(file);
+            filesByDirectory.set(parent, files);
+        }
         const selected = new Set<string>();
         for (const area of [...snapshot.directDirectories].sort(
             (a, b) => b.changedPrs - a.changedPrs,
         )) {
-            const candidates = eligible
-                .filter((file) =>
-                    area.path === '.'
-                        ? !file.path.includes('/')
-                        : file.path.startsWith(`${area.path}/`) &&
-                          file.path.slice(area.path.length + 1).indexOf('/') <
-                              0,
-                )
-                .sort((a, b) => b.changedPrs - a.changedPrs);
+            const candidates = [
+                ...(filesByDirectory.get(area.path) ?? []),
+            ].sort((a, b) => b.changedPrs - a.changedPrs);
             for (const file of candidates.slice(0, MAX_FILES_PER_DIRECTORY)) {
                 if (selected.size >= MAX_STRUCTURE_FILES) break;
                 selected.add(file.path);
@@ -392,7 +398,21 @@ export class RefreshCodeAreaRiskMapService {
         if (selected.size) {
             const branch = await this.codeManagement
                 .getDefaultBranch({ organizationAndTeamData, repository })
-                .catch(() => null);
+                .catch((error) => {
+                    this.logger.warn({
+                        message:
+                            'Could not load default branch for structure sampling',
+                        context: RefreshCodeAreaRiskMapService.name,
+                        error,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                            teamId: organizationAndTeamData.teamId,
+                            repositoryId: repository.id,
+                        },
+                    });
+                    return null;
+                });
             if (typeof branch === 'string' && branch) {
                 const paths = [...selected];
                 for (
@@ -404,18 +424,50 @@ export class RefreshCodeAreaRiskMapService {
                         paths
                             .slice(offset, offset + STRUCTURE_FETCH_CONCURRENCY)
                             .map(async (path) => {
-                                const response = await this.codeManagement
-                                    .getRepositoryContentFile({
-                                        organizationAndTeamData,
-                                        repository,
-                                        file: { filename: path },
-                                        pullRequest: {
-                                            head: { ref: branch },
-                                            base: { ref: branch },
+                                const response = await runWithBoundedTimeout(
+                                    this.codeManagement.getRepositoryContentFile(
+                                        {
+                                            organizationAndTeamData,
+                                            repository,
+                                            file: { filename: path },
+                                            pullRequest: {
+                                                head: { ref: branch },
+                                                base: { ref: branch },
+                                            },
+                                            suppressNotFoundLogs: true,
                                         },
-                                        suppressNotFoundLogs: true,
-                                    })
-                                    .catch(() => null);
+                                    ),
+                                    STRUCTURE_FETCH_TIMEOUT_MS,
+                                    'structure file fetch',
+                                ).catch((error) => {
+                                    const failure = error as {
+                                        status?: number;
+                                        response?: { status?: number };
+                                    };
+                                    if (
+                                        (failure?.status ??
+                                            failure?.response?.status) !== 404
+                                    ) {
+                                        this.logger.warn({
+                                            message:
+                                                'Could not load file for structure sampling',
+                                            context:
+                                                RefreshCodeAreaRiskMapService.name,
+                                            error,
+                                            metadata: {
+                                                organizationId:
+                                                    organizationAndTeamData.organizationId,
+                                                teamId: organizationAndTeamData.teamId,
+                                                repositoryId: repository.id,
+                                                branch,
+                                                path,
+                                                timeoutMs:
+                                                    STRUCTURE_FETCH_TIMEOUT_MS,
+                                            },
+                                        });
+                                    }
+                                    return null;
+                                });
                                 const encoded = response?.data?.content;
                                 const encoding = response?.data?.encoding;
                                 if (typeof encoded !== 'string') return;
@@ -440,12 +492,7 @@ export class RefreshCodeAreaRiskMapService {
             }
         }
         snapshot.directDirectories = snapshot.directDirectories.map((area) => {
-            const files = eligible.filter((file) => {
-                const parent = file.path.includes('/')
-                    ? file.path.slice(0, file.path.lastIndexOf('/'))
-                    : '.';
-                return parent === area.path;
-            });
+            const files = filesByDirectory.get(area.path) ?? [];
             const measured = files
                 .map((file) => results.get(file.path))
                 .filter((result) => result !== undefined);

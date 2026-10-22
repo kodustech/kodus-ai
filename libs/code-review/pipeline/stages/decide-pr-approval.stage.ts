@@ -89,15 +89,19 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
 
         // Incremental reviews may contain only files changed since Kody's last
         // run. Approval and team path vetoes apply to the entire current PR.
-        const fullFiles = await this.codeManagement.getFilesByPullRequestId({
-            organizationAndTeamData,
-            repository,
-            prNumber: pullRequest.number,
-            headSha,
-        });
+        const needsFiles = policy.assessRisk || !!policy.sensitivePaths?.length;
+        const fullFiles = needsFiles
+            ? await this.codeManagement.getFilesByPullRequestId({
+                  organizationAndTeamData,
+                  repository,
+                  prNumber: pullRequest.number,
+                  headSha,
+              })
+            : [];
         if (
-            !fullFiles?.length ||
-            fullFiles.some((file) => typeof file.filename !== 'string')
+            needsFiles &&
+            (!fullFiles?.length ||
+                fullFiles.some((file) => typeof file.filename !== 'string'))
         ) {
             return this.updateContext(context, (draft) => {
                 draft.approvalDecision = {

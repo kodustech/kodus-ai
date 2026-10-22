@@ -74,6 +74,12 @@ it('preserves the old path without extra calls when no policy is configured', as
     expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
 });
 
+it('does not fetch file content for a label-only policy', async () => {
+    const result = await stage.execute(context({ approvalLabels: ['ready'] }));
+    expect(result.approvalDecision?.kind).toBe('approve');
+    expect(codeManagement.getFilesByPullRequestId).not.toHaveBeenCalled();
+});
+
 it('judges an in-scope PR with the review model and records the map version', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',

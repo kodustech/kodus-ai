@@ -44,6 +44,7 @@ import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -93,6 +94,7 @@ const TEAM_CONCURRENCY = 10;
 // trade is wrong. 15 keeps the git-provider work wide while the DB
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
+const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -833,21 +835,40 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
 
                 if (conditionalDecision) {
-                    const before =
-                        await this.codeManagementService.getReviewStatusByPullRequest(
+                    const before = await runWithBoundedTimeout(
+                        this.codeManagementService.getReviewStatusByPullRequest(
                             codeManagementRequestData,
-                        );
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval provider-status lookup',
+                    );
+                    if (before == null) {
+                        this.logger.warn({
+                            message: 'Approval provider status unavailable',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository?.id,
+                                prNumber,
+                                timeoutMs: FINAL_PROVIDER_TIMEOUT_MS,
+                            },
+                        });
+                        return false;
+                    }
                     if (before === PullRequestReviewState.APPROVED) {
                         return false;
                     }
                     // Comments and provider status checks can take time. A new
                     // commit or a removed scope label invalidates the decision
                     // made at the start of this cron pass.
-                    const latestPullRequest =
-                        await this.codeManagementService.getPullRequest(
+                    const latestPullRequest = await runWithBoundedTimeout(
+                        this.codeManagementService.getPullRequest(
                             codeManagementRequestData,
                             platformType,
-                        );
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval final PR refresh',
+                    );
                     const latestHeadSha =
                         latestPullRequest?.head?.sha ||
                         (latestPullRequest as any)?.headSha ||

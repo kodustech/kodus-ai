@@ -2,8 +2,13 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 
-import { buildCodeAreaRiskMap } from '../../libs/platformData/domain/code-area-risk/build-area-risk-map';
-import { mongoMigrationClient } from '../../libs/core/infrastructure/database/mongo/mongo-migration-client';
+import { buildCodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
+import { mongoMigrationClient } from '@libs/core/infrastructure/database/mongo/mongo-migration-client';
+
+const FETCH_TIMEOUT_MS = 10_000;
+let operation = 'initialize';
+let activeRepositoryId = '';
+let activeOrganizationId = '';
 
 const api = (
     process.env.PREVIEW_SEED_API_URL ?? 'http://localhost:3001'
@@ -14,16 +19,22 @@ if (!password)
 
 async function main() {
     const repositoryId = `preview-area-map-smoke-${randomUUID()}`;
+    activeRepositoryId = repositoryId;
     const path = `/code-management/area-risk-map?repositoryId=${repositoryId}`;
-    const unauthenticated = await fetch(`${api}${path}`);
+    operation = 'unauthenticated area-map read';
+    const unauthenticated = await fetch(`${api}${path}`, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (unauthenticated.status !== 401) {
         throw new Error(
             `Area-map route without auth returned ${unauthenticated.status}`,
         );
     }
 
+    operation = 'preview login';
     const login = await fetch(`${api}/auth/login`, {
         method: 'POST',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             email: process.env.PREVIEW_SEED_EMAIL ?? 'preview@kodus.io',
@@ -45,6 +56,7 @@ async function main() {
     if (typeof organizationId !== 'string') {
         throw new Error('Preview token has no organization');
     }
+    activeOrganizationId = organizationId;
 
     const now = Date.now();
     const snapshot = buildCodeAreaRiskMap({
@@ -66,13 +78,17 @@ async function main() {
             },
         ],
     });
+    operation = 'connect MongoDB';
     const mongo = await mongoMigrationClient();
     const collection = mongo.db.collection('codeAreaRiskMaps');
     const key = { organizationId, repositoryId };
     try {
+        operation = 'insert map fixture';
         await collection.insertOne({ ...key, snapshot });
+        operation = 'authenticated area-map read';
         const response = await fetch(`${api}${path}`, {
             headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
         if (!response.ok) {
             throw new Error(
@@ -116,12 +132,19 @@ async function main() {
             'preview area-map: authenticated read and risk evidence passed',
         );
     } finally {
+        operation = 'remove map fixture and close MongoDB';
         await collection.deleteOne(key);
         await mongo.close();
     }
 }
 
 main().catch((error) => {
-    console.error(error.message);
+    console.error('preview area-map smoke failed', {
+        operation,
+        repositoryId: activeRepositoryId,
+        organizationId: activeOrganizationId,
+        fetchTimeoutMs: FETCH_TIMEOUT_MS,
+        error: error instanceof Error ? error.message : String(error),
+    });
     process.exitCode = 1;
 });

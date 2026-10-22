@@ -26,6 +26,9 @@ const {
     DecidePrApprovalStage,
 } = require('../../libs/code-review/pipeline/stages/decide-pr-approval.stage.ts');
 const {
+    CodeManagementService,
+} = require('../../libs/platform/infrastructure/adapters/services/codeManagement.service.ts');
+const {
     evaluateApproval,
 } = require('../../libs/code-review/domain/approval/approval-decision.ts');
 const targets = require('./targets.json');
@@ -74,10 +77,16 @@ async function runCase(item, slot, withMap = true) {
         head: { sha: headSha },
         user: { login: item.author || 'eval-author' },
     };
-    const host = {
+    // Snapshot data enters at the provider boundary; the stage still calls
+    // the production CodeManagementService routing and file-fetch methods.
+    const snapshotProvider = {
         getPullRequest: async () => ({ ...pr, labels: item.labels || [] }),
         getFilesByPullRequestId: async () => item.files,
     };
+    const host = new CodeManagementService(
+        { findOne: async () => ({ platform: 'GITHUB' }) },
+        { getCodeManagementService: () => snapshotProvider },
+    );
     const maps = { read: async () => (withMap ? item.areaMap || null : null) };
     const stage = new DecidePrApprovalStage(host, maps);
     const context = {

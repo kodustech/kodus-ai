@@ -7,6 +7,10 @@ import { buildCodeAreaRiskMap } from '../../libs/platformData/domain/code-area-r
 import { mongoMigrationClient } from '../../libs/core/infrastructure/database/mongo/mongo-migration-client';
 
 const repositoryId = 'preview-code-area-demo';
+const FETCH_TIMEOUT_MS = 10_000;
+let operation = 'initialize';
+let organizationId = '';
+let activeTeamId = '';
 const api = (
     process.env.PREVIEW_SEED_API_URL ?? 'http://localhost:3001'
 ).replace(/\/+$/, '');
@@ -15,8 +19,10 @@ async function main(): Promise<void> {
     const password = process.env.PREVIEW_SEED_PASSWORD;
     if (!password) throw new Error('PREVIEW_SEED_PASSWORD is required');
 
+    operation = 'preview login';
     const login = await fetch(`${api}/auth/login`, {
         method: 'POST',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             email: process.env.PREVIEW_SEED_EMAIL ?? 'preview@kodus.io',
@@ -37,9 +43,12 @@ async function main(): Promise<void> {
     };
     if (!claims.organizationId)
         throw new Error('preview token has no organization');
+    organizationId = claims.organizationId;
 
+    operation = 'read preview teams';
     const teamsResponse = await fetch(`${api}/team`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!teamsResponse.ok)
         throw new Error(`GET /team returned ${teamsResponse.status}`);
@@ -47,7 +56,9 @@ async function main(): Promise<void> {
     const teams = teamsBody?.data ?? teamsBody;
     const teamId = Array.isArray(teams) ? teams[0]?.uuid : teams?.uuid;
     if (!teamId) throw new Error('preview has no team');
+    activeTeamId = teamId;
 
+    operation = 'update selected repositories';
     const postgres = new Client({
         host: process.env.API_PG_DB_HOST,
         port: Number(process.env.API_PG_DB_PORT ?? 5432),
@@ -59,12 +70,35 @@ async function main(): Promise<void> {
     try {
         await postgres.query('BEGIN');
         const existing = await postgres.query(
-            `SELECT uuid FROM integration_configs
-             WHERE team_id = $1 AND "configKey" = 'repositories'
-               AND "configValue" @> $2::jsonb LIMIT 1`,
-            [teamId, JSON.stringify([{ id: repositoryId }])],
+            `SELECT c.uuid, c."configValue" FROM integration_configs c
+             JOIN integrations i ON i.uuid = c.integration_id
+             WHERE c.team_id = $1 AND i.organization_id = $2
+               AND c."configKey" = 'repositories'
+             ORDER BY i.status DESC, c."updatedAt" DESC LIMIT 1 FOR UPDATE OF c`,
+            [teamId, claims.organizationId],
         );
-        if (!existing.rowCount) {
+        const demoRepository = {
+            id: repositoryId,
+            name: 'code-area-demo (sample data)',
+            full_name: 'preview/code-area-demo (sample data)',
+        };
+        if (existing.rowCount) {
+            const repositories = existing.rows[0].configValue;
+            if (!Array.isArray(repositories)) {
+                throw new Error('Selected repositories config is not an array');
+            }
+            if (!repositories.some((repo) => repo.id === repositoryId)) {
+                await postgres.query(
+                    `UPDATE integration_configs
+                     SET "configValue" = $1::jsonb, "updatedAt" = NOW()
+                     WHERE uuid = $2`,
+                    [
+                        JSON.stringify([...repositories, demoRepository]),
+                        existing.rows[0].uuid,
+                    ],
+                );
+            }
+        } else {
             const integration = await postgres.query(
                 `INSERT INTO integrations (status, platform, "integrationCategory", organization_id, team_id)
                  VALUES (false, 'INTERNAL', 'CODE_MANAGEMENT', $1, $2) RETURNING uuid`,
@@ -74,13 +108,7 @@ async function main(): Promise<void> {
                 `INSERT INTO integration_configs ("configKey", "configValue", integration_id, team_id)
                  VALUES ('repositories', $1::jsonb, $2, $3)`,
                 [
-                    JSON.stringify([
-                        {
-                            id: repositoryId,
-                            name: 'code-area-demo (sample data)',
-                            full_name: 'preview/code-area-demo (sample data)',
-                        },
-                    ]),
+                    JSON.stringify([demoRepository]),
                     integration.rows[0].uuid,
                     teamId,
                 ],
@@ -176,6 +204,7 @@ async function main(): Promise<void> {
         analyzedFiles: snapshot.directDirectories.length * 3,
         sampled: true,
     };
+    operation = 'save demo map';
     const mongo = await mongoMigrationClient();
     try {
         await mongo.db
@@ -189,9 +218,10 @@ async function main(): Promise<void> {
         await mongo.close();
     }
     const headers = { Authorization: `Bearer ${token}` };
+    operation = 'verify selected repositories';
     const selected = await fetch(
         `${api}/code-management/repositories/selected?teamId=${teamId}`,
-        { headers },
+        { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
     );
     if (!selected.ok) {
         throw new Error(`selected repositories returned ${selected.status}`);
@@ -204,9 +234,10 @@ async function main(): Promise<void> {
     if (!repositories?.some((repo) => repo.id === repositoryId)) {
         throw new Error('Cockpit demo repository is not visible through API');
     }
+    operation = 'verify area map';
     const map = await fetch(
         `${api}/code-management/area-risk-map?repositoryId=${repositoryId}`,
-        { headers },
+        { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
     );
     if (!map.ok) throw new Error(`area map returned ${map.status}`);
     const mapBody = (await map.json()) as {
@@ -220,6 +251,13 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-    console.error(`seed:preview: Cockpit demo failed: ${error.message}`);
+    console.error('seed:preview: Cockpit demo failed', {
+        operation,
+        repositoryId,
+        organizationId,
+        teamId: activeTeamId,
+        fetchTimeoutMs: FETCH_TIMEOUT_MS,
+        error: error instanceof Error ? error.message : String(error),
+    });
     process.exitCode = 1;
 });

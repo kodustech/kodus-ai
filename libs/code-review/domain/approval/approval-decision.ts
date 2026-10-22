@@ -45,15 +45,15 @@ export function matchesApprovalScope(input: {
     author?: string;
     labels?: string[];
 }): { matches: boolean; reason?: string } {
-    const labels = (input.policy?.labels ?? []).map(normalized).filter(Boolean);
+    const labels = new Set(
+        (input.policy?.labels ?? []).map(normalized).filter(Boolean),
+    );
     const authors = (input.policy?.authors ?? [])
         .map(normalized)
         .filter(Boolean);
     if (
-        labels.length > 0 &&
-        !(input.labels ?? []).some((label) =>
-            labels.includes(normalized(label)),
-        )
+        labels.size > 0 &&
+        !(input.labels ?? []).some((label) => labels.has(normalized(label)))
     ) {
         return {
             matches: false,
