@@ -20577,7 +20577,7 @@
                     "summary": {
                         "$ref": "#/components/schemas/ReviewSummaryDto"
                     },
-                    "ideRulesSyncEnabled": {
+                    "repoInstructionsEnabled": {
                         "type": "boolean"
                     },
                     "kodyRulesGeneratorEnabled": {
@@ -20607,7 +20607,7 @@
                     "reviewOptions",
                     "suggestionControl",
                     "summary",
-                    "ideRulesSyncEnabled",
+                    "repoInstructionsEnabled",
                     "kodyRulesGeneratorEnabled",
                     "customMessages",
                     "v2PromptOverrides"

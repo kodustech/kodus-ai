@@ -27,9 +27,14 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
+    VERIFIER_REPO_INSTRUCTION_RULE,
     verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
-import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import {
+    formatPreviousDecisions,
+    renderRepoInstructionFiles,
+} from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
     recoverVerdictObject,
@@ -137,15 +142,31 @@ export function buildVerifierAgentSpec(
     };
 }
 
+function repoInstructionEvidence(
+    finding: FinderSuggestion,
+    repoInstructions?: RepoInstructionsContext,
+): string {
+    if (finding.label !== 'repo_instruction') return '';
+    const files = repoInstructions?.files ?? [];
+    const block = files.length
+        ? `<RepositoryInstructions>\n${renderRepoInstructionFiles(files).join('\n')}\n</RepositoryInstructions>`
+        : '<RepositoryInstructions>No instruction files were provided for this review.</RepositoryInstructions>';
+    return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
+}
+
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
  *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
  *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
- *  unchanged. */
+ *  unchanged. `repoInstructions` is read only for a `repo_instruction`
+ *  candidate. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
-    options: { laneFocus?: string } = {},
+    options: {
+        laneFocus?: string;
+        repoInstructions?: RepoInstructionsContext;
+    } = {},
 ): string {
     const laneFocus =
         typeof options?.laneFocus === 'string' ? options.laneFocus : '';
@@ -157,6 +178,7 @@ export function verifierPromptFor(
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
+        repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
         laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
@@ -319,6 +341,9 @@ export interface LlmVerifierParams {
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** The coding-agent instructions the finder reviewed against; evidence
+     *  for `repo_instruction` candidates only. */
+    repoInstructions?: RepoInstructionsContext;
     /** A custom agent kept to its lane (#2172): its focus, against which each
      *  finding is also judged in the same run (see verifierLaneRule). */
     laneFocus?: string;
@@ -407,6 +432,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             {
                 prompt: verifierPromptFor(candidate, matchingDecisions, {
                     laneFocus: this.params.laneFocus,
+                    repoInstructions: this.params.repoInstructions,
                 }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),

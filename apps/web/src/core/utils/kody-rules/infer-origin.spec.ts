@@ -11,21 +11,21 @@ describe("inferRuleOrigin — .agents/rules discovery", () => {
         ).toBe(true);
     });
 
-    it("classifies a repo-root .agents/rules file as Auto-sync", () => {
+    it("classifies a repo-root .agents/rules file as Agent file", () => {
         expect(
             inferRuleOrigin({
                 origin: null,
                 sourcePath: ".agents/rules/architecture.md",
             }),
-        ).toBe("Auto-sync");
+        ).toBe("Agent file");
     });
 
-    it("classifies a nested .agents/rules file as Auto-sync", () => {
+    it("classifies a nested .agents/rules file as Agent file", () => {
         expect(
             inferRuleOrigin({
                 origin: null,
                 sourcePath: "applications/sales/.agents/rules/style.md",
             }),
-        ).toBe("Auto-sync");
+        ).toBe("Agent file");
     });
 });

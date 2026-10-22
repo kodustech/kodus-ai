@@ -4,23 +4,24 @@ description: "Crea Kody Rules personalizadas directamente en tu repositorio usan
 ---
 
 <Info>
-Las Reglas del Repositorio usan el mismo mecanismo de sincronización automática que la detección de archivos de reglas del IDE. Habilita **Auto-sync rules from repo** (en **Code review → Kody Rules** con alcance de repositorio, dentro de **Configuration**) para activar ambas funciones. Consulta <a href="/es/how_to_use/code_review/configs/rules_file_detection">Detección de Archivos de Reglas</a> para la configuración.
+Las Reglas del Repositorio siempre se mantienen sincronizadas: no hay ninguna opción que activar. Son los únicos archivos de un repositorio que se convierten en Kody Rules. Las instrucciones escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) se manejan por separado, consulta <a href="/es/how_to_use/code_review/configs/rules_file_detection">Instrucciones para Agentes de Código</a>.
 </Info>
 
 ## Cómo Usar
 Puedes crear Kody Rules personalizadas directamente en tu repositorio colocando archivos markdown estructurados en directorios específicos. Esto te permite versionar tus reglas junto con tu código y compartirlas con tu equipo.
 
 ### Sincronización
-- **Detección Automática**: Las reglas del repositorio se detectan y sincronizan automáticamente cuando están habilitadas
-- **Sincronización Manual**: Agrega `@kody-sync` a cualquier archivo de regla para sincronizarlo individualmente (funciona incluso con la sincronización automática deshabilitada)
-- **Aplicación Web**: Las reglas sincronizadas aparecen en la página **Code review → Kody Rules** del repositorio, con el origen **Auto-sync**
-- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se cierran los Pull Requests
+- **Detección Automática**: Las reglas del repositorio se detectan y sincronizan en todos los repositorios conectados; no hay nada que activar
+- **Importar ahora**: En el panel **Kody Rules → Configuration** del repositorio, **Import rule files now** lee todos los archivos de reglas de la rama por defecto
+- **Aplicación Web**: Las reglas sincronizadas aparecen en la página **Code review → Kody Rules** del repositorio, con el origen **Auto-sync** (las reglas importadas desde archivos para agentes de código antes de que dejaran de convertirse muestran **Agent file** en su lugar)
+- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se fusionan los Pull Requests
 
 ## Ubicación de los Archivos
 
-Coloca tus archivos de reglas en uno de estos directorios:
+Coloca tus archivos de reglas en uno de estos directorios, en la raíz del repositorio o en cualquier subdirectorio:
 - `.kody/rules/**/*.md`
 - `rules/**/*.md`
+- `.rules/**` y `docs/coding-standards/**` (solo los archivos que siguen la plantilla)
 
 ## Plantilla de Regla
 
@@ -155,18 +156,30 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 
 ## Requisitos de Configuración
 
-Para usar las Reglas del Repositorio, tienes dos opciones:
+1. **Crear archivos de reglas**: Coloca archivos `.md` que sigan la plantilla en `.kody/rules/**` o `rules/**`. Los archivos de `.rules/**` y `docs/coding-standards/**` que siguen la plantilla también se importan.
+2. **Fusionarlos**: Un archivo de regla se sincroniza cuando se fusiona un Pull Request que lo agrega, modifica, renombra o elimina. Eliminar el archivo elimina su regla.
+3. **Archivos existentes**: Para importar archivos de reglas que ya están en la rama por defecto, usa **Import rule files now** en el panel **Kody Rules → Configuration** del repositorio.
 
-### Opción 1: Habilitar Sincronización Automática (Recomendado)
-1. **Habilitar Detección de Archivos de Reglas**: Elige el repositorio en el selector de alcance de **Code review**, abre **Kody Rules → Configuration** y activa **Auto-sync rules from repo**
-2. **Crear archivos de reglas**: Coloca archivos `.md` en los directorios `.kody/rules/**` o `rules/**`
-3. **Sincronización automática**: Todos los archivos de reglas se sincronizan cuando se cierran los PRs
-
-### Opción 2: Sincronización Manual (Selectiva)
-1. **Crear archivos de reglas**: Coloca archivos `.md` en los directorios `.kody/rules/**` o `rules/**`
-2. **Agregar marcador de sincronización**: Incluye `@kody-sync` en cualquier parte del archivo de regla
-3. **Hacer commit de los cambios**: Solo los archivos marcados se sincronizarán (el interruptor de sincronización automática permanece desactivado)
+Las reglas nuevas quedan activas, o en **Pending review** cuando **Kody knowledge approval** está activado.
 
 <Tip>
-Las Reglas del Repositorio usan el mismo mecanismo de sincronización que [Detección de Archivos de Reglas](/es/how_to_use/code_review/configs/rules_file_detection). Usa la sincronización manual (`@kody-sync`) para sincronizar selectivamente reglas específicas sin habilitar la sincronización automática.
+Agrega `@kody-ignore` en cualquier parte de un archivo de regla para mantenerlo en el repositorio sin sincronizarlo. Su regla existente se elimina en la siguiente sincronización.
 </Tip>
+
+## Verificar sincronización y evaluación de reglas (self-hosted)
+
+En despliegues self-hosted los logs de la API llevan marcadores grep-ables para depurar:
+
+- `[kody-rules-sync]` — resumen por ejecución: qué archivos se importaron, se omitieron (con el motivo) o se eliminaron.
+- `[kody-rules-eval]` — traza de evaluación por archivo durante una revisión: exactamente qué reglas (uuid + título) se seleccionaron para el prompt de cada archivo revisado.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+Si una regla aparece activa en la UI pero nunca sale en `[kody-rules-eval]` para los archivos que esperas, revisa su glob de **Path** — una regla solo se ejecuta sobre archivos que coincidan con su ruta.
+
+## Límites de reglas
+
+Las organizaciones en el plan **Free** de la nube (o cuya suscripción fue cancelada o expiró) y las instancias self-hosted que corren **sin una licencia válida** (Community Edition) evalúan como máximo **10 reglas activas** por revisión (las más antiguas primero). Las reglas que superan el límite permanecen en la lista como **Locked** y se omiten en cada PR; un banner en **Code review → Kody Rules** indica cuántas se omiten. Los planes de pago en la nube y las instancias self-hosted con licencia no tienen ese límite. Si las reglas más allá de la décima no se disparan, este límite es la razón.

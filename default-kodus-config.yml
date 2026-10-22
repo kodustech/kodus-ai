@@ -1154,6 +1154,9 @@ deterministicEvidence:
         secrets: false # credential scanning over the changed files
         dependencies: false # known CVEs in dependencies this PR adds or bumps
 
+# coding-agent instructions
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
+
 # suggestion control
 suggestionControl:
     applyFiltersToKodyRules: false
@@ -1167,7 +1170,6 @@ summary:
     customInstructions: ''
 
 # kody rules
-ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
 kodyRulesAutoPauseEnabled: false
 kodyLearningExcludedReviewers: []

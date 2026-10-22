@@ -85,6 +85,9 @@ deterministicEvidence:
         secrets: false # varredura de credenciais nos arquivos alterados
         dependencies: false # CVEs conhecidas em dependências que este PR adiciona ou atualiza
 
+# o que revisar: instruções para agentes de código
+repoInstructionsEnabled: false # check changes against CLAUDE.md / AGENTS.md / .cursor/rules; the severity filter applies
+
 # o que revisar: limite de severidade
 suggestionControl:
     applyFiltersToKodyRules: false
@@ -98,7 +101,6 @@ summary:
     customInstructions: ''
 
 # kody rules
-ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
 kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:

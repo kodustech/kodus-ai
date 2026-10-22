@@ -36,15 +36,15 @@ automatedReviewActive: true
 
 Esto te da revisiones automatizadas con un umbral de severidad razonable. Ajusta después de una semana según los comentarios recibidos.
 
-## Paso 3 — Importa reglas existentes de herramientas del IDE
+## Paso 3 — Usa las instrucciones que ya escribiste para agentes de código
 
-Si tu equipo ya usa reglas de Cursor, Copilot o Claude:
+Si tu equipo ya mantiene instrucciones de Cursor, Copilot, Claude o `AGENTS.md`:
 
-1. En la barra lateral, selecciona el repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **Kody Rules**, haz clic en **Configuration** y activa **Auto-sync rules from repo**
-2. Kodus detecta archivos `.cursorrules`, `.github/copilot-instructions.md` y `.claude`
-3. Revisa las reglas importadas y conserva las que tengan sentido para la revisión de código
+1. En la barra lateral, selecciona **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review**, abre **What to review** y activa **Coding-agent instructions**
+2. Kody lee los archivos de instrucciones que cubren los archivos modificados de cada pull request y señala los cambios que los incumplen
+3. Para una convención que quieras aplicar en cada revisión, escríbela como un archivo de regla en `.kody/rules`
 
-Esto evita tener que reescribir las reglas desde cero.
+Los archivos de instrucciones nunca se convierten en Kody Rules, así que no pueden cambiar tu política de revisión sin que lo notes.
 
 ## Paso 4 — Enseña tus 5 principales convenciones
 

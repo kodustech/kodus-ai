@@ -9,12 +9,7 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
-describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
-    const organizationAndTeamData = {
-        organizationId: 'org-1',
-        teamId: 'team-1',
-    };
-
+describe('KodyRulesSyncListener', () => {
     function buildListener(
         overrides: {
             acquireImpl?: () => Promise<{ release: jest.Mock } | null>;
@@ -22,15 +17,6 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
     ) {
         const kodyRulesSyncService = {
             syncFromChangedFiles: jest.fn().mockResolvedValue(undefined),
-            purgeAllIdeSyncRulesForRepositories: jest
-                .fn()
-                .mockResolvedValue(undefined),
-            pauseAllIdeSyncRulesForRepositories: jest
-                .fn()
-                .mockResolvedValue(undefined),
-            resumeAllIdeSyncRulesForRepository: jest
-                .fn()
-                .mockResolvedValue(undefined),
         };
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue(null),
@@ -62,108 +48,6 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             releaseMock,
         };
     }
-
-    it('action=delete purges IDE-synced rules', async () => {
-        const { listener, kodyRulesSyncService } = buildListener();
-
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1', 'repo-2'],
-            action: 'delete',
-        });
-
-        expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
-        ).toHaveBeenCalledWith({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1', 'repo-2'],
-        });
-        expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-    });
-
-    it('action=pause flips IDE-synced rules to PAUSED', async () => {
-        const { listener, kodyRulesSyncService } = buildListener();
-
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1', 'repo-2'],
-            action: 'pause',
-        });
-
-        expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
-        ).toHaveBeenCalledWith({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1', 'repo-2'],
-        });
-        expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-    });
-
-    it('action=keep is a no-op (rules stay ACTIVE)', async () => {
-        const { listener, kodyRulesSyncService } = buildListener();
-
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1', 'repo-2'],
-            action: 'keep',
-        });
-
-        expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-        expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-        expect(
-            kodyRulesSyncService.resumeAllIdeSyncRulesForRepository,
-        ).not.toHaveBeenCalled();
-    });
-
-    it('missing action defaults to keep (least destructive)', async () => {
-        // REGRESSION GUARD: previously the listener always purged on this event,
-        // which silently deleted rules when the user toggled IDE auto-sync off.
-        // Defaulting to 'keep' ensures any caller that doesn't pass an explicit
-        // action gets the safe behaviour.
-        const { listener, kodyRulesSyncService } = buildListener();
-
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: ['repo-1'],
-        } as any);
-
-        expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-        expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-    });
-
-    it('ignores the event when it carries no repositories', async () => {
-        const { listener, kodyRulesSyncService } = buildListener();
-
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: [],
-            action: 'delete',
-        });
-        await listener.handleIdeRulesSyncDisabled({
-            organizationAndTeamData,
-            repositoryIds: undefined as any,
-            action: 'delete',
-        });
-
-        expect(
-            kodyRulesSyncService.purgeAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-        expect(
-            kodyRulesSyncService.pauseAllIdeSyncRulesForRepositories,
-        ).not.toHaveBeenCalled();
-    });
 
     describe('cross-process sync via distributed lock', () => {
         const mergedEvent = {

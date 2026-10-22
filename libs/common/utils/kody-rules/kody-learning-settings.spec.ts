@@ -46,7 +46,7 @@ const buildConfig = (
 describe('resolveKodyLearningSettings', () => {
     it('falls back to the defaults when nothing is configured', () => {
         expect(resolveKodyLearningSettings(undefined, 'repo-1')).toEqual({
-            ideRulesSyncEnabled: false,
+            repoInstructionsEnabled: false,
             kodyRulesGeneratorEnabled: true,
             kodyLearningExcludedReviewers: [],
         });
@@ -54,24 +54,24 @@ describe('resolveKodyLearningSettings', () => {
 
     it('makes a repository without its own value follow the global value', () => {
         const config = buildConfig(
-            { ideRulesSyncEnabled: true, kodyRulesGeneratorEnabled: false },
+            { repoInstructionsEnabled: true, kodyRulesGeneratorEnabled: false },
             [{ id: 'repo-1', configs: {} }],
         );
 
         expect(resolveKodyLearningSettings(config, 'repo-1')).toMatchObject({
-            ideRulesSyncEnabled: true,
+            repoInstructionsEnabled: true,
             kodyRulesGeneratorEnabled: false,
         });
     });
 
     it('lets a repository override win over the global value', () => {
         const config = buildConfig(
-            { ideRulesSyncEnabled: true, kodyRulesGeneratorEnabled: false },
+            { repoInstructionsEnabled: true, kodyRulesGeneratorEnabled: false },
             [
                 {
                     id: 'repo-1',
                     configs: {
-                        ideRulesSyncEnabled: false,
+                        repoInstructionsEnabled: false,
                         kodyRulesGeneratorEnabled: true,
                     },
                 },
@@ -79,7 +79,7 @@ describe('resolveKodyLearningSettings', () => {
         );
 
         expect(resolveKodyLearningSettings(config, 'repo-1')).toMatchObject({
-            ideRulesSyncEnabled: false,
+            repoInstructionsEnabled: false,
             kodyRulesGeneratorEnabled: true,
         });
     });
@@ -110,7 +110,7 @@ describe('resolveKodyLearningSettings', () => {
                     {
                         id: 'dir-1',
                         configs: {
-                            ideRulesSyncEnabled: true,
+                            repoInstructionsEnabled: true,
                             kodyRulesGeneratorEnabled: false,
                         },
                     },
@@ -119,16 +119,16 @@ describe('resolveKodyLearningSettings', () => {
         ]);
 
         expect(resolveKodyLearningSettings(config, 'repo-1')).toMatchObject({
-            ideRulesSyncEnabled: false,
+            repoInstructionsEnabled: false,
             kodyRulesGeneratorEnabled: true,
         });
     });
 
     it('follows the global value for a repository missing from the config', () => {
-        const config = buildConfig({ ideRulesSyncEnabled: true });
+        const config = buildConfig({ repoInstructionsEnabled: true });
 
         expect(
-            resolveKodyLearningSettings(config, 'unknown').ideRulesSyncEnabled,
+            resolveKodyLearningSettings(config, 'unknown').repoInstructionsEnabled,
         ).toBe(true);
     });
 
@@ -136,25 +136,25 @@ describe('resolveKodyLearningSettings', () => {
         const config = buildConfig({}, [
             {
                 id: 123 as unknown as string,
-                configs: { ideRulesSyncEnabled: true },
+                configs: { repoInstructionsEnabled: true },
             },
         ]);
 
         expect(
-            resolveKodyLearningSettings(config, '123').ideRulesSyncEnabled,
+            resolveKodyLearningSettings(config, '123').repoInstructionsEnabled,
         ).toBe(true);
     });
 });
 
 describe('createKodyLearningSettingsResolver', () => {
     const config = buildConfig(
-        { ideRulesSyncEnabled: true, kodyLearningExcludedReviewers: ['bot'] },
+        { repoInstructionsEnabled: true, kodyLearningExcludedReviewers: ['bot'] },
         [
             { id: 'inherits', configs: {} },
             {
                 id: 'own',
                 configs: {
-                    ideRulesSyncEnabled: false,
+                    repoInstructionsEnabled: false,
                     kodyRulesGeneratorEnabled: false,
                 },
             },

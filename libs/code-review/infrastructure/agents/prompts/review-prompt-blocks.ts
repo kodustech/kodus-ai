@@ -199,7 +199,14 @@ export function buildCategoryReviewPrompt(kind: CategoryPromptKind): string {
     return renderSinglePrompt(PROMPT_BLOCKS[kind]);
 }
 
-export function buildGeneralistReviewPrompt(): string {
+export function buildGeneralistReviewPrompt(
+    options: { repoInstructions?: boolean } = {},
+): string {
+    const instructionsCategory = options.repoInstructions
+        ? `
+    - repo_instruction: an added or modified line that breaks a convention stated in one of the files listed in <RepositoryInstructions>, quoted from that file`
+        : '';
+
     return `  <Mission>
     Find real, verifiable issues in the changed code in a single pass. You may report bug, security, or performance findings, but only when the evidence is concrete.
   </Mission>
@@ -208,7 +215,7 @@ export function buildGeneralistReviewPrompt(): string {
     You can report these categories:
     - bug: logic errors, contract breaks, interface/signature mismatches, state bugs, bad error handling, race conditions
     - security: exploit paths, auth/access-control flaws, data exposure, unsafe trust boundaries
-    - performance: material slowdowns, N+1s, unbounded loading, hot-path blowups, blocking I/O
+    - performance: material slowdowns, N+1s, unbounded loading, hot-path blowups, blocking I/O${instructionsCategory}
   </Focus>
 
   <DoNotReport>

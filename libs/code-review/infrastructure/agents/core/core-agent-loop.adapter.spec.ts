@@ -1333,6 +1333,203 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         ]);
     });
 
+    // A repo_instruction finding is judged against the repository's
+    // coding-agent instructions; without them the verifier drops it as style.
+    it('threads repoInstructions to the verifier for a repo_instruction finding', async () => {
+        const doGenerate = (async (opts: any) => {
+            const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
+            const isVerifier =
+                sys.includes('REFUTE') ||
+                sys.includes('verdict') ||
+                sys.includes('verify');
+            const tc = isVerifier
+                ? {
+                      id: 'v',
+                      name: 'submitVerdict',
+                      input: sys.includes('Money columns end in _cents.')
+                          ? { keep: true, rationale: 'breaks CLAUDE.md' }
+                          : { keep: false, rationale: 'style only' },
+                  }
+                : {
+                      id: 'f',
+                      name: 'submitResult',
+                      input: {
+                          reasoning: 'one candidate',
+                          suggestions: [
+                              {
+                                  relevantFile: 'a.ts',
+                                  label: 'repo_instruction',
+                                  suggestionContent:
+                                      'CLAUDE.md says "Amounts are integer cents."',
+                                  existingCode: 'const total = 1.5;',
+                                  improvedCode: 'const totalCents = 150;',
+                                  severity: 'medium',
+                              },
+                          ],
+                      },
+                  };
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: tc.id,
+                        toolName: tc.name,
+                        input: JSON.stringify(tc.input),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+
+        const out = await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), {
+                repoInstructions: {
+                    files: [
+                        {
+                            path: 'CLAUDE.md',
+                            content:
+                                'Amounts are integer cents. Money columns end in _cents.',
+                            appliesTo: '**',
+                            truncated: false,
+                        },
+                    ],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            }),
+            secrets,
+        );
+
+        expect(out.droppedByVerify).toHaveLength(0);
+        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
+    describe('readRepoInstruction', () => {
+        const repoInstructions = {
+            files: [
+                {
+                    path: 'CLAUDE.md',
+                    content: 'Amounts are integer cents.',
+                    appliesTo: '**',
+                    truncated: false,
+                },
+            ],
+            otherFiles: [],
+            dropped: [],
+            truncated: false,
+            indexedCount: 1,
+        };
+
+        /** Finder calls readRepoInstruction once when offered, then submits;
+         *  records the tool names offered and the prompts it saw. */
+        function readingModel() {
+            const seen = { tools: [] as string[][], prompts: [] as string[] };
+            const doGenerate = (async (opts: any) => {
+                const sys = JSON.stringify(opts?.prompt ?? '');
+                const offered = (opts?.tools ?? []).map((t: any) => t.name);
+                const isVerifier = offered.includes('submitVerdict');
+                if (!isVerifier) {
+                    seen.tools.push(offered);
+                    seen.prompts.push(sys);
+                }
+                const tc = isVerifier
+                    ? {
+                          id: 'v',
+                          name: 'submitVerdict',
+                          input: { keep: true, rationale: 'ok' },
+                      }
+                    : offered.includes('readRepoInstruction') &&
+                        !sys.includes('tool-result')
+                      ? {
+                            id: 'r',
+                            name: 'readRepoInstruction',
+                            input: { path: 'CLAUDE.md' },
+                        }
+                      : { id: 'f', name: 'submitResult', input: findings };
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: tc.id,
+                            toolName: tc.name,
+                            input: JSON.stringify(tc.input),
+                        },
+                    ],
+                    // Structured, or the SDK reads the reason as unknown and
+                    // leaves the tool call unexecuted.
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return { model: new MockLanguageModelV3({ doGenerate }), seen };
+        }
+
+        it('is offered when the prompt lists the instructions, and answers with the file text', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, {
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                secrets,
+            );
+            expect(seen.tools[0]).toContain('readRepoInstruction');
+            expect(
+                seen.prompts.some((p) =>
+                    p.includes('Amounts are integer cents.'),
+                ),
+            ).toBe(true);
+        });
+
+        it('is offered without a sandbox', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, {
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            expect(seen.tools[0]).toContain('readRepoInstruction');
+        });
+
+        it('is not offered to an agent whose prompt does not list them', async () => {
+            const { model, seen } = readingModel();
+            await runAgentLoopViaCore(
+                makeInput(model, { repoInstructions }),
+                secrets,
+            );
+            expect(seen.tools.flat()).not.toContain('readRepoInstruction');
+        });
+
+        // Without a sandbox the heavy passes are skipped; the instructions
+        // tool must not turn them back on.
+        it('keeps a review without a sandbox off the heavy passes', async () => {
+            const plain = makeModel();
+            await runAgentLoopViaCore(
+                makeInput(plain.model, { reviewMode: 'normal' }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            const listed = makeModel();
+            await runAgentLoopViaCore(
+                makeInput(listed.model, {
+                    reviewMode: 'normal',
+                    repoInstructions,
+                    listsRepoInstructions: true,
+                }),
+                { ...secrets, remoteCommands: undefined },
+            );
+            expect(listed.calls.count).toBe(plain.calls.count);
+        });
+    });
+
     // Lane check (#2172): AgentLoopInput.laneFocus reaches the verifier, which
     // drops a custom agent's finding outside its focus in the verify run the
     // finding already takes; it is counted with the verify drops.

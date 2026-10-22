@@ -26,6 +26,7 @@ import {
     type KodyRuleWithInheritanceDetails,
 } from "@services/kodyRules/types";
 import {
+    AlertTriangleIcon,
     ArrowDownIcon,
     ArrowRightToLineIcon,
     ArrowUpIcon,
@@ -59,7 +60,6 @@ type RuleDetailSheetProps = {
     /** The rule to show; null keeps the sheet closed. */
     rule: KodyRuleWithInheritanceDetails | null;
     variant: KodyRulesTableVariant;
-    syncEnabledForRepo?: boolean;
     context: KodyRuleRowContext;
     onClose: () => void;
     /** Step to the previous / next rule in the list currently on screen. */
@@ -78,7 +78,6 @@ type RuleDetailSheetProps = {
 export const KodyRuleDetailSheet = ({
     rule,
     variant,
-    syncEnabledForRepo,
     context,
     onClose,
     onNavigate,
@@ -217,11 +216,7 @@ export const KodyRuleDetailSheet = ({
                         <SheetDescription asChild>
                             <div className="text-text-secondary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                                 {!isMemory && (
-                                    <OriginBadge
-                                        rule={rule}
-                                        syncEnabledForRepo={syncEnabledForRepo}
-                                        variant="text"
-                                    />
+                                    <OriginBadge rule={rule} variant="text" />
                                 )}
                                 {isMemory ? (
                                     <span className="flex items-center gap-1">
@@ -248,6 +243,14 @@ export const KodyRuleDetailSheet = ({
                                         <code className="font-mono break-all">
                                             {rule.sourcePath}
                                         </code>
+                                    </span>
+                                )}
+                                {rule.sourceFileIssue && (
+                                    <span className="text-warning flex items-center gap-1">
+                                        <AlertTriangleIcon className="size-3 shrink-0" />
+                                        Its file no longer syncs: a .kody/rules
+                                        file needs a frontmatter with a title.
+                                        Kody keeps the last version that synced.
                                     </span>
                                 )}
                                 {isInherited && (

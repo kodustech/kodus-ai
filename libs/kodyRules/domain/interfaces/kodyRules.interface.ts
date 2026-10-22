@@ -193,17 +193,10 @@ export interface IKodyRule {
     resolvedAt?: Date;
     resolvedBy?: string;
     /**
-     * Set by the IDE-rule sync flow when the source file currently
-     * carries an `@kody-sync` marker — the per-file override that
-     * keeps a rule synchronized even with the repository's
-     * `ideRulesSyncEnabled=false`. Recomputed from file content on
-     * every sync, so flipping the toggle or editing the marker
-     * self-corrects on the next sync of that file.
-     *
-     * Consumed by the web UI to exclude such rules from the
-     * "orphan auto-sync" chip (they're not orphans, the backend
-     * keeps maintaining them) and to render a pin affordance on
-     * the Auto-sync origin badge.
+     * @deprecated Marked rules whose source file carried `@kody-sync`. The
+     * marker no longer does anything (Kody rule files always sync,
+     * coding-agent files never convert), the sync no longer writes it, and the
+     * agent-file freeze migration cleared it. Kept so old documents parse.
      */
     pinnedSync?: boolean;
     /**
@@ -223,6 +216,13 @@ export interface IKodyRule {
      */
     lockedByPlan?: boolean;
     /**
+     * Set by the repository sync when this rule's `.kody/rules` file stopped
+     * parsing as a rule template (no frontmatter with a title and a body).
+     * The rule keeps its last text and status; the Kody Rules page asks the
+     * team to fix the file. Cleared (`null`) when the file parses again.
+     */
+    sourceFileIssue?: KodyRuleSourceFileIssue | null;
+    /**
      * Set when the rule-health cron paused this rule because Cockpit labelled
      * it ignored or noisy (`kodyRulesAutoPauseEnabled`). Carries the numbers
      * shown to admins as the reason. Cleared (`null`) on resume, when it moves
@@ -237,6 +237,8 @@ export interface IKodyRule {
      */
     resumedAt?: Date | null;
 }
+
+export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 
 export interface IKodyRuleCentralizedConfig {
     path: string;

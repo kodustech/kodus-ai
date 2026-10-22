@@ -114,6 +114,7 @@
         "eval:kody-rules": "node evals/kody-rules/real-agent.js --dataset=github-cases",
         "eval:kody-rules:gate": "node evals/kody-rules/real-agent.js --dataset=github-cases --gate",
         "eval:kody-rules:harvest": "node evals/kody-rules/harvest-github-cases.js",
+        "eval:repo-instructions": "node evals/repo-instructions/run.js --model=gpt-5.4 --arm=both",
         "eval:review-chain": "node evals/review-chain/run.js --gate",
         "eval:shape-invariance": "node evals/review-chain/shape-invariance.js --gate",
         "eval:verifier-verdict": "node evals/verifier-verdict/run.js",

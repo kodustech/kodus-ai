@@ -26,7 +26,13 @@ import {
 import {
     IKodyRule,
     KodyRulesOrigin,
+    KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    IKodyRulesService,
+    KODY_RULES_SERVICE_TOKEN,
+} from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { ONBOARDING_IMPORT_REMOVED_REASON } from '@libs/core/infrastructure/database/mongo/kody-rules/freeze-agent-file-rules';
 
 @Injectable()
 export class CheckSyncStatusUseCase {
@@ -39,6 +45,8 @@ export class CheckSyncStatusUseCase {
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+        @Inject(KODY_RULES_SERVICE_TOKEN)
+        private readonly kodyRulesService: IKodyRulesService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: { organization: { uuid: string } };
@@ -49,17 +57,19 @@ export class CheckSyncStatusUseCase {
         teamId: string,
         repositoryId?: string,
     ): Promise<{
-        ideRulesSyncEnabledFirstTime: boolean;
         kodyRulesGeneratorEnabledFirstTime: boolean;
+        removedOnboardingImports: number;
     }> {
-        const syncStatusFlags = {
-            ideRulesSyncEnabledFirstTime: true,
-            kodyRulesGeneratorEnabledFirstTime: true,
-        };
-
         const organizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
             teamId: teamId,
+        };
+
+        const syncStatusFlags = {
+            kodyRulesGeneratorEnabledFirstTime: true,
+            removedOnboardingImports: await this.countRemovedOnboardingImports(
+                organizationAndTeamData.organizationId,
+            ),
         };
 
         try {
@@ -82,17 +92,6 @@ export class CheckSyncStatusUseCase {
                     {},
                     repositoryId,
                 );
-
-            const ideRulesSyncEnabled =
-                currentRepositoryConfig.configs.ideRulesSyncEnabled;
-
-            if (!ideRulesSyncEnabled) {
-                const ideRules = rules?.find((rule) =>
-                    rule?.rules?.find((r: IKodyRule) => r.sourcePath),
-                );
-
-                syncStatusFlags.ideRulesSyncEnabledFirstTime = !ideRules;
-            }
 
             // "First time" for the generator means the repo has never been
             // seeded from past reviews. It drives the one-time onboarding
@@ -123,6 +122,35 @@ export class CheckSyncStatusUseCase {
             });
 
             return syncStatusFlags;
+        }
+    }
+
+    /**
+     * Rules the onboarding import made from coding-agent files that the
+     * agent-file migration removed. Drives the notice that offers the
+     * coding-agent instructions setting instead.
+     */
+    private async countRemovedOnboardingImports(
+        organizationId: string,
+    ): Promise<number> {
+        try {
+            const doc =
+                await this.kodyRulesService.findByOrganizationId(
+                    organizationId,
+                );
+            return (doc?.rules ?? []).filter(
+                (rule) =>
+                    rule?.status === KodyRulesStatus.DELETED &&
+                    rule?.reason === ONBOARDING_IMPORT_REMOVED_REASON,
+            ).length;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not count removed onboarding imports',
+                context: CheckSyncStatusUseCase.name,
+                error,
+                metadata: { organizationId },
+            });
+            return 0;
         }
     }
 

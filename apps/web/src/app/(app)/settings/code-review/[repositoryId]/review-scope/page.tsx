@@ -40,6 +40,7 @@ import {
     mergeMissingReviewOptions,
 } from "../general/_utils/review-options-state";
 import { CategoryList } from "./_components/category-list";
+import { CodingAgentInstructions } from "./_components/coding-agent-instructions";
 import { DeterministicEvidence } from "./_components/deterministic-evidence";
 import { SeverityCard } from "./_components/severity-card";
 
@@ -200,8 +201,9 @@ function ReviewScopeContent() {
                     <Page.Title>What to review</Page.Title>
                     <Page.Description>
                         Turn categories on or off, tell Kody what each one means
-                        in your codebase, and set the severity below which
-                        suggestions stay unposted.
+                        in your codebase, choose whether it checks your
+                        coding-agent instructions, and set the severity below
+                        which suggestions stay unposted.
                     </Page.Description>
                 </Page.TitleContainer>
 
@@ -217,6 +219,7 @@ function ReviewScopeContent() {
             <Page.Content className="gap-6">
                 <CentralizedConfigReadOnlyAlert />
                 <CategoryList canEdit={canEdit} defaults={defaults} />
+                <CodingAgentInstructions />
                 <SeverityCard />
 
                 {/* The pipeline gates this feature on its own and fails
