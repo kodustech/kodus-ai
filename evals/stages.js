@@ -80,6 +80,16 @@ const STAGES = [
                 name: 'Per requirement: done work not called a gap, and gaps caught (evals/business-logic-requirements)',
                 weekly: ['evals/business-logic-requirements/run.js', '--gate'],
             },
+            {
+                kind: 'contract',
+                name: 'The judge, the second look and where criteria live, on a real model (evals/business-logic/live.js)',
+                weekly: ['evals/business-logic/live.js'],
+            },
+            {
+                kind: 'contract',
+                name: "A task a tracker's changed server still reads, and never another (evals/task-finder)",
+                weekly: ['evals/task-finder/run.js'],
+            },
         ],
         eval: {
             path: 'evals/business-logic',

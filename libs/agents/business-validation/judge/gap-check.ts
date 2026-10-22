@@ -2,6 +2,8 @@ import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schem
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import type { AgentRun } from '../trackers/task-finder';
+import { fence } from '../fence';
+import { diffFor } from '../pull-request-diff';
 import { asRecord } from '../value-utils';
 import type { RequirementVerdict } from './validation.types';
 
@@ -301,17 +303,14 @@ function prompt(input: GapCheckInput): string {
             ? fence('reviewer_note', input.requirement.note)
             : '',
         fence('task', input.taskText),
-        fence('pr_diff', input.diff || '(none)'),
+        fence(
+            'pr_diff',
+            diffFor(
+                input.diff,
+                (input.requirement.evidence ?? []).map((e) => e.file),
+            ) || '(none)',
+        ),
     ]
         .filter((line) => line !== '')
         .join('\n');
-}
-
-/** A labeled data block whose text can't close it early. */
-function fence(label: string, text: string): string {
-    const safe = text.replace(
-        new RegExp(`</?${label}>`, 'gi'),
-        (tag) => `&lt;${tag.slice(1)}`,
-    );
-    return `<${label}>\n${safe}\n</${label}>`;
 }

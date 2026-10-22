@@ -1,3 +1,5 @@
+import * as vm from 'node:vm';
+
 /** Longest user or model pattern we run. A line or id matcher is short;
  *  anything longer is more likely an unbounded/backtracking construct. */
 export const MAX_PATTERN_LEN = 200;
@@ -46,4 +48,40 @@ export function isRegexSafe(pattern: string): boolean {
 /** Whether the token at `index` repeats what precedes it: `*`, `+`, `{n,}`, `{n,m}`. */
 function repeats(pattern: string, index: number): boolean {
     return /^\s*([*+]|\{\d+,?\d*\})/.test(pattern.slice(index));
+}
+
+/** One match of {@link matchAllWithin}: where it starts, its text and its first group. */
+export interface BoundedMatch {
+    index: number;
+    text: string;
+    group?: string;
+}
+
+/**
+ * Every match of a user's pattern in `text`, stopped after `timeoutMs`. The
+ * shape check above can't see every slow pattern (`[A-Z]+\w*-\d+` grows
+ * cubically on a long run of capitals), and the text is often the PR's own
+ * title or description, which its author controls: V8 interrupts a regex that
+ * runs past a script timeout, so the review never hangs on one. A pattern
+ * that runs out of time matches nothing.
+ */
+export function matchAllWithin(
+    pattern: string,
+    text: string,
+    timeoutMs = 50,
+): BoundedMatch[] {
+    try {
+        const found = vm.runInNewContext(
+            'Array.from(text.matchAll(new RegExp(pattern, "g")), (m) => [m.index, m[0], m[1]])',
+            { text, pattern },
+            { timeout: timeoutMs },
+        ) as Array<[number, string, string | undefined]>;
+        return Array.from(found, ([index, match, group]) => ({
+            index,
+            text: match,
+            ...(group !== undefined ? { group } : {}),
+        }));
+    } catch {
+        return [];
+    }
 }

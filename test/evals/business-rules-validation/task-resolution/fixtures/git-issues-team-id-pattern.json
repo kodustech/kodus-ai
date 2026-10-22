@@ -12,7 +12,10 @@
     },
     "gitIssuesConnected": true,
     "trackers": [],
-    "settings": { "taskIdPattern": "RCP-(\\d+)" },
+    "settings": {
+        "taskSource": "kodus-issues-default",
+        "taskIdPattern": "RCP-(\\d+)"
+    },
     "pullRequest": {
         "title": "RCP-12 scale servings",
         "body": "Adds a servings input."

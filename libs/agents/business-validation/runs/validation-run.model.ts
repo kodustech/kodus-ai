@@ -129,6 +129,13 @@ export class BusinessValidationRunModel extends CoreDocument {
     /** A run skipped because the tracker was down, waiting to be re-checked (UC-22). */
     @Prop({ type: Boolean, required: false })
     pendingRecheck?: boolean;
+
+    /**
+     * When the PR was first skipped for a tracker that was down. Each re-check
+     * that finds it still down carries this on, so the 24h window closes.
+     */
+    @Prop({ type: Date, required: false })
+    pendingSince?: Date;
 }
 
 export const BusinessValidationRunSchema = SchemaFactory.createForClass(
@@ -142,6 +149,11 @@ BusinessValidationRunSchema.index(
 BusinessValidationRunSchema.index(
     { organizationId: 1, createdAt: -1 },
     { name: 'idx_org_time', background: true },
+);
+// Runs are history for the card, the Cockpit and support: a year of it.
+BusinessValidationRunSchema.index(
+    { createdAt: 1 },
+    { name: 'ttl_created_at', expireAfterSeconds: 365 * 24 * 60 * 60 },
 );
 BusinessValidationRunSchema.index(
     { pendingRecheck: 1, createdAt: -1 },

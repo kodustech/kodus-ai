@@ -20,6 +20,7 @@ export const BUSINESS_LOGIC_PATHS = {
         ),
     TRY: pathToApiUrl("/business-logic/try"),
     TEST: pathToApiUrl("/business-logic/test"),
+    TEST_POST: pathToApiUrl("/business-logic/test/post"),
     INTENT: pathToApiUrl("/business-logic/intent"),
 };
 
@@ -60,15 +61,26 @@ export const testOnPullRequest = (body: {
     prUrl: string;
     taskInput?: string;
     settings?: BusinessLogicSettingsValue;
-    post?: boolean;
 }) =>
     authorizedFetch<BusinessLogicTestResult>(BUSINESS_LOGIC_PATHS.TEST, {
         method: "POST",
         body: JSON.stringify(body),
     });
 
+/** Posts the result a test showed, as it was shown. */
+export const postTestResult = (body: {
+    teamId: string;
+    previewToken: string;
+}) =>
+    authorizedFetch<{ posted: "created" | "updated" | "none" }>(
+        BUSINESS_LOGIC_PATHS.TEST_POST,
+        { method: "POST", body: JSON.stringify(body) },
+    );
+
 export const getIntentCockpit = (params: {
     startDate: string;
     endDate: string;
     teamId?: string;
+    /** The Cockpit's repository picker: `owner/name`. */
+    repository?: string;
 }) => authorizedFetch<IntentCockpit>(BUSINESS_LOGIC_PATHS.INTENT, { params });

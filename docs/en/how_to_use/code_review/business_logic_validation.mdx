@@ -44,7 +44,8 @@ Kody also reads what the task links to:
 - **Documents attached to the task** (Linear docs): read as part of the task, criteria included.
 
 - **"Closes PROJ-1"** or a key in the title or branch: the PR is checked against the whole task.
-- **"Part of PROJ-1"** or **"Refs PROJ-1"**: the PR delivers a slice. What's missing is listed, but not as something to merge.
+- **"Part of PROJ-1"**: the PR delivers a slice. What's missing is listed, but not as something to merge.
+- **"Refs PROJ-1"**, **"see PROJ-1"** or **"related to PROJ-1"** in the description: a mention. It is checked only when the PR names no other task, and then as the PR's own.
 - **Up to three tasks** are checked per PR, one section each. A PR that states more (a release or a merge) is skipped.
 
 ## The five states
@@ -69,17 +70,17 @@ A gap tells the author to redo work, so Kody holds each one to the code:
 
 ## On the pull request
 
-- Kody checks the PR on its **first review**, then again on each push while something is missing, so a fix updates the comment without anyone asking. **Re-check** can also be set to every push, or only when someone comments `@kody -v business-logic`.
+- Kody checks the PR on its **first review**. After that it re-checks when someone comments `@kody -v business-logic` or runs `@kody review --force`. **Re-check** can also be set to each push while something is missing, so a fix updates the comment without anyone asking, or to every push; each is one more validation per push.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
 - A PR that meets its task gets a one-line comment ("✅ 4 of 4 met"), plus anything to check by hand, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
 - The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to fix.
 
 ### Replying to the comment
 
-Reply to the Business Logic comment and mention `@kody`:
+Reply to the Business Logic comment and mention `@kody`. Kody reads a comment as a reply when it is posted in that comment's thread (GitLab, Bitbucket, Azure Repos), quotes it, or names the requirement, its state (MISSING, PARTIAL) or the task id; any other comment goes to the chat.
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
-- **Accept a finding** (on GitHub, anyone with write access to the repository, the author included; other platforms don't report the commenter's role, so there anyone can): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks.
+- **Accept a finding** (someone other than the PR's author: on GitHub, with write access to the repository; on the other platforms, a member of the organization the platform lists): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks, even when Kody words the requirement a little differently.
 
 ## When Kody stays quiet
 
@@ -91,7 +92,7 @@ Kody comments only when the author can do something about it:
 | `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Ask for a task** on, it stays open until fixed |
 | No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing. With **Ask for a task** on, a comment asking for one (never on a bot's PR) |
 | A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Ask for a task** on, a comment saying which tracker can't read it |
-| The tracker is down or its token expired | Nothing; owners are notified, and Kody re-checks once the tracker answers |
+| The tracker is down or its token expired | Nothing; owners are notified, and Kody re-checks once the tracker answers, for up to a day after the first miss |
 
 The reason for every skip is recorded and shown on the Business Logic settings page.
 
@@ -107,11 +108,11 @@ Comment on the PR (not on a line of code):
 
 Open **Code review → What to review → Business Logic → Configure**. Every setting can be set globally and overridden per repository or directory.
 
-- **Task source**: every connected tracker (custom task plugins like ClickUp included), or one plugin. For a custom plugin, pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it** at the end of the page: a task alone shows what Kody reads from it, and a pull request runs the whole check without posting, with the settings on screen, saved or not.
-- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96`, `#12`, `AB#8`, `CU-…` and tracker links are found without it, and so is a lower-case key like `sc-123` in a branch name. In a title or description a lower-case key counts only when Linear or Jira has that team or project; for another tracker, set the format.
+- **Task source**: every connected tracker (custom task plugins like ClickUp included), or one plugin. For a custom plugin, pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it** at the end of the page (it needs permission to edit these settings): a task alone shows what Kody reads from it, and a pull request runs the whole check without posting, with the settings on screen, saved or not. **Post to the pull request** posts the result shown, without running it again.
+- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96`, `#12`, `AB#8`, `CU-…` and tracker links are found without it, and so is a lower-case key like `sc-123` in a branch name. In a title or description a lower-case key counts only when Linear or Jira has that team or project; for another tracker, set the format. A number the format captures is read as a Git issue only when Git Issues is the task source; with every connected tracker, `T1234` is never issue #1234 of the repository.
 - **Where acceptance criteria live**: detected automatically, under a heading in the description, or in a custom field; a task without the field is read from its description.
 - **Ask for a task when the PR references none**: Kody comments asking which task the PR is for (or pointing at the typo), instead of skipping it. PRs opened by bots, like Dependabot or Renovate, are left alone. A tracker that is down never counts.
-- **Re-check**: while something is missing (default), on every push, or only on request.
+- **Re-check**: only on request (default), each push while something is missing, or every push.
 - **Skipped pull requests**: the ones code review skips are skipped here too: titles with an ignored keyword (`ignoredTitleKeywords`, like `wip`) and drafts when `runOnDraft` is off. A `@kody -v business-logic` comment always runs.
 - **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
@@ -123,7 +124,7 @@ businessLogic:
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: true
-  recheckOn: 'failing' # failing | push | request
+  recheckOn: 'request' # request | failing | push
   requireTask: false
 ```
 
@@ -140,4 +141,4 @@ It checks your local changes against the task and prints one line per requiremen
 
 ## Cockpit
 
-**Cockpit → Delivered as asked** shows the share of PRs that met their task, changes not in the task, how often developers agreed with Kody, and the split by who wrote the code (people or coding agents, from commit authors and `Co-Authored-By` trailers) and by team.
+**Cockpit → Delivered as asked** shows the share of PRs that met their task, changes not in the task, how often developers agreed with Kody, and the split by who wrote the code (people or coding agents, from commit authors and `Co-Authored-By` trailers) and by team. It follows the Cockpit's repository picker, and can be hidden in **Organization → Cockpit** like the other tabs.

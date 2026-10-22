@@ -85,6 +85,8 @@ export function buildRun(
         trigger?: string;
         headSha?: string;
         author?: RunAuthor;
+        /** The first skip of the re-checks this run continues. */
+        pendingSince?: Date;
     } = {},
 ): NewValidationRun {
     const { outcome } = result;
@@ -117,11 +119,16 @@ export function buildRun(
         tasks: toRunTasks(result),
         unseenFiles: outcome.kind === 'validated' ? outcome.unseenFiles : [],
         ...(extra.author ? { author: extra.author } : {}),
-        // The PR is waiting on the tracker, not on its author (UC-22).
+        // The PR is waiting on the tracker, not on its author (UC-22). A CLI
+        // check never comments on the PR, so nothing re-checks it.
         ...(outcome.kind === 'skipped' &&
         outcome.reason === 'tracker_unavailable' &&
-        request.pullRequest
-            ? { pendingRecheck: true }
+        request.pullRequest &&
+        request.door !== 'cli'
+            ? {
+                  pendingRecheck: true,
+                  pendingSince: extra.pendingSince ?? new Date(),
+              }
             : {}),
     };
 }

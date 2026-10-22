@@ -80,62 +80,14 @@ describe('SkillLoaderService', () => {
 
         expect(meta.name).toBe('business-rules-validation');
         expect(meta.version).toBe('1.0.0');
-        expect(meta.capabilities).toEqual([
-            'pr.metadata.read',
-            'pr.diff.read',
-            'task.context.read',
-        ]);
-        expect(meta.capabilityDefinitions).toEqual({
-            'pr.metadata.read': {
-                mode: 'fixed_tools',
-                tools: ['KODUS_GET_PULL_REQUEST'],
-            },
-            'pr.diff.read': {
-                mode: 'fixed_tools',
-                tools: ['KODUS_GET_PULL_REQUEST_DIFF'],
-            },
-            'task.context.read': {
-                mode: 'provider_dynamic',
-            },
-        });
-        expect(meta.allowedTools).toEqual([
-            'KODUS_GET_PULL_REQUEST',
-            'KODUS_GET_PULL_REQUEST_DIFF',
-        ]);
-        expect(meta.fetcherPolicy).toEqual({
-            toolMode: 'any',
-            allowWithoutTools: false,
-        });
+        // The runtime reads only these; nothing else is declared.
         expect(meta.executionPolicy).toEqual({
-            onMissingMcp: 'fail',
-            onMcpConnectError: 'fail',
-            fetcherTimeoutMs: 120000,
             analyzerTimeoutMs: 120000,
-            fetcherMaxIterations: 2,
             analyzerMaxIterations: 1,
         });
-        expect(meta.contracts).toEqual({
-            input: {
-                requiredContextFields: [
-                    'organizationAndTeamData.organizationId',
-                    'organizationAndTeamData.teamId',
-                    'prepareContext.repository.id',
-                ],
-            },
-            output: {
-                requiredFields: ['needsMoreInfo', 'summary'],
-            },
-        });
-        expect(meta.requiredMcps).toEqual([
-            {
-                category: 'task-management',
-                label: 'Task Management',
-                examples:
-                    'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues, Git Issues',
-            },
-        ]);
+        expect(meta.requiredMcps).toBeUndefined();
+        expect(meta.capabilities).toBeUndefined();
     });
-
     it('parses complex YAML frontmatter using a YAML parser', () => {
         const service = new SkillLoaderService() as any;
 

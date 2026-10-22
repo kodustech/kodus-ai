@@ -472,6 +472,27 @@ describe('the resolver asks the finder only after every direct read missed', () 
         });
     });
 
+    it('searches a clean miss of a key whose team the tracker has: its server may read ids another way now', async () => {
+        const finder = jest.fn(async () => ({
+            task: { id: 'SAA-96', title: 'Sticky notes', description: 'x' },
+            tools: ['list_issues', 'get_issue'],
+        }));
+        const linear = new LinearTracker(
+            linearSession(() => {
+                throw new TaskNotFoundError('Entity not found');
+            }),
+        ).useFinder(finder);
+
+        const resolution = await resolveTasks(
+            [ref('SAA-96')],
+            [linear],
+            context,
+        );
+
+        expect(finder).toHaveBeenCalled();
+        expect(resolution.kind).toBe('found');
+    });
+
     it('does not search a tracker whose team the key is not', async () => {
         const finder = jest.fn(async () => undefined);
         const linear = new LinearTracker(
@@ -485,22 +506,81 @@ describe('the resolver asks the finder only after every direct read missed', () 
         expect(finder).not.toHaveBeenCalled();
     });
 
-    it('searches a plugin that cannot list its keys', async () => {
-        const finder = jest.fn(async () => undefined);
-        const plugin = new CustomMcpTracker('Acme', {
-            called: [] as string[],
-            tools: async () => [
-                tool('get_task', { task_id: { type: 'string' } }),
-            ],
-            call: async () => {
-                throw new TaskNotFoundError('not found');
+    it('searches a plugin whose answer it cannot read, never one that said there is no such task', async () => {
+        const plugin = (call: () => Promise<unknown>) => {
+            const finder = jest.fn(async () => undefined);
+            const tracker = new CustomMcpTracker('Acme', {
+                called: [] as string[],
+                tools: async () => [
+                    tool('get_task', { task_id: { type: 'string' } }),
+                ],
+                call,
+                close: async () => undefined,
+            } as any).useFinder(finder);
+            return { tracker, finder };
+        };
+
+        const unread = plugin(async () => ({ data: { ref: 'something' } }));
+        await resolveTasks([ref('KOD-10')], [unread.tracker], context);
+        expect(unread.finder).toHaveBeenCalled();
+
+        const missing = plugin(async () => {
+            throw new TaskNotFoundError('Task KOD-10 not found');
+        });
+        await resolveTasks([ref('KOD-10')], [missing.tracker], context);
+        expect(missing.finder).not.toHaveBeenCalled();
+    });
+
+    it('lets the agent read a Linear issue that came back without a description key, and keeps the title if it cannot', async () => {
+        const titleOnly = { id: 'SAA-96', title: 'Sticky notes' };
+        const finder = jest.fn(async () => ({
+            task: {
+                id: 'SAA-96',
+                title: 'Sticky notes',
+                description: '- Notes stick to the board',
             },
-            close: async () => undefined,
-        } as any).useFinder(finder);
-
-        await resolveTasks([ref('KOD-10')], [plugin], context);
-
+            tools: ['get_issue'],
+        }));
+        const read = await resolveTasks(
+            [ref('SAA-96')],
+            [
+                new LinearTracker(linearSession(() => titleOnly)).useFinder(
+                    finder,
+                ),
+            ],
+            context,
+        );
         expect(finder).toHaveBeenCalled();
+        expect(read).toMatchObject({
+            kind: 'found',
+            tasks: [{ task: { description: '- Notes stick to the board' } }],
+        });
+
+        const kept = await resolveTasks(
+            [ref('SAA-96')],
+            [
+                new LinearTracker(linearSession(() => titleOnly)).useFinder(
+                    async () => undefined,
+                ),
+            ],
+            context,
+        );
+        expect(kept).toMatchObject({
+            kind: 'found',
+            tasks: [{ task: { title: 'Sticky notes' } }],
+        });
+
+        const empty = jest.fn(async () => undefined);
+        await resolveTasks(
+            [ref('SAA-96')],
+            [
+                new LinearTracker(
+                    linearSession(() => ({ ...titleOnly, description: '' })),
+                ).useFinder(empty),
+            ],
+            context,
+        );
+        expect(empty).not.toHaveBeenCalled();
     });
 
     it('leaves a tracker that is down to the re-check, not to an agent', async () => {

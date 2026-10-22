@@ -8,6 +8,8 @@ import {
 } from '@libs/agents/business-validation/judge/gap-check';
 import { aiSdkAgentRun } from '@libs/agents/business-validation/trackers/task-finder';
 
+import { evalModel } from './eval-model';
+
 /**
  * Does the second look settle only what the repository settles? Each case is
  * a requirement the judge left open from the diff (MISSING, PARTIAL or CHECK
@@ -303,7 +305,7 @@ function readerOf(files: Record<string, string>): RepositoryReader {
     () => {
         it('changes a state only where the repository settles it', async () => {
             const check = createGapCheck(
-                aiSdkAgentRun(undefined, { organizationId: 'eval-org' }),
+                aiSdkAgentRun(evalModel(), { organizationId: 'eval-org' }),
             );
             const report: Array<Record<string, unknown>> = [];
             let right = 0;

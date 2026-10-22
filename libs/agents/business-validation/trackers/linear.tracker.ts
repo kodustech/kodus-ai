@@ -4,7 +4,7 @@ import type {
 } from '../business-validation.types';
 import type { MCPToolRaw } from '@libs/mcp-server/mcp-adapter';
 
-import { asRecord } from '../value-utils';
+import { asRecord, isEmpty } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import type { RelatedTask, Task } from '../business-validation.types';
 import {
@@ -68,6 +68,10 @@ export class LinearTracker extends McpTaskTracker {
         if (issue) {
             return {
                 status: 'found',
+                // No `description` key at all is a shape miss (the answer
+                // moved again, #1810), not an issue with no description: an
+                // empty one stays thin.
+                ...(!('description' in issue) ? { incomplete: true } : {}),
                 task: {
                     tracker: this.name,
                     id: identifierOf(issue) ?? reference.id,
@@ -98,7 +102,11 @@ export class LinearTracker extends McpTaskTracker {
                 },
             };
         }
-        return { status: 'not_found' };
+        // It answered without an error and without the issue: a shape this
+        // tracker can't read, so the finder may look.
+        return isEmpty(payload)
+            ? { status: 'not_found' }
+            : { status: 'not_found', unread: true };
     }
 
     /**

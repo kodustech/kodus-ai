@@ -2,7 +2,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord } from '../value-utils';
+import { asRecord, isEmpty } from '../value-utils';
 import { McpToolSession } from './mcp-tool-session';
 import { recordsIn, textField } from './task-payload';
 import { McpTaskTracker } from './tracker';
@@ -41,7 +41,11 @@ export class NotionTracker extends McpTaskTracker {
         const description = text ? pageText(text) : undefined;
         const fields = text ? pageProperties(text) : {};
         if (!description) {
-            return { status: 'not_found' };
+            // A page answered with none of the fields its text lives in is
+            // a shape this tracker can't read; an empty page is just empty.
+            return text === undefined && !isEmpty(payload)
+                ? { status: 'not_found', unread: true }
+                : { status: 'not_found' };
         }
         return {
             status: 'found',
@@ -67,6 +71,9 @@ export class NotionTracker extends McpTaskTracker {
                         tools.some((t) => t.name === name),
                     ) ?? NOTION_TOOLS[0],
             );
+        this.fetchTool.catch(() => {
+            this.fetchTool = undefined;
+        });
         return this.fetchTool;
     }
 }

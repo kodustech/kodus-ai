@@ -1,47 +1,13 @@
 ---
 name: business-rules-validation
 description: Validate PR code changes against task requirements to identify missing, forgotten, or overlooked business logic implementations
-allowed-tools: KODUS_GET_PULL_REQUEST KODUS_GET_PULL_REQUEST_DIFF
 metadata:
     version: '1.0.0'
     kodus:
-        capabilities:
-            - pr.metadata.read
-            - pr.diff.read
-            - task.context.read
-        capability-definitions:
-            pr.metadata.read:
-                mode: fixed_tools
-                tools: KODUS_GET_PULL_REQUEST
-            pr.diff.read:
-                mode: fixed_tools
-                tools: KODUS_GET_PULL_REQUEST_DIFF
-            task.context.read:
-                mode: provider_dynamic
-        fetcher-policy:
-            tool-mode: any
-            allow-without-tools: false
+        # The only frontmatter the runtime reads (business-validation.service.ts).
         execution-policy:
-            on-missing-mcp: fail
-            on-mcp-connect-error: fail
-            fetcher-timeout-ms: 120000
             analyzer-timeout-ms: 120000
-            fetcher-max-iterations: 2
             analyzer-max-iterations: 1
-        contracts:
-            input:
-                required-context-fields:
-                    - organizationAndTeamData.organizationId
-                    - organizationAndTeamData.teamId
-                    - prepareContext.repository.id
-            output:
-                required-fields:
-                    - needsMoreInfo
-                    - summary
-        required-mcps:
-            - category: task-management
-              label: Task Management
-              examples: Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues, Git Issues
 ---
 
 # Business Rules Gap Analysis

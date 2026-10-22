@@ -6,6 +6,7 @@ import {
     getIntentCockpit,
     getReadTools,
     getTaskSources,
+    postTestResult,
     testOnPullRequest,
     tryReadTask,
 } from "./fetch";
@@ -59,10 +60,14 @@ export const useTryReadTask = () => useMutation({ mutationFn: tryReadTask });
 export const useTestOnPullRequest = () =>
     useMutation({ mutationFn: testOnPullRequest });
 
+export const usePostTestResult = () =>
+    useMutation({ mutationFn: postTestResult });
+
 export const useIntentCockpit = (params: {
     startDate: string;
     endDate: string;
     teamId?: string;
+    repository?: string;
 }) =>
     useQuery({
         queryKey: [
@@ -70,6 +75,7 @@ export const useIntentCockpit = (params: {
             params.startDate,
             params.endDate,
             params.teamId,
+            params.repository,
         ],
         queryFn: () => getIntentCockpit(params),
         staleTime: 5 * 60 * 1000,

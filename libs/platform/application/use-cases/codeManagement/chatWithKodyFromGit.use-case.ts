@@ -97,7 +97,6 @@ interface CommentClaim {
 const KODY_CONVERSATION_MARKER =
     '<!-- kody-codereview -->\n<!-- kody-conversation -->';
 
-
 enum CommandType {
     BUSINESS_LOGIC_VALIDATION = 'business_logic_validation',
     BUSINESS_LOGIC_INVALID_CONTEXT = 'business_logic_invalid_context',
@@ -712,8 +711,12 @@ export class ChatWithKodyFromGitUseCase {
                 message,
                 sender: {
                     login: this.getSender(params).login,
-                    canWrite: this.senderCanWrite(params),
+                    ...(await this.senderAccess(
+                        params,
+                        organizationAndTeamData,
+                    )),
                 },
+                threadId: replyThreadOf(params),
             })
             .catch((error) => {
                 this.logger.warn({
@@ -741,19 +744,52 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     /**
-     * GitHub says how the commenter relates to the repository. Only people
-     * with write access may waive a requirement; other platforms don't say,
-     * so there anyone may.
+     * Who may waive a requirement: someone with write access who did not open
+     * the PR. GitHub says how the commenter relates to the repository; the
+     * other platforms are asked for the organization's members, and a
+     * commenter outside them, or a list that can't be read, may not.
      */
-    private senderCanWrite(params: WebhookParams): boolean | undefined {
-        const association = params.payload?.comment?.author_association;
-        if (
-            params.platformType !== PlatformType.GITHUB ||
-            typeof association !== 'string'
-        ) {
-            return undefined;
+    private async senderAccess(
+        params: WebhookParams,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<{ canWrite?: boolean; isAuthor: boolean }> {
+        const sender = this.getSender(params);
+        const isAuthor = isPullRequestAuthor(params, sender);
+        if (params.platformType === PlatformType.GITHUB) {
+            const association = params.payload?.comment?.author_association;
+            return {
+                isAuthor,
+                ...(typeof association === 'string'
+                    ? {
+                          canWrite: [
+                              'OWNER',
+                              'MEMBER',
+                              'COLLABORATOR',
+                          ].includes(association),
+                      }
+                    : {}),
+            };
         }
-        return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association);
+        const members = await this.codeManagementService
+            .getListMembers(
+                { organizationAndTeamData },
+                params.platformType as PlatformType,
+            )
+            .catch(() => undefined);
+        const id = bareId(sender.id);
+        const login = sender.login?.toLowerCase();
+        return {
+            isAuthor,
+            canWrite:
+                Array.isArray(members) &&
+                members.some(
+                    (m: { id?: unknown; name?: unknown }) =>
+                        (!!id && bareId(m.id) === id) ||
+                        (!!login &&
+                            typeof m.name === 'string' &&
+                            m.name.toLowerCase() === login),
+                ),
+        };
     }
 
     private getCommentBody(params: WebhookParams): string {
@@ -2414,14 +2450,25 @@ export class ChatWithKodyFromGitUseCase {
               }
             : undefined;
 
-        const settings = await this.businessLogicPublisher?.settingsFor(
+        // The PR's directory settings and model, as its review uses them.
+        const config = await this.businessLogicPublisher?.configFor(
             organizationAndTeamData,
             repository?.id,
+            repository && prNumber
+                ? {
+                      number: prNumber,
+                      repositoryName: repository.name,
+                      platformType: pc?.platformType,
+                  }
+                : undefined,
         );
+        const settings = config?.settings;
         const request = {
             door: 'command' as const,
             organizationAndTeamData,
             repository,
+            byokModel: config?.byokModel,
+            byokModelId: config?.byokModelId,
             pullRequest: prNumber
                 ? {
                       number: prNumber,
@@ -2711,5 +2758,73 @@ export class ChatWithKodyFromGitUseCase {
         }
 
         return undefined;
+    }
+}
+
+/** An id as platforms write it, without Bitbucket's braces. */
+function bareId(id: unknown): string | undefined {
+    if (id === undefined || id === null || id === '') {
+        return undefined;
+    }
+    return String(id).replace(/^\{|\}$/g, '');
+}
+
+/** Whether the commenter opened the pull request, as each platform names its author. */
+function isPullRequestAuthor(
+    params: WebhookParams,
+    sender: { login?: string; id?: unknown },
+): boolean {
+    const payload = params.payload ?? {};
+    switch (params.platformType) {
+        case PlatformType.GITHUB: {
+            const author =
+                payload.issue?.user?.login ?? payload.pull_request?.user?.login;
+            return (
+                typeof author === 'string' &&
+                !!sender.login &&
+                author.toLowerCase() === sender.login.toLowerCase()
+            );
+        }
+        case PlatformType.GITLAB:
+            return sameId(payload.merge_request?.author_id, sender.id);
+        case PlatformType.BITBUCKET:
+            return (
+                sameId(payload.pullrequest?.author?.uuid, sender.id) ||
+                sameId(payload.pullrequest?.author?.account_id, sender.id)
+            );
+        case PlatformType.AZURE_REPOS:
+            return sameId(
+                payload.resource?.pullRequest?.createdBy?.id,
+                sender.id,
+            );
+        default:
+            return false;
+    }
+}
+
+function sameId(a: unknown, b: unknown): boolean {
+    const left = bareId(a);
+    return !!left && left === bareId(b);
+}
+
+/**
+ * The thread a comment was posted in, where the platform has threads: a
+ * GitLab discussion, a Bitbucket parent comment, an Azure Repos thread.
+ */
+function replyThreadOf(params: WebhookParams): string | undefined {
+    const payload = params.payload ?? {};
+    switch (params.platformType) {
+        case PlatformType.GITLAB:
+            return bareId(payload.object_attributes?.discussion_id);
+        case PlatformType.BITBUCKET:
+            return bareId(payload.comment?.parent?.id);
+        case PlatformType.AZURE_REPOS: {
+            const links = JSON.stringify(
+                payload.resource?.comment?._links ?? {},
+            );
+            return links.match(/\/threads\/(\d+)/)?.[1];
+        }
+        default:
+            return undefined;
     }
 }

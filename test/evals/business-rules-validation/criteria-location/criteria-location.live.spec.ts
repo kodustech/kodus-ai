@@ -48,6 +48,8 @@ import type {
 } from '../task-resolution/fixture.types';
 import { renderTask } from '../task-resolution/servers';
 
+import { evalModel } from '../../../../evals/business-logic/eval-model';
+
 const RUN = process.env.RUN_BR_EVAL === '1';
 /** Every requirement right in every variant: where the criteria live must not change the verdict. */
 const MIN_ACCURACY = 1;
@@ -277,7 +279,7 @@ async function judgeOnce(
 ): Promise<ValidationResult> {
     return settleVerdict(
         await new IntentJudge(
-            undefined,
+            evalModel(),
             { analyzerTimeoutMs: 170_000, analyzerMaxIterations: 1 },
             { organizationId: 'eval-org', teamId: 'eval-team' },
         ).judge({
@@ -376,11 +378,10 @@ describe('every variant hands the judge its criteria', () => {
                 });
             }
 
-            const out =
-                path.join(
-                    process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
-                    'business-rules-criteria-location.json',
-                );
+            const out = path.join(
+                process.env.BR_EVAL_REPORT_DIR ?? os.tmpdir(),
+                'business-rules-criteria-location.json',
+            );
             fs.mkdirSync(path.dirname(out), { recursive: true });
             fs.writeFileSync(out, JSON.stringify(report, null, 2));
             for (const r of report) {

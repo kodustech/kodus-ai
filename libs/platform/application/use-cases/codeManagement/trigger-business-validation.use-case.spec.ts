@@ -563,7 +563,10 @@ describe('TriggerBusinessValidationUseCase (deterministic logic)', () => {
                 }),
             };
             const publisher = {
-                settingsFor: jest.fn().mockResolvedValue({}),
+                configFor: jest.fn().mockResolvedValue({
+                    settings: {},
+                    enabled: true,
+                }),
                 withRepository: jest.fn((r: unknown) => r),
                 publish: jest.fn(),
             };
@@ -701,7 +704,11 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             })),
         };
         const publisher = {
-            settingsFor: jest.fn(),
+            configFor: jest.fn(async () => ({
+                settings: {},
+                enabled: true,
+                byokModelId: 'model-dir',
+            })),
             withRepository: jest.fn((r: unknown) => r),
             headShaOf: jest.fn(async () => 'abc1234'),
             preview: jest.fn(async () => ({
@@ -764,7 +771,10 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             }),
         );
         expect(result.pullRequest.repositoryName).toBe('notes');
-        expect(publisher.settingsFor).not.toHaveBeenCalled();
+        // The settings on screen, with the model the PR's review uses.
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({ byokModelId: 'model-dir' }),
+        );
         expect(publisher.publish).not.toHaveBeenCalled();
         expect(runs.create).not.toHaveBeenCalled();
         expect(result.attempts[0].tools).toEqual(['get_issue']);
@@ -773,22 +783,60 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             criteria: ['Order persists'],
         });
         expect(result.comment.posted).toBe(true);
-        expect(result.posted).toBeUndefined();
+        expect(result.previewToken).toEqual(expect.any(String));
     });
 
-    it('posts like the command when asked to', async () => {
-        const { useCase, publisher } = build();
-
-        const result = await useCase.testOnPullRequest({
+    it('posts the result the preview showed, sealed, without running it again', async () => {
+        const { useCase, publisher, service } = build();
+        const preview = await useCase.testOnPullRequest({
             organizationAndTeamData,
             prUrl,
-            post: true,
+        });
+        expect(service.validate).toHaveBeenCalledTimes(1);
+
+        const authorize = jest.fn(async () => undefined);
+        const result = await useCase.postPreview({
+            organizationAndTeamData,
+            previewToken: preview.previewToken,
+            authorize,
         });
 
+        expect(service.validate).toHaveBeenCalledTimes(1);
+        expect(authorize).toHaveBeenCalledWith('repo-1');
         expect(publisher.publish).toHaveBeenCalledWith(
-            expect.objectContaining({ trigger: 'command', headSha: 'abc1234' }),
+            expect.objectContaining({
+                trigger: 'command',
+                headSha: 'abc1234',
+                request: expect.objectContaining({
+                    pullRequest: expect.objectContaining({ number: 47 }),
+                }),
+            }),
         );
-        expect(result.posted).toBe('created');
+        expect(result).toEqual({ posted: 'created' });
+    });
+
+    it('refuses a preview another team made, or one that was altered', async () => {
+        const { useCase, publisher } = build();
+        const { previewToken } = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+        });
+        await expect(
+            useCase.postPreview({
+                organizationAndTeamData: {
+                    ...organizationAndTeamData,
+                    teamId: 'team-2',
+                },
+                previewToken,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+            useCase.postPreview({
+                organizationAndTeamData,
+                previewToken: `x${previewToken}`,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(publisher.publish).not.toHaveBeenCalled();
     });
 
     it('never runs on another PR than the one asked for', async () => {

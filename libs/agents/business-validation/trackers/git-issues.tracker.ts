@@ -17,18 +17,26 @@ export const GIT_ISSUES_TOOLS = ['KODUS_GET_ISSUE'];
 export class GitIssuesTracker extends McpTaskTracker {
     readonly name = 'Git Issues';
 
-    constructor(session: McpToolSession) {
+    /** `chosen`: the team picked Git Issues as its one task source. */
+    constructor(
+        session: McpToolSession,
+        private readonly chosen = false,
+    ) {
         super(session);
     }
 
     /**
      * `#12`, and a number a team's own id pattern captured (`TCK-(\d+)` on
-     * `TCK-12`): the built-in key shapes never yield a bare number.
+     * `TCK-12`) when Git Issues is the source the team chose: the pattern
+     * names no tracker, and read under `auto` `T1234` would judge the PR
+     * against issue #1234 of the repository.
      */
     canRead(reference: TaskReference): boolean {
         return (
             reference.kind === 'git_issue' ||
-            (reference.kind === 'key' && /^\d+$/.test(reference.id))
+            (this.chosen &&
+                reference.kind === 'key' &&
+                /^\d+$/.test(reference.id))
         );
     }
 
@@ -36,7 +44,11 @@ export class GitIssuesTracker extends McpTaskTracker {
         reference: TaskReference,
         context: TrackerReadContext,
     ): Promise<TrackerLookup> {
-        if (!this.canRead(reference)) {
+        // A parent is read by its bare number here, whatever the source.
+        if (
+            reference.kind !== 'git_issue' &&
+            !(reference.kind === 'key' && /^\d+$/.test(reference.id))
+        ) {
             return { status: 'not_found' };
         }
         const repository =
@@ -58,7 +70,15 @@ export class GitIssuesTracker extends McpTaskTracker {
             }),
         );
         if (payload.success === false) {
-            return { status: 'error', message: 'Git Issues failed' };
+            const cause = [payload.message, payload.error].find(
+                (v): v is string => typeof v === 'string' && !!v.trim(),
+            );
+            return {
+                status: 'error',
+                message: cause
+                    ? `Git Issues failed: ${cause}`
+                    : 'Git Issues failed',
+            };
         }
         const issue = asRecord(payload.data);
         if (

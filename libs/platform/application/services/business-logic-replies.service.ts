@@ -27,11 +27,19 @@ export interface BusinessLogicReplyInput {
     sender: {
         login: string;
         /**
-         * Whether the sender can write to the repository, when the platform
-         * says (GitHub's `author_association`). Unknown elsewhere.
+         * Whether the sender can write to the repository: GitHub's
+         * `author_association`, elsewhere membership of the organization the
+         * platform lists. Unknown only when nothing could be asked.
          */
         canWrite?: boolean;
+        /** The sender opened the pull request. */
+        isAuthor?: boolean;
     };
+    /**
+     * The thread the comment was posted in, where the platform has threads
+     * (a GitLab discussion, an Azure thread, a Bitbucket parent comment).
+     */
+    threadId?: string;
 }
 
 export type BusinessLogicReplyResult =
@@ -83,7 +91,8 @@ export class BusinessLogicReplies {
             return { handled: false };
         }
         const open = openFindings(run);
-        if (!open.length) {
+        if (!open.length || !answersTheComment(input, run, open)) {
+            // A question for the chat: no classifier call, no re-check.
             return { handled: false };
         }
 
@@ -132,9 +141,17 @@ export class BusinessLogicReplies {
                 request.organizationAndTeamData,
                 text,
             );
-        // Anyone on the team may accept, the author included: the comment
-        // records who and why. Only a drive-by commenter on a public GitHub
-        // repository, without write access, can't.
+        // With the comment as the only signal, a PR must not clear itself:
+        // the author disputes, someone else accepts.
+        if (input.sender.isAuthor) {
+            return {
+                handled: true,
+                reply: await say(
+                    `The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check.`,
+                ),
+            };
+        }
+        // A drive-by commenter without write access can't either.
         if (input.sender.canWrite === false) {
             return {
                 handled: true,
@@ -144,9 +161,10 @@ export class BusinessLogicReplies {
             };
         }
 
-        const settings = await this.publisher.settingsFor(
+        const { settings } = await this.publisher.configFor(
             request.organizationAndTeamData,
             request.repository!.id,
+            prScope(request),
         );
         if (intent.movedTo) {
             const exists = await this.businessValidationService.tryRead(
@@ -241,10 +259,12 @@ export class BusinessLogicReplies {
         intent: { files: string[]; claim: string },
     ): Promise<BusinessLogicReplyResult> {
         const { request } = input;
-        const settings = await this.publisher.settingsFor(
+        const config = await this.publisher.configFor(
             request.organizationAndTeamData,
             request.repository!.id,
+            prScope(request),
         );
+        const { settings } = config;
         const disputed = chosen
             .filter((c) => c.requirement)
             .map((c) => c.requirement!.requirement);
@@ -257,6 +277,8 @@ export class BusinessLogicReplies {
                 .map((t) => readBack(t, settings.taskIdPattern))
                 .join(' '),
             settings,
+            byokModel: request.byokModel ?? config.byokModel,
+            byokModelId: request.byokModelId ?? config.byokModelId,
             authorClaim: {
                 claim: intent.claim || input.message,
                 requirements: disputed,
@@ -324,6 +346,61 @@ export class BusinessLogicReplies {
 }
 
 /** The findings a reply can act on: open requirements and unaccepted changes, numbered. */
+/**
+ * Whether a comment answers the Business Logic comment, before any model is
+ * asked: it is posted in that comment's thread, quotes it, or names one of
+ * its findings (the task id, a state, or a run of the finding's words).
+ */
+function answersTheComment(
+    input: BusinessLogicReplyInput,
+    run: ValidationRunRecord,
+    open: Located[],
+): boolean {
+    const comment = run.comment;
+    if (
+        input.threadId &&
+        comment &&
+        [comment.threadId, comment.id]
+            .filter((id) => id !== undefined && id !== null)
+            .some((id) => String(id) === input.threadId)
+    ) {
+        return true;
+    }
+    const message = normalized(input.message);
+    if (/^\s*>/m.test(input.message) && /business logic/i.test(input.message)) {
+        return true;
+    }
+    if (/\b(?:missing|partial|not in task|check manually)\b/i.test(message)) {
+        return true;
+    }
+    return open.some(
+        ({ finding }) =>
+            message.includes(normalized(finding.taskId)) ||
+            sharesWords(message, normalized(finding.text), 4),
+    );
+}
+
+function normalized(text: string): string {
+    return text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}#-]+/gu, ' ')
+        .trim();
+}
+
+/** Whether `a` holds `n` words in a row of `b`. */
+function sharesWords(a: string, b: string, n: number): boolean {
+    const words = b.split(' ').filter(Boolean);
+    if (words.length < n) {
+        return words.length > 0 && a.includes(words.join(' '));
+    }
+    for (let i = 0; i + n <= words.length; i++) {
+        if (a.includes(words.slice(i, i + n).join(' '))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function openFindings(run: ValidationRunRecord): Located[] {
     const located: Located[] = [];
     for (const task of run.tasks) {
@@ -376,4 +453,15 @@ function readBack(task: RunTask, taskIdPattern?: string): string {
 
 function sameText(a: string, b: string): boolean {
     return requirementKey(a) === requirementKey(b);
+}
+
+/** The PR a reply is on, so its directory's settings and model apply. */
+function prScope(request: Omit<BusinessValidationRequest, 'door'>) {
+    return request.pullRequest && request.repository
+        ? {
+              number: request.pullRequest.number,
+              repositoryName: request.repository.name,
+              platformType: request.platformType,
+          }
+        : undefined;
 }

@@ -8,9 +8,9 @@ import { Switch } from "@components/ui/switch";
 import { Controller, useFormContext } from "react-hook-form";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
-import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
+import { useCodeReviewRouteParams } from "../../../../_hooks";
 
 const SWITCHES = [
     {
@@ -27,19 +27,19 @@ const SWITCHES = [
 
 const RECHECK = [
     {
+        value: "request",
+        label: "Only on request",
+        hint: "Kody checks the first review; after that, anyone re-checks with @kody -v business-logic.",
+    },
+    {
         value: "failing",
         label: "While something is missing",
-        hint: "A push re-checks a PR that still misses something or names no task, so a fix updates the comment without anyone asking.",
+        hint: "A push re-checks a PR that still misses something or names no task, so a fix updates the comment without anyone asking. One validation per push until it passes.",
     },
     {
         value: "push",
         label: "On every push",
         hint: "Also re-checks a PR that already passes. One validation per push.",
-    },
-    {
-        value: "request",
-        label: "Only on request",
-        hint: "Kody checks the first review; after that, anyone re-checks with @kody -v business-logic.",
     },
 ] as const;
 
@@ -116,7 +116,7 @@ export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
                         control={form.control}
                         render={({ field }) => (
                             <RadioGroup.Root
-                                value={(field.value as string) ?? "failing"}
+                                value={(field.value as string) ?? "request"}
                                 onValueChange={field.onChange}
                                 disabled={!canEdit || field.disabled}
                                 className="gap-2">

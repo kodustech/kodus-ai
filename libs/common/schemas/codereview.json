@@ -330,7 +330,7 @@
                 "recheckOn": {
                     "type": "string",
                     "enum": ["failing", "push", "request"],
-                    "default": "failing",
+                    "default": "request",
                     "description": "When a push re-checks a PR already checked: while its last check failed, on every push, or only on @kody -v business-logic. A re-check edits the same comment."
                 },
                 "requireTask": {

@@ -224,10 +224,35 @@ describe('reference intent (UC-18)', () => {
     const intents = (sources: Parameters<typeof extractTaskReferences>[0]) =>
         extractTaskReferences(sources).map((r) => `${r.id}:${r.intent}`);
 
-    it('reads "Closes" as closing and "Part of" as a slice', () => {
+    it('reads "Closes" as closing, "Part of" as a slice and "Refs" or "see" as a mention', () => {
         expect(
-            intents({ body: 'Closes PLAT-1\nPart of PLAT-2\nRefs: PLAT-3' }),
-        ).toEqual(['PLAT-1:closes', 'PLAT-2:part_of', 'PLAT-3:part_of']);
+            intents({
+                body: 'Closes PLAT-1\nPart of PLAT-2\nRefs: PLAT-3\nsee PLAT-4 for context',
+            }),
+        ).toEqual([
+            'PLAT-1:closes',
+            'PLAT-2:part_of',
+            'PLAT-3:mentions',
+            'PLAT-4:mentions',
+        ]);
+    });
+
+    it('judges a task the body only cites when the PR states another, and a lone "Refs:" as the PR\'s own', () => {
+        expect(
+            selectReferences(
+                extractTaskReferences({
+                    title: 'feat(PLAT-1): x',
+                    body: 'see PLAT-12 for context',
+                }),
+                3,
+            )!.map((r) => r.id),
+        ).toEqual(['PLAT-1']);
+        expect(
+            selectReferences(
+                extractTaskReferences({ body: 'Refs: SAA-96' }),
+                3,
+            )!.map((r) => `${r.id}:${r.intent}`),
+        ).toEqual(['SAA-96:mentions']);
     });
 
     it("treats a task in the title or branch as the PR's own, and one only mentioned in the body as a mention", () => {

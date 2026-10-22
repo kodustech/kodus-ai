@@ -24,8 +24,6 @@
  * DSL (any/all/unless/ast) is a later extension of `DetectorPlan`.
  */
 import { z } from 'zod';
-
-import { isRegexSafe } from '@libs/common/utils/safe-regex';
 import {
     IKodyRule,
     IKodyRuleDetector,
@@ -267,11 +265,7 @@ export function normalizeDetectorExtensions(
         // template's punctuation and can never be part of an extension, so
         // stripping them recovers a correct answer without loosening what
         // counts as one: the pattern below still rejects globs and paths.
-        const e = raw
-            .trim()
-            .toLowerCase()
-            .replace(/^<+|>+$/g, '')
-            .trim();
+        const e = raw.trim().toLowerCase().replace(/^<+|>+$/g, '').trim();
         if (!e) continue;
         const dotted = e.startsWith('.') ? e : `.${e}`;
         // A real extension: one or more dot-prefixed alphanumeric segments.
@@ -292,8 +286,36 @@ export function normalizeDetectorExtensions(
     return out.size ? [...out] : undefined;
 }
 
-/** Reject regex shapes prone to catastrophic backtracking (ReDoS). */
-export const isDetectorRegexSafe = isRegexSafe;
+/** Longest detector pattern we persist. A compiled rule is a simple line
+ *  matcher; anything longer is more likely an unbounded/backtracking construct
+ *  than a legitimate detector. */
+const MAX_PATTERN_LEN = 200;
+
+/**
+ * Reject regex shapes prone to catastrophic backtracking (ReDoS). An LLM (or a
+ * malicious rule author) can pass the example/corpus gate with a pattern like
+ * `(a+)+$` that still hangs on a long adversarial line at review time. This is
+ * a conservative heuristic — a quantifier applied to a group/class that itself
+ * contains a quantifier — plus a length cap. Rejected patterns fall back to the
+ * semantic judge; combined with the per-line length cap in runDetector, a
+ * shipped detector can't blow up review time.
+ */
+export function isDetectorRegexSafe(pattern: string): boolean {
+    if (!pattern || pattern.length > MAX_PATTERN_LEN) return false;
+    // Nested quantifier: a group or char-class that itself contains a
+    // quantifier-ish char (+/*/}), followed by an outer quantifier —
+    // the classic ReDoS shape. The outer quantifier must be matched in
+    // full (*, +, {n,}, {n,m}) — an earlier version only matched a bare
+    // `*`/`+` right after the group, so bounded forms like `(a+){3,}` or
+    // `(a*){5}` (both valid, both still catastrophic) slipped through.
+    // The char-class branch requires the SAME inner-quantifier-char
+    // check as the group branch — without it, this flagged every
+    // ordinary `[a-z]+`-shaped detector as unsafe, which would have
+    // declined nearly every char-class-based pattern.
+    const NESTED_QUANTIFIER =
+        /(\([^()]*[+*}][^()]*\)|\[[^\]]*[+*}][^\]]*\])\s*([*+]|\{\d+,?\d*\})/;
+    return !NESTED_QUANTIFIER.test(pattern);
+}
 
 /** Extract the content of one added diff line from a `NN +code` shard line. */
 function addedLineContent(line: string): string | null {
@@ -534,10 +556,7 @@ export function buildDetectorCandidates(
     // and the prompt should list each candidate once, in file order.
     for (const perFile of index.values()) {
         for (const [filename, lines] of perFile) {
-            perFile.set(
-                filename,
-                [...new Set(lines)].sort((a, b) => a - b),
-            );
+            perFile.set(filename, [...new Set(lines)].sort((a, b) => a - b));
         }
     }
     return index;

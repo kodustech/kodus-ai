@@ -47,6 +47,6 @@
     },
     "expect": {
         "outcome": "silent",
-        "toolsCalled": ["notion-fetch"]
+        "toolsCalled": ["notion-fetch", "notion-fetch"]
     }
 }

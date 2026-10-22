@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
@@ -36,8 +38,33 @@ import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/t
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { LabelType } from '@libs/common/utils/codeManagement/labels';
+import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import type { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 import { withRepositoryReader } from './business-logic-repository-reader';
+
+/** The PR a door acts on, so its files can pick the directory's settings. */
+export interface PullRequestScope {
+    number: number;
+    repositoryName: string;
+    platformType?: string;
+}
+
+/** The settings, switch and model a door outside the review runs with. */
+export interface DoorConfig {
+    settings: BusinessLogicSettings;
+    /** `reviewOptions.business_logic` for the PR's repository or directory. */
+    enabled: boolean;
+    byokModel?: string;
+    byokModelId?: string;
+}
 
 export interface PublishInput {
     request: BusinessValidationRequest;
@@ -49,6 +76,8 @@ export interface PublishInput {
     commits?: CommitInfo[];
     authorLogin?: string;
     dryRun?: boolean;
+    /** A re-check's first skip, carried so its window closes (UC-22). */
+    pendingSince?: Date;
 }
 
 /** What a publish would put on the PR, without writing anything. */
@@ -90,24 +119,79 @@ export class BusinessLogicPublisher {
         @Optional()
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService?: ICodeBaseConfigService,
+        @Optional()
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequestsService?: IPullRequestsService,
     ) {}
 
-    /** The repository's Business Logic settings, for a door outside the review pipeline. */
+    /** The Business Logic settings, for a door outside the review pipeline. */
     async settingsFor(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId: string | undefined,
+        pullRequest?: PullRequestScope,
     ): Promise<BusinessLogicSettings> {
-        try {
-            const config = await this.codeBaseConfigService?.getSimpleConfig(
+        return (
+            await this.configFor(
                 organizationAndTeamData,
-                { repositoryId },
-            );
-            return resolveBusinessLogicSettings(
-                (config as { businessLogic?: BusinessLogicConfig } | undefined)
-                    ?.businessLogic,
-            );
+                repositoryId,
+                pullRequest,
+            )
+        ).settings;
+    }
+
+    /**
+     * What a door outside the review pipeline runs with, resolved the way the
+     * review resolves it: a PR's files pick the directory whose settings
+     * apply, so the command, a reply and a re-check use the same task source,
+     * re-check rule and model as the review of that PR.
+     */
+    async configFor(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string | undefined,
+        pullRequest?: PullRequestScope,
+    ): Promise<DoorConfig> {
+        try {
+            const files =
+                repositoryId && pullRequest
+                    ? ((await this.codeManagementService
+                          .getFilesByPullRequestId(
+                              {
+                                  organizationAndTeamData,
+                                  repository: {
+                                      id: repositoryId,
+                                      name: pullRequest.repositoryName,
+                                  },
+                                  prNumber: pullRequest.number,
+                              },
+                              pullRequest.platformType as
+                                  PlatformType | undefined,
+                          )
+                          .catch(() => [])) ?? [])
+                    : [];
+            const config = (await this.codeBaseConfigService?.getSimpleConfig(
+                organizationAndTeamData,
+                { repositoryId, preliminaryFiles: files as any },
+            )) as
+                | {
+                      businessLogic?: BusinessLogicConfig;
+                      reviewOptions?: { business_logic?: boolean };
+                      byokModel?: string;
+                      byokModelId?: string;
+                  }
+                | undefined;
+            return {
+                settings: resolveBusinessLogicSettings(config?.businessLogic),
+                // No config read: the doors keep working as before.
+                enabled: config
+                    ? config.reviewOptions?.business_logic !== false
+                    : true,
+                ...(config?.byokModel ? { byokModel: config.byokModel } : {}),
+                ...(config?.byokModelId
+                    ? { byokModelId: config.byokModelId }
+                    : {}),
+            };
         } catch {
-            return DEFAULT_BUSINESS_LOGIC_SETTINGS;
+            return { settings: DEFAULT_BUSINESS_LOGIC_SETTINGS, enabled: true };
         }
     }
 
@@ -243,6 +327,14 @@ export class BusinessLogicPublisher {
                     body,
                     previousComment,
                 ));
+                if (action === 'created' && comment) {
+                    await this.recordSuggestion(
+                        request,
+                        outcome,
+                        comment,
+                        body,
+                    );
+                }
             }
         }
 
@@ -251,6 +343,7 @@ export class BusinessLogicPublisher {
                 trigger: input.trigger,
                 headSha: input.headSha,
                 author: detectAuthor(input.commits, input.authorLogin),
+                pendingSince: input.pendingSince,
             }),
             ...(comment ? { comment } : {}),
         });
@@ -358,6 +451,66 @@ export class BusinessLogicPublisher {
             });
             return { action: 'none' };
         }
+    }
+
+    /**
+     * The comment as a PR-level suggestion of the review's record, so its
+     * reactions and implemented rate count Business Logic like any other
+     * PR-level comment. One per comment: a re-check edits it in place.
+     */
+    private async recordSuggestion(
+        request: BusinessValidationRequest,
+        outcome: BusinessValidationOutcome,
+        comment: RunComment,
+        body: string,
+    ): Promise<void> {
+        if (
+            !this.pullRequestsService ||
+            !request.pullRequest ||
+            !request.repository
+        ) {
+            return;
+        }
+        const passed = outcome.kind === 'validated' && outcome.passed;
+        const now = new Date().toISOString();
+        await this.pullRequestsService
+            .addPrLevelSuggestions(
+                request.pullRequest.number,
+                request.repository.name,
+                [
+                    {
+                        id: randomUUID(),
+                        suggestionContent: body,
+                        oneSentenceSummary: passed
+                            ? 'Business logic validation passed — PR aligns with task requirements.'
+                            : 'Business logic gap detected based on PR requirements.',
+                        label: LabelType.BUSINESS_LOGIC,
+                        severity: passed
+                            ? SeverityLevel.LOW
+                            : SeverityLevel.MEDIUM,
+                        priorityStatus: PriorityStatus.PRIORITIZED,
+                        deliveryStatus: DeliveryStatus.SENT,
+                        // A PR-level comment has no review id (as on Bitbucket).
+                        comment: {
+                            id: comment.id,
+                        } as ISuggestionByPR['comment'],
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                ],
+                request.organizationAndTeamData,
+            )
+            .catch((error) => {
+                this.logger.warn({
+                    message: `Could not record the business logic comment as a PR-level suggestion on PR#${request.pullRequest!.number}`,
+                    context: BusinessLogicPublisher.name,
+                    error,
+                    metadata: {
+                        organizationId:
+                            request.organizationAndTeamData.organizationId,
+                    },
+                });
+            });
     }
 
     /** For PRs commented before runs were recorded: find the comment by its marker. */

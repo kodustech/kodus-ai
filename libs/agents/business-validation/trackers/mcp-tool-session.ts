@@ -43,10 +43,26 @@ export class McpToolSession {
     /** Every tool called through this session, in order. */
     readonly called: string[] = [];
 
+    /**
+     * The tools this session may call: the tracker's own list, within what
+     * the org left open on the connection. Undefined: every tool it lists.
+     */
+    private readonly allowed?: string[];
+    /** A tracker's list, or the org's, bounds this session; an empty bound opens nothing. */
+    private readonly restricted: boolean;
+
     constructor(
         private readonly server: MCPServerConfig,
-        private readonly allowedTools?: string[],
-    ) {}
+        allowedTools?: string[],
+    ) {
+        const serverTools = new Set(server.allowedTools ?? []);
+        this.allowed = allowedTools
+            ? allowedTools.filter(
+                  (tool) => !serverTools.size || serverTools.has(tool),
+              )
+            : server.allowedTools;
+        this.restricted = !!allowedTools || serverTools.size > 0;
+    }
 
     async tools(): Promise<MCPToolRaw[]> {
         const adapter = await this.connect();
@@ -55,8 +71,9 @@ export class McpToolSession {
 
     /** Calls a tool and returns its payload: the structured content, or the parsed text. */
     async call(name: string, args: Record<string, unknown>): Promise<unknown> {
-        // Listing filters by `allowedTools`; executing does not. Enforce it here.
-        if (this.allowedTools && !this.allowedTools.includes(name)) {
+        // Listing filters by `allowedTools`; executing does not. Enforce it
+        // here, against what the org allows too.
+        if (this.restricted && !this.allowed?.includes(name)) {
             throw new TrackerUnavailableError(
                 `Tool ${name} is not open to this session`,
             );
@@ -69,6 +86,7 @@ export class McpToolSession {
         } catch (error) {
             throw trackerError(
                 error instanceof Error ? error.message : String(error),
+                args,
             );
         }
         if ((result as CallToolResult | undefined)?.isError) {
@@ -78,6 +96,7 @@ export class McpToolSession {
                 typeof payload === 'string'
                     ? payload
                     : (JSON.stringify(payload) ?? `${name} failed`),
+                args,
             );
         }
         return readToolPayload(result);
@@ -95,14 +114,8 @@ export class McpToolSession {
             return Promise.resolve(this.adapter);
         }
         this.connecting ??= (async () => {
-            const serverTools = new Set(this.server.allowedTools ?? []);
-            const allowed = this.allowedTools
-                ? this.allowedTools.filter(
-                      (tool) => !serverTools.size || serverTools.has(tool),
-                  )
-                : this.server.allowedTools;
             const adapter = createMCPAdapter({
-                servers: [{ ...this.server, allowedTools: allowed }],
+                servers: [{ ...this.server, allowedTools: this.allowed }],
                 defaultTimeout: 15_000,
                 maxRetries: 1,
             });
@@ -154,11 +167,45 @@ export function readToolPayload(result: unknown): unknown {
 /** What the MCP adapter puts before a tool's own answer when it throws it. */
 const ADAPTER_PREFIX = /^\s*Tool \S+ failed:\s*/i;
 
-function trackerError(message: string): Error {
+/**
+ * Something other than the task was not found (the site, the workspace, the
+ * team), or the integration may not see it: the tracker is set up wrong for
+ * this read, not missing the task.
+ */
+const NOT_THE_TASK =
+    /\b(?:cloud_?id|site|workspace|organi[sz]ation|team|project|space|database|user|tool|resource|endpoint)s?\b[^.\n]{0,30}?\bnot[\s_-]?found\b|\bshared with (?:your|the|this) integration\b|\b(?:permission|access) (?:denied|required)\b|\b(?:no|lacks?|without) (?:permission|access)\b/i;
+
+/**
+ * "Not found" counts as "no such task" only when it is about the task asked
+ * for: the message names it, or a task, and nothing else is missing. Anything
+ * else is a tracker that could not read it, so the owners hear about it and
+ * the PR is checked again, instead of a typo comment on the PR.
+ */
+function trackerError(message: string, args: Record<string, unknown>): Error {
     const answer = message.replace(ADAPTER_PREFIX, '').trim();
-    return NOT_FOUND_PATTERN.test(message) ||
+    if (
         RETRIEVE_FAILED_FOR_ID.test(answer) ||
         CLICKUP_NO_SUCH_TASK.test(answer)
+    ) {
+        return new TaskNotFoundError(message);
+    }
+    return NOT_FOUND_PATTERN.test(message) &&
+        !NOT_THE_TASK.test(answer) &&
+        (TASK_NOUN.test(answer) || namesAsked(answer, args))
         ? new TaskNotFoundError(message)
         : new TrackerUnavailableError(message);
+}
+
+const TASK_NOUN =
+    /\b(?:issue|task|ticket|work ?item|story|bug|epic|card|page|item|record|entity)s?\b/i;
+
+/** Whether the message names a value the call was given (the id it asked for). */
+function namesAsked(answer: string, args: Record<string, unknown>): boolean {
+    const text = answer.toLowerCase();
+    return Object.values(args).some(
+        (value) =>
+            (typeof value === 'string' || typeof value === 'number') &&
+            String(value).trim().length > 0 &&
+            text.includes(String(value).toLowerCase()),
+    );
 }

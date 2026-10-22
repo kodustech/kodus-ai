@@ -4,7 +4,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord } from '../value-utils';
+import { asRecord, isEmpty } from '../value-utils';
 import { MANY_ITEMS as MANY, wholeItem } from './whole-item';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import { describeTask, mentions, recordsIn } from './task-payload';
@@ -23,13 +23,19 @@ const STARTS_WITH_WRITE = new RegExp(`^(?:${WRITE_VERBS})`, 'i');
  * and `list_bookmarks` read.
  */
 function namesAWrite(name: string): boolean {
-    const words = name
-        .split(/[_\-\s.]+|(?<=[a-z0-9])(?=[A-Z])/)
-        .filter(Boolean);
+    const words = wordsOf(name);
     return (
         STARTS_WITH_WRITE.test(words[0] ?? '') ||
         words.some((word) => WRITE_WORD.test(word))
     );
+}
+
+/** Verbs that only read. An unannotated tool must be named with one. */
+const READ_WORD =
+    /^(?:get|read|fetch|view|list|search|find|show|describe|lookup|retrieve)$/i;
+
+function wordsOf(name: string): string[] {
+    return name.split(/[_\-\s.]+|(?<=[a-z0-9])(?=[A-Z])/).filter(Boolean);
 }
 
 /** What a task is called across trackers. */
@@ -145,6 +151,7 @@ export class CustomMcpTracker extends McpTaskTracker {
                     ? readers.filter(takesRepository)
                     : []
                 : readers;
+        let unread = false;
         for (const tool of usable.slice(0, MAX_TOOLS_TRIED)) {
             const args = buildReadArgs(tool, reference, repository);
             let payload: unknown;
@@ -163,6 +170,9 @@ export class CustomMcpTracker extends McpTaskTracker {
                 payload = await this.readWithAgent(tool, reference);
             }
             if (!mentions(payload, reference.id)) {
+                // An answer that never names the id: another shape, or
+                // another item. The finder may look; an empty one is a miss.
+                unread ||= !isEmpty(payload);
                 continue;
             }
             const item =
@@ -186,6 +196,7 @@ export class CustomMcpTracker extends McpTaskTracker {
             const described = describeTask(item, payload);
             if (!described) {
                 // It names the task but says nothing of it: watchers, dates, links.
+                unread = true;
                 continue;
             }
             return {
@@ -197,7 +208,9 @@ export class CustomMcpTracker extends McpTaskTracker {
                 },
             };
         }
-        return { status: 'not_found' };
+        return unread
+            ? { status: 'not_found', unread: true }
+            : { status: 'not_found' };
     }
 
     private chosen(tool: MCPToolRaw): boolean {
@@ -224,18 +237,34 @@ export class CustomMcpTracker extends McpTaskTracker {
     }
 
     private loadTools(): Promise<MCPToolRaw[]> {
-        this.tools ??= this.session.tools();
+        if (!this.tools) {
+            this.tools = this.session.tools();
+            // A failed listing is not kept: the retry lists again.
+            this.tools.catch(() => {
+                this.tools = undefined;
+            });
+        }
         return this.tools;
     }
 }
 
-/** Never marked or named as writing. The bar for a tool the org picked itself. */
+/**
+ * Never marked or named as writing. A tool the server marks read-only passes
+ * on that; one with no mark must also be named with a read verb, since a
+ * list of write verbs never covers them all (`complete_task`, `clone_issue`).
+ */
 export function isReadOnly(tool: MCPToolRaw): boolean {
     const annotations = asRecord(tool.annotations);
+    if (
+        annotations.readOnlyHint === false ||
+        annotations.destructiveHint === true ||
+        namesAWrite(tool.name)
+    ) {
+        return false;
+    }
     return (
-        annotations.readOnlyHint !== false &&
-        annotations.destructiveHint !== true &&
-        !namesAWrite(tool.name)
+        annotations.readOnlyHint === true ||
+        wordsOf(tool.name).some((word) => READ_WORD.test(word))
     );
 }
 

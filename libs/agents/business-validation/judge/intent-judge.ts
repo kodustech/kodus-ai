@@ -55,6 +55,8 @@ export interface JudgeTelemetry {
     teamId?: string;
     pullRequestId?: number;
     repositoryId?: string;
+    /** The validation's stop signal: every run of this judge ends with it. */
+    signal?: AbortSignal;
 }
 
 type Message = { role: 'system' | 'user'; content: string };
@@ -232,6 +234,7 @@ export class IntentJudge {
             });
             const verifyOne = async (claim: ValidationResult) => {
                 const { ctx, cleanup } = createAgentRunContext({
+                    parentSignal: this.telemetry.signal,
                     runId: 'business-rules:verify',
                     timeoutMs: this.policy.analyzerTimeoutMs,
                 });
@@ -344,6 +347,7 @@ export class IntentJudge {
             .map((m) => ({ role: 'user' as const, content: m.content }));
 
         const { ctx, cleanup } = createAgentRunContext({
+            parentSignal: this.telemetry.signal,
             runId: `business-rules:${phase}`,
         });
         try {

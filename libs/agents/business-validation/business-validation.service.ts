@@ -8,7 +8,10 @@ import {
     withLangfuseTrace,
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
-import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import {
+    PermissionValidationService,
+    ValidationErrorType,
+} from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
@@ -275,17 +278,25 @@ export class BusinessValidationService {
                 taskSource: settings.taskSource,
                 taskSourceTool: settings.taskSourceTool,
                 agentReader: async (input) =>
-                    createAgentToolReader((await judge()).modelSlot, {
-                        organizationId:
-                            request.organizationAndTeamData.organizationId,
-                        teamId: request.organizationAndTeamData.teamId,
-                    })(input),
-                finder: createTaskFinder(async (spec, prompt) =>
-                    aiSdkAgentRun((await judge()).modelSlot, {
-                        organizationId:
-                            request.organizationAndTeamData.organizationId,
-                        teamId: request.organizationAndTeamData.teamId,
-                    })(spec, prompt),
+                    createAgentToolReader(
+                        (await judge()).modelSlot,
+                        {
+                            organizationId:
+                                request.organizationAndTeamData.organizationId,
+                            teamId: request.organizationAndTeamData.teamId,
+                        },
+                        request.signal,
+                    )(input),
+                finder: createTaskFinder(async (spec, prompt, signal) =>
+                    aiSdkAgentRun(
+                        (await judge()).modelSlot,
+                        {
+                            organizationId:
+                                request.organizationAndTeamData.organizationId,
+                            teamId: request.organizationAndTeamData.teamId,
+                        },
+                        request.signal,
+                    )(spec, prompt, signal),
                 ),
             });
             trackerNames = trackers.map((t) => t.name);
@@ -293,6 +304,7 @@ export class BusinessValidationService {
                 resolution = await resolveTasks(wanted, trackers, {
                     organizationAndTeamData: request.organizationAndTeamData,
                     repository: this.repositoryOf(request),
+                    signal: request.signal,
                 });
             } finally {
                 await this.release(
@@ -611,7 +623,7 @@ export class BusinessValidationService {
                     a.index - b.index,
             )
             .slice(0, MAX_GAP_CHECKS);
-        if (!reader || !open.length) {
+        if (!reader || !open.length || request.signal?.aborted) {
             return verdict;
         }
         const check = this.gapCheck((await judge()).modelSlot, request);
@@ -690,10 +702,15 @@ export class BusinessValidationService {
         request: BusinessValidationRequest,
     ): GapCheck {
         return createGapCheck(
-            aiSdkAgentRun(model, {
-                organizationId: request.organizationAndTeamData.organizationId,
-                teamId: request.organizationAndTeamData.teamId,
-            }),
+            aiSdkAgentRun(
+                model,
+                {
+                    organizationId:
+                        request.organizationAndTeamData.organizationId,
+                    teamId: request.organizationAndTeamData.teamId,
+                },
+                request.signal,
+            ),
         );
     }
 
@@ -780,7 +797,7 @@ export class BusinessValidationService {
                         teamId: organizationAndTeamData.teamId,
                     },
                 )(input),
-            finder: createTaskFinder(async (spec, prompt) =>
+            finder: createTaskFinder(async (spec, prompt, signal) =>
                 aiSdkAgentRun(
                     (
                         await this.judge({
@@ -793,7 +810,7 @@ export class BusinessValidationService {
                         organizationId: organizationAndTeamData.organizationId,
                         teamId: organizationAndTeamData.teamId,
                     },
-                )(spec, prompt),
+                )(spec, prompt, signal),
             ),
         });
         let resolution: TaskResolution;
@@ -898,6 +915,39 @@ export class BusinessValidationService {
             );
         } catch {
             return { intent: 'other' };
+        }
+    }
+
+    /**
+     * Whether the organization may still run a review (license, trial,
+     * credits), for a run no review started. Consumes nothing.
+     */
+    async canRun(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        try {
+            const result =
+                await this.permissionValidationService.validateExecutionPermissions(
+                    organizationAndTeamData,
+                    undefined,
+                    BusinessValidationService.name,
+                    { consumeTrialReviewCredit: false },
+                );
+            return (
+                result.allowed ||
+                result.errorType === ValidationErrorType.NOT_ERROR
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not confirm the organization may run Business Logic; skipped',
+                context: BusinessValidationService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                },
+            });
+            return false;
         }
     }
 
@@ -1048,6 +1098,7 @@ export class BusinessValidationService {
                 teamId: request.organizationAndTeamData.teamId,
                 pullRequestId: request.pullRequest?.number,
                 repositoryId: request.repository?.id,
+                signal: request.signal,
             },
             this.byokErrorCounter
                 ? (error) => void this.byokErrorCounter!.record(error)
@@ -1181,6 +1232,9 @@ export class BusinessValidationService {
                 door: request.door,
                 outcome: outcome.kind,
                 reason,
+                // The labels this counter had before, so what was built on
+                // them keeps reading it.
+                ...legacyOutcomeLabels(outcome),
             },
         );
         this.logger.log({
@@ -1205,6 +1259,62 @@ export class BusinessValidationService {
                     : {}),
             },
         });
+    }
+}
+
+/**
+ * `mode`, `taskContextStatus`, `prDiffStatus` and `confidence`, as the
+ * validation agent before this one labeled its outcome counter.
+ */
+export function legacyOutcomeLabels(outcome: BusinessValidationOutcome): {
+    mode: string;
+    taskContextStatus: string;
+    prDiffStatus: string;
+    confidence: string;
+} {
+    switch (outcome.kind) {
+        case 'validated': {
+            const levels = outcome.checks.map(
+                (c) => c.verdict.confidence ?? 'medium',
+            );
+            return {
+                mode: 'full_analysis',
+                taskContextStatus: 'usable',
+                prDiffStatus: 'usable',
+                confidence:
+                    (['low', 'medium', 'high'] as const).find((level) =>
+                        levels.includes(level),
+                    ) ?? 'medium',
+            };
+        }
+        case 'task_too_thin':
+            return {
+                mode: 'limitation_response',
+                taskContextStatus: 'weak',
+                prDiffStatus: 'usable',
+                confidence: 'low',
+            };
+        case 'skipped':
+            return {
+                mode: 'limitation_response',
+                taskContextStatus:
+                    outcome.reason === 'diff_unavailable' ||
+                    outcome.reason === 'judge_failed'
+                        ? 'unknown'
+                        : 'missing',
+                prDiffStatus:
+                    outcome.reason === 'diff_unavailable'
+                        ? 'missing'
+                        : 'unknown',
+                confidence: 'low',
+            };
+        default:
+            return {
+                mode: 'limitation_response',
+                taskContextStatus: 'missing',
+                prDiffStatus: 'unknown',
+                confidence: 'low',
+            };
     }
 }
 

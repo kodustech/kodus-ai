@@ -268,13 +268,37 @@ describe('BusinessLogicValidationStage', () => {
         expect(result.businessLogicResults).toEqual([]);
     });
 
-    it('re-checks a PR already validated on a push while its last check failed', async () => {
+    it('re-checks a PR already validated only on request by default (#1812)', async () => {
+        const { stage, service, publisher } = build(validated(true), [], {
+            lastVerdictFailed: true,
+        });
+
+        const result = await stage.execute(
+            context({
+                pipelineMetadata: {
+                    lastExecution: { businessLogicValidatedAt: 'x' },
+                },
+            } as any),
+        );
+
+        expect(publisher.lastVerdictFailed).not.toHaveBeenCalled();
+        expect(service.validate).not.toHaveBeenCalled();
+        expect(result.businessLogicOutcome).toMatchObject({
+            reason: 'already_validated',
+        });
+    });
+
+    it('re-checks a PR already validated on a push while its last check failed, when the team chose that', async () => {
         const { stage, service, publisher } = build(validated(true), [], {
             lastVerdictFailed: true,
         });
 
         await stage.execute(
             context({
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOn: 'failing' },
+                },
                 pipelineMetadata: {
                     lastExecution: { businessLogicValidatedAt: 'x' },
                 },
@@ -457,6 +481,29 @@ describe('BusinessLogicValidationStage', () => {
 
         expect(result.businessLogicOutcome).toMatchObject({ kind: 'error' });
         expect(result.errors).toHaveLength(1);
+    });
+
+    it('stops the validation it gave up on, so a timeout also ends the spend', async () => {
+        jest.useFakeTimers();
+        try {
+            const { stage, service } = build(validated(true));
+            let signal: AbortSignal | undefined;
+            (service.validate as jest.Mock).mockImplementationOnce(
+                (request: { signal?: AbortSignal }) => {
+                    signal = request.signal;
+                    return new Promise(() => undefined);
+                },
+            );
+            const run = stage.execute(context());
+            await jest.advanceTimersByTimeAsync(300_000);
+            const result = await run;
+            expect(signal?.aborted).toBe(true);
+            expect(result.businessLogicOutcome).toMatchObject({
+                kind: 'error',
+            });
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('leaves no timeout pending once the service has answered', async () => {

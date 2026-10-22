@@ -44,7 +44,8 @@ Kody também lê o que a tarefa referencia:
 - **Documentos anexados à tarefa** (docs do Linear): lidos como parte da tarefa, critérios incluídos.
 
 - **"Closes PROJ-1"** ou uma chave no título ou na branch: o PR é conferido contra a tarefa inteira.
-- **"Part of PROJ-1"** ou **"Refs PROJ-1"**: o PR entrega uma parte. O que falta é listado, mas não como algo a resolver antes do merge.
+- **"Part of PROJ-1"**: o PR entrega uma parte. O que falta é listado, mas não como algo a resolver antes do merge.
+- **"Refs PROJ-1"**, **"see PROJ-1"** ou **"related to PROJ-1"** na descrição: uma menção. Só é conferida quando o PR não cita outra tarefa, e aí como a tarefa do próprio PR.
 - **Até três tarefas** são conferidas por PR, uma seção para cada. Um PR que referencia mais (um release ou um merge) é pulado.
 
 ## Os cinco estados
@@ -69,17 +70,17 @@ Um gap manda o autor refazer trabalho, então Kody confronta cada um com o códi
 
 ## No pull request
 
-- Kody confere o PR na **primeira revisão** e de novo a cada push enquanto algo estiver faltando, então uma correção atualiza o comentário sem ninguém pedir. **Re-check** também pode ser a cada push, ou só quando alguém comenta `@kody -v business-logic`.
+- Kody confere o PR na **primeira revisão**. Depois disso, confere de novo quando alguém comenta `@kody -v business-logic` ou roda `@kody review --force`. **Re-check** também pode ser a cada push enquanto algo estiver faltando, para uma correção atualizar o comentário sem ninguém pedir, ou a cada push; cada um é mais uma validação por push.
 - Confira de novo quando quiser com `@kody -v business-logic`. O **mesmo comentário é editado**; Kody nunca posta um segundo.
 - Um PR que cumpre a tarefa recebe um comentário de uma linha ("✅ 4 of 4 met"), mais o que houver para conferir manualmente, para o autor saber que foi conferido. Desligue **Comment when every requirement is met** para não comentar nesses casos.
 - O comentário é o sinal em todas as plataformas: Kody não escreve check nem status, então nunca bloqueia um merge sozinho. O cabeçalho diz o que falta corrigir.
 
 ### Respondendo ao comentário
 
-Responda ao comentário de Business Logic mencionando `@kody`:
+Responda ao comentário de Business Logic mencionando `@kody`. Kody lê um comentário como resposta quando ele está na thread desse comentário (GitLab, Bitbucket, Azure Repos), cita o comentário, ou nomeia o requisito, o estado dele (MISSING, PARTIAL) ou o id da tarefa; qualquer outro comentário vai para o chat.
 
 - **Discordar**: "Está coberto em `useDrag.ts`". Kody confere de novo o que você apontou e marca como MET ou diz o que olhou e mantém.
-- **Aceitar um apontamento** (no GitHub, qualquer pessoa com permissão de escrita no repositório, o autor incluído; outras plataformas não informam o papel de quem comenta, então lá qualquer pessoa pode): "Reordenar pelo teclado está fora do escopo, foi para SAA-102". Kody confirma que SAA-102 existe, marca a linha como **ACCEPTED** com quem aceitou, e ela deixa de ficar pendente. A decisão se mantém nas próximas conferências.
+- **Aceitar um apontamento** (alguém que não é o autor do PR: no GitHub, com permissão de escrita no repositório; nas outras plataformas, um membro da organização que a plataforma lista): "Reordenar pelo teclado está fora do escopo, foi para SAA-102". Kody confirma que SAA-102 existe, marca a linha como **ACCEPTED** com quem aceitou, e ela deixa de ficar pendente. A decisão se mantém nas próximas conferências, mesmo quando Kody escreve o requisito de um jeito um pouco diferente.
 
 ## Quando Kody fica em silêncio
 
@@ -91,7 +92,7 @@ Kody só comenta quando o autor pode fazer algo:
 | `SAA-999` não existe, mas SAA é um time no seu gerenciador | Um comentário dizendo que parece erro de digitação, com as tarefas reais mais próximas. Com **Ask for a task** ligado, fica pendente até ser corrigido |
 | Nenhuma tarefa referenciada, ou só ids que nenhum gerenciador tem (`UTF-8` num título) | Nada. Com **Ask for a task** ligado, um comentário pedindo uma (nunca no PR de um bot) |
 | Uma issue do GitHub, mas só o Linear está conectado | Nada; admins veem uma contagem na página de configurações. Com **Ask for a task** ligado, um comentário dizendo qual gerenciador não consegue ler |
-| O gerenciador está fora do ar ou o token expirou | Nada; os donos são notificados, e Kody confere de novo quando o gerenciador responder |
+| O gerenciador está fora do ar ou o token expirou | Nada; os donos são notificados, e Kody confere de novo quando o gerenciador responder, por até um dia depois da primeira falha |
 
 O motivo de cada pulo é registrado e aparece na página de configurações de Business Logic.
 
@@ -107,11 +108,11 @@ Comente no PR (não numa linha de código):
 
 Abra **Code review → What to review → Business Logic → Configure**. Toda configuração pode ser global e sobrescrita por repositório ou diretório.
 
-- **Task source**: todos os gerenciadores conectados (plugins de tarefa customizados como o ClickUp incluídos), ou um plugin. Para um plugin customizado, escolha a ferramenta que lê uma tarefa pelo id; só ferramentas de leitura são oferecidas. Use **Try it** no fim da página: uma tarefa sozinha mostra o que Kody lê dela, e um pull request roda a conferência inteira sem postar, com as configurações da tela, salvas ou não.
-- **Custom task id format** (opcional): uma expressão regular para ids que Kody não encontra sozinho: `T(\d{4})` lê `T1234` como a tarefa 1234. Chaves como `SAA-96`, `#12`, `AB#8`, `CU-…` e links de gerenciadores são encontrados sem ela, assim como uma chave em minúsculas como `sc-123` no nome da branch. No título ou na descrição, uma chave em minúsculas só conta quando o Linear ou o Jira tem aquele time ou projeto; para outro gerenciador, defina o formato.
+- **Task source**: todos os gerenciadores conectados (plugins de tarefa customizados como o ClickUp incluídos), ou um plugin. Para um plugin customizado, escolha a ferramenta que lê uma tarefa pelo id; só ferramentas de leitura são oferecidas. Use **Try it** no fim da página (precisa de permissão para editar essas configurações): uma tarefa sozinha mostra o que Kody lê dela, e um pull request roda a conferência inteira sem postar, com as configurações da tela, salvas ou não. **Post to the pull request** posta o resultado mostrado, sem rodar de novo.
+- **Custom task id format** (opcional): uma expressão regular para ids que Kody não encontra sozinho: `T(\d{4})` lê `T1234` como a tarefa 1234. Chaves como `SAA-96`, `#12`, `AB#8`, `CU-…` e links de gerenciadores são encontrados sem ela, assim como uma chave em minúsculas como `sc-123` no nome da branch. No título ou na descrição, uma chave em minúsculas só conta quando o Linear ou o Jira tem aquele time ou projeto; para outro gerenciador, defina o formato. Um número que o formato captura só é lido como issue do Git quando Git Issues é a fonte de tarefas; com todos os gerenciadores conectados, `T1234` nunca vira a issue #1234 do repositório.
 - **Where acceptance criteria live**: detectado automaticamente, sob um título na descrição, ou num campo customizado; uma tarefa sem o campo é lida pela descrição.
 - **Ask for a task when the PR references none**: Kody comenta perguntando qual é a tarefa do PR (ou apontando o erro de digitação), em vez de pular. PRs abertos por bots, como Dependabot ou Renovate, ficam de fora. Um gerenciador fora do ar nunca conta.
-- **Re-check**: enquanto algo estiver faltando (padrão), a cada push, ou só sob demanda.
+- **Re-check**: só sob demanda (padrão), a cada push enquanto algo estiver faltando, ou a cada push.
 - **Pull requests pulados**: os que o code review pula são pulados aqui também: títulos com uma palavra ignorada (`ignoredTitleKeywords`, como `wip`) e drafts quando `runOnDraft` está desligado. Um comentário `@kody -v business-logic` sempre roda.
 - **Team guidance**: notas que Kody segue ao julgar, por exemplo "Feature flags contam como implementadas quando a flag existe e vem desligada". Ela não muda o formato do veredito nem faz Kody inventar requisitos.
 
@@ -123,7 +124,7 @@ businessLogic:
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: true
-  recheckOn: 'failing' # failing | push | request
+  recheckOn: 'request' # request | failing | push
   requireTask: false
 ```
 
@@ -140,4 +141,4 @@ Ele confere suas mudanças locais contra a tarefa e imprime uma linha por requis
 
 ## Cockpit
 
-**Cockpit → Delivered as asked** mostra a fatia de PRs que cumpriram a tarefa, as mudanças fora da tarefa, quantas vezes os devs concordaram com Kody, e a divisão por quem escreveu o código (pessoas ou agentes de código, pelos autores dos commits e pelos trailers `Co-Authored-By`) e por time.
+**Cockpit → Delivered as asked** mostra a fatia de PRs que cumpriram a tarefa, as mudanças fora da tarefa, quantas vezes os devs concordaram com Kody, e a divisão por quem escreveu o código (pessoas ou agentes de código, pelos autores dos commits e pelos trailers `Co-Authored-By`) e por time. Segue o seletor de repositório do Cockpit, e pode ser escondida em **Organization → Cockpit** como as outras abas.

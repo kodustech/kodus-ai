@@ -1,5 +1,5 @@
 import type { BusinessValidationOutcome } from './business-validation.types';
-import { carryOver } from './carry-over';
+import { carryOver, matchPrevious } from './carry-over';
 import type { RunTask } from './runs/validation-run.model';
 
 type Validated = Extract<BusinessValidationOutcome, { kind: 'validated' }>;
@@ -136,5 +136,60 @@ describe('carryOver', () => {
             result.checks[0].verdict.requirements![0].accepted,
         ).toBeUndefined();
         expect(result.passed).toBe(false);
+    });
+
+    it('keeps an acceptance when the judge re-quotes the requirement differently', () => {
+        const accepted: RunTask[] = [
+            {
+                ...before[0],
+                requirements: [
+                    {
+                        requirement:
+                            'Notes can be reordered with the keyboard, using the arrow keys.',
+                        state: 'missing',
+                        evidence: [],
+                        confidence: 'high',
+                        accepted: {
+                            by: 'nina',
+                            at: '2026-10-05T11:00:00.000Z',
+                        },
+                    },
+                ],
+            },
+        ];
+        const result = carryOver(
+            now([
+                {
+                    requirement: 'Notes can be reordered with the keyboard',
+                    state: 'missing',
+                    evidence: [],
+                    confidence: 'high',
+                },
+            ]),
+            accepted,
+        );
+        if (result.kind !== 'validated') throw new Error('expected validated');
+        expect(
+            result.checks[0].verdict.requirements![0].accepted,
+        ).toMatchObject({ by: 'nina' });
+        expect(result.passed).toBe(true);
+    });
+});
+
+describe('matchPrevious', () => {
+    it('takes the exact text first, then the most alike, each earlier requirement once', () => {
+        expect(
+            matchPrevious(
+                [
+                    'Admins can archive notes',
+                    'Admins can delete notes',
+                    'Notes sync across devices',
+                ],
+                [
+                    'Admins can delete notes',
+                    'Notes sync across devices and browsers',
+                ],
+            ),
+        ).toEqual([undefined, 0, 1]);
     });
 });

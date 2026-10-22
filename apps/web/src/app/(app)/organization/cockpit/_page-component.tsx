@@ -29,6 +29,7 @@ const createSettingsSchema = () =>
                 .object({
                     kodusReview: z.boolean(),
                     productivity: z.boolean(),
+                    intent: z.boolean(),
                 })
                 .refine((t) => t.kodusReview || t.productivity, {
                     message: "At least one tab must stay enabled",
@@ -249,6 +250,18 @@ export const CockpitOrganizationSettingsPage = (props: {
                                     name="cockpitMetricsVisibility.tabs.kodusReview"
                                     title="Kodus Review"
                                     description="Implementation rate, severity calibration, negative feedback and Kody Rule health."
+                                />
+                            </CardHeader>
+                        </Card>
+
+                        {/* Delivered as asked — Business Logic's runs */}
+                        <Card color="lv1" className="w-full">
+                            <CardHeader>
+                                <TabToggle
+                                    control={control}
+                                    name="cockpitMetricsVisibility.tabs.intent"
+                                    title="Delivered as asked"
+                                    description="Pull requests checked against their task: share that met it, changes not in the task, and the split by author and team."
                                 />
                             </CardHeader>
                         </Card>

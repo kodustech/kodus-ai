@@ -34,6 +34,12 @@ export type TaskReference =
            * connected tracker has that team or project.
            */
           loose?: true;
+          /**
+           * Captured by the team's own id pattern (`T(\d{4})` on `T1234`). It
+           * names no tracker, so a bare number is an issue only where Git
+           * Issues is the source the team chose.
+           */
+          teamPattern?: true;
       }
     | {
           kind: 'git_issue';
@@ -123,9 +129,18 @@ export interface FoundTask {
 }
 
 /** What one tracker said about one reference. */
-export type TrackerLookup = (
-    | { status: 'found'; task: Task }
-    | { status: 'not_found' }
+export type TrackerLookup = /**
+ * `incomplete`: the record came back without the field the task's text
+ * lives in (no `description` key at all), so the answer's shape moved.
+ */
+(
+    | { status: 'found'; task: Task; incomplete?: boolean }
+    /**
+     * `unread`: the server answered, but in a shape this tracker could not
+     * read; only then, or on an error, may an agent look again. A clean
+     * "no such task" costs nothing more.
+     */
+    | { status: 'not_found'; unread?: boolean }
     /**
      * The tracker could not be reached or failed: outage, auth, timeout.
      * `setup`: it answers, but is set up so no task can be read (a plugin
@@ -218,6 +233,8 @@ export interface BusinessValidationRequest {
     byokModelId?: string;
     /** The team's Business Logic settings; defaults when absent. */
     settings?: BusinessLogicSettings;
+    /** Fires when the caller gave up (the stage's timeout): every agent and tracker call stops. */
+    signal?: AbortSignal;
     /**
      * The author disputes findings (UC-38): what they said, for the judge to
      * check against the diff before keeping or changing those states.

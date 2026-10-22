@@ -3,6 +3,8 @@ import type { ValidationResult } from '@libs/agents/business-validation/judge/va
 import { resolveValidationStatus } from '@libs/agents/business-validation/judge/validation-verdict';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 
+import { evalModel } from './eval-model';
+
 /**
  * #2019 — does a real model fill the verdict? Runs the production analyzer
  * (SKILL.md + references, the production prompt builder, `callLLM` with the
@@ -63,7 +65,7 @@ async function analyze(
 ): Promise<ValidationResult> {
     const loader = new SkillLoaderService();
     const result = await new IntentJudge(
-        undefined,
+        evalModel(),
         { analyzerTimeoutMs: 170_000, analyzerMaxIterations: 1 },
         { organizationId: 'eval-org', teamId: 'eval-team' },
     ).judge({

@@ -1,3 +1,5 @@
+import { matchAllWithin } from '@libs/common/utils/safe-regex';
+
 import type {
     ReferenceIntent,
     ReferenceSource,
@@ -19,8 +21,14 @@ type Candidate = TaskReference extends infer R
 const CLOSES =
     /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|implement(?:s|ed)?|complete[sd]?)\b[\s:]*$/i;
 /** Words that say the PR delivers only a slice of it. */
-const PART_OF =
-    /\b(?:part\s+of|partially|partial|refs?|references?|related\s+to|relates\s+to|towards?|see|parte\s+de|relacionad[oa]\s+a)\b[\s:]*$/i;
+const PART_OF = /\b(?:part\s+of|partially|partial|parte\s+de)\b[\s:]*$/i;
+/**
+ * Words that only cite a task: `see KOD-12 for context` is not the PR's work,
+ * and `Refs: SAA-96` alone is how some teams name the PR's own task, so these
+ * read as a mention, judged only when the PR states nothing else.
+ */
+const MENTIONS =
+    /\b(?:refs?|references?|related\s+to|relates\s+to|towards?|see|relacionad[oa]\s+a)\b[\s:]*$/i;
 
 const SUMMARY_START = '<!-- kody-pr-summary:start -->';
 const SUMMARY_END = '<!-- kody-pr-summary:end -->';
@@ -175,6 +183,9 @@ function intentBefore(
     if (PART_OF.test(before)) {
         return 'part_of';
     }
+    if (MENTIONS.test(before)) {
+        return 'mentions';
+    }
     if (CLOSES.test(before)) {
         return 'closes';
     }
@@ -245,12 +256,15 @@ function extractFromText(
         // The team's own shape (`sc-123`, `T1234`) claims its text before the
         // built-in ones: its first group, when it has one, is the id. The
         // pattern already passed `isRegexSafe` and compiled in
-        // `resolveBusinessLogicSettings`.
-        const own = new RegExp(taskIdPattern, 'g');
-        for (const m of text.slice(0, MAX_PATTERN_INPUT).matchAll(own)) {
-            const id = (m[1] ?? m[0]).trim();
-            const index = m.index ?? 0;
-            const end = index + m[0].length;
+        // `resolveBusinessLogicSettings`; it runs with a time limit, since
+        // the text is the PR's, written by its author.
+        for (const m of matchAllWithin(
+            taskIdPattern,
+            text.slice(0, MAX_PATTERN_INPUT),
+        )) {
+            const id = (m.group ?? m.text).trim();
+            const { index } = m;
+            const end = index + m.text.length;
             if (id && !taken(index, end)) {
                 claim(index, end);
                 matches.push({
@@ -259,9 +273,10 @@ function extractFromText(
                     reference: {
                         kind: 'key',
                         id,
-                        raw: m[0],
+                        raw: m.text,
                         source,
                         intent: intentBefore(text, index, source),
+                        teamPattern: true,
                     },
                 });
             }

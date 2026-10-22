@@ -164,5 +164,6 @@ export type BusinessLogicTestResult = {
         body?: string;
         editsExisting: boolean;
     };
-    posted?: "created" | "updated" | "none";
+    /** Posts this result as shown, without running it again. */
+    previewToken: string;
 };

@@ -15,6 +15,8 @@ export interface TrackerReadContext {
     organizationAndTeamData: OrganizationAndTeamData;
     /** The PR's repository, for references like `#12`. */
     repository?: { owner?: string; name: string };
+    /** Fires when the caller gave up: no further call is made. */
+    signal?: AbortSignal;
 }
 
 /**
@@ -109,32 +111,42 @@ export abstract class McpTaskTracker implements TaskTracker {
 
     /**
      * Asks the task finder agent for a task the direct read missed. Called
-     * by the resolver only after no tracker read the reference directly.
+     * by the resolver only after no tracker read the reference directly, or
+     * one read it without the field its text lives in.
      */
     async find(
         reference: TaskReference,
         context: TrackerReadContext,
         direct: TrackerLookup,
     ): Promise<TrackerLookup | undefined> {
-        if (!this.finder || !worthFinding(direct)) {
+        if (!this.finder) {
             return undefined;
         }
-        if (
-            direct.status === 'not_found' &&
-            reference.kind === 'key' &&
-            (await this.ownsReference(reference, context).catch((error) => {
-                // Can't tell whose key it is: the agent may still look.
-                warnFailure(
-                    this.name,
-                    'list its keys',
-                    reference.id,
-                    context,
-                    error,
-                );
+        if (direct.status === 'not_found') {
+            const owns =
+                reference.kind === 'key'
+                    ? await this.ownsReference(reference, context).catch(
+                          (error) => {
+                              warnFailure(
+                                  this.name,
+                                  'list its keys',
+                                  reference.id,
+                                  context,
+                                  error,
+                              );
+                              return undefined;
+                          },
+                      )
+                    : undefined;
+            // `KOD-10` with no team KOD here: another tracker's, nothing to
+            // find. A clean "no such task" is worth a look only where the
+            // tracker says the key is its own (the server changed how it
+            // reads ids); where it can't say (Git Issues, a custom plugin),
+            // a PR number or a `SHA-256` in a title would cost a run each.
+            if (owns === false || (!direct.unread && owns !== true)) {
                 return undefined;
-            })) === false
-        ) {
-            // `KOD-10` with no team KOD here: another tracker's, nothing to find.
+            }
+        } else if (!worthFinding(direct)) {
             return undefined;
         }
         const found = await this.finder(reference, context).catch((error) => {
@@ -192,6 +204,13 @@ export abstract class McpTaskTracker implements TaskTracker {
         const tools = () => [...new Set(this.session.called.slice(firstCall))];
         let message = '';
         for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt++) {
+            if (context.signal?.aborted) {
+                return {
+                    status: 'error',
+                    message: message || 'The validation was stopped',
+                    tools: tools(),
+                };
+            }
             try {
                 return {
                     ...(await this.lookup(reference, context)),
@@ -369,9 +388,14 @@ function warnFailure(
  * isn't the server being down or refusing us. A plugin set up with no reader
  * is the admin's to fix.
  */
+/**
+ * Whether an agent may look again at a read that found or failed: a record
+ * without its description, or a failure other than an outage. A miss is
+ * weighed in `find`, against whose key it is.
+ */
 function worthFinding(lookup: TrackerLookup): boolean {
-    if (lookup.status === 'not_found') {
-        return true;
+    if (lookup.status !== 'error') {
+        return lookup.status === 'found' && !!lookup.incomplete;
     }
     return (
         lookup.status === 'error' &&

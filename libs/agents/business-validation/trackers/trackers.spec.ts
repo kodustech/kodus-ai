@@ -105,10 +105,17 @@ describe('buildTaskTrackers', () => {
 });
 
 describe('CustomMcpTracker with the tool the org picked', () => {
-    const workItem = tool('wit_work_item', {
-        properties: { id: { type: 'number' }, project: { type: 'string' } },
-        required: ['id', 'project'],
-    });
+    const workItem = tool(
+        'wit_work_item',
+        {
+            properties: {
+                id: { type: 'number' },
+                project: { type: 'string' },
+            },
+            required: ['id', 'project'],
+        },
+        { readOnlyHint: true },
+    );
 
     it("asks an agent with only that tool when the schema alone can't fill the arguments", async () => {
         const s = session({ tools: [workItem] });
@@ -209,6 +216,23 @@ describe('isReadOnly: a write verb is a word of the name, not part of one', () =
         ]) {
             expect([name, isReadOnly(tool(name))]).toEqual([name, true]);
         }
+    });
+
+    it('takes an unmarked tool only when a read verb names it, and a marked one on its mark', () => {
+        for (const name of [
+            'complete_task',
+            'start_task',
+            'claim_task',
+            'clone_issue',
+            'unarchive_issue',
+            'transfer_issue',
+            'jira_issue',
+        ]) {
+            expect([name, isReadOnly(tool(name))]).toEqual([name, false]);
+        }
+        expect(isReadOnly(tool('jira_issue', {}, { readOnlyHint: true }))).toBe(
+            true,
+        );
     });
 });
 
@@ -546,5 +570,45 @@ describe('GitIssuesTracker: the parent and sub-issues GitHub links', () => {
     it('names a parent in another repository without reading it', async () => {
         const task = await found('#20');
         expect(task.parent).toEqual({ id: 'acme/specs#3', title: undefined });
+    });
+    it("reads a number the team's pattern captured only when Git Issues is the chosen source (#2018)", () => {
+        const [fromPattern] = extractTaskReferences(
+            { branch: 'nina/T1234-gift-cards' },
+            { taskIdPattern: 'T(\\d{4})' },
+        );
+        expect(fromPattern).toMatchObject({ id: '1234', teamPattern: true });
+        expect(git().canRead(fromPattern)).toBe(false);
+        expect(
+            new GitIssuesTracker(session({}), true).canRead(fromPattern),
+        ).toBe(true);
+        const auto = buildTaskTrackers([
+            server({
+                name: 'Git Issues',
+                integrationId: 'kodus-issues-default',
+            }),
+        ]);
+        const chosen = buildTaskTrackers(
+            [
+                server({
+                    name: 'Git Issues',
+                    integrationId: 'kodus-issues-default',
+                }),
+            ],
+            { taskSource: 'kodus-issues-default' },
+        );
+        expect(auto[0].canRead(fromPattern)).toBe(false);
+        expect(chosen[0].canRead(fromPattern)).toBe(true);
+    });
+
+    it('says why Git Issues failed', async () => {
+        const failing = new GitIssuesTracker(
+            session({
+                call: () => ({ success: false, message: 'Bad credentials' }),
+            }),
+        );
+        await expect(failing.read(ref('#12'), context)).resolves.toMatchObject({
+            status: 'error',
+            message: 'Git Issues failed: Bad credentials',
+        });
     });
 });

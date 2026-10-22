@@ -40,10 +40,38 @@ export interface ValidationRunRecord {
     comment?: RunComment;
     checkRunId?: string;
     pendingRecheck?: boolean;
+    pendingSince?: Date;
+    /** The author the PR's earliest run named, on a run read per PR. */
+    firstAuthor?: RunAuthor;
     createdAt: Date;
 }
 
 export type NewValidationRun = Omit<ValidationRunRecord, 'id' | 'createdAt'>;
+
+export interface RunFilter {
+    teamId?: string;
+    repositoryIds?: string[];
+    /** The repository the Cockpit's picker chose, as `owner/name` or `name`. */
+    repositoryName?: string;
+}
+
+function scope(organizationId: string, filter: RunFilter) {
+    const name = filter.repositoryName?.split('/').pop();
+    return {
+        organizationId,
+        ...(filter.teamId ? { teamId: filter.teamId } : {}),
+        ...(filter.repositoryIds?.length
+            ? { repositoryId: { $in: filter.repositoryIds } }
+            : {}),
+        ...(name
+            ? {
+                  repositoryName: {
+                      $in: [...new Set([filter.repositoryName, name])],
+                  },
+              }
+            : {}),
+    };
+}
 
 /** Reads and writes business-logic validation runs. Writes never fail a review. */
 @Injectable()
@@ -130,25 +158,130 @@ export class ValidationRunRepository {
         return docs.map(toRecord);
     }
 
-    async findSince(
+    /**
+     * The newest run of each pull request in a range, grouped in Mongo: what
+     * the card and the Cockpit count, one document per PR however many runs
+     * it had. Each carries `firstAuthor`, the author its earliest run named.
+     */
+    async latestPerPullRequest(
         organizationId: string,
-        since: Date,
-        filter: { teamId?: string; repositoryIds?: string[] } = {},
+        range: { from: Date; to?: Date },
+        filter: RunFilter = {},
     ): Promise<ValidationRunRecord[]> {
         const docs = await this.model
-            .find({
-                organizationId,
-                createdAt: { $gte: since },
-                ...(filter.teamId ? { teamId: filter.teamId } : {}),
-                ...(filter.repositoryIds?.length
-                    ? { repositoryId: { $in: filter.repositoryIds } }
-                    : {}),
-            })
-            .sort({ createdAt: -1 })
-            .limit(5000)
-            .lean()
+            .aggregate([
+                {
+                    $match: {
+                        ...scope(organizationId, filter),
+                        createdAt: {
+                            $gte: range.from,
+                            ...(range.to ? { $lte: range.to } : {}),
+                        },
+                        repositoryId: { $exists: true, $ne: null },
+                        pullRequestNumber: { $exists: true, $ne: null },
+                    },
+                },
+                { $sort: { createdAt: -1 } },
+                {
+                    $group: {
+                        _id: {
+                            repositoryId: '$repositoryId',
+                            pullRequestNumber: '$pullRequestNumber',
+                        },
+                        latest: { $first: '$$ROOT' },
+                        authors: {
+                            $push: { $ifNull: ['$author', '$$REMOVE'] },
+                        },
+                    },
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: {
+                            $mergeObjects: [
+                                '$latest',
+                                {
+                                    firstAuthor: {
+                                        $arrayElemAt: ['$authors', -1],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+                { $sort: { createdAt: -1 } },
+            ])
+            .allowDiskUse(true)
             .exec();
         return docs.map(toRecord);
+    }
+
+    /**
+     * The few runs the card reads besides each PR's newest: the last task
+     * read, the last run the tracker failed and the last it answered, the
+     * first failure since, and the last issue read. With the newest per PR,
+     * they are all `summarizeStatus` needs.
+     */
+    async statusSignals(
+        organizationId: string,
+        since: Date,
+        filter: RunFilter = {},
+    ): Promise<ValidationRunRecord[]> {
+        const base = {
+            ...scope(organizationId, filter),
+            createdAt: { $gte: since },
+        };
+        const newest = (query: Record<string, unknown>, limit = 1) =>
+            this.model
+                .find({ ...base, ...query })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .lean()
+                .exec();
+        const unavailable = {
+            outcome: 'skipped',
+            skipReason: 'tracker_unavailable',
+        };
+        const [read, failed, answered, issues] = await Promise.all([
+            newest({ 'tasks.0': { $exists: true } }),
+            newest(unavailable),
+            newest({
+                $or: [
+                    { outcome: { $ne: 'skipped' } },
+                    {
+                        skipReason: { $ne: 'tracker_unavailable' },
+                        attempts: { $elemMatch: { status: { $ne: 'error' } } },
+                    },
+                ],
+            }),
+            newest(
+                {
+                    'references.kind': 'git_issue',
+                    'attempts.status': 'found',
+                },
+                20,
+            ),
+        ]);
+        const lastAnswered = (answered[0] as { createdAt?: Date } | undefined)
+            ?.createdAt;
+        const firstFailure = await this.model
+            .find({
+                ...base,
+                ...unavailable,
+                ...(lastAnswered
+                    ? { createdAt: { $gte: since, $gt: lastAnswered } }
+                    : {}),
+            })
+            .sort({ createdAt: 1 })
+            .limit(1)
+            .lean()
+            .exec();
+        return [
+            ...read,
+            ...failed,
+            ...answered,
+            ...issues,
+            ...firstFailure,
+        ].map(toRecord);
     }
 
     /**
@@ -164,10 +297,16 @@ export class ValidationRunRepository {
             .findOneAndUpdate(
                 {
                     pendingRecheck: true,
-                    createdAt: {
-                        $gte: window.notBefore,
-                        $lte: window.notAfter,
-                    },
+                    createdAt: { $lte: window.notAfter },
+                    // Counted from the first skip; runs recorded before
+                    // `pendingSince` count from their own creation.
+                    $or: [
+                        { pendingSince: { $gte: window.notBefore } },
+                        {
+                            pendingSince: { $exists: false },
+                            createdAt: { $gte: window.notBefore },
+                        },
+                    ],
                 },
                 { $set: { pendingRecheck: false } },
                 { sort: { createdAt: 1 }, new: true },

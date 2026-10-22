@@ -7,7 +7,7 @@ describe('resolveBusinessLogicSettings', () => {
             taskSource: 'auto',
             criteria: { location: 'auto' },
             commentWhenMet: true,
-            recheckOn: 'failing',
+            recheckOn: 'request',
             requireTask: false,
         });
     });
@@ -33,11 +33,11 @@ describe('resolveBusinessLogicSettings', () => {
         });
     });
 
-    it('re-checks while failing when the stored value is unknown', () => {
+    it('re-checks only on request when the stored value is unknown (#1812)', () => {
         expect(
             resolveBusinessLogicSettings({ recheckOn: 'sometimes' as any })
                 .recheckOn,
-        ).toBe('failing');
+        ).toBe('request');
     });
 
     it('falls back to auto when the heading or field is empty', () => {

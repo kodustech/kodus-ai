@@ -281,7 +281,8 @@ export function summarizeIntent(runs: ValidationRunRecord[]): IntentCockpit {
     const authors = new Map<string, ValidationRunRecord[]>();
     let unidentified = 0;
     for (const run of all.checked) {
-        const author = firstAuthor.get(prKey(run)!) ?? run.author;
+        const author =
+            run.firstAuthor ?? firstAuthor.get(prKey(run)!) ?? run.author;
         const name =
             author?.kind === 'agent'
                 ? (author.agent ?? 'Agent')

@@ -75,18 +75,33 @@ export async function resolveTasks(
             }
             missed.push({ tracker, lookup });
         }
+        // A record read without its description: the answer's shape moved,
+        // and the agent may read it whole. Its title-only read stands if not.
+        const findAgain = hitBy?.find?.bind(hitBy);
+        if (hit?.status === 'found' && hit.incomplete && findAgain) {
+            const direct = hit;
+            const second = await findWithin(findUntil, context, (scoped) =>
+                findAgain(reference, scoped, direct),
+            );
+            const checked = second && confirmed(reference, second);
+            if (checked?.status === 'found') {
+                attempts.push(attemptOf(reference, hitBy!, checked));
+                hit = checked;
+            }
+        }
         // An agent looks again only when no tracker read it directly: a
         // Linear key Jira doesn't know never costs a search in Jira.
         for (const miss of hit ? [] : missed) {
-            if (Date.now() >= findUntil) {
+            if (Date.now() >= findUntil || context.signal?.aborted) {
                 // Out of time: the direct reads stand as the answer.
                 break;
             }
-            const second = await miss.tracker.find?.(
-                reference,
-                context,
-                miss.lookup,
-            );
+            const find = miss.tracker.find?.bind(miss.tracker);
+            const second =
+                find &&
+                (await findWithin(findUntil, context, (scoped) =>
+                    find(reference, scoped, miss.lookup),
+                ));
             if (!second) {
                 continue;
             }
@@ -179,6 +194,26 @@ export async function resolveTasks(
             : {}),
         attempts,
     };
+}
+
+/**
+ * One second look, stopped when the budget runs out: the agent's run is
+ * aborted at the deadline rather than allowed its own full timeout past it.
+ */
+async function findWithin(
+    until: number,
+    context: TrackerReadContext,
+    find: (scoped: TrackerReadContext) => Promise<TrackerLookup | undefined>,
+): Promise<TrackerLookup | undefined> {
+    const remaining = until - Date.now();
+    if (remaining <= 0 || context.signal?.aborted) {
+        return undefined;
+    }
+    const deadline = AbortSignal.timeout(remaining);
+    const signal = context.signal
+        ? AbortSignal.any([context.signal, deadline])
+        : deadline;
+    return find({ ...context, signal });
 }
 
 /** A found task whose title contradicts the branch it came from counts as not found. */

@@ -27,11 +27,14 @@ export function carryOver(
 }
 
 function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
-    const earlier = new Map(
-        before.requirements.map((r) => [requirementKey(r.requirement), r]),
+    const current = check.verdict.requirements ?? [];
+    const priors = matchPrevious(
+        current.map((r) => r.requirement),
+        before.requirements.map((r) => r.requirement),
     );
-    const requirements = (check.verdict.requirements ?? []).map((r) => {
-        const prior = earlier.get(requirementKey(r.requirement));
+    const requirements = current.map((r, i) => {
+        const at = priors[i];
+        const prior = at === undefined ? undefined : before.requirements[at];
         if (!prior) {
             return r;
         }
@@ -63,6 +66,83 @@ function applyPrevious(check: TaskCheck, before: RunTask): TaskCheck {
         verdict,
         passed: taskPasses(verdict, check.reference?.intent),
     };
+}
+
+/** How alike two re-quotes of one criterion must be, in shared words. */
+const SAME_REQUIREMENT = 0.8;
+
+/**
+ * For each requirement of this run, the index of the same one in the last
+ * run. The judge re-quotes the task on every run, and a re-quote may cut a
+ * sentence or merge two bullets: the exact text wins, then the most alike
+ * one, each earlier requirement taken once. Numbers and symbols must match:
+ * "count > 10" never takes "count < 10"'s acceptance.
+ */
+export function matchPrevious(
+    now: string[],
+    before: string[],
+): Array<number | undefined> {
+    const taken = new Set<number>();
+    const result: Array<number | undefined> = now.map(() => undefined);
+    const keys = before.map(requirementKey);
+    now.forEach((text, i) => {
+        const exact = keys.findIndex(
+            (key, j) => !taken.has(j) && key === requirementKey(text),
+        );
+        if (exact >= 0) {
+            taken.add(exact);
+            result[i] = exact;
+        }
+    });
+    const pairs: Array<{ i: number; j: number; score: number }> = [];
+    now.forEach((text, i) => {
+        if (result[i] !== undefined) {
+            return;
+        }
+        before.forEach((earlier, j) => {
+            if (taken.has(j) || signs(text) !== signs(earlier)) {
+                return;
+            }
+            const score = overlap(words(text), words(earlier));
+            if (score >= SAME_REQUIREMENT) {
+                pairs.push({ i, j, score });
+            }
+        });
+    });
+    for (const { i, j } of pairs.sort((a, b) => b.score - a.score)) {
+        if (result[i] === undefined && !taken.has(j)) {
+            taken.add(j);
+            result[i] = j;
+        }
+    }
+    return result;
+}
+
+function words(text: string): Set<string> {
+    return new Set(
+        requirementKey(text)
+            .split(/[^\p{L}\p{N}]+/u)
+            .filter((w) => w.length > 2),
+    );
+}
+
+/** The numbers and comparison signs, which must agree for two texts to be one requirement. */
+function signs(text: string): string {
+    return (text.match(/\d+(?:[.,]\d+)?|[<>=≤≥≠]+/g) ?? []).sort().join(' ');
+}
+
+/** Shared words over the smaller text's words: a cut sentence still matches. */
+function overlap(a: Set<string>, b: Set<string>): number {
+    if (!a.size || !b.size) {
+        return 0;
+    }
+    let shared = 0;
+    for (const word of a) {
+        if (b.has(word)) {
+            shared += 1;
+        }
+    }
+    return shared / Math.min(a.size, b.size);
 }
 
 /**

@@ -15,8 +15,12 @@
  * that doesn't exist), no other task is taken, and no tool that writes is
  * called. Also reported: how often the finder had to step in, and its calls.
  *
+ * The model is routed as production routes an org's for the
+ * businessValidation task (evals/shared/model-route.js), and recorded with the
+ * result.
+ *
  * EXIT CODES: 0 = every case passed in every repeat, 1 = a case failed,
- *   2 = infra (unroutable model).
+ *   2 = not measured (a model production can't route, or no key).
  */
 const fs = require('fs');
 const path = require('path');
@@ -59,13 +63,12 @@ const MODEL = args.model || 'gpt-5.4-mini';
 const REPEATS = Number(args.repeats || 1);
 const ONLY = args.case ? String(args.case).split(',') : undefined;
 
-const { applyModelEnv } = require('../shared/tier0-models');
-try {
-    applyModelEnv(MODEL);
-} catch (e) {
-    console.error(`\n❌ INFRA ERROR: cannot route model '${MODEL}': ${e.message}`);
-    process.exit(2);
-}
+// The model an org gets for the businessValidation task, routed as production
+// routes it (evals/shared/model-route.js): a stored BYOK config, read by
+// PermissionValidationService and resolved by resolveTaskSlot, the slot the
+// service hands the finder (business-validation.service.ts).
+const { orgRouteOrExit, evalPermissionService, EVAL_ORG } = require('../shared/model-route');
+const ROUTE = orgRouteOrExit(MODEL);
 
 const {
     createTaskFinder,
@@ -336,10 +339,10 @@ const CASES = [
 
 const WRITE = /save|update|create|edit|delete|transition|comment|add/i;
 
-async function runCase(c) {
+async function runCase(c, slot) {
     const { session, log, tools } = c.build();
     const finderLog = [];
-    const run = aiSdkAgentRun(undefined, { organizationId: ORG.organizationId });
+    const run = aiSdkAgentRun(slot, { organizationId: ORG.organizationId });
     const tracker = c.tracker(session).useFinder((reference, context) =>
         createTaskFinder(async (spec, prompt) => {
             try {
@@ -385,13 +388,21 @@ async function runCase(c) {
 (async () => {
     // The model client's timers don't hold the loop; this does, until the end.
     const keepAlive = setInterval(() => undefined, 1000);
+    const { LLM_TASK } = require('../../libs/llm/llm-tasks.ts');
+    const slot = await evalPermissionService(ROUTE.storedConfig).resolveTaskSlot(EVAL_ORG, LLM_TASK.businessValidation, { ctx: {} });
+    if (!slot && ROUTE.storedConfig) {
+        console.error(`not measured: production resolves no businessValidation slot for ${MODEL}`);
+        process.exit(2);
+    }
+    const resolved = slot ? `${slot.provider}:${slot.model}` : 'managed default';
+    console.log(`model ${MODEL} via ${ROUTE.route} → ${resolved}`);
     const cases = CASES.filter((c) => !ONLY || ONLY.includes(c.id));
     const rows = [];
     for (let r = 1; r <= REPEATS; r++) {
         for (const c of cases) {
             let row;
             try {
-                row = await runCase(c);
+                row = await runCase(c, slot);
             } catch (e) {
                 row = { id: c.id, pass: false, got: `threw: ${e.message}`, finderCalls: [], wrote: [] };
             }
@@ -402,8 +413,8 @@ async function runCase(c) {
         }
     }
     const passed = rows.filter((r) => r.pass).length;
-    console.log(`\n${passed}/${rows.length} passed · model ${MODEL} · ${REPEATS} repeat(s)`);
+    console.log(`\n${passed}/${rows.length} passed · model ${MODEL} (${resolved}) · ${REPEATS} repeat(s)`);
     clearInterval(keepAlive);
-    if (args.output) fs.writeFileSync(args.output, JSON.stringify({ model: MODEL, rows }, null, 2));
+    if (args.output) fs.writeFileSync(args.output, JSON.stringify({ model: MODEL, route: ROUTE.route, resolved, rows }, null, 2));
     process.exit(passed === rows.length ? 0 : 1);
 })();

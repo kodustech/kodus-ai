@@ -44,7 +44,8 @@ Kody también lee lo que enlaza la tarea:
 - **Documentos adjuntos a la tarea** (docs de Linear): se leen como parte de la tarea, criterios incluidos.
 
 - **"Closes PROJ-1"** o una clave en el título o la rama: el PR se compara con la tarea completa.
-- **"Part of PROJ-1"** o **"Refs PROJ-1"**: el PR entrega una parte. Lo que falta se lista, pero no como algo pendiente para el merge.
+- **"Part of PROJ-1"**: el PR entrega una parte. Lo que falta se lista, pero no como algo pendiente para el merge.
+- **"Refs PROJ-1"**, **"see PROJ-1"** o **"related to PROJ-1"** en la descripción: una mención. Solo se comprueba cuando el PR no nombra otra tarea, y entonces como la tarea del propio PR.
 - **Hasta tres tareas** se comprueban por PR, una sección por cada una. Un PR que menciona más (una release o un merge) se omite.
 
 ## Los cinco estados
@@ -69,17 +70,17 @@ Una brecha le dice al autor que rehaga trabajo, así que Kody contrasta cada una
 
 ## En el pull request
 
-- Kody comprueba el PR en su **primera revisión**, y de nuevo en cada push mientras falte algo, así que una corrección actualiza el comentario sin que nadie lo pida. **Re-check** también se puede configurar para cada push, o solo cuando alguien comenta `@kody -v business-logic`.
+- Kody comprueba el PR en su **primera revisión**. Después, vuelve a comprobarlo cuando alguien comenta `@kody -v business-logic` o ejecuta `@kody review --force`. **Re-check** también se puede configurar para cada push mientras falte algo, para que una corrección actualice el comentario sin que nadie lo pida, o para cada push; cada opción suma una validación por push.
 - Vuelve a comprobar en cualquier momento con `@kody -v business-logic`. Se **edita el mismo comentario**; Kody nunca publica un segundo.
 - Un PR que cumple su tarea recibe un comentario de una línea ("✅ 4 of 4 met"), más lo que haya que comprobar a mano, para que el autor sepa que se comprobó. Desactiva **Comment when every requirement is met** para no comentar en esos casos.
 - El comentario es la señal en todas las plataformas: Kody no escribe un check ni un status, así que nunca bloquea un merge por sí solo. Su encabezado dice lo que queda por corregir.
 
 ### Responder al comentario
 
-Responde al comentario de Business Logic y menciona a `@kody`:
+Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita, o nombra el requisito, su estado (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
 
 - **Discrepar**: "Está cubierto en `useDrag.ts`". Kody vuelve a comprobar lo que señalaste y lo marca como MET o dice qué revisó y lo mantiene.
-- **Aceptar un hallazgo** (en GitHub, cualquier persona con permiso de escritura en el repositorio, el autor incluido; las otras plataformas no informan del rol de quien comenta, así que ahí puede hacerlo cualquiera): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores.
+- **Aceptar un hallazgo** (alguien que no es el autor del PR: en GitHub, con permiso de escritura en el repositorio; en las otras plataformas, un miembro de la organización que la plataforma lista): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores, aunque Kody redacte el requisito de forma un poco distinta.
 
 ## Cuándo Kody no comenta
 
@@ -91,7 +92,7 @@ Kody solo comenta cuando el autor puede hacer algo al respecto:
 | `SAA-999` no existe, pero SAA es un equipo en tu gestor | Un comentario diciendo que parece un error tipográfico, con las tareas reales más cercanas. Con **Ask for a task** activado, permanece abierto hasta que se corrija |
 | No se referencia ninguna tarea, o solo ids que ningún gestor tiene (`UTF-8` en un título) | Nada. Con **Ask for a task** activado, un comentario pidiendo una (nunca en el PR de un bot) |
 | Un issue de GitHub, pero solo Linear está conectado | Nada; los administradores ven un contador en la página de configuración. Con **Ask for a task** activado, un comentario que indica qué gestor no puede leerlo |
-| El gestor está caído o su token expiró | Nada; se notifica a los propietarios, y Kody vuelve a comprobar cuando el gestor responde |
+| El gestor está caído o su token expiró | Nada; se notifica a los propietarios, y Kody vuelve a comprobar cuando el gestor responde, hasta un día después del primer fallo |
 
 El motivo de cada omisión queda registrado y se muestra en la página de configuración de Business Logic.
 
@@ -107,11 +108,11 @@ Comenta en el PR (no en una línea de código):
 
 Abre **Code review → What to review → Business Logic → Configure**. Cada opción se puede definir de forma global y sobrescribir por repositorio o directorio.
 
-- **Task source**: todos los gestores conectados (plugins de tareas personalizados como ClickUp incluidos), o un solo plugin. Para un plugin personalizado, elige la herramienta que lee una tarea por su id; solo se ofrecen herramientas de solo lectura. Usa **Try it** al final de la página: una tarea sola muestra lo que Kody lee de ella, y un pull request ejecuta la comprobación completa sin publicar, con la configuración que hay en pantalla, guardada o no.
-- **Custom task id format** (opcional): una expresión regular para ids que Kody no encuentra por sí solo: `T(\d{4})` lee `T1234` como la tarea 1234. Claves como `SAA-96`, `#12`, `AB#8`, `CU-…` y los enlaces de gestores se encuentran sin ella, igual que una clave en minúsculas como `sc-123` en el nombre de una rama. En un título o una descripción, una clave en minúsculas solo cuenta cuando Linear o Jira tienen ese equipo o proyecto; para otro gestor, define el formato.
+- **Task source**: todos los gestores conectados (plugins de tareas personalizados como ClickUp incluidos), o un solo plugin. Para un plugin personalizado, elige la herramienta que lee una tarea por su id; solo se ofrecen herramientas de solo lectura. Usa **Try it** al final de la página (necesita permiso para editar esta configuración): una tarea sola muestra lo que Kody lee de ella, y un pull request ejecuta la comprobación completa sin publicar, con la configuración que hay en pantalla, guardada o no. **Post to the pull request** publica el resultado mostrado, sin ejecutarlo de nuevo.
+- **Custom task id format** (opcional): una expresión regular para ids que Kody no encuentra por sí solo: `T(\d{4})` lee `T1234` como la tarea 1234. Claves como `SAA-96`, `#12`, `AB#8`, `CU-…` y los enlaces de gestores se encuentran sin ella, igual que una clave en minúsculas como `sc-123` en el nombre de una rama. En un título o una descripción, una clave en minúsculas solo cuenta cuando Linear o Jira tienen ese equipo o proyecto; para otro gestor, define el formato. Un número que el formato captura solo se lee como issue de Git cuando Git Issues es la fuente de tareas; con todos los gestores conectados, `T1234` nunca es la issue #1234 del repositorio.
 - **Where acceptance criteria live**: detectado automáticamente, bajo un encabezado en la descripción, o en un campo personalizado; una tarea sin ese campo se lee desde su descripción.
 - **Ask for a task when the PR references none**: Kody comenta preguntando para qué tarea es el PR (o señalando el error tipográfico), en lugar de omitirlo. Los PRs abiertos por bots, como Dependabot o Renovate, se dejan en paz. Un gestor caído nunca cuenta.
-- **Re-check**: mientras falte algo (por defecto), en cada push, o solo a petición.
+- **Re-check**: solo a petición (por defecto), en cada push mientras falte algo, o en cada push.
 - **Skipped pull requests**: los que omite la revisión de código también se omiten aquí: títulos con una palabra clave ignorada (`ignoredTitleKeywords`, como `wip`) y borradores cuando `runOnDraft` está desactivado. Un comentario `@kody -v business-logic` siempre se ejecuta.
 - **Team guidance**: notas que Kody sigue al juzgar, por ejemplo "Los feature flags cuentan como implementados cuando el flag existe y está desactivado por defecto". No pueden cambiar el formato del veredicto ni hacer que Kody invente requisitos.
 
@@ -123,7 +124,7 @@ businessLogic:
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: true
-  recheckOn: 'failing' # failing | push | request
+  recheckOn: 'request' # request | failing | push
   requireTask: false
 ```
 
@@ -140,4 +141,4 @@ Compara tus cambios locales con la tarea e imprime una línea por requisito y el
 
 ## Cockpit
 
-**Cockpit → Delivered as asked** muestra la proporción de PRs que cumplieron su tarea, los cambios que no están en la tarea, con qué frecuencia los desarrolladores estuvieron de acuerdo con Kody, y el desglose por quién escribió el código (personas o agentes de código, según los autores de los commits y los trailers `Co-Authored-By`) y por equipo.
+**Cockpit → Delivered as asked** muestra la proporción de PRs que cumplieron su tarea, los cambios que no están en la tarea, con qué frecuencia los desarrolladores estuvieron de acuerdo con Kody, y el desglose por quién escribió el código (personas o agentes de código, según los autores de los commits y los trailers `Co-Authored-By`) y por equipo. Sigue el selector de repositorio del Cockpit, y se puede ocultar en **Organization → Cockpit** como las otras pestañas.

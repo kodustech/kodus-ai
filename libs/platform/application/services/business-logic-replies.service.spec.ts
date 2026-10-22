@@ -61,7 +61,10 @@ function build(intent: any, revalidated?: any, latest: any = run) {
         validate: jest.fn(async () => revalidated),
     };
     const publisher = {
-        settingsFor: jest.fn(async () => DEFAULT_BUSINESS_LOGIC_SETTINGS),
+        configFor: jest.fn(async () => ({
+            settings: DEFAULT_BUSINESS_LOGIC_SETTINGS,
+            enabled: true,
+        })),
         withRepository: jest.fn((r: unknown) => r),
         headShaOf: jest.fn(async () => 'def5678'),
         publish: jest.fn(async (input: any) => ({
@@ -87,13 +90,47 @@ describe('BusinessLogicReplies', () => {
         await expect(
             replies.handle({
                 request,
-                message: 'why?',
+                message: 'Keyboard reordering: why?',
                 sender: { login: 'nina' },
             }),
         ).resolves.toEqual({ handled: false });
     });
 
-    it('lets the PR author accept too, and records who accepted (UC-37)', async () => {
+    it('never asks the classifier about a comment that does not answer the Business Logic comment', async () => {
+        const { replies, service } = build({
+            intent: 'dispute',
+            findings: [1],
+        });
+        await expect(
+            replies.handle({
+                request,
+                message: '@kody can you explain the caching in this PR?',
+                sender: { login: 'nina' },
+            }),
+        ).resolves.toEqual({ handled: false });
+        expect(service.classifyReply).not.toHaveBeenCalled();
+    });
+
+    it("reads a reply in the comment's own thread, a quote of it or a named state as an answer", async () => {
+        for (const reply of [
+            { message: 'out of scope', threadId: '501' },
+            {
+                message:
+                    '> **Business Logic**: 1 missing\n\nout of scope for now',
+            },
+            { message: 'that MISSING one is out of scope' },
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                ...reply,
+            });
+            expect(service.classifyReply).toHaveBeenCalled();
+        }
+    });
+
+    it('records who accepted (UC-37)', async () => {
         const { replies, publisher } = build({
             intent: 'accept',
             findings: [1],
@@ -101,7 +138,7 @@ describe('BusinessLogicReplies', () => {
 
         const result = await replies.handle({
             request,
-            message: 'out of scope',
+            message: 'Keyboard reordering is out of scope',
             sender: { login: 'rafa' },
         });
 
@@ -112,6 +149,25 @@ describe('BusinessLogicReplies', () => {
         expect(publisher.publish).toHaveBeenCalled();
     });
 
+    it("never lets the PR's author accept its own requirements", async () => {
+        const { replies, publisher } = build({
+            intent: 'accept',
+            findings: [1],
+        });
+
+        const result = await replies.handle({
+            request,
+            message: 'Keyboard reordering is out of scope',
+            sender: { login: 'rafa', canWrite: true, isAuthor: true },
+        });
+
+        expect(result).toMatchObject({
+            handled: true,
+            reply: expect.stringContaining('ask a reviewer'),
+        });
+        expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
     it('refuses someone without write access to the repository', async () => {
         const { replies, publisher } = build({
             intent: 'accept',
@@ -120,7 +176,7 @@ describe('BusinessLogicReplies', () => {
 
         const result = await replies.handle({
             request,
-            message: 'out of scope',
+            message: 'Keyboard reordering is out of scope',
             sender: { login: 'drive-by', canWrite: false },
         });
 
@@ -137,7 +193,7 @@ describe('BusinessLogicReplies', () => {
 
             const result = await replies.handle({
                 request: { ...request, platformType },
-                message: 'out of scope',
+                message: 'Keyboard reordering is out of scope',
                 sender: { login: 'Nina' },
             });
 
@@ -225,7 +281,7 @@ describe('BusinessLogicReplies', () => {
 
         const result = await replies.handle({
             request,
-            message: "it's covered in useDrag.ts",
+            message: 'Keyboard reordering is covered in useDrag.ts',
             sender: { login: 'rafa' },
         });
 
@@ -275,7 +331,7 @@ describe('BusinessLogicReplies', () => {
 
         await replies.handle({
             request,
-            message: "it's covered",
+            message: 'OPS-12 is covered',
             sender: { login: 'rafa' },
         });
 
@@ -293,7 +349,7 @@ describe('BusinessLogicReplies', () => {
 
         const result = await replies.handle({
             request,
-            message: 'moved to SAA-999',
+            message: 'Keyboard reordering moved to SAA-999',
             sender: { login: 'nina' },
         });
 
@@ -312,7 +368,7 @@ describe('BusinessLogicReplies', () => {
 
         const result = await replies.handle({
             request,
-            message: 'out of scope',
+            message: 'Keyboard reordering is out of scope',
             sender: { login: 'drive-by', canWrite: false },
         });
 

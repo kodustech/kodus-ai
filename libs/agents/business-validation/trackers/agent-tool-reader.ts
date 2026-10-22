@@ -19,6 +19,7 @@ const TIMEOUT_MS = 30_000;
 export function createAgentToolReader(
     model: NormalizedModel | undefined,
     telemetry: { organizationId: string; teamId?: string },
+    signal?: AbortSignal,
 ): AgentToolReader {
     return async ({ tool, reference, call }) => {
         let payload: unknown;
@@ -75,6 +76,7 @@ export function createAgentToolReader(
             maxOutputTokens: 600,
         };
         const { ctx, cleanup } = createAgentRunContext({
+            parentSignal: signal,
             runId: 'business-rules:task-reader',
             timeoutMs: TIMEOUT_MS,
         });

@@ -9,13 +9,13 @@ import {
 } from "@components/ui/collapsible";
 import { Link } from "@components/ui/link";
 import { Switch } from "@components/ui/switch";
-import { useBusinessLogicStatus } from "@services/business-logic/hooks";
+import {
+    useBusinessLogicStatus,
+    useTaskSources,
+} from "@services/business-logic/hooks";
 import type { BusinessLogicStatus } from "@services/business-logic/types";
-import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { KODUS_ISSUES_INTEGRATION_ID } from "@services/mcp-manager/types";
-import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
-import { useQuery } from "@tanstack/react-query";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
     useCodeReviewRouteParams,
@@ -34,7 +34,6 @@ import {
     getPromptFieldText,
     parsePromptFieldValue,
 } from "../../custom-prompts/_utils/custom-prompts-state";
-import { hasTaskManagementConnection } from "../../general/_components/analysis-types";
 import {
     filterVisibleReviewLabels,
     mergeMissingReviewOptions,
@@ -285,28 +284,26 @@ export const CategoryList = ({
         directoryId ? `?directoryId=${directoryId}` : ""
     }`;
 
-    // Same gating as the General page: only look up MCP plugins when the
-    // business-logic category is on, since that is the only row it affects.
-    const { data: mcpPlugins, isFetched: isMCPFetched } = useQuery({
-        queryKey: ["mcp-plugins-task-management"],
-        enabled: businessLogicEnabled,
-        staleTime: 5 * 60 * 1000,
-        retry: false,
-        queryFn: async () => {
-            try {
-                return await getMCPPlugins();
-            } catch (error) {
-                if (error instanceof MCPServiceUnavailableError) return null;
-                return null;
-            }
-        },
-    });
-    const hasTaskMcp = useMemo(() => {
-        if (!mcpPlugins) return false;
-        return hasTaskManagementConnection(
-            mcpPlugins.filter((plugin) => plugin.isConnected),
-        );
-    }, [mcpPlugins]);
+    // The sources Business Logic reads, as the backend builds them: Git
+    // Issues and custom task plugins included, which name hints miss.
+    const taskSource = useWatch({
+        control: form.control,
+        name: "businessLogic.taskSource.value" as never,
+    }) as string | undefined;
+    const {
+        data: taskSources,
+        isFetched: isMCPFetched,
+        isError: taskSourcesFailed,
+    } = useTaskSources(businessLogicEnabled ? teamId : undefined);
+    const hasTaskMcp = useMemo(
+        () =>
+            !!taskSources?.some((source) =>
+                taskSource && taskSource !== "auto"
+                    ? source.integrationId === taskSource
+                    : source.inAuto,
+            ),
+        [taskSources, taskSource],
+    );
 
     const visibleLabels = useMemo(
         () => filterVisibleReviewLabels(labels, true),
@@ -382,16 +379,13 @@ export const CategoryList = ({
                                                 status={businessLogicStatus}
                                                 hasTaskMcp={hasTaskMcp}
                                                 gitIssuesConnected={
-                                                    !!mcpPlugins?.some(
-                                                        (plugin) =>
-                                                            plugin.isConnected &&
-                                                            plugin.id ===
-                                                                KODUS_ISSUES_INTEGRATION_ID,
+                                                    !!taskSources?.some(
+                                                        (source) =>
+                                                            source.integrationId ===
+                                                            KODUS_ISSUES_INTEGRATION_ID,
                                                     )
                                                 }
-                                                lookupFailed={
-                                                    mcpPlugins === null
-                                                }
+                                                lookupFailed={taskSourcesFailed}
                                                 configureHref={configureHref}
                                             />
                                         ) : undefined

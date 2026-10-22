@@ -1,4 +1,4 @@
-import { fitDiff, formatPullRequestDiff } from './pull-request-diff';
+import { diffFor, fitDiff, formatPullRequestDiff } from './pull-request-diff';
 
 describe('fitDiff (UC-32)', () => {
     const diff = formatPullRequestDiff([
@@ -22,5 +22,27 @@ describe('fitDiff (UC-32)', () => {
     it('reads unified diff headers from a local diff too', () => {
         const local = `diff --git a/x.ts b/x.ts\n${'+'.repeat(300)}\ndiff --git a/y.ts b/y.ts\n+ok\n`;
         expect(fitDiff(local, 100).unseenFiles).toEqual(['x.ts']);
+    });
+});
+
+describe('diffFor: what one second look re-reads on every step', () => {
+    const file = (name: string, size: number) =>
+        `=== FILE: ${name} ===\nStatus: modified\n\n${'+'.repeat(size)}\n`;
+
+    it('sends a small diff whole', () => {
+        const diff = file('a.ts', 10) + file('b.ts', 10);
+        expect(diffFor(diff, [], 1000)).toBe(diff);
+    });
+
+    it('puts the files the evidence cites first, and names the rest for read_file', () => {
+        const diff =
+            file('a.ts', 400) + file('b.ts', 400) + file('cited.ts', 400);
+        const sent = diffFor(diff, ['cited.ts'], 900);
+        expect(sent.indexOf('=== FILE: cited.ts')).toBe(0);
+        expect(sent).toContain('=== FILE: a.ts');
+        expect(sent).not.toContain('=== FILE: b.ts');
+        expect(sent).toMatch(
+            /not shown here \(read them with read_file\): b\.ts$/,
+        );
     });
 });

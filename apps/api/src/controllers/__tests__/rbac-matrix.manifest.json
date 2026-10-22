@@ -11,6 +11,17 @@
     }
   },
   {
+    "key": "businessLogic.controller.ts#postTest",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test/post",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "businessLogic.controller.ts#readTools",
     "httpMethod": "GET",
     "urlPath": "/business-logic/task-sources/:integrationId/tools",
@@ -71,9 +82,9 @@
     "urlPath": "/business-logic/try",
     "expected": {
       "owner": "allow",
-      "billing_manager": "allow",
+      "billing_manager": "deny",
       "repo_admin": "allow",
-      "contributor": "allow"
+      "contributor": "deny"
     }
   },
   {

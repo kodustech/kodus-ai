@@ -2,7 +2,7 @@ import type {
     TaskReference,
     TrackerLookup,
 } from '../business-validation.types';
-import { asRecord } from '../value-utils';
+import { asRecord, isEmpty } from '../value-utils';
 import { McpToolSession, TaskNotFoundError } from './mcp-tool-session';
 import {
     jiraCustomFields,
@@ -52,6 +52,7 @@ export class JiraTracker extends McpTaskTracker {
               ]
             : sites;
 
+        let unread = false;
         for (const site of ordered.slice(0, 3)) {
             let payload: unknown;
             try {
@@ -73,6 +74,8 @@ export class JiraTracker extends McpTaskTracker {
                     record.key.toUpperCase() === reference.id,
             );
             if (!issue) {
+                // Answered, without an error and without the issue.
+                unread ||= !isEmpty(payload);
                 continue;
             }
             const fields = asRecord(issue.fields);
@@ -103,7 +106,9 @@ export class JiraTracker extends McpTaskTracker {
                 },
             };
         }
-        return { status: 'not_found' };
+        return unread
+            ? { status: 'not_found', unread: true }
+            : { status: 'not_found' };
     }
 
     protected async projectKeys(): Promise<string[]> {
@@ -138,6 +143,10 @@ export class JiraTracker extends McpTaskTracker {
                 ...('expand' in properties ? { expand: 'names' } : {}),
             };
         });
+        // A failed load is not kept: the next attempt asks again.
+        this.fullIssueArgs.catch(() => {
+            this.fullIssueArgs = undefined;
+        });
         return this.fullIssueArgs;
     }
 
@@ -160,6 +169,9 @@ export class JiraTracker extends McpTaskTracker {
                                 : undefined,
                     })),
             );
+        this.sites.catch(() => {
+            this.sites = undefined;
+        });
         return this.sites;
     }
 }

@@ -1,4 +1,4 @@
-import { isRegexSafe } from './safe-regex';
+import { isRegexSafe, matchAllWithin } from './safe-regex';
 
 // The id and line matchers teams and detectors write: kept, and fast.
 const KEPT = [
@@ -52,5 +52,24 @@ describe('isRegexSafe', () => {
             new RegExp(p).test(line);
             expect(Date.now() - started).toBeLessThan(50);
         }
+    });
+});
+
+describe('matchAllWithin', () => {
+    it('reads every match and its first group', () => {
+        expect(matchAllWithin('T(\\d{4})', 'feat T1234 and T5678')).toEqual([
+            { index: 5, text: 'T1234', group: '1234' },
+            { index: 15, text: 'T5678', group: '5678' },
+        ]);
+    });
+
+    // `[A-Z]+\w*-\d+` passes the shape check and grows cubically on a long
+    // run of capitals: a PR title its author wrote must not hang the review.
+    it('stops a pattern that runs past its time and matches nothing', () => {
+        const pattern = '[A-Z]+\\w*-\\d+';
+        expect(isRegexSafe(pattern)).toBe(true);
+        const started = Date.now();
+        expect(matchAllWithin(pattern, `${'A'.repeat(3000)}!`, 50)).toEqual([]);
+        expect(Date.now() - started).toBeLessThan(1000);
     });
 });

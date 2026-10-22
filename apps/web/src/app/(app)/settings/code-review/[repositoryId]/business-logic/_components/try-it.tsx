@@ -5,6 +5,7 @@ import { Button } from "@components/ui/button";
 import { Card } from "@components/ui/card";
 import { Input } from "@components/ui/input";
 import {
+    usePostTestResult,
     useTestOnPullRequest,
     useTryReadTask,
 } from "@services/business-logic/hooks";
@@ -34,10 +35,11 @@ export const TryIt = ({
     const [task, setTask] = useState("");
     const tryRead = useTryReadTask();
     const test = useTestOnPullRequest();
-    const post = useTestOnPullRequest();
+    const post = usePostTestResult();
 
     const onPr = !!prUrl.trim();
-    const canRun = onPr ? canEdit : !!task.trim();
+    // Both spend the org's model and read with its tracker credentials.
+    const canRun = canEdit && (onPr || !!task.trim());
     const payload = () => ({
         teamId,
         prUrl: prUrl.trim(),
@@ -107,10 +109,10 @@ export const TryIt = ({
                     {onPr ? "Run check" : "Read task"}
                 </Button>
             </div>
-            {onPr && !canEdit && (
+            {!canEdit && (
                 <p className="text-text-secondary text-xs">
-                    Checking a pull request needs permission to edit these
-                    settings.
+                    Trying a task or a pull request needs permission to edit
+                    these settings.
                 </p>
             )}
 
@@ -139,7 +141,13 @@ export const TryIt = ({
                     posting={post.isPending}
                     posted={post.data?.posted}
                     postError={post.isError ? errorMessage(post.error) : null}
-                    onPost={() => post.mutate({ ...payload(), post: true })}
+                    // The result on screen, as it is: not a second run.
+                    onPost={() =>
+                        post.mutate({
+                            teamId,
+                            previewToken: test.data!.previewToken,
+                        })
+                    }
                 />
             )}
         </Card>

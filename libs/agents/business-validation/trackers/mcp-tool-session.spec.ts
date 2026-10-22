@@ -121,6 +121,36 @@ describe('McpToolSession', () => {
         );
     });
 
+    it('reads "not found" as a missing task only when it is about the task asked for', async () => {
+        for (const text of [
+            'cloudId not found',
+            'Could not find page with ID: 1f2e. Make sure the relevant pages and databases are shared with your integration.',
+            'Request failed with status code 404',
+            'Workspace not found',
+        ]) {
+            executeTool.mockResolvedValueOnce(errorResult(text));
+            await expect(
+                session().call('get_issue', { id: 'SAA-9' }),
+            ).rejects.toBeInstanceOf(TrackerUnavailableError);
+        }
+        executeTool.mockResolvedValueOnce(errorResult('404: SAA-9'));
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TaskNotFoundError);
+    });
+
+    it('never calls a tool the org turned off on the connection', async () => {
+        executeTool.mockClear();
+        const narrowed = new McpToolSession(
+            { name: 'tracker', allowedTools: ['list_teams'] } as any,
+            ['get_issue', 'list_teams'],
+        );
+        await expect(
+            narrowed.call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TrackerUnavailableError);
+        expect(executeTool).not.toHaveBeenCalled();
+    });
+
     it('never calls a tool the session was not opened for', async () => {
         executeTool.mockClear();
         await expect(

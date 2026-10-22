@@ -34,9 +34,10 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
  * task referenced, a tracker that can't read it, a tracker that is down) is
  * silent on the PR: the check says "skipped" and the run records why.
  *
- * Automatic validation runs on the first review, then on each push while the
- * last check failed (or on every push, or never, as the team set it).
- * `@kody -v business-logic` and `@kody review --force` re-run it on demand.
+ * Automatic validation runs on the first review, then only on request
+ * (#1812), unless the team chose to re-check each push while the last check
+ * failed, or every push. `@kody -v business-logic` and `@kody review --force`
+ * re-run it on demand.
  * A re-run edits the same comment.
  */
 @Injectable()
@@ -73,6 +74,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         const explicitRun = context.origin === 'command-force';
         const settings = this.settingsOf(context);
         const rerun = !explicitRun && this.wasAlreadyValidated(context);
+        // Stops the tracker reads, the judge and the gap checks when the
+        // stage gives up, so a timeout ends the spend too.
+        const stop = new AbortController();
         try {
             const request = {
                 door: explicitRun ? ('force' as const) : ('auto' as const),
@@ -98,11 +102,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 byokModel: context.codeReviewConfig?.byokModel,
                 byokModelId: context.codeReviewConfig?.byokModelId,
                 settings,
+                signal: stop.signal,
             };
             const result = await this.withTimeout(
                 this.businessValidationService.validate(
                     this.publisher.withRepository(request),
                 ),
+                stop,
             );
             const published = await this.publisher.publish({
                 request,
@@ -355,13 +361,16 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         });
     }
 
-    private async withTimeout<T>(promise: Promise<T>): Promise<T> {
+    private async withTimeout<T>(
+        promise: Promise<T>,
+        stop: AbortController,
+    ): Promise<T> {
         let timer: NodeJS.Timeout | undefined;
         const timeout = new Promise<never>((_, reject) => {
-            timer = setTimeout(
-                () => reject(new Error('BusinessLogicValidation timeout')),
-                BusinessLogicValidationStage.TIMEOUT_MS,
-            );
+            timer = setTimeout(() => {
+                stop.abort();
+                reject(new Error('BusinessLogicValidation timeout'));
+            }, BusinessLogicValidationStage.TIMEOUT_MS);
         });
         try {
             return await Promise.race([promise, timeout]);

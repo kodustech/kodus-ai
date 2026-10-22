@@ -29,3 +29,17 @@ export function safeStringify(value: unknown): string | undefined {
 
     return undefined;
 }
+
+/** No answer at all: nothing, a blank string, an empty object or list. */
+export function isEmpty(value: unknown): boolean {
+    if (value === undefined || value === null) {
+        return true;
+    }
+    if (typeof value === 'string') {
+        return !value.trim();
+    }
+    if (Array.isArray(value)) {
+        return value.length === 0;
+    }
+    return typeof value === 'object' && Object.keys(value).length === 0;
+}

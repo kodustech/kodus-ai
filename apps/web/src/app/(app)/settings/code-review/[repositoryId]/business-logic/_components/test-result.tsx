@@ -77,7 +77,7 @@ export const TestResult = ({
     result: BusinessLogicTestResult;
     canEdit: boolean;
     posting: boolean;
-    posted?: BusinessLogicTestResult["posted"];
+    posted?: "created" | "updated" | "none";
     postError: string | null;
     onPost: () => void;
 }) => {
@@ -242,7 +242,7 @@ export const TestResult = ({
                         ? posted === "none"
                             ? "Nothing to post: the comment isn't posted for this result."
                             : `Comment ${posted} on #${pullRequest.number}.`
-                        : "Runs again and posts the comment, as @kody -v business-logic does."}
+                        : "Posts this result as the comment, as @kody -v business-logic does."}
                 </span>
                 {postError && (
                     <span className="text-danger text-xs">{postError}</span>

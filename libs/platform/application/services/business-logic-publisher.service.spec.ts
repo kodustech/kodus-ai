@@ -72,12 +72,24 @@ function build(
         create: jest.fn(async () => 'run-1'),
         clearPendingRecheck: jest.fn(async () => undefined),
     };
+    const config = {
+        getSimpleConfig: jest.fn(async () => ({
+            reviewOptions: { business_logic: true },
+            businessLogic: { recheckOn: 'push' },
+            byokModelId: 'model-dir',
+        })),
+    };
+    const pullRequests = {
+        addPrLevelSuggestions: jest.fn(async () => null),
+    };
     const publisher = new BusinessLogicPublisher(
         service as any,
         code as any,
         runs as any,
+        config as any,
+        pullRequests as any,
     );
-    return { publisher, service, code, runs };
+    return { publisher, service, code, runs, config, pullRequests };
 }
 
 describe('BusinessLogicPublisher', () => {
@@ -108,6 +120,58 @@ describe('BusinessLogicPublisher', () => {
                 passed: false,
                 comment: { id: 501 },
             }),
+        );
+    });
+
+    it('records a new comment as a PR-level suggestion once, never again on an edit', async () => {
+        const result = {
+            outcome: validated('missing'),
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        };
+        const first = build();
+        await first.publisher.publish({ request, result });
+        expect(first.pullRequests.addPrLevelSuggestions).toHaveBeenCalledWith(
+            47,
+            'notes',
+            [
+                expect.objectContaining({
+                    label: 'business_logic',
+                    deliveryStatus: 'sent',
+                    comment: { id: 501 },
+                }),
+            ],
+            request.organizationAndTeamData,
+        );
+
+        const edit = build({ comment: { comment: { id: 501 } } });
+        await edit.publisher.publish({ request, result });
+        expect(edit.pullRequests.addPrLevelSuggestions).not.toHaveBeenCalled();
+    });
+
+    it("resolves a door's settings, switch and model with the PR's files, as the review does", async () => {
+        const { publisher, code, config } = build();
+        (code as any).getFilesByPullRequestId = jest.fn(async () => [
+            { filename: 'apps/billing/src/fee.ts' },
+        ]);
+
+        await expect(
+            publisher.configFor(request.organizationAndTeamData, 'repo-1', {
+                number: 47,
+                repositoryName: 'notes',
+            }),
+        ).resolves.toMatchObject({
+            enabled: true,
+            byokModelId: 'model-dir',
+            settings: { recheckOn: 'push' },
+        });
+        expect(config.getSimpleConfig).toHaveBeenCalledWith(
+            request.organizationAndTeamData,
+            {
+                repositoryId: 'repo-1',
+                preliminaryFiles: [{ filename: 'apps/billing/src/fee.ts' }],
+            },
         );
     });
 

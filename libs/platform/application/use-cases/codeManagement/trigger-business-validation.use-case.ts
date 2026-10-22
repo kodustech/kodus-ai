@@ -5,9 +5,15 @@ import { BusinessValidationService } from '@libs/agents/business-validation/busi
 import type {
     BusinessValidationOutcome,
     BusinessValidationRequest,
+    BusinessValidationResult,
     ResolutionAttempt,
     TaskReference,
 } from '@libs/agents/business-validation/business-validation.types';
+import {
+    openPreview,
+    PreviewSealError,
+    sealPreview,
+} from '@libs/agents/business-validation/preview-seal';
 import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
 import { renderCliText } from '@libs/agents/business-validation/render';
 import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
@@ -79,6 +85,17 @@ export interface CliBusinessVerdict {
     tasks: RunTask[];
 }
 
+/** What a preview carries to be posted later, as it was shown. */
+interface SealedPreview {
+    organizationId: string;
+    teamId?: string;
+    repositoryId: string;
+    request: BusinessValidationRequest;
+    result: BusinessValidationResult;
+    settings: BusinessLogicSettings;
+    headSha?: string;
+}
+
 /** What "Test on a pull request" shows, step by step. */
 export interface BusinessLogicTestResult {
     pullRequest: {
@@ -105,8 +122,8 @@ export interface BusinessLogicTestResult {
     }>;
     verdict: CliBusinessVerdict;
     comment: PublishPreview['comment'];
-    /** Set when the test was posted to the PR. */
-    posted?: 'created' | 'updated' | 'none';
+    /** Posts this result as shown (`postPreview`), without running it again. */
+    previewToken: string;
 }
 
 interface BusinessValidationRepositoryContext {
@@ -177,14 +194,16 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                       taskReference,
                   });
 
-        const settings = await this.businessLogicPublisher.settingsFor(
+        const config = await this.businessLogicPublisher.configFor(
             organizationAndTeamData,
             executionContext.repository?.id,
+            this.pullRequestScope(executionContext, platformType),
         );
         const request = this.buildRequest({
             organizationAndTeamData,
             executionContext,
-            settings,
+            settings: config.settings,
+            config,
             platformType,
             taskInput: taskReference,
         });
@@ -281,7 +300,8 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         prUrl: string;
         settings?: BusinessLogicConfig;
         taskInput?: string;
-        post?: boolean;
+        /** Throws when the caller may not test this PR's repository. */
+        authorize?: (repositoryId: string) => Promise<void>;
     }): Promise<BusinessLogicTestResult> {
         const { organizationAndTeamData } = params;
         const taskInput = params.taskInput?.trim() || undefined;
@@ -294,16 +314,21 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 input: { prUrl: params.prUrl },
             }),
         ]);
+        await params.authorize?.(executionContext.repository.id);
+        const config = await this.businessLogicPublisher.configFor(
+            organizationAndTeamData,
+            executionContext.repository.id,
+            this.pullRequestScope(executionContext, platformType),
+        );
+        // The settings on screen, saved or not; the model the PR's review uses.
         const settings = params.settings
             ? resolveBusinessLogicSettings(params.settings)
-            : await this.businessLogicPublisher.settingsFor(
-                  organizationAndTeamData,
-                  executionContext.repository.id,
-              );
+            : config.settings;
         const request = this.buildRequest({
             organizationAndTeamData,
             executionContext,
             settings,
+            config,
             platformType,
             taskInput,
         });
@@ -324,16 +349,6 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             settings,
             headSha,
         });
-        const published = params.post
-            ? await this.businessLogicPublisher.publish({
-                  request,
-                  result: validation,
-                  settings,
-                  trigger: 'command',
-                  headSha,
-              })
-            : undefined;
-
         const outcome = preview.outcome;
         const tasksRead =
             outcome.kind === 'validated'
@@ -370,8 +385,71 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 toRunTasks({ ...validation, outcome }),
             ),
             comment: preview.comment,
-            ...(published ? { posted: published.comment } : {}),
+            // Posting publishes this very result, sealed, not a second run.
+            previewToken: sealPreview<SealedPreview>({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                repositoryId: executionContext.repository.id,
+                request: { ...request, diff: '' },
+                result: validation,
+                settings,
+                headSha,
+            }),
         };
+    }
+
+    /**
+     * Posts the preview "Test on a pull request" showed, as the command
+     * would: the sealed result, on the PR it was for. A preview of another
+     * team, altered or expired is refused.
+     */
+    async postPreview(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previewToken: string;
+        authorize?: (repositoryId: string) => Promise<void>;
+    }): Promise<{ posted: 'created' | 'updated' | 'none' }> {
+        let sealed: SealedPreview;
+        try {
+            sealed = openPreview<SealedPreview>(params.previewToken);
+        } catch (error) {
+            throw new BadRequestException(
+                error instanceof PreviewSealError
+                    ? error.message
+                    : 'The preview is not one Kody made.',
+            );
+        }
+        if (
+            sealed.organizationId !==
+                params.organizationAndTeamData.organizationId ||
+            sealed.teamId !== params.organizationAndTeamData.teamId
+        ) {
+            throw new BadRequestException('The preview is not one Kody made.');
+        }
+        await params.authorize?.(sealed.repositoryId);
+        const published = await this.businessLogicPublisher.publish({
+            request: sealed.request,
+            result: sealed.result,
+            settings: sealed.settings,
+            trigger: 'command',
+            headSha: sealed.headSha,
+        });
+        return { posted: published.comment };
+    }
+
+    /** The PR a run is on, so its directory's settings apply; none for a local diff. */
+    private pullRequestScope(
+        executionContext:
+            | PullRequestValidationExecutionContext
+            | LocalDiffValidationExecutionContext,
+        platformType?: string,
+    ) {
+        return executionContext.mode === 'pull_request'
+            ? {
+                  number: executionContext.prNumber,
+                  repositoryName: executionContext.repository.name,
+                  platformType,
+              }
+            : undefined;
     }
 
     private buildRequest(params: {
@@ -380,6 +458,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             | PullRequestValidationExecutionContext
             | LocalDiffValidationExecutionContext;
         settings: BusinessLogicSettings;
+        config?: { byokModel?: string; byokModelId?: string };
         platformType?: string;
         taskInput?: string;
     }): BusinessValidationRequest {
@@ -387,6 +466,8 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         return {
             door: 'cli',
             settings: params.settings,
+            byokModel: params.config?.byokModel,
+            byokModelId: params.config?.byokModelId,
             organizationAndTeamData,
             repository: executionContext.repository
                 ? {

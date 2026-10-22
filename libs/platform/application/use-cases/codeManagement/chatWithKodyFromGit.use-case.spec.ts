@@ -321,21 +321,56 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(response).toMatch(/no task-management mcp/i);
     });
 
-    it('lets only people with write access waive a requirement on GitHub', () => {
-        const canWrite = (
-            association?: string,
-            platformType = PlatformType.GITHUB,
-        ) =>
-            (useCase as any).senderCanWrite({
-                platformType,
-                payload: { comment: { author_association: association } },
-            });
-        expect(canWrite('MEMBER')).toBe(true);
-        expect(canWrite('COLLABORATOR')).toBe(true);
-        expect(canWrite('CONTRIBUTOR')).toBe(false);
-        expect(canWrite('NONE')).toBe(false);
-        // Other platforms don't say; the rule there is "anyone but the author".
-        expect(canWrite('MEMBER', PlatformType.GITLAB)).toBeUndefined();
+    it('lets only people with write access waive a requirement on GitHub', async () => {
+        const access = (association?: string) =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITHUB,
+                    payload: {
+                        sender: { login: 'nina' },
+                        issue: { user: { login: 'rafa' } },
+                        comment: { author_association: association },
+                    },
+                },
+                { organizationId: 'org-1' },
+            );
+        await expect(access('MEMBER')).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        await expect(access('COLLABORATOR')).resolves.toMatchObject({
+            canWrite: true,
+        });
+        await expect(access('CONTRIBUTOR')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        await expect(access('NONE')).resolves.toMatchObject({
+            canWrite: false,
+        });
+    });
+
+    it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
+        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        (useCase as any).codeManagementService = { getListMembers };
+        const access = (userId: number, authorId = 9) =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITLAB,
+                    payload: {
+                        user: { id: userId, name: 'someone' },
+                        merge_request: { author_id: authorId },
+                    },
+                },
+                { organizationId: 'org-1' },
+            );
+        await expect(access(7)).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        await expect(access(8)).resolves.toMatchObject({ canWrite: false });
+        await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
+        getListMembers.mockRejectedValueOnce(new Error('403'));
+        await expect(access(7)).resolves.toMatchObject({ canWrite: false });
     });
 
     // A bare `#12` is read from the PR's repository, which needs its owner.
@@ -386,7 +421,9 @@ describe('ChatWithKodyFromGitUseCase', () => {
             trackers: ['Linear'],
         });
         const publisher = {
-            settingsFor: jest.fn().mockResolvedValue({}),
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
             withRepository: jest.fn((r: unknown) => r),
             headShaOf: jest.fn().mockResolvedValue('abc1234'),
             publish: jest

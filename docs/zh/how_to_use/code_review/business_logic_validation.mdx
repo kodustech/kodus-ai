@@ -44,7 +44,8 @@ Kody 还会读取任务所链接的内容：
 - **附加到任务的文档**（Linear docs）：作为任务的一部分读取，包括其中的验收标准。
 
 - **"Closes PROJ-1"**，或标题、分支中的键：PR 与整个任务进行核对。
-- **"Part of PROJ-1"** 或 **"Refs PROJ-1"**：PR 只交付其中一部分。缺失的内容会列出，但不作为合并前需要完成的事项。
+- **"Part of PROJ-1"**：PR 只交付其中一部分。缺失的内容会列出，但不作为合并前需要完成的事项。
+- 描述中的 **"Refs PROJ-1"**、**"see PROJ-1"** 或 **"related to PROJ-1"**：只是提及。仅当 PR 没有指明其他任务时才会检查，此时将其视为 PR 自身的任务。
 - 每个 PR **最多检查三个任务**，每个任务一个部分。引用更多任务的 PR（例如发布或合并）会被跳过。
 
 ## 五种状态
@@ -69,17 +70,17 @@ Kody 还会读取任务所链接的内容：
 
 ## 在拉取请求上
 
-- Kody 在 PR 的**首次审查**时进行检查，之后在仍有缺失时每次 push 都会再次检查，因此修复后评论会自动更新，无需任何人请求。**Re-check** 也可以设置为每次 push，或仅在有人评论 `@kody -v business-logic` 时。
+- Kody 在 PR 的**首次审查**时进行检查。之后，当有人评论 `@kody -v business-logic` 或运行 `@kody review --force` 时会再次检查。**Re-check** 也可以设置为仍有缺失时每次 push（修复后评论会自动更新，无需任何人请求），或每次 push；每种都会让每次 push 多一次验证。
 - 随时可以用 `@kody -v business-logic` 重新检查。**同一条评论会被编辑**；Kody 从不发布第二条评论。
 - 满足任务的 PR 会收到一行评论（"✅ 4 of 4 met"），外加需要手动检查的内容，让作者知道已经检查过。关闭 **Comment when every requirement is met** 可在这种情况下不发评论。
 - 评论是所有平台上的信号：Kody 不写入 check 或 status，因此它本身永远不会阻止合并。评论标题会说明还有哪些需要修复。
 
 ### 回复评论
 
-回复 Business Logic 评论并提及 `@kody`：
+回复 Business Logic 评论并提及 `@kody`。当评论发在该评论的讨论串中（GitLab、Bitbucket、Azure Repos）、引用了该评论，或指明了某个需求、其状态（MISSING、PARTIAL）或任务 ID 时，Kody 才会将其视为回复；其他评论会交给聊天处理。
 
 - **提出异议**："这在 `useDrag.ts` 中已经覆盖了"。Kody 会重新检查你指出的内容，要么将其标记为 MET，要么说明它查看了什么并保留原状态。
-- **接受某项发现**（在 GitHub 上，任何对仓库有写权限的人，包括作者；其他平台不报告评论者的角色，因此任何人都可以）："键盘重新排序不在范围内，已移至 SAA-102"。Kody 确认 SAA-102 存在，将该行标记为 **ACCEPTED** 并注明接受者，该行不再需要修复。这一决定在之后的重新检查中保持不变。
+- **接受某项发现**（PR 作者以外的人：在 GitHub 上需对仓库有写权限；在其他平台上需是平台列出的组织成员）："键盘重新排序不在范围内，已移至 SAA-102"。Kody 确认 SAA-102 存在，将该行标记为 **ACCEPTED** 并注明接受者，该行不再需要修复。即使 Kody 对需求的措辞略有不同，这一决定在之后的重新检查中也保持不变。
 
 ## Kody 何时不发表评论
 
@@ -91,7 +92,7 @@ Kody 只在作者能够采取行动时才发表评论：
 | `SAA-999` 不存在，但 SAA 是你任务管理工具中的一个团队 | 一条指出可能是拼写错误的评论，并附上最接近的真实任务。开启 **Ask for a task** 时，该评论保持未解决直到修正 |
 | 没有引用任务，或只有任何任务管理工具都没有的 ID（标题中的 `UTF-8`） | 不做任何事。开启 **Ask for a task** 时，发布一条请求提供任务的评论（从不在机器人的 PR 上发布） |
 | 引用的是 GitHub issue，但只连接了 Linear | 不做任何事；管理员会在设置页面上看到计数。开启 **Ask for a task** 时，发布一条说明哪个任务管理工具无法读取它的评论 |
-| 任务管理工具宕机或其令牌已过期 | 不做任何事；会通知所有者，任务管理工具恢复响应后 Kody 会重新检查 |
+| 任务管理工具宕机或其令牌已过期 | 不做任何事；会通知所有者，任务管理工具恢复响应后 Kody 会重新检查（自首次失败起最多一天） |
 
 每次跳过的原因都会被记录，并显示在 Business Logic 设置页面上。
 
@@ -107,11 +108,11 @@ Kody 只在作者能够采取行动时才发表评论：
 
 打开 **Code review → What to review → Business Logic → Configure**。每项设置都可以全局设置，并按仓库或目录覆盖。
 
-- **Task source**：所有已连接的任务管理工具（包括 ClickUp 等自定义任务插件），或某一个插件。对于自定义插件，选择按 ID 读取单个任务的工具；只会提供只读工具。使用页面底部的 **Try it**：只填任务时会显示 Kody 从中读取的内容，填写拉取请求时会使用屏幕上的设置（无论是否已保存）运行完整检查且不发布任何内容。
-- **Custom task id format**（可选）：用于 Kody 自身无法识别的 ID 的正则表达式：`T(\d{4})` 会将 `T1234` 读作任务 1234。类似 `SAA-96` 的键、`#12`、`AB#8`、`CU-…` 以及任务管理工具链接无需此设置即可识别，分支名中类似 `sc-123` 的小写键也是如此。标题或描述中的小写键只有在 Linear 或 Jira 存在该团队或项目时才会被采用；其他任务管理工具请设置格式。
+- **Task source**：所有已连接的任务管理工具（包括 ClickUp 等自定义任务插件），或某一个插件。对于自定义插件，选择按 ID 读取单个任务的工具；只会提供只读工具。使用页面底部的 **Try it**（需要编辑这些设置的权限）：只填任务时会显示 Kody 从中读取的内容，填写拉取请求时会使用屏幕上的设置（无论是否已保存）运行完整检查且不发布任何内容。**Post to the pull request** 会发布所显示的结果，而不会重新运行。
+- **Custom task id format**（可选）：用于 Kody 自身无法识别的 ID 的正则表达式：`T(\d{4})` 会将 `T1234` 读作任务 1234。类似 `SAA-96` 的键、`#12`、`AB#8`、`CU-…` 以及任务管理工具链接无需此设置即可识别，分支名中类似 `sc-123` 的小写键也是如此。标题或描述中的小写键只有在 Linear 或 Jira 存在该团队或项目时才会被采用；其他任务管理工具请设置格式。格式捕获的数字只有在 Git Issues 是任务来源时才会被读作 Git issue；使用所有已连接工具时，`T1234` 永远不会被当作仓库的 issue #1234。
 - **Where acceptance criteria live**：自动检测、在描述中的某个标题下，或在自定义字段中；没有该字段的任务从其描述中读取。
 - **Ask for a task when the PR references none**：Kody 会发表评论询问该 PR 对应哪个任务（或指出拼写错误），而不是跳过它。由机器人（如 Dependabot 或 Renovate）创建的 PR 不受影响。任务管理工具宕机永远不算在内。
-- **Re-check**：仍有缺失时（默认）、每次 push 时，或仅在请求时。
+- **Re-check**：仅在请求时（默认）、仍有缺失时每次 push，或每次 push。
 - **Skipped pull requests**：代码审查跳过的 PR 在这里也会被跳过：标题包含被忽略关键词（`ignoredTitleKeywords`，例如 `wip`）的 PR，以及 `runOnDraft` 关闭时的草稿。`@kody -v business-logic` 评论始终会运行。
 - **Team guidance**：Kody 判断时遵循的说明，例如"当功能开关存在且默认关闭时，视为已实现"。它不能改变判定格式，也不能让 Kody 编造需求。
 
@@ -123,7 +124,7 @@ businessLogic:
   criteriaLocation: 'heading'
   criteriaHeading: 'Acceptance criteria'
   commentWhenMet: true
-  recheckOn: 'failing' # failing | push | request
+  recheckOn: 'request' # request | failing | push
   requireTask: false
 ```
 
@@ -140,4 +141,4 @@ kodus pr business-validation --task-id AB#8 --format json
 
 ## Cockpit
 
-**Cockpit → Delivered as asked** 显示满足任务的 PR 比例、不在任务中的变更、开发者认同 Kody 的频率，以及按代码编写者（人或编码代理，依据提交作者和 `Co-Authored-By` trailer 判断）和按团队的分布。
+**Cockpit → Delivered as asked** 显示满足任务的 PR 比例、不在任务中的变更、开发者认同 Kody 的频率，以及按代码编写者（人或编码代理，依据提交作者和 `Co-Authored-By` trailer 判断）和按团队的分布。它跟随 Cockpit 的仓库选择器，并且可以像其他标签页一样在 **Organization → Cockpit** 中隐藏。

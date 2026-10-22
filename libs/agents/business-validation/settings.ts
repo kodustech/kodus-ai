@@ -41,7 +41,9 @@ export const DEFAULT_BUSINESS_LOGIC_SETTINGS: BusinessLogicSettings = {
     taskSource: AUTO_TASK_SOURCE,
     criteria: { location: 'auto' },
     commentWhenMet: true,
-    recheckOn: 'failing',
+    // #1812: the automatic check runs once per PR; after that only on the
+    // command or `--force`, unless the team asks for more.
+    recheckOn: 'request',
     requireTask: false,
 };
 

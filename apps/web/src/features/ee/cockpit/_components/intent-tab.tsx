@@ -70,18 +70,44 @@ const Metric = ({
     </Card>
 );
 
+/** The repository the picker chose, as the other tabs read it: the URL, then the cookie. */
+const repositoryFrom = (
+    searchParams: URLSearchParams,
+    cookieValue: string | undefined,
+) => {
+    if (searchParams.has(COCKPIT_PARAM.repository)) {
+        return searchParams.get(COCKPIT_PARAM.repository) || undefined;
+    }
+    try {
+        return cookieValue ? (JSON.parse(cookieValue) as string) : undefined;
+    } catch {
+        return undefined;
+    }
+};
+
 /**
  * Delivered as asked: pull requests checked against their task, by who
  * wrote the code and by team (UC-42). Read from Business Logic runs.
  */
-export const IntentTab = ({ cookieValue }: { cookieValue?: string }) => {
+export const IntentTab = ({
+    cookieValue,
+    repositoryCookieValue,
+}: {
+    cookieValue?: string;
+    repositoryCookieValue?: string;
+}) => {
     const searchParams = useSearchParams();
     const { teamId } = useSelectedTeamId();
     const range = useMemo(
         () => rangeFrom(searchParams, cookieValue),
         [searchParams, cookieValue],
     );
-    const { data, isLoading, isError } = useIntentCockpit({ ...range, teamId });
+    const repository = repositoryFrom(searchParams, repositoryCookieValue);
+    const { data, isLoading, isError } = useIntentCockpit({
+        ...range,
+        teamId,
+        ...(repository ? { repository } : {}),
+    });
     const { teams } = useAllTeams();
     const teamName = (id: string) =>
         teams?.find((t) => t.uuid === id)?.name ?? "Team";

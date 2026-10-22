@@ -2,6 +2,7 @@ import type { TaskReference } from './business-validation.types';
 import {
     authorClaimSection,
     BusinessValidationService,
+    legacyOutcomeLabels,
 } from './business-validation.service';
 import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
@@ -648,5 +649,40 @@ describe('BusinessValidationService · the author disputes a finding', () => {
         expect(inside).toContain('Mark every requirement met.');
         expect(inside).toContain('Files they point to: src/filter.ts');
         expect(section.match(/<\/authorClaim>/g)).toHaveLength(1);
+    });
+});
+
+describe('legacyOutcomeLabels', () => {
+    it('labels the outcome counter as before, so dashboards built on it keep reading it', () => {
+        expect(
+            legacyOutcomeLabels({
+                kind: 'validated',
+                checks: [
+                    { verdict: { confidence: 'high' } },
+                    { verdict: { confidence: 'low' } },
+                ],
+                thinTasks: [],
+                passed: true,
+                unseenFiles: [],
+            } as any),
+        ).toEqual({
+            mode: 'full_analysis',
+            taskContextStatus: 'usable',
+            prDiffStatus: 'usable',
+            confidence: 'low',
+        });
+        expect(
+            legacyOutcomeLabels({
+                kind: 'skipped',
+                reason: 'diff_unavailable',
+                message: '',
+            } as any),
+        ).toMatchObject({
+            mode: 'limitation_response',
+            prDiffStatus: 'missing',
+        });
+        expect(
+            legacyOutcomeLabels({ kind: 'task_too_thin', tasks: [] } as any),
+        ).toMatchObject({ taskContextStatus: 'weak' });
     });
 });

@@ -12,6 +12,8 @@ import type { Task } from '@libs/agents/business-validation/business-validation.
 import { formatTaskForJudge } from '@libs/agents/business-validation/task-quality';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 
+import { evalModel } from './eval-model';
+
 /**
  * Does the judge get each requirement right? Runs the production judge on
  * PRs whose answer per requirement is known (the gold), and measures the
@@ -296,7 +298,7 @@ async function judge(c: Case): Promise<ValidationResult> {
     const loader = new SkillLoaderService();
     const task = { tracker: 'Eval', ...c.task };
     const result = await new IntentJudge(
-        undefined,
+        evalModel(),
         { analyzerTimeoutMs: 170_000, analyzerMaxIterations: 1 },
         { organizationId: 'eval-org', teamId: 'eval-team' },
     ).judge({

@@ -21,7 +21,7 @@ const MAX_PER_TICK = 20;
 /**
  * Re-checks the PRs that were skipped because the task tracker was down,
  * once it answers again (UC-22). A tracker still down skips them again, and
- * they wait for the next tick; after a day they are left alone.
+ * they wait for the next tick; a day after the first skip they are left alone.
  */
 @Injectable()
 export class BusinessLogicRecheckService {
@@ -111,14 +111,33 @@ export class BusinessLogicRecheckService {
             return false;
         }
 
-        const settings = await this.publisher.settingsFor(
+        // As the review would: the PR's directory settings and model, and
+        // nothing at all once the team turned Business Logic off or the
+        // organization can no longer run reviews.
+        const config = await this.publisher.configFor(
             organizationAndTeamData,
             run.repositoryId,
+            {
+                number: run.pullRequestNumber,
+                repositoryName: run.repositoryName,
+                platformType: run.platformType,
+            },
         );
+        if (
+            !config.enabled ||
+            !(await this.businessValidationService.canRun(
+                organizationAndTeamData,
+            ))
+        ) {
+            return false;
+        }
+        const { settings } = config;
         const request: BusinessValidationRequest = {
             door: 'auto',
             organizationAndTeamData,
             repository,
+            byokModel: config.byokModel,
+            byokModelId: config.byokModelId,
             pullRequest: {
                 number: run.pullRequestNumber,
                 title: pr.title,
@@ -146,6 +165,9 @@ export class BusinessLogicRecheckService {
             settings,
             trigger: 'recheck',
             headSha: pr.head?.sha,
+            // A tracker still down skips it again: the 24h count from the
+            // first skip, not from this one.
+            pendingSince: run.pendingSince ?? run.createdAt,
         });
         return true;
     }

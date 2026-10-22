@@ -23,39 +23,63 @@ export class BusinessLogicInsightsService {
         organizationId: string,
         filter: { teamId?: string; repositoryId?: string } = {},
     ): Promise<BusinessLogicStatus> {
-        const runs = await this.runs.findSince(
-            organizationId,
-            new Date(Date.now() - 30 * DAY_MS),
-            {
-                teamId: filter.teamId,
-                repositoryIds: filter.repositoryId
-                    ? [filter.repositoryId]
-                    : undefined,
-            },
-        );
-        return summarizeStatus(runs);
+        const since = new Date(Date.now() - 30 * DAY_MS);
+        const scope = {
+            teamId: filter.teamId,
+            repositoryIds: filter.repositoryId
+                ? [filter.repositoryId]
+                : undefined,
+        };
+        const [latest, signals] = await Promise.all([
+            this.runs.latestPerPullRequest(
+                organizationId,
+                { from: since },
+                scope,
+            ),
+            this.runs.statusSignals(organizationId, since, scope),
+        ]);
+        return summarizeStatus(newestFirst([...latest, ...signals]));
     }
 
     async intent(
         organizationId: string,
-        range: { startDate: Date; endDate: Date; teamId?: string },
+        range: {
+            startDate: Date;
+            endDate: Date;
+            teamId?: string;
+            /** Only these repositories; all the caller can read when absent. */
+            repositoryIds?: string[];
+            /** The repository the Cockpit's picker chose. */
+            repositoryName?: string;
+        },
     ): Promise<IntentCockpit & { previousMetRate?: number }> {
         const span = range.endDate.getTime() - range.startDate.getTime();
-        const runs = await this.runs.findSince(
-            organizationId,
-            new Date(range.startDate.getTime() - span),
-            { teamId: range.teamId },
-        );
-        const inRange = (r: ValidationRunRecord) =>
-            r.createdAt >= range.startDate && r.createdAt <= range.endDate;
-        const before = (r: ValidationRunRecord) =>
-            r.createdAt < range.startDate;
-        const current = summarizeIntent(runs.filter(inRange));
-        const previous = summarizeIntent(runs.filter(before));
+        const scope = {
+            teamId: range.teamId,
+            repositoryIds: range.repositoryIds,
+            repositoryName: range.repositoryName,
+        };
+        const [current, previous] = await Promise.all([
+            this.runs.latestPerPullRequest(
+                organizationId,
+                { from: range.startDate, to: range.endDate },
+                scope,
+            ),
+            this.runs.latestPerPullRequest(
+                organizationId,
+                {
+                    from: new Date(range.startDate.getTime() - span),
+                    to: new Date(range.startDate.getTime() - 1),
+                },
+                scope,
+            ),
+        ]);
+        const summary = summarizeIntent(current);
+        const before = summarizeIntent(previous);
         return {
-            ...current,
-            ...(previous.metRate !== undefined
-                ? { previousMetRate: previous.metRate }
+            ...summary,
+            ...(before.metRate !== undefined
+                ? { previousMetRate: before.metRate }
                 : {}),
         };
     }
@@ -68,4 +92,12 @@ export class BusinessLogicInsightsService {
     }): Promise<ValidationRunRecord[]> {
         return this.runs.forPullRequest(params);
     }
+}
+
+/** Runs once each, newest first, as the summaries read them. */
+function newestFirst(runs: ValidationRunRecord[]): ValidationRunRecord[] {
+    const byId = new Map(runs.map((run) => [run.id, run]));
+    return [...byId.values()].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
 }

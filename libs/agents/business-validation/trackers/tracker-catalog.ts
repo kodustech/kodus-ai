@@ -11,9 +11,15 @@ import type { TaskFinder } from './task-finder';
 import type { BoundTaskFinder, McpTaskTracker, TaskTracker } from './tracker';
 
 /** Managed catalog entries, by integration id (apps/mcp-manager/src/config/managed-mcp-servers.json). */
-const MANAGED: Record<string, (server: MCPServerConfig) => McpTaskTracker> = {
-    'kodus-issues-default': (server) =>
-        new GitIssuesTracker(new McpToolSession(server, GIT_ISSUES_TOOLS)),
+const MANAGED: Record<
+    string,
+    (server: MCPServerConfig, chosen?: boolean) => McpTaskTracker
+> = {
+    'kodus-issues-default': (server, chosen) =>
+        new GitIssuesTracker(
+            new McpToolSession(server, GIT_ISSUES_TOOLS),
+            chosen,
+        ),
     'linear-default': (server) =>
         new LinearTracker(new McpToolSession(server, LINEAR_TOOLS)),
     'atlassian-rovo-default': (server) =>
@@ -103,7 +109,7 @@ function chosenTracker(
         ? MANAGED[server.integrationId]
         : undefined;
     if (managed) {
-        return managed(server);
+        return managed(server, true);
     }
     const tool = options.taskSourceTool;
     return new CustomMcpTracker(
@@ -176,6 +182,7 @@ function bindFinder(
                         : undefined,
                 tools: await session.tools(),
                 call: (name, args) => session.call(name, args),
+                signal: context.signal,
             });
         } finally {
             await session.close();

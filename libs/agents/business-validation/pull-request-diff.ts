@@ -36,20 +36,13 @@ export function fitDiff(
     if (diff.length <= budget) {
         return { diff, unseenFiles: [] };
     }
-    const headers = [...diff.matchAll(FILE_HEADER)];
-    if (!headers.length) {
+    const chunks = fileChunks(diff);
+    if (!chunks.length) {
         return {
             diff: diff.slice(0, budget),
             unseenFiles: ['(rest of the diff)'],
         };
     }
-    const chunks = headers.map((header, i) => ({
-        file: header[1] ?? header[2],
-        text: diff.slice(
-            header.index,
-            i + 1 < headers.length ? headers[i + 1].index : diff.length,
-        ),
-    }));
     const kept: string[] = [];
     const unseenFiles: string[] = [];
     let used = 0;
@@ -62,4 +55,61 @@ export function fitDiff(
         }
     }
     return { diff: kept.join(''), unseenFiles };
+}
+
+/** One file's part of the diff, header included. */
+function fileChunks(diff: string): Array<{ file: string; text: string }> {
+    const headers = [...diff.matchAll(FILE_HEADER)];
+    return headers.map((header, i) => ({
+        file: header[1] ?? header[2],
+        text: diff.slice(
+            header.index,
+            i + 1 < headers.length ? headers[i + 1].index : diff.length,
+        ),
+    }));
+}
+
+/**
+ * About 6k tokens: what one second look at a requirement re-reads on every
+ * step. The agent reads any other file with `read_file`.
+ */
+export const GAP_DIFF_CHARS = 24_000;
+
+/**
+ * The diff for a second look at one requirement: whole when it is small;
+ * otherwise the files its evidence cites first, then others while they fit,
+ * and the names of the rest for `read_file`. Sent on every step of up to
+ * eight checks, the whole diff of a large PR cost millions of tokens a run.
+ */
+export function diffFor(
+    diff: string,
+    files: string[],
+    budget = GAP_DIFF_CHARS,
+): string {
+    if (diff.length <= budget) {
+        return diff;
+    }
+    const chunks = fileChunks(diff);
+    if (!chunks.length) {
+        return `${diff.slice(0, budget)}\n… (cut)`;
+    }
+    const cited = new Set(files);
+    const ordered = [
+        ...chunks.filter((c) => cited.has(c.file)),
+        ...chunks.filter((c) => !cited.has(c.file)),
+    ];
+    const kept: string[] = [];
+    const left: string[] = [];
+    let used = 0;
+    for (const chunk of ordered) {
+        if (used + chunk.text.length <= budget) {
+            kept.push(chunk.text);
+            used += chunk.text.length;
+        } else {
+            left.push(chunk.file);
+        }
+    }
+    return left.length
+        ? `${kept.join('')}\n\nAlso changed, not shown here (read them with read_file): ${left.join(', ')}`
+        : kept.join('');
 }
