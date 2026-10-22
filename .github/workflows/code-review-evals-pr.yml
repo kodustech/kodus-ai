@@ -60,10 +60,14 @@ on:
                 description: "Comma-separated approval-risk case IDs to rerun (empty = all 200)"
                 required: false
                 type: string
+            approval_batch:
+                description: "Unique batch name for concurrent approval-risk runs"
+                required: false
+                type: string
 
 concurrency:
     # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
-    group: code-review-evals-pr-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'experiment:full' && format('-label-{0}', github.event.label.name) || '' }}
+    group: code-review-evals-pr-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && format('-approval-{0}', inputs.approval_batch) || github.event.action == 'labeled' && github.event.label.name != 'experiment:full' && format('-label-{0}', github.event.label.name) || '' }}
     cancel-in-progress: true
 
 jobs:
