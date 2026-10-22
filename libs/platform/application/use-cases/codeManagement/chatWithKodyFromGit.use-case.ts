@@ -790,7 +790,15 @@ export class ChatWithKodyFromGitUseCase {
                     )
                     // Unverified is no: a failed lookup must not let anyone accept.
                     .then((canWrite) => canWrite === true)
-                    .catch(() => false),
+                    .catch((error) => {
+                        this.logAccessFailure(
+                            error,
+                            params,
+                            organizationAndTeamData,
+                            repository,
+                        );
+                        return false;
+                    }),
             };
         }
         const members = await this.codeManagementService
@@ -798,7 +806,15 @@ export class ChatWithKodyFromGitUseCase {
                 { organizationAndTeamData },
                 params.platformType as PlatformType,
             )
-            .catch(() => undefined);
+            .catch((error) => {
+                this.logAccessFailure(
+                    error,
+                    params,
+                    organizationAndTeamData,
+                    repository,
+                );
+                return undefined;
+            });
         const id = bareId(sender.id);
         const login = sender.login?.toLowerCase();
         return {
@@ -813,6 +829,30 @@ export class ChatWithKodyFromGitUseCase {
                             m.name.toLowerCase() === login),
                 ),
         };
+    }
+
+    /** A lookup that failed reads as no access; the log tells it from a real no. */
+    private logAccessFailure(
+        error: Error,
+        params: WebhookParams,
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
+    ): void {
+        const sender = replySender(params, this.getSender(params));
+        this.logger.error({
+            message:
+                "Could not read the commenter's access: treated as no write access",
+            context: ChatWithKodyFromGitUseCase.name,
+            error,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                platformType: params.platformType,
+                repositoryId: repository?.id,
+                prNumber: this.getPullRequestNumber(params),
+                senderId: sender.id,
+            },
+        });
     }
 
     private getCommentBody(params: WebhookParams): string {

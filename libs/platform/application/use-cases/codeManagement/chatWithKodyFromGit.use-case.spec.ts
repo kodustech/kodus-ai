@@ -411,6 +411,9 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 merge_request: { author_id: 9 },
             },
         };
+        const logged = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
         userCanWrite.mockRejectedValueOnce(new Error('502'));
         await expect(
             (useCase as any).senderAccess(
@@ -419,6 +422,15 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { id: 'repo-1' },
             ),
         ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    repositoryId: 'repo-1',
+                    senderId: 7,
+                }),
+            }),
+        );
         userCanWrite.mockResolvedValueOnce(undefined as any);
         await expect(
             (useCase as any).senderAccess(
