@@ -263,10 +263,11 @@ describe('A. output-shape zoo', () => {
         expect(r.suggestions).toHaveLength(1);
     });
 
-    // Row 12 — Partial item: one valid + one missing required keys. The valid one
+    // Row 12 — Partial item: one valid + one missing a required key. The valid one
     // is kept, the partial one dropped (documented partial recovery, logged).
+    // The fix is not required (#2112 FPARSE-11): the partial lacks the claim.
     it('row 12: mixed valid + partial items → keeps valid, drops incomplete', () => {
-        const partial = { relevantFile: 'a.ts', suggestionContent: 'x' }; // no existing/improved
+        const partial = { relevantFile: 'a.ts', existingCode: 'x' }; // no suggestionContent
         const r = extractFindings(
             makeState({
                 artifacts: [
@@ -397,28 +398,23 @@ describe('B. semantic-but-wrong', () => {
     // boolean field. The verifier's `keep` boolean is a SEPARATE boundary,
     // covered in core/verifier.agent.contract.spec.ts. See rowsNA.
 
-    // Row 24 — Enum out of allowed set: severity:"URGENT". A whole REAL finding is
-    // dropped over one invalid OPTIONAL field. #1786 class → pin CORRECT (keep the
-    // finding, drop/normalize the bad optional). Degradation: findings-schema.ts
-    // suggestionSchema enum on `severity` (L23) + partial-recovery drop L66-70.
-    it.failing(
-        'row 24: out-of-set severity → should keep finding minus bad optional (prod drops whole finding)',
-        () => {
-            const r = extractFindings(
-                makeState({
-                    artifacts: [
-                        artifactOf({
-                            reasoning: 'r',
-                            suggestions: [
-                                validSuggestion({ severity: 'URGENT' as any }),
-                            ],
-                        }),
-                    ],
-                }),
-            );
-            expect(r.suggestions).toHaveLength(1);
-        },
-    );
+    // Row 24 — Enum out of allowed set: severity:"URGENT". The finding is kept and
+    // the bad optional cleared (#2112 FPARSE-13).
+    it('row 24: out-of-set severity → keeps the finding minus the bad optional', () => {
+        const r = extractFindings(
+            makeState({
+                artifacts: [
+                    artifactOf({
+                        reasoning: 'r',
+                        suggestions: [
+                            validSuggestion({ severity: 'URGENT' as any }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+        expect(r.suggestions).toHaveLength(1);
+    });
 
     // Row 25 — Index out of range / dangling reference — N/A: FindingsOutput
     // carries no index into the input array (unlike dedup's uniqueIndices). Line

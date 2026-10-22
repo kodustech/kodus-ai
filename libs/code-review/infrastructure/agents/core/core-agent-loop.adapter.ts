@@ -41,11 +41,7 @@ import {
     buildFindingsFromVerify,
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
-import {
-    sanitizeFindingsResult,
-    type FindingsOutput,
-} from '@libs/code-review/infrastructure/agents/core/findings-schema';
-import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -219,21 +215,21 @@ export function finderRunEnvironment(
  * and recovery dropped none of its items. On a cut turn a dropped item means
  * the result was damaged; the valid items still ship, the run is partial.
  */
-function isWholeResult(
-    payload: unknown,
-    telemetryMetadata?: { organizationId?: string },
-): boolean {
-    const clean = sanitizeFindingsResult(
-        payload as FindingsOutput,
-        telemetryMetadata,
+function isWholeResult(payload: unknown): boolean {
+    // Silent: extractFindings already logged this artifact. Items salvaged
+    // before a break mean a cut payload: only those items survived (escaping
+    // or dropping text after a whole array loses none). A
+    // provider text node is not a finding the cut damaged (findings-schema.ts).
+    const { result, drops, recoveries } = inspectFindingsResult(
+        payload,
+        undefined,
+        { silent: true },
     );
-    if (!clean) return false;
-    const raw = normalizeEnvelope(payload, 'suggestions', [
-        'findings',
-        'codeSuggestions',
-    ]) as { suggestions?: unknown };
-    const sent = Array.isArray(raw?.suggestions) ? raw.suggestions.length : 0;
-    return clean.suggestions.length === sent;
+    return (
+        !!result &&
+        !recoveries.some((r) => r.includes('salvaged-items')) &&
+        drops.every((d) => d.reason === 'provider-text-node')
+    );
 }
 
 export async function runAgentLoopViaCore(
@@ -508,9 +504,7 @@ export async function runAgentLoopViaCore(
     const published = [...r.finderState.artifacts]
         .reverse()
         .find((a) => a.type === FINDER_DONE_TOOL);
-    const submitted =
-        !!published &&
-        isWholeResult(published.payload, input.telemetryMetadata);
+    const submitted = !!published && isWholeResult(published.payload);
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
