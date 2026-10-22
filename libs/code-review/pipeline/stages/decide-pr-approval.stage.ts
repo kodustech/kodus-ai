@@ -9,6 +9,7 @@ import {
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
+    approvalPolicyForPlatform,
     approvalPolicyFromConfig,
     evaluateApproval,
 } from '@libs/code-review/domain/approval/approval-decision';
@@ -43,7 +44,10 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         ) {
             return context;
         }
-        const policy = approvalPolicyFromConfig(config);
+        const policy = approvalPolicyForPlatform(
+            approvalPolicyFromConfig(config),
+            context.platformType,
+        );
         if (
             !policy.labels?.length &&
             !policy.authors?.length &&

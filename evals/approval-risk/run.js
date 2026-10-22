@@ -29,9 +29,16 @@ const {
     CodeManagementService,
 } = require('../../libs/platform/infrastructure/adapters/services/codeManagement.service.ts');
 const {
+    PlatformIntegrationFactory,
+} = require('../../libs/platform/infrastructure/adapters/services/platformIntegration.factory.ts');
+const {
+    IntegrationService,
+} = require('../../libs/integrations/infrastructure/adapters/services/integration.service.ts');
+const {
     evaluateApproval,
 } = require('../../libs/code-review/domain/approval/approval-decision.ts');
 const targets = require('./targets.json');
+const storedIntegrations = require('./integrations.json');
 
 function loadCases() {
     if (set === 'controlled') return require('./controlled.json');
@@ -83,16 +90,42 @@ async function runCase(item, slot, withMap = true) {
         getPullRequest: async () => ({ ...pr, labels: item.labels || [] }),
         getFilesByPullRequestId: async () => item.files,
     };
-    const host = new CodeManagementService(
-        { findOne: async () => ({ platform: 'GITHUB' }) },
-        { getCodeManagementService: () => snapshotProvider },
+    const organizationId = '00000000-0000-4000-8000-00000000e7a1';
+    const teamId = 'eval-team';
+    const storedIntegration =
+        storedIntegrations[item.repository || 'eval-repo'];
+    if (!storedIntegration) {
+        throw new Error(`No stored code integration for ${item.repository}`);
+    }
+    // The evaluation supplies the stored row at the repository boundary.
+    // Production's IntegrationService, CodeManagementService and platform
+    // factory still resolve and route the provider for every case.
+    const integrationRepository = {
+        findOne: async (filter) =>
+            filter.organization?.uuid === organizationId &&
+            filter.team?.uuid === teamId &&
+            filter.integrationCategory === 'CODE_MANAGEMENT' &&
+            filter.status === true
+                ? {
+                      ...storedIntegration,
+                      organization: { uuid: organizationId },
+                      team: { uuid: teamId },
+                  }
+                : null,
+    };
+    const integrations = new IntegrationService(integrationRepository, {});
+    const providers = new PlatformIntegrationFactory();
+    providers.registerCodeManagementService(
+        storedIntegration.platform,
+        snapshotProvider,
     );
+    const host = new CodeManagementService(integrations, providers);
     const maps = { read: async () => (withMap ? item.areaMap || null : null) };
     const stage = new DecidePrApprovalStage(host, maps);
     const context = {
         organizationAndTeamData: {
-            organizationId: '00000000-0000-4000-8000-00000000e7a1',
-            teamId: 'eval-team',
+            organizationId,
+            teamId,
         },
         repository: {
             id: item.repositoryId || 'eval-repo',

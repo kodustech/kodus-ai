@@ -1,5 +1,6 @@
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 export interface ApprovalPolicy {
     /** Any configured label matches. When authors are also set, both groups apply. */
@@ -38,6 +39,16 @@ export function approvalPolicyFromConfig(
         riskInstructions: config.approvalRiskInstructions,
         sensitivePaths: config.approvalSensitivePaths,
     };
+}
+
+/** Bitbucket PRs do not expose the label contract required by this policy. */
+export function approvalPolicyForPlatform(
+    policy: ApprovalPolicy,
+    platformType?: PlatformType,
+): ApprovalPolicy {
+    return platformType === PlatformType.BITBUCKET
+        ? { ...policy, labels: [] }
+        : policy;
 }
 
 export function matchesApprovalScope(input: {

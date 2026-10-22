@@ -74,7 +74,8 @@ async function main(): Promise<void> {
              JOIN integrations i ON i.uuid = c.integration_id
              WHERE c.team_id = $1 AND i.organization_id = $2
                AND c."configKey" = 'repositories'
-             ORDER BY i.status DESC, c."updatedAt" DESC LIMIT 1 FOR UPDATE OF c`,
+             ORDER BY i.status DESC, c."updatedAt" DESC, c.uuid ASC
+             LIMIT 1 FOR UPDATE OF c`,
             [teamId, claims.organizationId],
         );
         const demoRepository = {

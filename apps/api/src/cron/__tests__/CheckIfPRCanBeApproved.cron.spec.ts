@@ -72,7 +72,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 .fn()
                 .mockResolvedValue(undefined),
             getReviewStatusByPullRequest: jest.fn(),
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
             createIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
         } as any;
 
         const automationExecutionService = {
@@ -326,6 +328,44 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             }),
             PlatformType.GITLAB,
         );
+    });
+
+    it('updates the existing approval reason instead of posting another comment', async () => {
+        const { cron, deps } = makeCron();
+        deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
+            [
+                {
+                    id: 42,
+                    body: '<!-- kodus-conditional-approval -->\n**Automatic approval held:** Old reason.',
+                },
+            ],
+        );
+
+        await (cron as any).postConditionalApprovalReason(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 7,
+            },
+            PlatformType.GITHUB,
+            { kind: 'hold', reason: 'Sensitive path needs a person.' },
+        );
+
+        expect(
+            deps.codeManagementService.updateIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                commentId: 42,
+                body: expect.stringContaining('Sensitive path needs a person.'),
+            }),
+            PlatformType.GITHUB,
+        );
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
     });
 
     it('holds conditional approval when the provider status is unavailable', async () => {

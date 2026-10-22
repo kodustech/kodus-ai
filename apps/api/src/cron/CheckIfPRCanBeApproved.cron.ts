@@ -33,6 +33,7 @@ import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum'
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
+    approvalPolicyForPlatform,
     approvalPolicyFromConfig,
     evaluateApproval,
     type ApprovalDecision,
@@ -95,6 +96,7 @@ const TEAM_CONCURRENCY = 10;
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
+const APPROVAL_REASON_MARKER = '<!-- kodus-conditional-approval -->';
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -555,7 +557,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
         const policy = codeReviewConfig
-            ? approvalPolicyFromConfig(codeReviewConfig)
+            ? approvalPolicyForPlatform(
+                  approvalPolicyFromConfig(codeReviewConfig),
+                  platformType,
+              )
             : undefined;
         const policyActive = !!(
             policy?.labels?.length ||
@@ -654,6 +659,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
                 conditionalDecision = decision;
                 if (decision.kind !== 'approve') {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        decision,
+                    );
                     this.logger.log({
                         message: `Holding cron approval for PR#${prNumber}: ${decision.reason}`,
                         context: CheckIfPRCanBeApprovedCronProvider.name,
@@ -883,16 +893,21 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     conditionalDecision = evaluateApproval({
                         approvalActive: true,
                         policy,
-                        author:
-                            latestPullRequest?.user?.login ??
-                            latestPullRequest?.user?.username,
+                        author: latestPullRequest?.user?.login,
                         labels: latestPullRequest?.labels,
                         changedPaths,
                         reviewClean: true,
                         risk: lastExecution?.dataExecution?.approvalRisk,
                         currentHeadSha: latestHeadSha,
                     });
-                    if (conditionalDecision.kind !== 'approve') return false;
+                    if (conditionalDecision.kind !== 'approve') {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            conditionalDecision,
+                        );
+                        return false;
+                    }
                 }
 
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
@@ -914,12 +929,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     if (after !== PullRequestReviewState.APPROVED) {
                         return false;
                     }
-                    await this.codeManagementService.createIssueComment(
-                        {
-                            ...codeManagementRequestData,
-                            body: `**Automatic approval:** ${conditionalDecision.reason}`,
-                        },
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
                         platformType,
+                        conditionalDecision,
                     );
                 }
                 return true;
@@ -941,6 +954,59 @@ export class CheckIfPRCanBeApprovedCronProvider {
             });
 
             return false;
+        }
+    }
+
+    private async postConditionalApprovalReason(
+        request: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id: string; name: string };
+            prNumber: number;
+        },
+        platformType: PlatformType,
+        decision: ApprovalDecision,
+    ): Promise<void> {
+        try {
+            const body = `${APPROVAL_REASON_MARKER}\n**Automatic approval ${decision.kind === 'approve' ? 'completed' : 'held'}:** ${decision.reason}`;
+            const comments =
+                await this.codeManagementService.getAllCommentsInPullRequest(
+                    request,
+                    platformType,
+                );
+            const existing = comments?.find((comment) => {
+                const text = comment?.body ?? comment?.note ?? comment?.content;
+                return (
+                    typeof text === 'string' &&
+                    text.includes(APPROVAL_REASON_MARKER)
+                );
+            });
+            const commentId =
+                existing?.id ?? existing?.commentId ?? existing?.note_id;
+            if (typeof commentId === 'number') {
+                const previous =
+                    existing?.body ?? existing?.note ?? existing?.content;
+                if (previous === body) return;
+                await this.codeManagementService.updateIssueComment(
+                    { ...request, body, commentId, noteId: commentId },
+                    platformType,
+                );
+            } else {
+                await this.codeManagementService.createIssueComment(
+                    { ...request, body },
+                    platformType,
+                );
+            }
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not post conditional approval reason',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: request.organizationAndTeamData,
+                    repositoryId: request.repository.id,
+                    prNumber: request.prNumber,
+                },
+            });
         }
     }
 

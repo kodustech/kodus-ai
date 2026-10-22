@@ -1,4 +1,8 @@
-import { evaluateApproval } from './approval-decision';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    approvalPolicyForPlatform,
+    evaluateApproval,
+} from './approval-decision';
 
 const base = {
     approvalActive: true,
@@ -25,6 +29,19 @@ it('requires both configured scope groups and never bypasses findings', () => {
     );
     expect(evaluateApproval({ ...base, reviewClean: false, policy }).kind).toBe(
         'hold',
+    );
+});
+
+it('ignores inherited label restrictions on Bitbucket while keeping author scope', () => {
+    const policy = approvalPolicyForPlatform(
+        { labels: ['ready'], authors: ['alice'] },
+        PlatformType.BITBUCKET,
+    );
+    expect(evaluateApproval({ ...base, labels: undefined, policy }).kind).toBe(
+        'approve',
+    );
+    expect(evaluateApproval({ ...base, author: 'bob', policy }).kind).toBe(
+        'out-of-scope',
     );
 });
 

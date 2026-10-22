@@ -45,6 +45,7 @@ describe('ForgejoService — live PR labels', () => {
         expect(pr?.labels).toEqual(['ready', 'security']);
         expect(issueGetIssue).toHaveBeenCalledWith(
             expect.objectContaining({
+                timeout: 5000,
                 path: { owner: 'acme', repo: 'widget-api', index: 7 },
             }),
         );
@@ -63,5 +64,33 @@ describe('ForgejoService — live PR labels', () => {
         });
 
         expect(pr?.labels).toBeUndefined();
+    });
+
+    it('keeps the PR available with unknown labels when the issue lookup times out', async () => {
+        issueGetIssue.mockRejectedValue(
+            new Error('timeout of 5000ms exceeded'),
+        );
+
+        const pr = await service.getPullRequest({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'acme/widget-api' },
+            prNumber: 7,
+        });
+
+        expect(pr?.labels).toBeUndefined();
+        expect((service as any).logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    repository: 'acme/widget-api',
+                    prNumber: 7,
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    timeoutMs: 5000,
+                }),
+            }),
+        );
     });
 });

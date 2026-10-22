@@ -13,7 +13,11 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
 import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
-import { approvalPolicyFromConfig } from '@libs/code-review/domain/approval/approval-decision';
+import {
+    approvalPolicyForPlatform,
+    approvalPolicyFromConfig,
+} from '@libs/code-review/domain/approval/approval-decision';
+import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -86,7 +90,10 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
         // whole, so it never approves.
-        const approvalPolicy = approvalPolicyFromConfig(codeReviewConfig);
+        const approvalPolicy = approvalPolicyForPlatform(
+            approvalPolicyFromConfig(codeReviewConfig),
+            context.platformType,
+        );
         const requiresConditionalDecision = !!(
             approvalPolicy.labels?.length ||
             approvalPolicy.authors?.length ||
@@ -96,7 +103,10 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         const approved = await this.approvePullRequest(
             codeReviewConfig.pullRequestApprovalActive &&
                 !context.onlyCustomAgent,
-            lineComments.length + (context.prLevelCommentResults?.length ?? 0),
+            lineComments.length +
+                (requiresConditionalDecision
+                    ? (context.prLevelCommentResults?.length ?? 0)
+                    : 0),
             organizationAndTeamData,
             pullRequest.number,
             repository,
@@ -106,6 +116,34 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         );
 
         if (approved) {
+            const endMessage =
+                context.pullRequestMessagesConfig?.endReviewMessage;
+            const endMessageSuppressed =
+                endMessage?.status === PullRequestMessageStatus.OFF ||
+                endMessage?.status === PullRequestMessageStatus.INACTIVE ||
+                (endMessage?.status ===
+                    PullRequestMessageStatus.ONLY_WHEN_OPENED &&
+                    !!context.lastExecution);
+            if (
+                requiresConditionalDecision &&
+                context.approvalDecision?.kind === 'approve' &&
+                endMessageSuppressed
+            ) {
+                try {
+                    await this.codeManagementService.createIssueComment({
+                        organizationAndTeamData,
+                        prNumber: pullRequest.number,
+                        repository,
+                        body: `**Automatic approval:** ${context.approvalDecision.reason}`,
+                    });
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Could not post automatic approval reason',
+                        context: this.stageName,
+                        error,
+                    });
+                }
+            }
             await this.notifyAutoApproved(context);
         }
 

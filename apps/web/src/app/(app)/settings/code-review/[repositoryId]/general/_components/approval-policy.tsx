@@ -7,6 +7,7 @@ import { Switch } from "@components/ui/switch";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
+import { useApprovalLabelsUnavailable } from "src/app/(app)/settings/_components/use-code-management-platform";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
 import type { CodeReviewFormType } from "../../../_types";
@@ -30,6 +31,7 @@ const eligibilityFields = [
 
 function EligibilityFields() {
     const form = useFormContext<CodeReviewFormType>();
+    const labelsUnavailable = useApprovalLabelsUnavailable();
 
     return (
         <div className="grid min-w-0 gap-5 sm:grid-cols-2">
@@ -52,7 +54,11 @@ function EligibilityFields() {
                                 <FormControl.Input>
                                     <TagInput
                                         id={field.name}
-                                        disabled={field.disabled}
+                                        disabled={
+                                            field.disabled ||
+                                            (name === "approvalLabels" &&
+                                                labelsUnavailable)
+                                        }
                                         tags={field.value ?? []}
                                         maxTags={maxTags}
                                         placeholder={placeholder}
@@ -60,7 +66,10 @@ function EligibilityFields() {
                                     />
                                 </FormControl.Input>
                                 <FormControl.Helper className="text-xs leading-5">
-                                    {help}
+                                    {name === "approvalLabels" &&
+                                    labelsUnavailable
+                                        ? "Bitbucket PRs do not support approval labels. Use authors to limit approval."
+                                        : help}
                                 </FormControl.Helper>
                             </FormControl.Root>
                         )}
@@ -165,7 +174,11 @@ export function ApprovalPolicySettings() {
                                         id={field.name}
                                         checked={field.value ?? false}
                                         disabled={field.disabled}
-                                        onCheckedChange={field.onChange}
+                                        onCheckedChange={(checked) => {
+                                            if (!checked)
+                                                setGuidanceOpen(false);
+                                            field.onChange(checked);
+                                        }}
                                         className="shrink-0"
                                     />
                                 </div>

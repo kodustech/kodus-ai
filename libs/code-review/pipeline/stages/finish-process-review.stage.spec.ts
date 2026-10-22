@@ -6,6 +6,7 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
@@ -27,6 +28,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             | 'approvePullRequest'
             | 'getReviewStatusByPullRequest'
             | 'requestChangesPullRequest'
+            | 'createIssueComment'
         >
     >;
     let notificationService: jest.Mocked<Pick<NotificationService, 'emit'>>;
@@ -65,6 +67,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 .fn()
                 .mockResolvedValue(PullRequestReviewState.PENDING),
             requestChangesPullRequest: jest.fn().mockResolvedValue(undefined),
+            createIssueComment: jest.fn().mockResolvedValue(undefined),
         };
         notificationService = { emit: jest.fn().mockResolvedValue(undefined) };
         prAuthorResolver = { resolve: jest.fn() };
@@ -128,6 +131,40 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
         expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
+    it('keeps legacy approval eligibility when only a PR-level comment exists', async () => {
+        await stage.execute(
+            makeContext({ prLevelCommentResults: [{}] as any }),
+        );
+
+        expect(codeManagement.approvePullRequest).toHaveBeenCalled();
+    });
+
+    it('posts the reason after a conditional approval when end-review messages are off', async () => {
+        await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalAuthors: ['alex'],
+                } as any,
+                approvalDecision: {
+                    kind: 'approve',
+                    reason: 'Clean review and allowed author.',
+                },
+                pullRequestMessagesConfig: {
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                    },
+                } as any,
+            }),
+        );
+
+        expect(codeManagement.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: '**Automatic approval:** Clean review and allowed author.',
+            }),
+        );
     });
 
     it('holds a clean PR when the approval policy judged it risky', async () => {
