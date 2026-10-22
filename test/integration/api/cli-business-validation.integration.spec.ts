@@ -149,7 +149,12 @@ describe('CLI business-validation integration', () => {
                 {
                     provide: BusinessLogicPublisher,
                     useValue: {
-                        settingsFor: jest.fn().mockResolvedValue(undefined),
+                        configFor: jest
+                            .fn()
+                            .mockResolvedValue({
+                                settings: undefined,
+                                enabled: true,
+                            }),
                         withRepository: jest.fn((request) => request),
                     },
                 },
