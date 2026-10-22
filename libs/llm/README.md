@@ -101,8 +101,6 @@ that means "no BYOK configured" returns `undefined`; don't reintroduce `null`.
 - **`llm-call.ts`** — call timeouts (`AGENT_TIMEOUT_MS`, `LLM_CALL_TIMEOUT_MS`,
   `timeoutSignal`, `hardTimeout`) and `tracedGenerateText` (generateText + hard
   timeout for providers that ignore AbortSignal).
-- **`preflight-context.ts`** — `assertPromptFitsInContext`: refuse a call whose
-  estimated prompt won't fit the model's context window (avoids futile retries).
 - **`system-cache.ts`** — `systemCacheControl`: registry-driven provider options to
   cache the (large) system prompt on Anthropic models across an agent loop's steps.
 

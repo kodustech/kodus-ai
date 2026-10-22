@@ -57,7 +57,6 @@ diferentes — **verify não é policy.**
 | `compression/` → `ContextWindowCompressor` (+ `context-compressor`) | impl canônica do `Compressor` (janela de token); usada por code-review **e** pelo fetcher de skills via `CompressionPolicy` |
 | `verify/` → `llm-verdict` (`buildVerifierAgentSpec` / `extractVerdict` / `submitVerdictTool`) | scaffolding genérico de `Verdict` (doer≠checker, fail-open) — um domínio só fornece prompt + candidato→prompt |
 | `orchestration/verification-pass` → `runVerificationPass<T>` | driver do `Verifier<T>` sobre um conjunto de candidatos |
-| `orchestration/sub-agent.factory` → `DefaultSubAgentFactory` | sub-agent-como-tool |
 
 ## Capacidades do `AiSdkAgentRunner`
 
