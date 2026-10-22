@@ -21,6 +21,8 @@ describe('ValidateNewCommitsStage', () => {
 
         mockPullRequestManagerService = {
             getNewCommitsSinceLastExecution: jest.fn(),
+            // null: the PR diff at the earlier head could not be read.
+            getRebaseInterdiff: jest.fn().mockResolvedValue(null),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -254,7 +256,7 @@ describe('ValidateNewCommitsStage', () => {
     });
 
     describe('orphaned baseCommit detection (rebase / force-push)', () => {
-        it('should force full rerun when lastAnalyzedCommit is not in PR commits (orphan)', async () => {
+        it('should force full rerun when the diff at the orphaned commit cannot be read', async () => {
             mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
                 {
                     uuid: 'exec-prev',
@@ -327,6 +329,7 @@ describe('ValidateNewCommitsStage', () => {
                 previousSha: 'OLD_ORPHAN_SHA',
                 currentHeadSha: 'head-sha',
                 totalCommits: 2,
+                interdiff: { fallback: 'previous_diff_unavailable' },
             });
         });
 
@@ -388,6 +391,123 @@ describe('ValidateNewCommitsStage', () => {
             );
 
             warnSpy.mockRestore();
+        });
+
+        describe('reviews only what the rebase changed (#2037)', () => {
+            const orphan = () => {
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+            };
+            const interdiff = (files: unknown[]) => ({
+                files,
+                unchangedFiles: ['src/same.ts'],
+                partialFiles: files.length ? ['src/edited.ts'] : [],
+                hunksKept: files.length,
+                hunksDropped: 3,
+            });
+
+            it('compares the PR diff at the orphaned commit with the current one', async () => {
+                orphan();
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).toHaveBeenCalledWith(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                    'OLD_ORPHAN_SHA',
+                );
+            });
+
+            it('hands the changed hunks to the review instead of a full rerun', async () => {
+                orphan();
+                const files = [{ filename: 'src/edited.ts', patch: '@@' }];
+                mockPullRequestManagerService.getRebaseInterdiff.mockResolvedValue(
+                    interdiff(files),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).not.toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
+                expect(result.rebaseInterdiffFiles).toEqual(files);
+                expect(
+                    result.lastExecution?.lastAnalyzedCommit,
+                ).toBeUndefined();
+                expect(result.orphanedBaseCommit).toEqual({
+                    previousSha: 'OLD_ORPHAN_SHA',
+                    currentHeadSha: 'head-sha',
+                    totalCommits: 1,
+                    interdiff: {
+                        filesToReview: 1,
+                        unchangedFiles: 1,
+                        partialFiles: 1,
+                        hunksKept: 1,
+                        hunksDropped: 3,
+                    },
+                });
+            });
+
+            it('skips like a merge-only push when the rebase changed nothing', async () => {
+                orphan();
+                mockPullRequestManagerService.getRebaseInterdiff.mockResolvedValue(
+                    interdiff([]),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.statusInfo?.message).toBe(
+                    StageMessageHelper.skippedWithReason(
+                        PipelineReasons.COMMITS.REBASE_NO_CHANGES,
+                        'The rebase changed nothing since the last review',
+                    ),
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
+                expect(result.orphanedBaseCommit?.interdiff).toEqual(
+                    expect.objectContaining({ filesToReview: 0 }),
+                );
+            });
+
+            it('records the fallback on orphanedBaseCommit when the earlier diff is unreadable', async () => {
+                orphan();
+
+                const result = await stage.execute(context);
+
+                expect(result.orphanedBaseCommit?.interdiff).toEqual({
+                    fallback: 'previous_diff_unavailable',
+                });
+            });
+
+            it.each([
+                ['@kody review --force', { origin: 'command-force' }],
+                ['@kody -v <agent>', { onlyCustomAgent: 'agent-1' }],
+            ])('keeps the full review for %s', async (_label, extra) => {
+                orphan();
+                Object.assign(context, extra);
+
+                const result = await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).not.toHaveBeenCalled();
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+            });
         });
 
         it('should preserve incremental flow when lastAnalyzedCommit IS in PR commits (regression guard)', async () => {
