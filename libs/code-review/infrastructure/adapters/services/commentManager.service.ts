@@ -133,23 +133,36 @@ export class CommentManagerService implements ICommentManagerService {
             'approval hold comment lookup',
         );
         const existing = comments?.find(isApprovalReasonComment);
-        const commentId =
-            existing?.id ?? existing?.commentId ?? existing?.note_id;
+        const commentId = [
+            existing?.id,
+            existing?.commentId,
+            existing?.note_id,
+        ].find(
+            (candidate): candidate is number => typeof candidate === 'number',
+        );
         if (typeof commentId === 'number') {
             if ((existing.body ?? existing.note ?? existing.content) === body) {
                 return;
             }
-            await this.codeManagementService.updateIssueComment({
-                ...request,
-                body,
-                commentId,
-                noteId: commentId,
-            });
+            await runWithBoundedTimeout(
+                this.codeManagementService.updateIssueComment({
+                    ...request,
+                    body,
+                    commentId,
+                    noteId: commentId,
+                }),
+                15_000,
+                `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
+            );
         } else {
-            await this.codeManagementService.createIssueComment({
-                ...request,
-                body,
-            });
+            await runWithBoundedTimeout(
+                this.codeManagementService.createIssueComment({
+                    ...request,
+                    body,
+                }),
+                15_000,
+                `approval hold comment create org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
+            );
         }
     }
 

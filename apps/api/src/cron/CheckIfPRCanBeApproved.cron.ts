@@ -108,6 +108,7 @@ const TEAM_CONCURRENCY = 10;
 const PR_CONCURRENCY = 15;
 const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
 const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
+const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
 const APPROVAL_FILES_TIMEOUT_MS = 10_000;
 const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -1147,22 +1148,36 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 'conditional approval comment lookup',
             );
             const existing = comments?.find(isApprovalReasonComment);
-            const commentId =
-                existing?.id ?? existing?.commentId ?? existing?.note_id;
+            const commentId = [
+                existing?.id,
+                existing?.commentId,
+                existing?.note_id,
+            ].find(
+                (candidate): candidate is number =>
+                    typeof candidate === 'number',
+            );
             if (typeof commentId === 'number') {
                 const previous =
                     existing?.body ?? existing?.note ?? existing?.content;
                 if (previous === body) return;
                 operation = 'updateIssueComment';
-                await this.codeManagementService.updateIssueComment(
-                    { ...request, body, commentId, noteId: commentId },
-                    platformType,
+                await runWithBoundedTimeout(
+                    this.codeManagementService.updateIssueComment(
+                        { ...request, body, commentId, noteId: commentId },
+                        platformType,
+                    ),
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                    'conditional approval comment update',
                 );
             } else {
                 operation = 'createIssueComment';
-                await this.codeManagementService.createIssueComment(
-                    { ...request, body },
-                    platformType,
+                await runWithBoundedTimeout(
+                    this.codeManagementService.createIssueComment(
+                        { ...request, body },
+                        platformType,
+                    ),
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                    'conditional approval comment create',
                 );
             }
         } catch (error) {
@@ -1176,6 +1191,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     prNumber: request.prNumber,
                     operation,
                     lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
+                    writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
                 },
             });
         }

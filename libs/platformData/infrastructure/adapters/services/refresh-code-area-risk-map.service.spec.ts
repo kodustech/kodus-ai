@@ -321,6 +321,31 @@ it('recognizes closing references and resolves GitLab issues by project ID', asy
     );
 });
 
+it('ignores issue URLs from another repository when collecting bug evidence', async () => {
+    const codeManagement = {
+        getIssue: jest.fn().mockResolvedValue({
+            labels: ['bug'],
+            url: 'https://github.com/acme/current/issues/12',
+        }),
+    };
+    const service = new RefreshCodeAreaRiskMapService(
+        codeManagement as any,
+        {} as any,
+        {} as any,
+        {} as any,
+    );
+
+    const urls = await (service as any).findLinkedBugIssues(
+        { organizationId: 'org', teamId: 'team' },
+        { id: 'repo', name: 'acme/current' },
+        'Fixes https://github.com/other/project/issues/12',
+        'https://github.com/acme/current/pull/7',
+    );
+
+    expect(urls).toEqual([]);
+    expect(codeManagement.getIssue).not.toHaveBeenCalled();
+});
+
 it('bounds a large area snapshot before MongoDB storage', () => {
     const service = new RefreshCodeAreaRiskMapService(
         {} as any,

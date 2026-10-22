@@ -395,6 +395,42 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('uses the provider numeric note ID when its primary ID is opaque', async () => {
+        const { cron, deps } = makeCron();
+        deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
+            [
+                {
+                    id: 'opaque-id',
+                    note_id: 42,
+                    body: '<!-- kodus-conditional-approval -->\n**Automatic approval held:** Old reason.',
+                },
+            ],
+        );
+
+        await (cron as any).postConditionalApprovalReason(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 7,
+            },
+            PlatformType.GITHUB,
+            { kind: 'hold', reason: 'Sensitive path needs a person.' },
+        );
+
+        expect(
+            deps.codeManagementService.updateIssueComment,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ commentId: 42 }),
+            PlatformType.GITHUB,
+        );
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+    });
+
     it('bounds reason-comment lookup without posting after the lookup times out', async () => {
         jest.useFakeTimers();
         try {

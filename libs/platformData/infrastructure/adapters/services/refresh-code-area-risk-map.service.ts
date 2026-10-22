@@ -42,7 +42,7 @@ const STRUCTURE_FETCH_CONCURRENCY = 5;
 const STRUCTURE_FETCH_TIMEOUT_MS = 15_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOSING_REFERENCE =
-    /\b(?:fix(?:es|ed)?|clos(?:e|es|ed)|resolv(?:e|es|ed))\b\s*:?\s*(?:#(\d+)|https?:\/\/[^\s)]+?\/issues\/(\d+))\b/gi;
+    /\b(?:fix(?:es|ed)?|clos(?:e|es|ed)|resolv(?:e|es|ed))\b\s*:?\s*(?:#(\d+)|(https?:\/\/[^\s)]+?\/issues\/(\d+)))\b/gi;
 const BUG_LABEL = /\b(?:bug|defect|regression)\b/i;
 
 interface SyncState {
@@ -661,7 +661,28 @@ export class RefreshCodeAreaRiskMapService {
         const numbers = [
             ...new Set(
                 [...body.matchAll(CLOSING_REFERENCE)]
-                    .map((match) => Number(match[1] ?? match[2]))
+                    .filter((match) => {
+                        if (!match[2]) return true;
+                        try {
+                            const issueUrl = new URL(match[2]);
+                            const pr = new URL(prUrl);
+                            const issueParts = issueUrl.pathname
+                                .split('/')
+                                .filter(Boolean);
+                            const issueRepositoryParts = issueParts.slice(
+                                0,
+                                issueParts.at(-3) === '-' ? -3 : -2,
+                            );
+                            return (
+                                issueUrl.origin === pr.origin &&
+                                issueRepositoryParts.join('/') ===
+                                    pathParts.join('/')
+                            );
+                        } catch {
+                            return false;
+                        }
+                    })
+                    .map((match) => Number(match[1] ?? match[3]))
                     .filter(
                         (number) => Number.isSafeInteger(number) && number > 0,
                     ),
