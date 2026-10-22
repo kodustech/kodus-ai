@@ -1,4 +1,5 @@
 import { RefreshCodeAreaRiskMapCron } from './refresh-code-area-risk-map.cron';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 it('scans only eligible teams and releases the scheduler lock', async () => {
     const teams = {
@@ -15,8 +16,10 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
         }),
     };
     const refresh = {
-        readStatus: jest.fn().mockResolvedValue(null),
         refreshOneBatch: jest.fn().mockResolvedValue({}),
+    };
+    const codeManagement = {
+        getTypeIntegration: jest.fn().mockResolvedValue(PlatformType.GITHUB),
     };
     const release = jest.fn();
     const locks = {
@@ -35,6 +38,7 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
         refresh as any,
         locks as any,
         access as any,
+        codeManagement as any,
     );
 
     await cron.handleCron();
@@ -51,13 +55,12 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
     expect(release).toHaveBeenCalledTimes(1);
 });
 
-it('skips repositories already known to have unsupported history providers', async () => {
+it('filters unsupported providers before choosing repository pages', async () => {
     const teams = {
-        findTeamsWithIntegrations: jest
-            .fn()
-            .mockResolvedValue([
-                { uuid: 'team-1', organization: { uuid: 'org-1' } },
-            ]),
+        findTeamsWithIntegrations: jest.fn().mockResolvedValue([
+            { uuid: 'bitbucket-team', organization: { uuid: 'org-1' } },
+            { uuid: 'github-team', organization: { uuid: 'org-1' } },
+        ]),
     };
     const parameters = {
         findOne: jest.fn().mockResolvedValue({
@@ -67,8 +70,16 @@ it('skips repositories already known to have unsupported history providers', asy
         }),
     };
     const refresh = {
-        readStatus: jest.fn().mockResolvedValue({ source: 'bitbucket' }),
-        refreshOneBatch: jest.fn(),
+        refreshOneBatch: jest.fn().mockResolvedValue({}),
+    };
+    const codeManagement = {
+        getTypeIntegration: jest
+            .fn()
+            .mockImplementation(async ({ teamId }) =>
+                teamId === 'bitbucket-team'
+                    ? PlatformType.BITBUCKET
+                    : PlatformType.GITHUB,
+            ),
     };
     const release = jest.fn();
     const cron = new RefreshCodeAreaRiskMapCron(
@@ -77,10 +88,19 @@ it('skips repositories already known to have unsupported history providers', asy
         refresh as any,
         { acquire: jest.fn().mockResolvedValue({ release }) } as any,
         { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+        codeManagement as any,
     );
 
     await cron.handleCron();
 
-    expect(refresh.refreshOneBatch).not.toHaveBeenCalled();
+    expect(parameters.findOne).toHaveBeenCalledTimes(1);
+    expect(refresh.refreshOneBatch).toHaveBeenCalledTimes(1);
+    expect(refresh.refreshOneBatch).toHaveBeenCalledWith({
+        organizationAndTeamData: {
+            organizationId: 'org-1',
+            teamId: 'github-team',
+        },
+        repository: { id: 'repo-1', name: 'api' },
+    });
     expect(release).toHaveBeenCalledTimes(1);
 });

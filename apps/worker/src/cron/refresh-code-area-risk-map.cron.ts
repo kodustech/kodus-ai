@@ -16,6 +16,7 @@ import {
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { IntegrationStatusFilter } from '@libs/organization/domain/team/interfaces/team.interface';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -42,6 +43,7 @@ export class RefreshCodeAreaRiskMapCron {
         private readonly locks: DistributedLockService,
         @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
         private readonly access: IConditionalApprovalAccessService,
+        private readonly codeManagement: CodeManagementService,
     ) {}
 
     @Cron('0 */2 * * *', {
@@ -80,6 +82,15 @@ export class RefreshCodeAreaRiskMapCron {
                 ) {
                     continue;
                 }
+                const source = await this.codeManagement.getTypeIntegration({
+                    organizationId,
+                    teamId: team.uuid,
+                });
+                if (
+                    ![PlatformType.GITHUB, PlatformType.GITLAB].includes(source)
+                ) {
+                    continue;
+                }
                 const config = await this.parameters.findOne({
                     configKey: ParametersKey.CODE_REVIEW_CONFIG,
                     team: { uuid: team.uuid },
@@ -113,18 +124,6 @@ export class RefreshCodeAreaRiskMapCron {
             );
             for (const repo of selected) {
                 try {
-                    const status = await this.refresh.readStatus(
-                        repo.organizationId,
-                        repo.id,
-                    );
-                    if (
-                        status?.source &&
-                        ![PlatformType.GITHUB, PlatformType.GITLAB].includes(
-                            status.source as PlatformType,
-                        )
-                    ) {
-                        continue;
-                    }
                     await this.refresh.refreshOneBatch({
                         organizationAndTeamData: {
                             organizationId: repo.organizationId,
