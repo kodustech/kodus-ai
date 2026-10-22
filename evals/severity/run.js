@@ -45,6 +45,7 @@ const right = (gold, got) => (gold === 'critical' ? got === 'high' || got === 'c
 
 // The head file around the cited lines; "+" marks lines the PR changed, ">" the cited ones.
 function excerpt(it) {
+    if (!REPOS[it.caseId]) return ''; // synthetic items have no repository
     const { repo, base, head } = REPOS[it.caseId];
     const f = it.finding;
     const a = f.relevantLinesStart;

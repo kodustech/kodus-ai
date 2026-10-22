@@ -1,0 +1,146 @@
+{
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2": {
+  "severity": "medium",
+  "reason": "Writing the wrong .env silently misconfigures GOOGLE_WEBHOOK_URL, a meaningful bounded defect without a supported outage or unusable operational path."
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01": {
+  "severity": "low",
+  "reason": "Deleting tests for the unchanged caching layer falls under missing coverage of unchanged code."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03": {
+  "severity": "medium",
+  "reason": "Rejecting legitimate slots is wrongful denial of valid availability, which is medium unless a supported path becomes unusable."
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03": {
+  "severity": "low",
+  "reason": "Changing the light-theme name color is a cosmetic inconsistency."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#19": {
+  "severity": "medium",
+  "reason": "Reusing another organization's cached attributes produces incorrect secondary output and a limited privacy weakness."
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02": {
+  "severity": "low",
+  "reason": "The inaccurate explanatory comment is a maintenance defect with no stated behavioral change."
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01": {
+  "severity": "low",
+  "reason": "Incorrect comments about slicing and permissions are maintenance defects without a demonstrated operational consequence."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05": {
+  "severity": "high",
+  "reason": "Accepting events outside date-override bounds bypasses the admission control enforcing permitted booking windows."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04": {
+  "severity": "medium",
+  "reason": "Failed cancellation retries allow unwanted reminder emails to be delivered, a defect confined to secondary email output."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11": {
+  "severity": "medium",
+  "reason": "Comparing only mutually derived outputs allows symmetric conversion bugs to pass, so the test falsely verifies its claimed behavior."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+  "severity": "high",
+  "reason": "Adding guests beyond seated-event capacity bypasses a material seat-cap admission control."
+ },
+ "github-oauth-security-enhancement-sentry#02": {
+  "severity": "low",
+  "reason": "The misleading parameter name is a maintenance defect, while all current callers supply the expected context."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05": {
+  "severity": "low",
+  "reason": "The unused private method is dead code, which falls under maintenance."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#07": {
+  "severity": "medium",
+  "reason": "The script falsely reports success while webhook testing targets the previous tunnel, which is misleading feedback and a meaningful bounded defect."
+ },
+ "notification-rule-processing-engine-grafana-codex#11": {
+  "severity": "high",
+  "reason": "Clicking Silence in the list view does nothing, making an identified supported UI path unusable."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#05": {
+  "severity": "medium",
+  "reason": "An oversized upload is stored despite the configured size limit, which is bounded invalid-input handling without a supported stronger consequence."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14": {
+  "severity": "medium",
+  "reason": "A stored host containing a port incorrectly rejects its embeds, which falls under failures confined to one record or embed even when repeated."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01": {
+  "severity": "medium",
+  "reason": "Already-linked identity providers are incorrectly omitted from the displayed list, which is wrong secondary output without a demonstrated unusable operational path."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10": {
+  "severity": "high",
+  "reason": "The global VIEW grant authorizes access despite explicit per-client denials, bypassing a material security control."
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05": {
+  "severity": "medium",
+  "reason": "The test passes even when transaction queries are incorrectly upsampled, falling under tests that falsely verify their claimed behavior."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01": {
+  "severity": "low",
+  "reason": "The interface documentation misstates the legacy implementation's permission behavior, which is a maintenance inconsistency."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#muse13-01": {
+  "severity": "high",
+  "reason": "Existing parser and SQL-command callers receive a database whose every method returns 'not implemented', making supported operational paths unusable."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2": {
+  "severity": "low",
+  "reason": "The cancellation loop performs one credential query per calendar reference without demonstrated significant load, falling under minor redundant work and N+1 alone."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#24": {
+  "severity": "low",
+  "reason": "English month abbreviations remain in an otherwise localized view, which is a cosmetic formatting inconsistency."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#01": {
+  "severity": "medium",
+  "reason": "The last-sync timestamp remains stale, which falls under wrong metrics or other secondary output."
+ },
+ "database-performance-optimizations-grafana-codex#muse13-01": {
+  "severity": "high",
+  "reason": "Concurrent cleanup deletes annotation rows that should be retained, which falls under operational data being wrongly destroyed."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#snloop-01": {
+  "severity": "medium",
+  "reason": "Reports lacking both timestamp and age pass validation, which falls under ordinary invalid-input handling."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01": {
+  "severity": "high",
+  "reason": "A legitimate offset gap permanently prevents partition commits, making a supported operational path unusable for valid inputs."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06": {
+  "severity": "high",
+  "reason": "A quote in the stored setting breaks the schema migration, which falls under blocked production deployments."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07": {
+  "severity": "high",
+  "reason": "The default missing-category case aborts the migration and blocks deployment, explicitly meeting the blocked production deployments clause."
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10": {
+  "severity": "high",
+  "reason": "The client-side unsubscribe route never changes the notification preference, making an identified UI path unusable for its intended operation."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12": {
+  "severity": "medium",
+  "reason": "The test passes despite missing and duplicated shard assignments, which falls under tests that falsely verify their claimed behavior."
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01": {
+  "severity": "low",
+  "reason": "The profile displays only the hostname instead of the requested path, which falls under cosmetic inconsistencies."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#09": {
+  "severity": "high",
+  "reason": "When downsizing replaces the inode, stale reads make automatic downsizing ineffective, rendering a supported operational path unusable for valid inputs."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#07": {
+  "severity": "medium",
+  "reason": "Unchecked choice branches allow prohibited links into rendered messages, which constitutes a limited security weakness without a demonstrated execution path."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#22": {
+  "severity": "medium",
+  "reason": "Incorrect rewriting breaks images and links within imported posts, which falls under failures confined to a record or embed."
+ }
+}

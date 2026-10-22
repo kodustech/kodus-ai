@@ -1,0 +1,544 @@
+{
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|enhance-embed-url-handling-and-validation-system-discourse-cursor|S4",
+   "finding": {
+    "relevantFile": "app/views/embed/best.html.erb",
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 14,
+    "suggestionContent": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "scripts/test-gcal-webhooks.sh",
+    "relevantLinesStart": 68,
+    "relevantLinesEnd": 68,
+    "suggestionContent": "The environment update uses BSD sed syntax (`sed -i ''`), which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the old URL in place but still reports success, so webhook testing continues targeting the previous tunnel. Use a portable temporary-file replacement or choose the appropriate in-place syntax for the host platform, and check the command's exit status."
+   }
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S3",
+   "finding": {
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 179,
+    "relevantLinesEnd": 184,
+    "suggestionContent": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` — it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+   }
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "caseId": "advanced-sql-analytics-framework-grafana-codex",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
+   "source": "round:muse13/classif-in.json:muse-muse13:S5",
+   "finding": {
+    "relevantFile": "pkg/expr/sql/db.go",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 26,
+    "suggestionContent": "Name NewInMemoryDB promises the working in-memory DB callers in parser.go and sql_command.go expect from duck.NewInMemoryDB, but the new type holds no state and every method returns 'not implemented'. Rename to reflect stub status (e.g. NewStubDB/NewDisabledDB) or document that it is intentionally unimplemented so callers are not misled."
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+   "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "round:kimi/classif-in.json:kimi-kimi:S7",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "relevantLinesStart": 85,
+    "relevantLinesEnd": 92,
+    "suggestionContent": "The interface Javadoc says VIEW/MANAGE permissions grant canView(), but the legacy GroupPermissions implementation only checks admin roles. Either implement the permission check in V1 or qualify the permission path as V2-only (as was done for canList) so the contract matches all implementations."
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
+   "source": "round:prod-finder/classif-in.json:prodfinder-kimi:C2",
+   "finding": {
+    "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "relevantLinesStart": 422,
+    "relevantLinesEnd": 441,
+    "suggestionContent": "WHAT: `handleCancelBooking` calls `prisma.credential.findUnique` inside a loop over calendar references. WHY: Cancelling a collective booking issues one credential query per host calendar reference rather than a single batched query. HOW: Collect all `credentialId` values from `bookingCalendarReference`, run one `prisma.credential.findMany({ where: { id: { in: ids } } })`, and map the results."
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "TP",
+   "category": "speculative",
+   "label": "bug",
+   "source": "lean:muse",
+   "finding": {
+    "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+    "relevantLinesStart": 519,
+    "relevantLinesEnd": 523,
+    "suggestionContent": "WHAT: .group-member-info .name light branch uses $lightness: 50% while original was $lightness: 30%. WHY: Lightens light-theme name color vs original; common/base/user.scss preserves 30%/70% for .name. HOW: Change first arg back to scale-color($primary, $lightness: 30%) with dark complement 70%."
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "round:snloop/classif-in.json:sonnet-snloop:S7",
+   "finding": {
+    "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "relevantLinesStart": 50,
+    "relevantLinesEnd": 60,
+    "suggestionContent": "The docstrings say validate_timestamp checks that 'age is absent, but timestamp is present' and validate_age checks that 'age is present, but not timestamp'. The code only rejects the case where both fields are supplied. Both fields are required=False, so a report with neither passes. Reword the docstrings to say they only enforce mutual exclusion, or add a check that one of the two is present."
+   }
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#02",
+   "caseId": "github-oauth-security-enhancement-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|github-oauth-security-enhancement-sentry|S3",
+   "finding": {
+    "relevantFile": "src/sentry/integrations/github/integration.py",
+    "relevantLinesStart": 149,
+    "relevantLinesEnd": 152,
+    "suggestionContent": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract — a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+   }
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
+   "source": "lean:ds20",
+   "finding": {
+    "relevantFile": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+    "relevantLinesStart": 433,
+    "relevantLinesEnd": 437,
+    "suggestionContent": "WHAT: The entire `describe(\"Caching\")` block (the only tests exercising cachedAuthConditions/cachedFilterConditions) was deleted, while the service still ships the caching layer (insightsBooking.ts lines 49-50, 84-94). WHY: nothing now verifies that repeated getAuthorizationConditions()/getFilterConditions() calls return the cached result, so a regression that recomputes (or worse, returns stale/incorrect conditions) in the caching path would go undetected. HOW: re-add caching tests or, if caching is being intentionally dropped, remove the cachedAuthConditions/cachedFilterConditions fields and their logic from the service in the same PR to keep code and tests consistent."
+   }
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "inventory:gpt-6.1-sol|ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor|S1",
+   "finding": {
+    "relevantFile": "app/serializers/user_serializer.rb",
+    "relevantLinesStart": 138,
+    "relevantLinesEnd": 141,
+    "suggestionContent": "Hostname comparisons are case-sensitive even though DNS hostnames are case-insensitive. With an instance hostname of example.com and a valid website of http://EXAMPLE.COM/user, neither the exact-host nor suffix comparison matches, so the profile displays only EXAMPLE.COM instead of the requested path. Normalize both hostnames to lowercase for comparison while preserving the desired display spelling."
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#05",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|add-client-resource-type-and-scopes-to-authorization-schema-keycloak|S10",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "relevantLinesStart": 262,
+    "relevantLinesEnd": 272,
+    "suggestionContent": "Dead computation: `getEvaluationContext(ClientModel, AccessToken)` is private and has no caller anywhere in the class. Its only possible consumer in the V1 class, `canExchangeTo`, was overridden to throw UnsupportedOperationException (line 148-150). The EvaluationContext and its overridden getBaseAttributes are built and then never used — remove the method (or wire it into canExchangeTo if token-exchange is meant to be supported)."
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "app/controllers/uploads_controller.rb",
+    "relevantLinesStart": 63,
+    "relevantLinesEnd": 70,
+    "suggestionContent": "The downsize loop runs at most five 80%-resize iterations and does not check whether OptimizedImage.downsize succeeded. After five passes a 10 MB file is still ~3.3 MB, so it can remain above SiteSetting.max_image_size_kb and Upload.create_for will store an oversized file. Verify the downsize result and loop until the file is actually within the configured limit, or reject the upload if it cannot be reduced."
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#pf-opus-C2",
+   "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:muse",
+   "finding": {
+    "relevantFile": "scripts/test-gcal-webhooks.sh",
+    "relevantLinesStart": 5,
+    "relevantLinesEnd": 5,
+    "suggestionContent": "WHAT: ENV_FILE=\"../.env\" is resolved against the caller's CWD, not the script location. WHY: Running from repo root vs scripts/ writes/creates the wrong .env (or parent-dir .env), silently misconfiguring GOOGLE_WEBHOOK_URL. HOW: Resolve relative to the script dir, e.g. SCRIPT_DIR=$(cd \"$(dirname \"$0\")\" && pwd); ENV_FILE=\"$SCRIPT_DIR/../.env\"."
+   }
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#snapi-01",
+   "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "round:snapi/classif-in.json:sonnet-snapi:S11",
+   "finding": {
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 874,
+    "relevantLinesEnd": 880,
+    "suggestionContent": "The comments say Django ORM handles negative slicing automatically and that permissions are checked at the queryset level. Django QuerySets raise an AssertionError on negative slice bounds, and the paginator does no permission check. Remove or correct these comments so they describe the actual behavior."
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "severityGold": "medium",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "relevantLinesStart": 39,
+    "relevantLinesEnd": 42,
+    "suggestionContent": "The new attribute-key query key omits organization identity although its query function requests an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the previous organization's cached attributes and can share an in-flight response. Include organization.slug in the query key."
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "severityGold": "medium",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:opus",
+   "finding": {
+    "relevantFile": "app/models/topic_embed.rb",
+    "relevantLinesStart": 64,
+    "relevantLinesEnd": 66,
+    "suggestionContent": "Protocol-relative URLs such as `//cdn.example.com/a.png` start with '/', so they are rewritten to `http://embedhost/cdn.example.com/a.png`. This breaks external images and links in imported posts. Exclude values starting with '//' from the relative-URL rewrite (the same check is needed for img src at lines 70-72)."
+   }
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#11",
+   "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+   "severityGold": "medium",
+   "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
+   "source": "inventory:sonnet-5.5|add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak|S3",
+   "finding": {
+    "relevantFile": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "relevantLinesStart": 53,
+    "relevantLinesEnd": 56,
+    "suggestionContent": "The only assertion compares two outputs of the code under test (rsConcat vs rsConcat2). It never checks the re-encoded DER against the original `sign` or verifies it with Signature.verify. A symmetric encode/decode bug would still pass. Also assert that asn1Des equals sign, or that the signature verifies with the public key."
+   }
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+   "severityGold": "medium",
+   "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
+   "source": "inventory:gpt-6.1-sol|span-buffer-multiprocess-enhancement-with-health-monitoring-sentry|S9",
+   "finding": {
+    "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
+    "relevantLinesStart": 119,
+    "relevantLinesEnd": 121,
+    "suggestionContent": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+   }
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#05",
+   "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+   "severityGold": "medium",
+   "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
+   "source": "inventory:sonnet-5.5|feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry|S2",
+   "finding": {
+    "relevantFile": "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "relevantLinesStart": 3654,
+    "relevantLinesEnd": 3697,
+    "suggestionContent": "test_error_upsampling_with_transaction_events would still pass if upsampling were wrongly applied to transaction queries. The transaction event has no sample_weight, and upsampled_count uses ifNull(sample_weight, 1), so the result is still 1 and 0. Give the transaction a non-default sample rate or weight so an upsampled count would differ from a plain count, or assert that the transform was not applied."
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#01",
+   "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+   "severityGold": "medium",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi",
+   "finding": {
+    "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "relevantLinesStart": 1023,
+    "relevantLinesEnd": 1025,
+    "suggestionContent": "Passing an empty data object to updateManyByCredentialId does not update any fields, so the @updatedAt field on SelectedCalendar is never refreshed. The cache-status logic intends to record when calendars were last synced, but this call is a no-op. Pass an explicit updatedAt value (e.g., { updatedAt: new Date() }) or another real field change so Prisma applies the timestamp."
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi",
+   "finding": {
+    "relevantFile": "app/controllers/uploads_controller.rb",
+    "relevantLinesStart": 63,
+    "relevantLinesEnd": 70,
+    "suggestionContent": "In-place downsizing of the open Tempfile may leave the Ruby file descriptor pointing at the original inode. WHAT: OptimizedImage.downsize overwrites tempfile.path while the Tempfile object is still open, so tempfile.size and subsequent reads can see the original large file instead of the downsampled one. WHY: If ImageMagick writes to a new inode and renames it into place, the loop guard and Upload.create_for receive stale size/content and the automatic downsizing effectively does nothing. HOW: downsample to a separate temp path, then replace the original and reopen/rewind the Tempfile, or use File.size(tempfile.path) and read from the path after downsizing."
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
+   "source": "lean:muse",
+   "finding": {
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 26,
+    "suggestionContent": "WHAT: migration interpolates raw site_settings value h directly into INSERT string ('#{h}'). WHY: a stored host containing a quote breaks the migration and gives SQL injection from an admin-controlled setting value into schema-migration SQL. HOW: quote/sanitize values or insert via parameterized exec / model create."
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
+   "source": "lean:opus",
+   "finding": {
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 86,
+    "relevantLinesEnd": 96,
+    "suggestionContent": "get_committable_offsets only moves forward while every offset in the range is present in all_offsets, so it stops at any offset that was never delivered. Kafka partitions can have legitimate offset gaps (transaction control markers, log compaction), so after one gap the partition never commits again and the consumer lag grows forever. Fix: track offsets in submission order (for example, an ordered deque per partition) and commit up to the last completed offset that has no earlier outstanding entry, rather than requiring numerically contiguous offsets."
+   }
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:ds",
+   "finding": {
+    "relevantFile": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+    "relevantLinesStart": 252,
+    "relevantLinesEnd": 256,
+    "suggestionContent": "WHAT: getLoginPredicate() now adds 'idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC))', but this shared SPI predicate is also consumed by IdentityProviderBean.federatedProviderPredicate() (services/.../IdentityProviderBean.java:226). WHY: That predicate is applied in getFederatedIdentityProviders() to the aliases of the user's already-linked federated identities, so any IDP linked to an organization whose BROKER_PUBLIC is not \"true\" is now silently filtered out of the linked/federated IDP list shown at login/account-linking — a behavioral regression for a caller that has nothing to do with the login-cache invalidation this clause was added for. HOW: Keep the login-availability clause out of the shared SPI predicate; either add a dedicated predicate (e.g. getLoginCachePredicate()) used only by the Infinispan invalidation code, or have IdentityProviderBean use the original enabled/linkOnly/hideOnLogin predicate."
+   }
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 8,
+    "suggestionContent": "The client-side unsubscribe route only calls PostStream.loadTopicView, which fetches the ordinary topic JSON endpoint rather than invoking the unsubscribe action. A client-side transition to this route displays the unsubscribe confirmation while leaving the notification level unchanged; only a full server request currently changes it. Have the route perform the preference-changing request before showing success, or require an explicit submission on this page."
+   }
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "relevantLinesStart": 56,
+    "relevantLinesEnd": 74,
+    "suggestionContent": "Successful cancellation rows are not deleted until every SendGrid request in the loop succeeds, and one rejection exits the entire loop. If a later request fails, earlier successfully cancelled batches remain in the database; the next run POSTs cancellation again for those batches, which SendGrid rejects with 400 for an already-cancelled batch, preventing later reminders from being cancelled before delivery. Handle errors per reminder and persist each successful cancellation's deletion before proceeding to the next reminder, treating an already-cancelled provider status idempotently."
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 92,
+    "relevantLinesEnd": 106,
+    "suggestionContent": "WHAT: new attendees are inserted without checking booking.eventType.seatsPerTimeSlot and without creating BookingSeat records. WHY: the existing seat-capacity guard in createNewSeat.ts counts attendees with a bookingSeat relation, so this endpoint can overbook seated events by adding guests that bypass the limit. HOW: before the prisma.booking.update createMany, reject the request when seatsPerTimeSlot is set and the resulting attendee count would exceed it, and create BookingSeat records for seated guests so they are counted consistently."
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "app/models/embeddable_host.rb",
+    "relevantLinesStart": 10,
+    "relevantLinesEnd": 18,
+    "suggestionContent": "WHAT: The host validation regex and before_validation allow a port in the stored host, but record_for_host compares only uri.host against the stored value. WHY: A host stored as example.com:8080 will not match a referer like http://example.com:8080/ because the lookup strips the port, incorrectly rejecting embeds. HOW: Either strip the port during before_validation so only hostnames are stored, or include uri.port in the lookup key."
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 117,
+    "relevantLinesEnd": 124,
+    "suggestionContent": "The override bounds check only rejects disjoint slots rather than requiring the entire event to fit inside the override. For a 10:00–11:00 override, a 09:30–10:30 or 10:30–11:30 event passes, and a slot starting exactly at 11:00 also passes. Require slotStartTime >= override start and slotEndTime <= override end."
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:opus",
+   "finding": {
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 9,
+    "relevantLinesEnd": 11,
+    "suggestionContent": "`execute(...)[0]['id']` raises NoMethodError on nil when no `embed_category` row exists in site_settings, or when its value does not match a category name. That is the default case on most sites, so the migration aborts and blocks the deploy. Check `ntuples > 0` before indexing the result and fall back to uncategorized."
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "security",
+   "label": "security",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "relevantLinesStart": 78,
+    "relevantLinesEnd": 79,
+    "suggestionContent": "The global canView() grant bypasses evaluation of explicit permissions on the requested client. With an all-clients VIEW grant and a per-client denial, this branch authorizes the denied client; ClientsResource.getClients() also uses the global result to bypass all per-client checks. Evaluate the concrete client resource before falling back to the all-clients resource, and do not expose a global listing shortcut when individual denials must be honored."
+   }
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "caseId": "notification-rule-processing-engine-grafana-codex",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "relevantLinesStart": 92,
+    "relevantLinesEnd": 105,
+    "suggestionContent": "`RuleActionsButtons.V2` wires `AlertRuleMenu.handleSilence` to open the silence drawer, but the `SilenceGrafanaRuleDrawer` is only rendered when `rulerRuleType.grafana.alertingRule(rule)` is true (line 104). In the list view `rule` is undefined, so clicking Silence in the menu does nothing. Render the drawer when the Grafana prom rule is an alerting rule and provide the necessary rule data."
+   }
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+   "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
+   "source": "inventory:gpt-6.1-sol|add-html-sanitizer-for-translated-message-resources-keycloak|S4",
+   "finding": {
+    "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "relevantLinesStart": 124,
+    "relevantLinesEnd": 126,
+    "suggestionContent": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+   }
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#muse13-01",
+   "caseId": "database-performance-optimizations-grafana-codex",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "concurrency",
+   "label": "bug",
+   "source": "round:muse13/classif-in.json:muse-muse13:S3",
+   "finding": {
+    "relevantFile": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "relevantLinesStart": 548,
+    "relevantLinesEnd": 558,
+    "suggestionContent": "WHAT: MaxCount cleanup fetches victim IDs with LIMIT/OFFSET then deletes them in a separate statement with no transaction. WHY: Concurrent deletion of newer rows between fetch and delete shifts the OFFSET window, so a fetched ID can slide back into the top-MaxCount set that must be kept yet still gets deleted. HOW: Re-check membership or perform the delete atomically if exact MaxCount retention is required."
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:ds20",
+   "finding": {
+    "relevantFile": "packages/trpc/server/routers/viewer/slots.ts",
+    "relevantLinesStart": 105,
+    "relevantLinesEnd": 127,
+    "suggestionContent": "The `.find` predicate returns a truthy value to mean \"slot is outside this override\" (= reject), but when a slot lies inside override A the predicate returns undefined and `.find` continues scanning; if a second override B exists on the same day and the slot is outside B, the predicate returns true and the valid slot is wrongly rejected. Multiple time ranges per day are supported for a user's date overrides, so this drops legitimate availability. Fix: mark the slot available (and stop scanning) as soon as it is found inside any same-day override, rather than relying on `.find` continuing."
+   }
+  }
+ ]
+}

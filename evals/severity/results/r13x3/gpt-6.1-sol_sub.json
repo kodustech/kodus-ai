@@ -1,0 +1,2304 @@
+{
+ "model": "gpt-6.1-sol@sub",
+ "prompt": "r13",
+ "perLevel": {
+  "low": {
+   "n": 50,
+   "right": 43,
+   "got": {
+    "low": 43,
+    "medium": 7,
+    "high": 0,
+    "critical": 0
+   }
+  },
+  "medium": {
+   "n": 70,
+   "right": 65,
+   "got": {
+    "low": 1,
+    "medium": 65,
+    "high": 4,
+    "critical": 0
+   }
+  },
+  "high": {
+   "n": 50,
+   "right": 40,
+   "got": {
+    "low": 1,
+    "medium": 9,
+    "high": 40,
+    "critical": 0
+   }
+  },
+  "critical": {
+   "n": 35,
+   "right": 35,
+   "got": {
+    "low": 0,
+    "medium": 0,
+    "high": 2,
+    "critical": 33
+   }
+  }
+ },
+ "unmeasured": 0,
+ "rows": [
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20850
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20850
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20850
+  },
+  {
+   "issueId": "frontend-asset-optimization-grafana-codex#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 24054
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 32205
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 32205
+  },
+  {
+   "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 32205
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 39208
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 32760
+  },
+  {
+   "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 32760
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35863
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35863
+  },
+  {
+   "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35863
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 19584
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19584
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19584
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19584
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 9919
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 9919
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 9919
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 9919
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 9919
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 5798
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 5798
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 5798
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "low",
+    "medium"
+   ],
+   "ms": 10879
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 10879
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 10879
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 10879
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20966
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 18978
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 18978
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 18978
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 20551
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20551
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "high"
+   ],
+   "ms": 20551
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20551
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 20551
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 7526
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 7526
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 7526
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 7526
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 7526
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#10",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 64074
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 64074
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 64074
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 64074
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 23966
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 23966
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 17168
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 17168
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#04",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 21887
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#15",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 21887
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 21887
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 21887
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 7250
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 33339
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 33339
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 33339
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 33339
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "low",
+    "medium",
+    "medium"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "medium",
+    "high",
+    "high"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 37887
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 44365
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 44365
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "gold": "high",
+   "got": "low",
+   "votes": [
+    "low",
+    "high",
+    "low"
+   ],
+   "ms": 44365
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 33897
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 33897
+  },
+  {
+   "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 33897
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 22691
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 22691
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 22691
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 13642
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 13642
+  },
+  {
+   "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 30568
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 54538
+  },
+  {
+   "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 29287
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 25411
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25411
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25411
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25411
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 25411
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 42553
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 42553
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 42553
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 42553
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30866
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 30866
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "medium",
+    "high"
+   ],
+   "ms": 30866
+  },
+  {
+   "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "high",
+    "medium",
+    "medium"
+   ],
+   "ms": 30866
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 48626
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#musep-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 38020
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "gold": "medium",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 35139
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "gold": "low",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "low",
+    "medium"
+   ],
+   "ms": 35342
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 15005
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 23489
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "medium",
+    "high",
+    "high"
+   ],
+   "ms": 23489
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 23489
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 23489
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 23489
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "gold": "medium",
+   "got": "high",
+   "votes": [
+    "medium",
+    "high",
+    "high"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 28838
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 34693
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 34693
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 34693
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 34693
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 34693
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19817
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19817
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 19817
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 19817
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 31142
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "gold": "medium",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "ms": 31142
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 31142
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "medium",
+    "high",
+    "high"
+   ],
+   "ms": 31142
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 8518
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "gold": "high",
+   "got": "medium",
+   "votes": [
+    "medium",
+    "high",
+    "medium"
+   ],
+   "ms": 16480
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#03",
+   "gold": "high",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "high"
+   ],
+   "ms": 6795
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#02",
+   "gold": "low",
+   "got": "low",
+   "votes": [
+    "low",
+    "low",
+    "low"
+   ],
+   "ms": 6796
+  },
+  {
+   "issueId": "synthetic-critical#04",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3300
+  },
+  {
+   "issueId": "synthetic-critical#03",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4110
+  },
+  {
+   "issueId": "synthetic-critical#05",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3485
+  },
+  {
+   "issueId": "synthetic-critical#07",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3307
+  },
+  {
+   "issueId": "synthetic-critical#06",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3728
+  },
+  {
+   "issueId": "synthetic-critical#08",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3100
+  },
+  {
+   "issueId": "synthetic-critical#11",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3314
+  },
+  {
+   "issueId": "synthetic-critical#12",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4150
+  },
+  {
+   "issueId": "synthetic-critical#13",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 5037
+  },
+  {
+   "issueId": "synthetic-critical#09",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 7977
+  },
+  {
+   "issueId": "synthetic-critical#17",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3810
+  },
+  {
+   "issueId": "synthetic-critical#14",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 5669
+  },
+  {
+   "issueId": "synthetic-critical#18",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3988
+  },
+  {
+   "issueId": "synthetic-critical#19",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3901
+  },
+  {
+   "issueId": "synthetic-critical#20",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4775
+  },
+  {
+   "issueId": "synthetic-critical#24",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3485
+  },
+  {
+   "issueId": "synthetic-critical#22",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4953
+  },
+  {
+   "issueId": "synthetic-critical#23",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 5322
+  },
+  {
+   "issueId": "synthetic-critical#25",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3281
+  },
+  {
+   "issueId": "synthetic-critical#26",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3884
+  },
+  {
+   "issueId": "synthetic-critical#28",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 2945
+  },
+  {
+   "issueId": "synthetic-critical#27",
+   "gold": "critical",
+   "got": "high",
+   "votes": [
+    "high",
+    "high",
+    "critical"
+   ],
+   "ms": 4521
+  },
+  {
+   "issueId": "synthetic-critical#29",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3024
+  },
+  {
+   "issueId": "synthetic-critical#30",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3510
+  },
+  {
+   "issueId": "synthetic-critical#32",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4029
+  },
+  {
+   "issueId": "synthetic-critical#34",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4886
+  },
+  {
+   "issueId": "synthetic-critical#35",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4167
+  },
+  {
+   "issueId": "synthetic-critical#36",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3322
+  },
+  {
+   "issueId": "synthetic-critical#37",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 4527
+  },
+  {
+   "issueId": "synthetic-critical#39",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 3707
+  },
+  {
+   "issueId": "synthetic-critical#38",
+   "gold": "critical",
+   "got": "critical",
+   "votes": [
+    "critical",
+    "critical",
+    "critical"
+   ],
+   "ms": 6855
+  }
+ ]
+}

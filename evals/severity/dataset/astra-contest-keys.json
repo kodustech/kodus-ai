@@ -1,0 +1,13 @@
+{
+ "A1": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
+ "A2": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+ "A3": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+ "A4": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+ "T1": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+ "W1": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+ "W2": "feature-automatically-downsize-large-images-discourse-cursor#03",
+ "W3": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+ "Q1": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+ "S1": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+ "R1": "implement-recovery-key-support-for-user-storage-providers-keycloak#05"
+}

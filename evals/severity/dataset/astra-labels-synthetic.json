@@ -1,0 +1,242 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#09": {
+  "severity": "high",
+  "reason": "Returning an unparsed Response breaks callers on the supported credential-sharing path, making that operational path unusable."
+ },
+ "synthetic-critical#36": {
+  "severity": "critical",
+  "reason": "An attacker can authenticate as any user with a self-signed token, providing a concrete authentication bypass without a valid factor."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01": {
+  "severity": "medium",
+  "reason": "Slots extending beyond working hours are incorrectly displayed as available, which is wrong secondary output without demonstrated acceptance of an ineligible booking."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03": {
+  "severity": "high",
+  "reason": "Repeated restarts eventually crash the consumer, meeting the clause for a supported operational path becoming unusable."
+ },
+ "synthetic-critical#17": {
+  "severity": "critical",
+  "reason": "A guessed public-prefix string authenticates as another user without a valid key, providing a concrete authentication-factor bypass."
+ },
+ "synthetic-critical#07": {
+  "severity": "critical",
+  "reason": "A view-only user can create users with realm-admin privileges, enabling broad unauthorized administration."
+ },
+ "synthetic-critical#29": {
+  "severity": "critical",
+  "reason": "An uploader-controlled filename executes shell commands as the application user, meeting the attacker-controlled server execution clause."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#09": {
+  "severity": "high",
+  "reason": "Persisted guests fail to reach the calendar and retries are rejected, breaking an essential durable calendar integration effect."
+ },
+ "synthetic-critical#38": {
+  "severity": "critical",
+  "reason": "Changing federation attributes lets a user log in as an administrator, enabling broad unauthorized administration through a concrete impersonation path."
+ },
+ "synthetic-critical#16": {
+  "severity": "high",
+  "reason": "Unsigned webhook requests can alter an organization's repository links or resolve its issues, bypassing a material security control."
+ },
+ "synthetic-critical#01": {
+  "severity": "high",
+  "reason": "A user who has passed the password step can bypass required OTP verification, bypassing a material security control while already holding a valid factor."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01": {
+  "severity": "high",
+  "reason": "A legitimate Kafka offset gap permanently prevents partition commits, making the supported commit path unusable for valid inputs."
+ },
+ "synthetic-critical#32": {
+  "severity": "critical",
+  "reason": "An arbitrary TOTP value bypasses both password and OTP checks, providing a concrete authentication bypass without any valid factor."
+ },
+ "synthetic-critical#19": {
+  "severity": "critical",
+  "reason": "Delivery failures leave entire email batches permanently marked sent without delivery, meeting the systemic loss clause for work silently marked done without processing."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#06": {
+  "severity": "high",
+  "reason": "Two unrelated infrastructure failures permanently delete a pending reminder, meeting the clause for operational data being wrongly destroyed."
+ },
+ "synthetic-critical#05": {
+  "severity": "critical",
+  "reason": "An editor-controlled template executes shell commands on the server, meeting the critical clause for attacker-controlled server execution."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#10": {
+  "severity": "high",
+  "reason": "Persisting the parse wrapper corrupts credentials and breaks Google Calendar integration, meeting the high clause for failure of an essential durable effect."
+ },
+ "synthetic-critical#22": {
+  "severity": "critical",
+  "reason": "A user-controlled webhook template executes code on the server when a booking fires, meeting the critical clause for attacker-controlled server execution."
+ },
+ "synthetic-critical#12": {
+  "severity": "critical",
+  "reason": "A member can promote a second account to owner and take over the team, meeting the critical clause for broad unauthorized administration."
+ },
+ "synthetic-critical#04": {
+  "severity": "critical",
+  "reason": "An ordinary member can directly promote themselves to organization owner, meeting the critical clause for broad unauthorized administration."
+ },
+ "synthetic-critical#15": {
+  "severity": "high",
+  "reason": "Upgrading deletes every organization's alert rules, meeting the high clause for operational data being wrongly destroyed."
+ },
+ "synthetic-critical#10": {
+  "severity": "high",
+  "reason": "Unauthenticated path traversal exposes database credentials and the session-signing secret, meeting the high clause for bypassing a material security control."
+ },
+ "synthetic-critical#14": {
+  "severity": "critical",
+  "reason": "An attacker-controlled page title becomes executable script in readers' browsers, meeting the critical clause for attacker-controlled browser execution."
+ },
+ "synthetic-critical#25": {
+  "severity": "critical",
+  "reason": "Committing offsets before processing permanently loses every recording segment during pool failures, meeting the critical clause for systemic destructive loss of a continuing work stream."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04": {
+  "severity": "high",
+  "reason": "Unnormalized migrated host values disable the supported embedding path after upgrade, meeting the high clause for an operational path becoming unusable for valid inputs."
+ },
+ "synthetic-critical#26": {
+  "severity": "critical",
+  "reason": "An editor-controlled panel executes JavaScript in viewers' browsers with their sessions, meeting the critical clause for attacker-controlled browser execution."
+ },
+ "synthetic-critical#23": {
+  "severity": "critical",
+  "reason": "An attacker can use their own reset flow to change the admin's password and log in as admin, meeting the critical clause for broad unauthorized administration."
+ },
+ "synthetic-critical#18": {
+  "severity": "critical",
+  "reason": "A realm admin can execute server commands through a custom-message template, meeting the critical clause for attacker-controlled server execution."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01": {
+  "severity": "high",
+  "reason": "A principal with only VIEW permission can create top-level groups, meeting the high clause for bypassing a material security control."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04": {
+  "severity": "high",
+  "reason": "Valid V2-only group permissions cannot retrieve or count group members through the supported search paths, meeting the high clause for an operational path becoming unusable for valid inputs."
+ },
+ "synthetic-critical#24": {
+  "severity": "critical",
+  "reason": "Any logged-in user can modify arbitrary site settings, providing a concrete path to broad unauthorized administration."
+ },
+ "synthetic-critical#27": {
+  "severity": "critical",
+  "reason": "Any logged-in user can permanently delete arbitrary accounts and their associated data, constituting broad unauthorized administration."
+ },
+ "synthetic-critical#08": {
+  "severity": "critical",
+  "reason": "A crafted OAuth callback state executes arbitrary JavaScript on the server, meeting the attacker-controlled server execution clause."
+ },
+ "synthetic-critical#39": {
+  "severity": "critical",
+  "reason": "An attacker-supplied breadcrumb executes JavaScript in issue viewers’ sessions, meeting the attacker-controlled browser execution clause."
+ },
+ "synthetic-critical#13": {
+  "severity": "critical",
+  "reason": "Forged unsigned tokens authenticate arbitrary identities and admin roles without a valid factor, meeting the authentication-factor bypass and broad unauthorized administration clauses."
+ },
+ "synthetic-critical#28": {
+  "severity": "critical",
+  "reason": "An attacker’s unregistered security key authenticates them as another user without any valid factor for that account, meeting the authentication-factor bypass clause."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08": {
+  "severity": "high",
+  "reason": "An unapproved email domain is accepted for registration, bypassing a material security admission control."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12": {
+  "severity": "high",
+  "reason": "Calendar updates overwrite required calendar and credential linkages with undefined values, breaking an essential durable calendar integration effect."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04": {
+  "severity": "high",
+  "reason": "Existing providers cause initialization to crash, making a supported operational path unusable for valid inputs."
+ },
+ "synthetic-critical#20": {
+  "severity": "critical",
+  "reason": "Organization admins gain server-wide user, password and privilege management, providing a concrete path to broad unauthorized administration."
+ },
+ "synthetic-critical#03": {
+  "severity": "critical",
+  "reason": "Unsanitized user bios execute attacker-supplied JavaScript in visitors’ browsers, meeting the attacker-controlled browser execution clause."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02": {
+  "severity": "high",
+  "reason": "Added guests are accepted beyond seated-event capacity, bypassing the explicit seat-cap admission control."
+ },
+ "synthetic-critical#37": {
+  "severity": "critical",
+  "reason": "Every failing reminder run permanently marks unsent work complete without retry, meeting the systemic loss of a continuing work stream clause."
+ },
+ "synthetic-critical#02": {
+  "severity": "high",
+  "reason": "Concrete SQL injection permits reading all users’ bookings and credentials, bypassing material security access controls."
+ },
+ "synthetic-critical#40": {
+  "severity": "high",
+  "reason": "Deleting an account permanently destroys other users’ replies in its topics, meeting the wrongful destruction of operational data clause."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#07": {
+  "severity": "high",
+  "reason": "Overwriting the valid refresh token permanently breaks subsequent calendar authentication, making a supported operational path unusable."
+ },
+ "synthetic-critical#21": {
+  "severity": "high",
+  "reason": "A password holder can bypass required 2FA and obtain a full session, bypassing a material security control without meeting the critical requirement of holding no valid factor."
+ },
+ "synthetic-critical#35": {
+  "severity": "critical",
+  "reason": "Any user can grant themselves site administrator privileges through the update endpoint, providing a concrete path to broad unauthorized administration."
+ },
+ "synthetic-critical#34": {
+  "severity": "critical",
+  "reason": "Cache unavailability causes all incoming events to be acknowledged and discarded, constituting systemic destructive loss of a continuing work stream."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08": {
+  "severity": "high",
+  "reason": "Collective bookings omit team members' destination calendars, failing an essential durable calendar integration effect."
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10": {
+  "severity": "high",
+  "reason": "The client-side unsubscribe route never changes the notification preference, making an identified supported UI path unusable."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01": {
+  "severity": "high",
+  "reason": "Hosts can actually be booked outside their override hours, bypassing the admission control for permitted booking windows."
+ },
+ "dual-storage-architecture-grafana-codex#06": {
+  "severity": "high",
+  "reason": "Recomputing the patch against stale legacy data can fail or persist a different playlist update after the unified commit, breaking an essential durable record update."
+ },
+ "synthetic-critical#31": {
+  "severity": "high",
+  "reason": "Request-controlled SQL injection lets viewers retrieve users' credential secrets, bypassing a material security control without demonstrating broad unauthorized administration."
+ },
+ "synthetic-critical#09": {
+  "severity": "critical",
+  "reason": "An arbitrary invalid token and a victim's email produce an authenticated session without any valid factor, establishing a concrete authentication-factor bypass."
+ },
+ "synthetic-critical#30": {
+  "severity": "critical",
+  "reason": "A token from one organization permits changes to every other organization's projects, members and settings, enabling broad unauthorized administration."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#09": {
+  "severity": "medium",
+  "reason": "Stale file descriptors can make automatic downsizing ineffective, a meaningful bounded defect without a stated failure of the upload path."
+ },
+ "synthetic-critical#33": {
+  "severity": "high",
+  "reason": "Request-controlled JPQL injection exposes cross-realm users and credential hashes, bypassing a material security control."
+ },
+ "synthetic-critical#11": {
+  "severity": "critical",
+  "reason": "Project admins can submit crafted pickle data that workers deserialize, providing a concrete path to attacker-controlled server execution."
+ },
+ "synthetic-critical#06": {
+  "severity": "critical",
+  "reason": "Processing failures acknowledge and delete unprocessed batches repeatedly while the error persists, causing systemic destructive loss of a continuing work stream."
+ }
+}

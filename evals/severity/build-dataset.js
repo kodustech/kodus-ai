@@ -76,6 +76,12 @@ for (const [key, issueId] of Object.entries(read(`${V3}/sugestoes.json`).sugesto
     if (g && !lean.has(issueId)) add(issueId, `inventory:${key}`, g.file, g.lines, g.texto);
 }
 
+module.exports = { real, texts, shuffle, LABEL };
+// The dataset was relabelled from its texts (astra-label.js) and grew (extend-dataset.js):
+// re-running the draw would discard both, so it only runs when asked.
+if (require.main === module && process.argv.includes('--rebuild')) draw();
+
+function draw() {
 // Sample per level; one suggestion per problem, drawn seeded.
 const items = [];
 const missing = {};
@@ -93,3 +99,4 @@ fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'items.json'), JSON.stringify({ seed: SEED, items }, null, 1));
 const count = (k) => items.reduce((o, x) => ((o[x[k]] = (o[x[k]] || 0) + 1), o), {});
 console.log('severity', count('severity'), 'class_reviewed', count('classReviewed'), 'without a suggestion text', missing);
+}

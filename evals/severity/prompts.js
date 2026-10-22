@@ -123,9 +123,9 @@ const ANCHORS = require('./dataset/anchors.json').anchors;
 const REAL_EXAMPLES = `Examples from past reviews, with the severity they were given:
 ${ANCHORS.map((a) => `- "${a.text}" -> ${a.severity}`).join('\n')}`;
 
-// Test 15: the level definitions agreed from gold v3 (definitions.md), with examples that follow them.
-const DEFS = require('fs').readFileSync(path.join(__dirname, 'definitions.md'), 'utf8')
-    .replace(' Internally refuted findings need validity review.', '').trim();
+// Test 15: the level definitions agreed from gold v3, frozen as they ran (definitions-r12.md), with examples that follow them.
+const defsOf = (f) => require('fs').readFileSync(path.join(__dirname, f), 'utf8').replace(' Internally refuted findings need validity review.', '').trim();
+const DEFS = defsOf('definitions-r12.md');
 const DEFS_RULE = `Rate the problem as the comment states it. Assume what it claims is true and rate how bad that would be; do not try to decide whether the claim is correct. Do not raise the severity because the comment uses alarming words, and do not lower it because the fix is small.`;
 const DEFS_EXAMPLES = `Examples (invented, for calibration only):
 - "The helper is still named loadXml although it now reads JSON." -> low
@@ -139,7 +139,31 @@ const DEFS_EXAMPLES = `Examples (invented, for calibration only):
 - "A viewer can call the endpoint that grants administrator access." -> critical
 - "An uploaded filename is passed to a shell command without escaping." -> critical`;
 
+// Test 16: the final definitions (definitions.md: logs low, development-only CI medium, latent
+// at most medium, asserted exploits rated by the weakness), labels from the text, 205 items.
+const FINAL_RULE = `Rate the problem as the comment states it. Take its facts about the code as true and rate how bad the stated consequence would be; do not try to decide whether the claim is correct. An attack the comment only asserts, without showing how it is carried out, counts as the weakness. Do not raise the severity because the comment uses alarming words, and do not lower it because the fix is small.`;
+const FINAL_EXAMPLES = `Examples (invented, for calibration only):
+- "The helper is still named loadXml although it now reads JSON." -> low
+- "The delete handler logs without the request-scoped fields, so its lines lack the user id." -> low (log content)
+- "The new sorting branch has no test." -> medium (the change adds that behavior)
+- "The unused import fails the lint step in CI." -> medium (blocks development only)
+- "The secret is compared with !==, which leaks timing; an attacker could recover it." -> medium (asserted exploit, rated by the weakness)
+- "On shutdown the last offsets are not committed, so those messages are processed again." -> medium (re-processed, not lost)
+- "Two concurrent sign-ups can both pass the seat count, so the team ends up over its seat limit." -> high (admission cap bypassed; concurrency does not lower it)
+- "Users without a billing profile get a 500 on the settings page." -> high
+- "A viewer can call the endpoint that grants administrator access." -> critical
+- "A failed send still marks every job of the batch as done, so they are never retried." -> critical (work marked done without being processed)`;
+
 module.exports = {
+    r13: { describe: 'Definição final (definitions.md), regra de exploit afirmado, exemplos alinhados; 205 itens rotulados pelo texto.', build: (items) => [
+        'Assign each code review comment below one severity: low, medium, high or critical. Return one item per comment index.',
+        FINAL_RULE,
+        defsOf('definitions.md'),
+        FINAL_EXAMPLES,
+        'Comments:',
+        items.map((x, i) => block(x, i, {})).join('\n\n'),
+        OUTPUT,
+    ].join('\n\n') },
     r12: { describe: 'Definições acordadas no gold v3 (definitions.md), com exemplos alinhados a elas.', build: (items) => [
         'Assign each code review comment below one severity: low, medium, high or critical. Return one item per comment index.',
         DEFS_RULE,
