@@ -11,6 +11,9 @@
  * --no-ref grades without the Astra reference, as a production gate would:
  * the judge sees only the finding, the cited code, the file window and the answer.
  *
+ * Groups: mustFix items (a correct fix fits the cited lines and the input
+ * shows enough) are graded on the fix; every other item is graded on giving
+ * no code (any fixStatus but "local").
  * Deterministic: the title format, whether an abstention was acceptable, and
  * the syntax of the whole head file with the cited lines replaced (TS/JS,
  * Ruby, Python; other languages are reported as not checked).
@@ -37,7 +40,8 @@ const args = process.argv.slice(2);
 const JUDGE_MODEL = (args.find((a) => a.startsWith('--judge=')) || '--judge=claude-opus-5.5@api').slice(8);
 const NO_REF = args.includes('--no-ref');
 const REFS_FILE = (args.find((a) => a.startsWith('--refs=')) || '').slice(7);
-const TAG = [JUDGE_MODEL === 'claude-opus-5.5@api' ? '' : JUDGE_MODEL.replace(/[@/]/g, '_'), NO_REF ? 'noref' : '', REFS_FILE ? (REFS_FILE.endsWith('-tools.json') ? 'selfref-tools' : 'selfref') : ''].filter(Boolean).join('-');
+// Opus judges by API or, when the API is out of quota, by subscription: same judge, same files and cache.
+const TAG = [/^claude-opus-5\.5@(api|sdk)$/.test(JUDGE_MODEL) ? '' : JUDGE_MODEL.replace(/[@/]/g, '_'), NO_REF ? 'noref' : '', REFS_FILE ? (REFS_FILE.endsWith('-tools.json') ? 'selfref-tools' : 'selfref') : ''].filter(Boolean).join('-');
 const selfRefs = REFS_FILE ? new Map(JSON.parse(fs.readFileSync(REFS_FILE, 'utf8')).items.map((r) => [r.issueId, r])) : null;
 const files = args.filter((a) => !a.startsWith('--'));
 const PAR = Number((args.find((a) => a.startsWith('--par=')) || '--par=6').split('=')[1]);
@@ -185,6 +189,8 @@ function summarize(res) {
     const pass = local.filter((r) => g(r).judge?.fix === 'PASS');
     const must = R.filter((r) => g(r).mustFix);
     const abstainOnMust = must.filter((r) => r.result && r.result.fixStatus !== 'local');
+    // Items with no correct fix inside the cited lines: the right answer is no code.
+    const noFix = R.filter((r) => !g(r).mustFix);
     const syn = local.filter((r) => g(r).syntaxOk !== null);
     const sum = (k) => R.reduce((s, r) => s + (r.usage?.[k] || 0), 0);
     return {
@@ -196,6 +202,7 @@ function summarize(res) {
         unassessable: local.filter((r) => g(r).judge?.fix === 'UNASSESSABLE').length,
         'fix on mustFix': pct(must.filter((r) => g(r).judge?.fix === 'PASS').length, must.length),
         'abstain on mustFix': `${abstainOnMust.length}/${must.length}`,
+        'no code on noFix': pct(noFix.filter((r) => r.result && r.result.fixStatus !== 'local').length, noFix.length),
         abstain: Object.entries(R.reduce((m, r) => (r.result && r.result.fixStatus !== 'local' ? ((m[r.result.fixStatus] = (m[r.result.fixStatus] || 0) + 1), m) : m), {})).map(([k, v]) => `${k}:${v}`).join(' ') || '-',
         'syntax ok': `${syn.filter((r) => g(r).syntaxOk).length}/${syn.length}`,
         'title fmt': pct(R.filter((r) => g(r).titleFormatOk).length, n),

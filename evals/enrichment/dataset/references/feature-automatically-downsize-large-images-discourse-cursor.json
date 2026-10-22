@@ -42,6 +42,50 @@
    ],
    "exampleFix": "      # allow users to upload large images that will be automatically reduced to allowed size\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)\n        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n          tempfile.open\n          attempt -= 1\n        end\n      end",
    "notes": "The gold description's infinite-loop claim is incorrect: attempt bounds execution to five iterations. The issue is a stale file descriptor, not cached size. Tempfile#open reopens the pathname without truncation and resets position; rewind alone or changing only the loop's size check is insufficient."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+   "defectStatement": "FileHelper.is_image? includes SVG, so oversized SVG uploads enter the raster downsizing loop. Rewriting the vector file can rasterize or corrupt it before Upload.create_for attempts to parse it as SVG.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Exclude SVG filenames from automatic raster downsizing, case-insensitively.",
+    "Preserve the existing downsizing eligibility and loop for other image formats.",
+    "Leave SVG bytes intact for normal upload parsing and validation."
+   ],
+   "exampleFix": "      # allow users to upload large raster images that will be automatically reduced to allowed size\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename) && filename !~ /\\.svg$/i\n        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)",
+   "notes": "The replacement deliberately leaves the loop decrement and closing ends outside the anchor unchanged. Oversized SVGs can still be rejected by normal upload validation."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "defectStatement": "The upload loop supplies \"80%\" to downsizing, but the animated GIF backend passes that value to gifsicle --resize-fit, which requires pixel geometry. Animated downsizing therefore fails, and the ignored failure is retried up to five times.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Supply valid positive pixel geometry when using the animated backend.",
+    "Calculate successive reductions from the current image dimensions.",
+    "Preserve the configured size threshold, animation option, and bounded attempts.",
+    "Stop retrying when dimensions cannot be read or downsizing fails."
+   ],
+   "exampleFix": "      # allow users to upload large images that will be automatically reduced to allowed size\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)\n        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          image_size = FastImage.size(tempfile.path) rescue nil\n          break unless image_size && image_size.all? { |dimension| dimension && dimension > 0 }\n          dimensions = image_size.map { |dimension| [(dimension * 0.8).floor, 1].max }.join(\"x\")\n          break unless OptimizedImage.downsize(tempfile.path, tempfile.path, dimensions, allow_animation: SiteSetting.allow_animated_thumbnails)\n          attempt -= 1\n        end",
+   "notes": "The repository confirms FastImage.size and the boolean downsizing result; their contracts are absent from this item's frozen input. Do not assume percentage geometry is universally invalid for ImageMagick. GIF suffix detection is a separate defect."
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "defectStatement": "When an uploaded GIF's tempfile path lacks a .gif suffix, OptimizedImage.optimize selects its static converter despite allow_animation being enabled. That converter reads only frame zero, permanently flattening the oversized animation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Select animated processing for GIF uploads when animation is enabled, regardless of the incoming tempfile suffix.",
+    "Preserve the animation while reducing its dimensions.",
+    "Make the successfully processed bytes available through the original upload tempfile.",
+    "Clean up any additional temporary file on success or failure."
+   ],
+   "exampleFix": "          if SiteSetting.allow_animated_thumbnails && filename =~ /\\.gif$/i\n            animation_file = Tempfile.new([\"discourse-upload-animation\", \".gif\"])\n            begin\n              FileUtils.cp(tempfile.path, animation_file.path)\n              image_size = FastImage.size(animation_file.path) rescue nil\n              break unless image_size && image_size.all? { |dimension| dimension && dimension > 0 }\n              dimensions = image_size.map { |dimension| [(dimension * 0.8).floor, 1].max }.join(\"x\")\n              break unless OptimizedImage.downsize(animation_file.path, animation_file.path, dimensions, allow_animation: true)\n              FileUtils.cp(animation_file.path, tempfile.path)\n            ensure\n              animation_file.close!\n            end\n          else\n            OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n          end",
+   "notes": "A one-line anchor may be replaced by multiple statements. This example also supplies pixel geometry because enabling gifsicle exposes #03; that backend requirement and the dimension-reading API are absent from this item's frozen input. Passing a new format option alone would require changing the optimizer."
   }
  ]
 }

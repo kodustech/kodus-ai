@@ -103,6 +103,63 @@
    ],
    "exampleFix": "            except Exception:\n                logger.exception(\n                    \"Unexpected error in queue worker\", extra={\"worker_id\": self.worker_id}\n                )\n            else:\n                self.offset_tracker.complete_offset(work_item.partition, work_item.offset)\n            finally:\n",
    "notes": "The trailing finally owns the unchanged metrics.gauge block immediately after the anchor. Moving completion into else avoids needing a success flag outside the replacement range."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+   "defectStatement": "terminate() signals the commit thread but does not wait for it to exit, allowing its current iteration or an in-flight commit callback to outlive termination. The loop does eventually observe the event; the defect is the missing synchronization, not indefinite continued looping.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Signal the commit thread to stop.",
+    "Ensure the commit thread has exited before terminate returns normally.",
+    "Preserve shutdown of the queue pool."
+   ],
+   "exampleFix": "    def terminate(self) -> None:\n        self.shutdown_event.set()\n        self.commit_thread.join()\n        self.queue_pool.shutdown()",
+   "notes": "An unchecked timed join can still return with a live commit thread. Joining prevents commits after termination returns; preventing every commit after the event is signaled would additionally require changes to the commit loop."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "defectStatement": "Each worker reports its own queue depth with only the shared identifier tag, causing different queues to write to the same gauge series. The reported depth consequently reflects whichever worker reported last.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Distinguish individual workers' queue-depth metric series.",
+    "Preserve the metric name, queue-size value, and identifier tag."
+   ],
+   "exampleFix": "                metrics.gauge(\n                    \"remote_subscriptions.queue_worker.queue_depth\",\n                    self.work_queue.qsize(),\n                    tags={\n                        \"identifier\": self.identifier,\n                        \"worker_id\": str(self.worker_id),\n                    },\n                )",
+   "notes": "Use the stable worker index, not a per-message identifier."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "defectStatement": "close() stops the commit thread before workers finish, leaving later completions uncommitted. Separately, FixedQueuePool.shutdown() sets worker stop flags before draining their queues, so graceful shutdown can abandon queued work and cause replay.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow accepted queued work and in-flight processing to finish before workers stop.",
+    "Commit the final contiguous completed offsets after processing finishes.",
+    "Serialize final committing with the background commit thread and stop that thread before shutdown completes.",
+    "Mark offsets committed only after the commit callback succeeds."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor covers the strategy ordering defect, but the pool's premature worker flags are outside it. Merely moving queue_pool.shutdown() earlier does not fix draining; queue emptiness also excludes in-flight work."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "defectStatement": "The graceful-shutdown test only checks that the factory cleared its pool reference. It therefore passes when shutdown leaves queued work abandoned or worker threads alive.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Retain access to the pool before the factory clears its reference.",
+    "Assert that shutdown leaves no queued or outstanding processing work.",
+    "Assert every worker has stopped when shutdown returns.",
+    "Preserve the assertion that the factory releases its pool reference."
+   ],
+   "exampleFix": "        queue_pool = factory.queue_pool\n        assert queue_pool is not None\n        factory.shutdown()\n        assert factory.queue_pool is None\n        assert all(not worker.is_alive() for worker in queue_pool.workers)\n        assert queue_pool.get_stats()[\"total_items\"] == 0\n        assert all(not offsets for offsets in queue_pool.offset_tracker.outstanding.values())",
+   "notes": "The frozen input does not expose workers or offset_tracker.outstanding. These checks detect this implementation's abandoned queues and live workers; outstanding offsets alone are insufficient because send_result reuses an offset. Deterministic pending-work setup would require earlier instrumentation."
   }
  ]
 }

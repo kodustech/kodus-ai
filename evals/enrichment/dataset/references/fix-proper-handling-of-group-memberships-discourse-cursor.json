@@ -58,6 +58,48 @@
    ],
    "exampleFix": "  setupController: function(controller, model) {\n    this.controllerFor('group').set('showing', 'members');\n    controller.set(\"model\", model);\n    model.setProperties({ offset: 0, limit: 50 });\n    return model.findMembers().then(function() {\n      if (model.get(\"user_count\") > model.get(\"members\").length) {\n        model.set(\"limit\", model.get(\"user_count\"));\n        return model.findMembers();\n      }\n    });\n  }",
    "notes": "Repository inspection confirms that 50 is a default, not a server-enforced maximum; findMembers reads limit/offset from the model and updates user_count and members before resolving. Those contracts are absent from the frozen input. Loading all members is locally possible; adding pagination controls would require wider changes."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "defectStatement": "findMembers unconditionally applies every response, allowing an older request that finishes last to overwrite the latest page or membership refresh.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Only the latest member request for a model may update its members and pagination metadata.",
+    "Distinguish overlapping requests even when they request the same offset.",
+    "Preserve member conversion to Discourse.User and the returned promise."
+   ],
+   "exampleFix": "    }).then(self._latestMembersRequest = function applyMembers(result) {\n      if (self._latestMembersRequest !== applyMembers) { return; }\n      self.setProperties({\n        user_count: result.meta.total,\n        limit: result.meta.limit,\n        offset: result.meta.offset,\n        members: result.members.map(function(member) { return Discourse.User.create(member); })",
+   "notes": "Callback identity supplies a per-request token within the exact anchor. Comparing offsets alone misses same-page refresh races. The replacement passed simulated out-of-order navigation and refresh checks."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "defectStatement": "Admin::GroupsController#create ignores the submitted alias_level, so newly created groups retain the default instead of the administrator's selection.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Assign a supplied alias_level before saving, using the same conversion as update.",
+    "Preserve the default when alias_level is absent or blank.",
+    "Preserve name trimming, visibility handling, and save response behavior."
+   ],
+   "exampleFix": "    group = Group.new\n    group.name = (params[:name] || '').strip\n    group.visible = params[:visible] == \"true\"\n    group.alias_level = params[:alias_level].to_i if params[:alias_level].present?\n\n    if group.save",
+   "notes": "The update action supplies the required assignment pattern."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "defectStatement": "remove_member deletes the membership through group.users.delete, bypassing GroupUser destruction callbacks and leaving the group's cached user_count inflated.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Destroy the matching membership with callbacks so its counter cache is decremented.",
+    "Remove only the specified group's membership, preserving the user and other memberships.",
+    "Preserve automatic-group protection and response handling."
+   ],
+   "exampleFix": "  def remove_member\n    group = Group.find(params.require(:group_id).to_i)\n    user_id = params.require(:user_id).to_i\n\n    return can_not_modify_automatic if group.automatic\n\n    group.group_users.where(user_id: user_id).destroy_all\n\n    if group.save\n      render json: success_json\n    else\n      render_json_error(group)\n    end\n  end",
+   "notes": "The finding supplies the association and destruction operation; the repository confirms both. Loading a User and still calling group.users.delete does not address the callback defect."
   }
  ]
 }

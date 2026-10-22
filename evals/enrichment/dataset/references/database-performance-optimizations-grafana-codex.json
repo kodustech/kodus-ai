@@ -14,6 +14,20 @@
    ],
    "exampleFix": "func (srv *CleanUpService) Run(ctx context.Context) error {\n\tsrv.cleanUpTmpFiles(ctx)\n\n\tticker := time.NewTicker(time.Minute * 10)\n\tfor {",
    "notes": "The tenfold increase concerns ticker frequency; actual execution frequency depends on job duration. Separately scheduling annotation cleanup is unnecessary for the minimal fix."
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#04",
+   "defectStatement": "Age-based annotation cleanup, count-based cleanup, and orphaned-tag cleanup unconditionally emit error-level logs for successful batches, including full ID lists and a known-nil fetch error. This floods error logs with normal cleanup activity and obscures actual failures.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Remove or downgrade routine success logs in all three cleanup flows so successful batches emit no error-level entries.",
+    "Remove known-nil error fields and avoid dumping full ID lists at normal operational log levels.",
+    "Preserve batch deletion, affected-row accounting, and propagation of actual errors."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor covers only age-based cleanup; the finding also requires changes at lines 554/557 and 576/579. Removing the diagnostic logs is valid. The post-delete error y can be non-nil, unlike the pre-delete err."
   }
  ]
 }

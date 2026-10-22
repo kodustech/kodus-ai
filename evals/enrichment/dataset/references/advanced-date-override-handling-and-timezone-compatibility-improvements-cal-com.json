@@ -104,6 +104,35 @@
    ],
    "exampleFix": "        if (slotStartTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\"))) {\n          return true;\n        }\n        if (slotEndTime.isAfter(dayjs(date.end).add(utcOffset, \"minutes\"))) {\n          return true;",
    "notes": "The cited range ends before the second if's closing brace; the replacement intentionally leaves that brace to existing line 125. Multiple-override aggregation remains the separate #oph-03 defect."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "defectStatement": "The date-override lower-bound check compares the slot end against the override start, allowing slots that start before the override and end inside it. Such slots can incorrectly mark a fixed host as available.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject slots whose start precedes the offset-adjusted override start.",
+    "Allow a slot starting exactly at the override start to pass this lower-bound check.",
+    "Preserve the existing organizer-offset adjustment and rejection return semantics."
+   ],
+   "exampleFix": "        if (slotStartTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\"))) {\n          return true;\n        }",
+   "notes": "Returning true here makes the enclosing find cause checkIfIsAvailable to return false. Separate override end-bound and multiple-interval defects are outside this finding."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "defectStatement": "Without a date override, checkIfIsAvailable only rejects slots outside an existing matching weekday entry. If no entry covers the slot's weekday, the slot reaches the busy checks and can incorrectly include an unavailable fixed host.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject slots when the host's normal schedule has no interval on the slot's weekday.",
+    "Require the complete event to fit within at least one matching interval.",
+    "Do not reject a covered slot merely because another interval or weekday does not cover it.",
+    "Preserve date-override precedence and busy-conflict checks."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor covers only the find callback body. Correct absence-of-coverage handling requires changing the enclosing condition; an empty array never executes the callback. Preserve the later busy-only call's behavior when schedule arguments are omitted."
   }
  ]
 }

@@ -1,0 +1,34 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "defectStatement": "website_name compares website and instance hostnames case-sensitively in its exact, sibling-domain, and parent-domain checks. A hostname differing only in letter case can therefore lose the path that the equivalent lowercase URL would display.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Make all hostname comparisons insensitive to case on both sides.",
+    "Retain the original URL path, including its case, for matching hosts.",
+    "Preserve the existing domain-matching rules and host-only output for unrelated hosts.",
+    "Continue returning nil for invalid URLs or URLs without a host."
+   ],
+   "exampleFix": "  def website_name\n    website_host = URI(website.to_s).host rescue nil\n    discourse_host = Discourse.current_hostname.to_s.downcase\n    return if website_host.nil?\n    website_host = website_host.downcase\n    if website_host == discourse_host\n      # example.com == example.com\n      website_host + URI(website.to_s).path\n    elsif (website_host.split('.').length == discourse_host.split('.').length) && discourse_host.split('.').length > 2\n      # www.example.com == forum.example.com\n      website_host.split('.')[1..-1].join('.') == discourse_host.split('.')[1..-1].join('.') ? website_host + URI(website.to_s).path : website_host\n    else\n      # example.com == forum.example.com\n      discourse_host.ends_with?(\".\" << website_host) ? website_host + URI(website.to_s).path : website_host\n    end\n  end",
+   "notes": "Normalizing displayed hostnames or preserving their original case are both valid. Do not lowercase the entire URL or assume URI#hostname automatically lowercases it."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#06",
+   "defectStatement": "website_name is serialized without the untrusted-attribute restriction applied to website. Anonymous viewers can consequently receive a TL0 user's website hostname and, for matching domains, its path even when website itself is suppressed.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Suppress website_name whenever the untrusted-profile-field restriction suppresses website.",
+    "Keep populated website_name available to viewers permitted to see those fields.",
+    "Preserve all existing untrusted-attribute protections."
+   ],
+   "exampleFix": "  untrusted_attributes :bio_raw,\n                       :bio_cooked,\n                       :bio_excerpt,\n                       :location,\n                       :website,\n                       :website_name,\n                       :profile_background,\n                       :card_background",
+   "notes": "The macro generates include_website_name?. The existing include_website_name method lacks the question mark and does not override that generated restriction."
+  }
+ ]
+}

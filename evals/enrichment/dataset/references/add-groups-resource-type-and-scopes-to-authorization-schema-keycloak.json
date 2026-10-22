@@ -57,6 +57,21 @@
    ],
    "exampleFix": "        this.auth.groups().requireView(group);\n        boolean canViewGlobal = auth.groups().canView();\n        return paginatedStream(\n            group.getSubGroupsStream(search, exact, -1, -1)\n            .filter(g -> canViewGlobal || auth.groups().canView(g)), first, max)\n            .map(g -> GroupUtils.populateSubGroupCount(g, GroupUtils.toRepresentation(auth.groups(), g, !briefRepresentation)));",
    "notes": "Local classification applies to the finding's getSubGroups regression. The analogous GroupsResource listing requires a separate edit. Representation access calculations may still evaluate permissions; this fix removes repeated visibility-filter checks."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "defectStatement": "getGroupIdsWithViewPermission filters resources by type \"Groups\", but individual group resources are created without that type, so their member-view grants are omitted from user-search restrictions. The callback also uses authorization-resource IDs where hasPermission and the returned set require group model IDs.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Discover group-specific grants even when their authorization resources have no type.",
+    "Evaluate permissions and populate the result using group model IDs.",
+    "Include only groups authorized for VIEW_MEMBERS or MANAGE_MEMBERS.",
+    "Preserve the existing early-return guards."
+   ],
+   "exampleFix": "        try (java.util.stream.Stream<GroupModel> groups = session.groups().getGroupsStream(root.realm)) {\n            groups.forEach(group -> {\n                if (hasPermission(group.getId(), AdminPermissionsSchema.VIEW_MEMBERS, AdminPermissionsSchema.MANAGE_MEMBERS)) {\n                    granted.add(group.getId());\n                }\n            });\n        }",
+   "notes": "A local enumeration replacement is possible, but the frozen input does not expose the group enumeration API or root.realm. Resource names hold group IDs; resource IDs are independently generated. Setting types at creation alone leaves the ID mismatch and existing untyped resources unresolved. The separate null-fallback defect remains outside this replacement."
   }
  ]
 }

@@ -1,0 +1,48 @@
+{
+ "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "items": [
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#01",
+   "defectStatement": "The cancellation loop discards the email and SMS reminder helpers' promises, allowing the handler to return before their database or provider operations finish. Equivalent unawaited calls in bookings.tsx and workflows.tsx also leave rescheduling and workflow changes vulnerable to incomplete reminder cancellation.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Await every applicable reminder cancellation before its enclosing operation completes.",
+    "Apply this guarantee to booking cancellation, rescheduling, and the affected workflow mutations.",
+    "Preserve method-specific dispatch, helper arguments, and existing awaited cleanup."
+   ],
+   "exampleFix": null,
+   "notes": "The anchored occurrence alone is locally fixable by collecting helper promises into the awaited Promise.all. The finding explicitly includes other call sites outside the anchor and frozen context. Helpers currently catch and log their own errors; awaiting them does not make those errors propagate."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#05",
+   "defectStatement": "For reminders with a provider reference, the default cancellation path only sets cancelled: true and leaves the email scheduled until cron attempts cancellation. That delay can consume the remaining provider cancellation window and allow the reminder to be delivered.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Attempt and await provider cancellation during the default cancellation path, including for near-term reminders.",
+    "Retain cancellation state for deferred retry if provider cancellation fails.",
+    "Preserve the existing no-reference and explicit immediateDelete branches.",
+    "Do not delete the tracking row before provider cancellation succeeds."
+   ],
+   "exampleFix": "    await prisma.workflowReminder.update({\n      where: {\n        id: reminderId,\n      },\n      data: {\n        cancelled: true,\n      },\n    });\n\n    await client.request({\n      url: \"/v3/user/scheduled_sends\",\n      method: \"POST\",\n      body: {\n        batch_id: referenceId,\n        status: \"cancel\",\n      },\n    });\n\n    await prisma.workflowReminder.delete({\n      where: {\n        id: reminderId,\n      },",
+   "notes": "The unchanged line 232 closes the final delete call. Immediate cancellation for all referenced reminders is a valid fix. Provider cutoffs still apply: this prevents avoidable delay but cannot guarantee cancellation inside an already-expired cancellation window."
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01",
+   "defectStatement": "The cron route initializes sgMail but does not configure the separately imported SendGrid client before issuing cancellation requests. Those requests lack authentication, so provider-scheduled reminders remain active.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Configure client with sendgridAPIKey before issuing its cancellation request.",
+    "Preserve the cancellation endpoint, POST method, batch identifier, and cancel status.",
+    "Continue awaiting provider cancellation before deleting the reminder row."
+   ],
+   "exampleFix": "      client.setApiKey(sendgridAPIKey);\n      await client.request({\n        url: \"/v3/user/scheduled_sends\",\n        method: \"POST\",",
+   "notes": "Initialization beside sgMail.setApiKey would be cleaner but is outside the anchor. Initializing immediately before each request is a valid exact-range fix."
+  }
+ ]
+}

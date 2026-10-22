@@ -1,0 +1,19 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+   "defectStatement": "The auth.anonymous section in conf/defaults.ini lacks device_limit. Environment overrides run before readAuthSettings and only visit existing keys, so GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and the limit remains zero, disabling enforcement.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Register an uncommented device_limit setting under auth.anonymous in the default configuration.",
+    "Ensure GF_AUTH_ANONYMOUS_DEVICE_LIMIT works without a custom INI entry.",
+    "Keep the default limit at zero and preserve normal configuration override precedence."
+   ],
+   "exampleFix": null,
+   "notes": "The cited assignment correctly reads the parsed setting; the missing entry belongs in conf/defaults.ini, outside the supplied code. A late dynamic environment read can change command-line precedence and bypass configuration expansion."
+  }
+ ]
+}

@@ -1,0 +1,34 @@
+{
+ "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "defectStatement": "getGroupIdsWithViewPermission filters resources by type \"Groups\", but individual group resources are created without that type, so their member-view grants are omitted from user-search restrictions. The callback also uses authorization-resource IDs where hasPermission and the returned set require group model IDs.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Discover group-specific grants even when their authorization resources have no type.",
+    "Evaluate permissions and populate the result using group model IDs.",
+    "Include only groups authorized for VIEW_MEMBERS or MANAGE_MEMBERS.",
+    "Preserve the existing early-return guards."
+   ],
+   "exampleFix": "        try (java.util.stream.Stream<GroupModel> groups = session.groups().getGroupsStream(root.realm)) {\n            groups.forEach(group -> {\n                if (hasPermission(group.getId(), AdminPermissionsSchema.VIEW_MEMBERS, AdminPermissionsSchema.MANAGE_MEMBERS)) {\n                    granted.add(group.getId());\n                }\n            });\n        }",
+   "notes": "A local enumeration replacement is possible, but the frozen input does not expose the group enumeration API or root.realm. Resource names hold group IDs; resource IDs are independently generated. Setting types at creation alone leaves the ID mismatch and existing untyped resources unresolved. The separate null-fallback defect remains outside this replacement."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01",
+   "defectStatement": "When no specific group resource exists and the Groups type resource is missing, hasPermission passes null to policyStore.findByResource. This causes an NPE and an HTTP 500 instead of denying permission.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Return false when the fallback Groups resource is absent, without passing null to the policy store.",
+    "Continue denying access when the fallback resource has no policies.",
+    "Preserve permission evaluation for existing specific resources and fallback resources with policies."
+   ],
+   "exampleFix": "        if (resource == null) {\n            resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE);\n\n            // check if there is a permission for \"all-groups\". If so, proceed with the evaluation to check scopes\n            if (resource == null || policyStore.findByResource(server, resource).isEmpty()) {\n                return false;\n            }\n        }",
+   "notes": "A separate null guard before the policy lookup is equally valid."
+  }
+ ]
+}

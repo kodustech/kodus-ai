@@ -1,0 +1,46 @@
+{
+ "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+ "items": [
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "defectStatement": "The handler passes raw request guests to sendAddGuestsEmails instead of the filtered guests actually added. Existing attendees included in a successful request consequently receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Classify only the newly added, filtered guests as new email recipients.",
+    "Preserve the full event attendee list so existing attendees still receive add-guests notifications."
+   ],
+   "exampleFix": "    await sendAddGuestsEmails(evt, uniqueGuests);",
+   "notes": "A rejected blacklisted address receives no email unless it already appears among event attendees. uniqueGuests excludes existing attendees and blacklisted addresses but does not deduplicate repeated request entries."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+   "defectStatement": "EventManager uses the requesting user's credentials, so an authorized non-organizer can cause calendar references without credentialId to be skipped or updated through the wrong account. A propagated calendar-update rejection also prevents notification emails after attendees have already been persisted.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use the booking organizer's credentials for calendar updates, including references without credentialId.",
+    "Preserve the update call with the reconstructed event and existing booking references.",
+    "Allow notification processing to continue if calendar synchronization throws.",
+    "Never fall back to the requesting user's credentials when the organizer is unavailable."
+   ],
+   "exampleFix": "  try {\n    if (!booking.user) {\n      throw new Error(\"Booking organizer not found\");\n    }\n\n    const credentials = await getUsersCredentials(booking.user);\n\n    const eventManager = new EventManager({\n      ...booking.user,\n      credentials: [...credentials],\n    });\n\n    await eventManager.updateCalendarAttendees(evt, booking);\n  } catch (err) {\n    console.error(\"Error updating calendar attendees\", err);\n  }",
+   "notes": "References with credentialId can fetch credentials directly, so failure is not universal. Reuse getUsersCredentials with booking.user: raw booking.user.credentials lacks the nested user.email required by CredentialPayload."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+   "defectStatement": "The reconstructed CalendarEvent omits booking.iCalUID, causing generated ICS attachments to fall back to booking.uid. When those identifiers differ, recipients receive an invitation with a different event identity instead of an update to the original invitation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Carry the persisted booking.iCalUID into the event used for calendar synchronization and emails.",
+    "Preserve booking.uid as the application booking identifier and fallback when iCalUID is absent."
+   ],
+   "exampleFix": "    uid: booking.uid,\n    iCalUID: booking.iCalUID,",
+   "notes": "Add iCalUID alongside uid; do not replace uid with the persisted calendar identifier. The existing ICS generator handles null or empty iCalUID."
+  }
+ ]
+}

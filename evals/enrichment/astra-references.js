@@ -4,8 +4,9 @@
  * on the Codex subscription) with read-only access to the repository at the
  * PR head. One call per PR, covering that PR's items.
  *
- *   node evals/enrichment/astra-references.js [--par=4] [--cases=a,b]
+ *   node evals/enrichment/astra-references.js [--par=4] [--cases=a,b] [--items=candidates.json]
  *     -> evals/enrichment/dataset/references/<caseId>.json
+ *        (--items=candidates.json -> dataset/references-candidates/)
  *
  * Only items a PR's reference file lacks are written; items no longer in the
  * dataset are dropped from it on that write.
@@ -16,7 +17,8 @@ const os = require('os');
 const { execFileSync, spawn } = require('child_process');
 
 const DIR = path.join(__dirname, 'dataset');
-const OUT = path.join(DIR, 'references');
+const ITEMS = (process.argv.find((a) => a.startsWith('--items=')) || '--items=items.json').slice(8);
+const OUT = path.join(DIR, ITEMS === 'items.json' ? 'references' : `references-${path.basename(ITEMS, '.json')}`);
 const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
 const PAR = Number(arg('par', 4));
@@ -63,7 +65,7 @@ For each item return:
 
 Items with anchorStatus other than "ok" have no usable cited code: set anchorCoversDefect false, fixability by the defect itself, contextSufficient false, exampleFix null.`;
 
-const items = JSON.parse(fs.readFileSync(path.join(DIR, 'items.json'), 'utf8')).items;
+const items = JSON.parse(fs.readFileSync(path.join(DIR, ITEMS), 'utf8')).items;
 const byCase = new Map();
 for (const it of items) (byCase.get(it.caseId) || byCase.set(it.caseId, []).get(it.caseId)).push(it);
 fs.mkdirSync(OUT, { recursive: true });

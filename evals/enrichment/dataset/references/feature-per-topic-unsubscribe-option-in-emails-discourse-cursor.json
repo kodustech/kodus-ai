@@ -44,6 +44,20 @@
    ],
    "exampleFix": "    tu = TopicUser.find_or_initialize_by(user_id: current_user.id, topic_id: params[:topic_id])\n    tu.notification_level ||= TopicUser.notification_levels[:regular]\n\n    if tu.notification_level > TopicUser.notification_levels[:regular]",
    "notes": "TopicUser.get also delegates to find_by and can return nil; replacing only the helper name is insufficient. A new record starts at regular and is muted by the existing branch."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "defectStatement": "The confirmation promises that all topic notifications will stop, although watching and tracking users are changed to regular, which still permits reply and mention notifications.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Avoid promising that every kind of topic notification has stopped.",
+    "Use wording valid for both regular and muted outcomes.",
+    "Preserve the translation key and title interpolation."
+   ],
+   "exampleFix": "        stop_notifications: \"You will no longer receive notifications for every new post in <strong>{{title}}</strong>. You may still receive notifications when someone mentions you or replies to you.\"",
+   "notes": "A conservative wording change fixes the cited confirmation locally. Conditional wording would require additional changes. The analogous email wording mentioned parenthetically is outside this anchor."
   }
  ]
 }

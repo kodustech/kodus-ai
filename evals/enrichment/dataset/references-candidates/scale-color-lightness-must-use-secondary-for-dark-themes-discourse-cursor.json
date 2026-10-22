@@ -1,0 +1,33 @@
+{
+ "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "items": [
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "defectStatement": "The mobile `.topic-map h3` color conversion changes the light-theme primary lightness adjustment from 20% to 50%, making headings lighter than before. Its 50%/50% selection also differs from the desktop heading's 20%/80% selection.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore the light-theme heading color to primary scaled by 20% lightness.",
+    "Use secondary scaled by 80% lightness for the dark-theme heading.",
+    "Preserve the surrounding heading styles."
+   ],
+   "exampleFix": "    color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));",
+   "notes": "The actual selector is `.topic-map h3`, not `a.star h3` or `.post-info h3`; the diff's section label is misleading."
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+   "defectStatement": "The default notification badge now combines a dark-theme background of secondary scaled by 30% lightness with unchanged secondary-colored text, including linked badges. With black secondary, this produces black text on approximately #4d4d4d, making small counts difficult to read.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restore readable dark-theme contrast for both linked and unlinked default notification badges.",
+    "Preserve the existing light-theme background and foreground.",
+    "Preserve specialized badge variants' background and foreground overrides."
+   ],
+   "exampleFix": "  background-color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 70%));",
+   "notes": "A lighter dark-theme background is a valid local alternative to the suggested foreground change; this example produces approximately #b3b3b3 against black text. Keeping the 30% background instead requires handling both foreground declarations: merely inserting a color declaration leaves the subsequent &[href] override in effect."
+  }
+ ]
+}

@@ -15,6 +15,20 @@
    ],
    "exampleFix": "        for process in self.processes.values():\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n            if isinstance(process, self.mp_context.Process):\n                process.terminate()\n",
    "notes": "The frozen diff shows the spawn context and thread alternative. SpawnProcess is not a subclass of multiprocessing.Process; a BaseProcess guard is also valid. Replacing break with continue still skips termination."
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "defectStatement": "The restart guard checks multiprocessing.Process, which does not match the SpawnProcess workers created by the spawn context. Consequently, a hung worker is left alive while its replacement starts for the same shards, allowing concurrent flushing and duplicate output.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Invoke kill on unhealthy spawn-context workers before creating their replacements.",
+    "Avoid invoking process-only termination methods on threading.Thread workers.",
+    "Preserve replacement creation with the same process index and shards, including handling already-closed processes."
+   ],
+   "exampleFix": "            try:\n                if isinstance(process, multiprocessing.context.SpawnProcess):\n                    process.kill()\n                    process.join()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore\n\n            self._create_process_for_shards(process_index, shards)",
+   "notes": "Correcting the guard alone addresses the reported regression; joining additionally waits for termination and reaps the worker. A compatible process-base-class check or capability check is also valid."
   }
  ]
 }

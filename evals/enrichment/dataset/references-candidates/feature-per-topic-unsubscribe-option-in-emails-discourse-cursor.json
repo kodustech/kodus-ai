@@ -1,0 +1,62 @@
+{
+ "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#03",
+   "defectStatement": "The unsubscribe fixture supplies a topic unsubscribe URL, but no example asserts that it appears in the generated body. Removing or breaking that link can therefore leave the existing tests passing.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Assert that the generated body contains /t/1234/unsubscribe.",
+    "Preserve the fixture and existing header and preferences-link coverage.",
+    "Ensure removing the topic unsubscribe URL from the generated body fails the new assertion."
+   ],
+   "exampleFix": "      let(:message_with_unsubscribe) { Email::MessageBuilder.new(to_address,\n                                                                body: 'hello world',\n                                                                add_unsubscribe_link: true,\n                                                                unsubscribe_url: \"/t/1234/unsubscribe\") }\n\n      it \"has the topic unsubscribe url in the body\" do\n        expect(message_with_unsubscribe.body).to include(\"/t/1234/unsubscribe\")\n      end",
+   "notes": "The replacement can retain the fixture and append an example within the same context. This is an actionable test-code omission, not a no-code-fix issue."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "defectStatement": "The confirmation promises that all topic notifications will stop, although watching and tracking users are changed to regular, which still permits reply and mention notifications.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Avoid promising that every kind of topic notification has stopped.",
+    "Use wording valid for both regular and muted outcomes.",
+    "Preserve the translation key and title interpolation."
+   ],
+   "exampleFix": "        stop_notifications: \"You will no longer receive notifications for every new post in <strong>{{title}}</strong>. You may still receive notifications when someone mentions you or replies to you.\"",
+   "notes": "A conservative wording change fixes the cited confirmation locally. Conditional wording would require additional changes. The analogous email wording mentioned parenthetically is outside this anchor."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#09",
+   "defectStatement": "Unsubscribe saves notification_level directly without recording an explicit user-change reason or timestamp and without publishing the notification-level update. Records with a null reason can consequently be automatically promoted back to tracking on a later read, while open clients retain the old level.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Persist the selected notification level for the current user and topic.",
+    "Record an explicit user-change reason and change timestamp so automatic tracking does not undo the choice.",
+    "Publish the notification-level change to the affected user's clients.",
+    "Preserve the existing level-selection behavior for this finding."
+   ],
+   "exampleFix": "    if tu.notification_level > TopicUser.notification_levels[:regular]\n      new_level = TopicUser.notification_levels[:regular]\n    else\n      new_level = TopicUser.notification_levels[:muted]\n    end\n\n    TopicUser.change(current_user.id, params[:topic_id], notification_level: new_level)",
+   "notes": "TopicUser.change supplies the required metadata and publication; its call signature is supplied in the finding. Automatic re-tracking specifically depends on a null reason and the reading threshold. Idempotence is a separate finding."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01",
+   "defectStatement": "The unsubscribe action derives its target from the current level, moving watching/tracking to regular on the first visit and regular to muted on the next. Reopening the same link changes its effect, and the first visit still permits notifications despite the confirmation's promise.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Make repeated visits converge immediately to the same notification level.",
+    "Stop topic notifications on the first visit, consistent with the existing confirmation.",
+    "Leave already-muted topics muted and preserve persistence of the selected level."
+   ],
+   "exampleFix": "    tu.notification_level = TopicUser.notification_levels[:muted]",
+   "notes": "The existing tu.save! remains immediately below the replacement. Always selecting muted fixes this finding; recording change metadata and broadcasting updates remain the separate #09 concern."
+  }
+ ]
+}

@@ -43,6 +43,20 @@
    ],
    "exampleFix": null,
    "notes": "The drawer requires a RulerGrafanaRuleDTO and reads grafana_alert.uid, including in its memo comparator. Supporting a UID or Prometheus DTO requires changes outside the anchor; fetching a real ruler DTO also requires additional integration. The drawer contract is absent from the frozen input."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "defectStatement": "Grafana list items supply only a Prometheus rule, but AlertRuleMenu requires both canDelete and rulerRule to render Delete. Consequently, eligible users cannot delete Grafana rules from the new list even when the Prometheus permission check allows deletion.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Show Delete for eligible Grafana rules when only promRule is available.",
+    "Open the delete confirmation for the correct rule identifier and group without requiring a ruler DTO.",
+    "Preserve permission and provisioning restrictions and deletion for existing ruler-backed callers."
+   ],
+   "exampleFix": null,
+   "notes": "The cited line exposes the mismatch; the defective guard and DTO-dependent callback contract are in AlertRuleMenu, outside the frozen code. RuleActionsButtons.V2 already supplies an identifier-based delete closure. Fabricating a ruler DTO at the cited call is not a sound fix."
   }
  ]
 }

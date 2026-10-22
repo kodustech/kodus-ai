@@ -57,6 +57,19 @@
    ],
    "exampleFix": "  const blacklistedGuestEmails = process.env.BLACKLISTED_GUEST_EMAILS\n    ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.toLowerCase())\n    : [];\n\n  const normalizeGuestEmail = (email: string): string => {\n    const [localPart, domain] = email.split(\"@\");\n    return `${localPart.split(\"+\")[0]}@${domain}`.toLowerCase();\n  };\n\n  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(normalizeGuestEmail(guest))",
    "notes": "The replacement deliberately leaves the filter's closing `);` on line 78 untouched. extractBaseEmail is not imported; equivalent inline normalization keeps the fix within the anchor. Lowercasing alone leaves the finding's plus-alias bypass unresolved."
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "defectStatement": "The handler passes raw request guests to sendAddGuestsEmails instead of the filtered guests actually added. Existing attendees included in a successful request consequently receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Classify only the newly added, filtered guests as new email recipients.",
+    "Preserve the full event attendee list so existing attendees still receive add-guests notifications."
+   ],
+   "exampleFix": "    await sendAddGuestsEmails(evt, uniqueGuests);",
+   "notes": "A rejected blacklisted address receives no email unless it already appears among event attendees. uniqueGuests excludes existing attendees and blacklisted addresses but does not deduplicate repeated request entries."
   }
  ]
 }

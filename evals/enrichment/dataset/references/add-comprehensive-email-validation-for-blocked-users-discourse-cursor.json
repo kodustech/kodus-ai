@@ -14,6 +14,35 @@
    ],
    "exampleFix": "    record = BlockedEmail.where('lower(email) = ?', email.to_s.downcase).first",
    "notes": "Lowercasing only the input is insufficient because stored addresses are not normalized. Normalizing stored values is optional for this defect when the lookup compares both sides case-insensitively."
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "defectStatement": "The domain restriction matcher accepts a configured domain followed by additional characters, allowing user@example.com.evil.com through an example.com whitelist and incorrectly rejecting it under the corresponding blacklist. It also treats regex metacharacters other than dots in configured domains as regex syntax.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Require the configured domain to end at the absolute end of the email address.",
+    "Treat each pipe-separated domain as literal text.",
+    "Preserve case-insensitive matching and support for multiple configured domains.",
+    "Preserve the existing whitelist and blacklist decision flow."
+   ],
+   "exampleFix": "  def email_in_restriction_setting?(setting, value)\n    domains = setting.split('|').map { |domain| Regexp.escape(domain) }.join('|')\n    regexp = Regexp.new(\"@(?:#{domains})\\\\z\", Regexp::IGNORECASE)\n    value =~ regexp\n  end",
+   "notes": "Use an absolute end anchor; Ruby's $ also matches before a newline. Escape domains individually so the pipe separator still represents alternatives."
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "defectStatement": "emailValidation treats every previously server-rejected address as permanently invalid because rejectedEmails is never cleared. Consequently, a later server-side policy change cannot make that address submitable again during the controller's lifetime.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow a previously rejected address to be submitted again for current server-side validation.",
+    "Preserve blank-address, email-format, and authenticated-email validation.",
+    "Preserve server-side rejection handling and its displayed error message."
+   ],
+   "exampleFix": "",
+   "notes": "Deleting the cited cache-based veto is a valid local fix: server failures still display through flash, while cached rejections cease disabling submission. Retaining temporary field-level rejection feedback through input-change or modal-reset invalidation would require changes outside this anchor."
   }
  ]
 }

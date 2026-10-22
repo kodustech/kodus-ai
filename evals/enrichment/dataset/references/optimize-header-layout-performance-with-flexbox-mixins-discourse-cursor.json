@@ -14,6 +14,20 @@
    ],
    "exampleFix": "      @include flexbox();\n      @include align-items(center);\n\n      > div:not(.title):not(.panel) {\n        min-width: 0;\n      }",
    "notes": "The replacement can add a nested direct-child rule inside .contents. The exclusion selector uses classes visible in the frozen input and reaches the component root; applying min-width:0 only to .extra-info-wrapper would not fix the defect."
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "defectStatement": "Making .small-action a flex container leaves its .small-action-desc child content-sized. The edit/delete buttons are nested inside that description, so their right floats align to the short description box instead of the row's right edge.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Make the description occupy the available row width so its floated buttons align at the right.",
+    "Preserve the avatar column and vertically centered flex layout.",
+    "Keep edit/delete buttons floated within the description."
+   ],
+   "exampleFix": "  @include flexbox();\n  @include align-items(center);\n\n  .small-action-desc {\n    -webkit-box-flex: 1;\n    -moz-box-flex: 1;\n    -webkit-flex: 1;\n    -ms-flex: 1;\n    flex: 1;\n    min-width: 0;\n  }",
+   "notes": "The template confirms buttons are inside .small-action-desc, contradicting the finding's direct-child claim. That markup is absent from the frozen input. Adding margin-left:auto to the buttons alone does not fix this defect."
   }
  ]
 }

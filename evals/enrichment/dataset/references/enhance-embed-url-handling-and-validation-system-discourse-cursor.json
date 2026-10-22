@@ -89,6 +89,63 @@
    ],
    "exampleFix": "    escaped_url = ERB::Util.html_escape(url)\n    contents = \"#{contents}\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped_url}'>#{escaped_url}</a>\")}</small>\\n\"",
    "notes": "Constructing the link with Nokogiri is also valid. Escaping must include apostrophes because href uses single quotes. All supplied local replacements passed Ruby syntax compilation in their surrounding files; runtime tests were not run."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "defectStatement": "The disabled-polling spec leaves both the feed URL and embedding username blank, so those guards independently prevent polling. It therefore passes even if the enabled-flag check is removed.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Keep feed_polling_enabled? false.",
+    "Set both the feed URL and embedding username to nonblank values.",
+    "Retain the no-polling assertion so removing the enabled-flag guard fails the example."
+   ],
+   "exampleFix": "    it \"requires feed_polling_enabled?\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(false)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end",
+   "notes": "The surrounding context already supplies suitable URL and username values."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "defectStatement": "The URL and username prerequisite specs leave polling disabled, so execute skips poll_feed before testing either prerequisite. Other blank defaults also mask removal of the individual checks.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Enable polling in both examples.",
+    "Provide a nonblank username when testing the missing URL.",
+    "Provide a nonblank URL when testing the missing username.",
+    "Retain assertions that poll_feed is never called, with each example failing if its corresponding guard is removed."
+   ],
+   "exampleFix": "    it \"requires feed_polling_url\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(nil)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end\n\n    it \"requires embed_by_username\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(nil)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end",
+   "notes": "Stubbing only feed_polling_enabled? to true, as suggested in the finding, is insufficient because the other required setting defaults to blank."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "defectStatement": "EmbedController and TopicRetriever compare URI hosts with SiteSetting.embeddable_host case-sensitively, rejecting otherwise matching hosts whose letter case differs.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Compare hostnames case-insensitively in both referer validation and embed URL validation.",
+    "Continue rejecting different hosts, missing hosts, and malformed URLs.",
+    "Preserve rejection when the configured embeddable host is blank."
+   ],
+   "exampleFix": null,
+   "notes": "The controller check alone is locally fixable, but the finding explicitly includes lib/topic_retriever.rb, whose implementation is absent from the frozen input. Handle nil URI hosts safely."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "defectStatement": "The precompile configuration omits embed.css and embed.js, leaving the iframe stylesheet and external embedding script unavailable in deployments relying on precompiled assets. The layout references embed.css; it does not itself reference embed.js.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Include embed.css and embed.js in the production asset precompile targets.",
+    "Preserve existing precompile targets.",
+    "Keep the iframe stylesheet reference resolving to the compiled embed stylesheet."
+   ],
+   "exampleFix": null,
+   "notes": "The cited stylesheet helper is a consumer, not the defective configuration. The fix belongs in config/application.rb, which is not shown in the frozen input; deleting the helper or adding a script tag does not fix asset compilation."
   }
  ]
 }

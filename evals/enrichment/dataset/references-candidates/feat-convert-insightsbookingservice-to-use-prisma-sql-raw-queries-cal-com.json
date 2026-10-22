@@ -1,0 +1,47 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+   "defectStatement": "The getBaseConditions test's result assertion cannot distinguish the intended authorization-and-filter intersection from either condition alone. Its user booking satisfies both predicates, so dropping either predicate still passes.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Fail if getBaseConditions returns only the authorization predicate.",
+    "Fail if getBaseConditions returns only the filter predicate.",
+    "Verify AND composition while retaining the successful matching-booking assertion."
+   ],
+   "exampleFix": "      const authConditions = await service.getAuthorizationConditions();\n      const filterConditions = await service.getFilterConditions();\n      const baseConditions = await service.getBaseConditions();\n      expect(baseConditions).toEqual(Prisma.sql`(${authConditions}) AND (${filterConditions})`);\n\n      const results = await prisma.$queryRaw<{ id: number }[]>`\n        SELECT id FROM \"BookingTimeStatusDenormalized\"\n        WHERE ${baseConditions}\n      `;\n\n      // Should return the user booking since it matches both conditions\n      expect(results).toEqual([\n        {\n          id: userBooking.id,\n        },\n      ]);",
+   "notes": "A structural composition assertion fixes this locally without changing fixtures. A behavioral alternative should include both auth-only and filter-only rows; adding only the suggested filter-only row cannot detect dropping the filter predicate."
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "defectStatement": "The constructor's public options type permits team scope without teamId, although the runtime schema requires it. Such calls compile but fail validation and silently produce empty insights.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject team-scoped options missing teamId at compile time, or explicitly report their runtime validation failure.",
+    "Continue accepting valid team options and user/org options without teamId.",
+    "Preserve authorization checks and prevent malformed options from granting access."
+   ],
+   "exampleFix": "export type InsightsBookingServicePublicOptions = z.infer<typeof insightsBookingServiceOptionsSchema>;\n\nexport type InsightsBookingServiceOptions = z.infer<typeof insightsBookingServiceOptionsSchema>;\n\nexport type InsightsBookingServiceFilterOptions = {\n  eventTypeId?: number;\n  memberUserId?: number;\n};\n\nconst NOTHING_CONDITION = Prisma.sql`1=0`;\n\nexport class InsightsBookingService {\n  private prisma: typeof readonlyPrisma;\n  private options: InsightsBookingServiceOptions | null;\n  private filters?: InsightsBookingServiceFilterOptions;\n  private cachedAuthConditions?: Prisma.Sql;\n  private cachedFilterConditions?: Prisma.Sql | null;\n\n  constructor({\n    prisma,\n    options,\n    filters,\n  }: {\n    prisma: typeof readonlyPrisma;\n    options: InsightsBookingServicePublicOptions;\n    filters?: InsightsBookingServiceFilterOptions;\n  }) {\n    this.prisma = prisma;\n    const validation = insightsBookingServiceOptionsSchema.safeParse(options);\n    this.options = validation.success ? validation.data : null;",
+   "notes": "Changing only the constructor parameter to InsightsBookingServiceOptions also works. Explicit runtime rejection is an alternative allowed by the finding, but changes existing invalid-input behavior."
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "defectStatement": "When no filter is present, getBaseConditions returns a team/org authorization OR expression without enclosing parentheses. Appending AND extra therefore applies extra only to the last OR branch, allowing earlier branches to bypass the extra restriction; this does not itself bypass the base authorization predicate.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Ensure an appended AND predicate applies to every branch of the returned condition.",
+    "Preserve the intersection of authorization and filters when both exist.",
+    "Preserve parameterized SQL and deny-all behavior."
+   ],
+   "exampleFix": "    if (authConditions && filterConditions) {\n      return Prisma.sql`((${authConditions}) AND (${filterConditions}))`;\n    } else if (authConditions) {\n      return Prisma.sql`(${authConditions})`;\n    } else if (filterConditions) {\n      return Prisma.sql`(${filterConditions})`;\n    } else {\n      return Prisma.sql`(${NOTHING_CONDITION})`;\n    }",
+   "notes": "Wrapping at this boundary suffices; changing the eventTypeId fragment elsewhere is unnecessary. The both-present branch already groups its operands correctly for appended AND. No production caller using the hazardous composition was found."
+  }
+ ]
+}

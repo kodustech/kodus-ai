@@ -41,6 +41,21 @@
    ],
    "exampleFix": "local set_span_id = parent_span_id\nlocal redirect_depth = 0\n\nfor i = 0, 10000 do\n    local new_set_span = redis.call(\"hget\", main_redirect_key, set_span_id)\n    redirect_depth = i\n    if not new_set_span or new_set_span == set_span_id then",
    "notes": "Lua numeric loop bounds are inclusive: the current loop permits 1001 iterations, versus 10001 previously. Restoring the previous bound fixes this regression without claiming support for arbitrarily deep chains."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "defectStatement": "Segment payloads now use sorted-set commands under the unchanged `span-buf:s:{...}` keys, which can still contain sets from the previous release. Existing keys cause WRONGTYPE errors in ZADD, Lua ZCARD, and flushing through ZSCAN, interrupting ingestion and flushing during rollout.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Prevent sorted-set-only commands from operating on legacy set-valued segment keys.",
+    "Keep Python insertion, Lua merging, queue consumption, and cleanup consistent with the chosen migration or namespace strategy.",
+    "Handle queued legacy segments and coexistence with old workers without reintroducing type conflicts.",
+    "Preserve timestamp scores and normal segment assembly, expiration, and flushing behavior."
+   ],
+   "exampleFix": null,
+   "notes": "Changing only this ZADD target leaves Lua key construction and legacy queue entries incompatible. The frozen input omits Lua implementation and queue/cleanup details needed for a complete fix. ZUNIONSTORE itself accepts set inputs; ZADD, ZCARD, and ZSCAN are the incompatible commands."
   }
  ]
 }

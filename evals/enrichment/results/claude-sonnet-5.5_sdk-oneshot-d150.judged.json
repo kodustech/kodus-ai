@@ -1,0 +1,4357 @@
+{
+ "model": "claude-sonnet-5.5@sdk",
+ "variant": "oneshot",
+ "split": "all",
+ "rows": [
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Blocked email lookup is case-sensitive and can be bypassed with different casing",
+    "fixStatus": "local",
+    "improvedCode": "    record = BlockedEmail.where('lower(email) = ?', email.to_s.downcase).first"
+   },
+   "ms": 2547,
+   "usage": {
+    "input": 2200,
+    "output": 85,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the case-sensitive blocked-email lookup lets an address with different casing bypass the block list.",
+     "fix": "PASS",
+     "fixReason": "Lowercasing both the stored column and the input gives an exact match that ignores case and adds no wildcards, and the match-count updates and the block/do_nothing logic stay unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "totalPages overcounts by one when user_count is a multiple of limit",
+    "fixStatus": "local",
+    "improvedCode": "  totalPages: function() {\n    if (this.get(\"user_count\") == 0) { return 0; }\n    return Math.ceil(this.get(\"user_count\") / this.get(\"limit\"));\n  }.property(\"limit\", \"user_count\"),"
+   },
+   "ms": 2664,
+   "usage": {
+    "input": 4346,
+    "output": 138,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: totalPages counts one page too many when user_count is an exact multiple of limit.",
+     "fix": "PASS",
+     "fixReason": "The improved code uses Math.ceil, keeps the zero-count guard that returns 0, and preserves the dependencies on limit and user_count, so it meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#14",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "record_for_host ignores port so hosts saved with :port never match",
+    "fixStatus": "local",
+    "improvedCode": "  def self.record_for_host(host)\n    uri = URI(host) rescue nil\n    return false unless uri.present?\n\n    host = uri.host\n    return false unless host.present?\n\n    host = host.downcase\n    candidates = [host]\n    candidates << \"#{host}:#{uri.port}\" if uri.port.present? && uri.port != uri.default_port\n\n    where(\"lower(host) IN (?)\", candidates).first\n  end"
+   },
+   "ms": 3372,
+   "usage": {
+    "input": 2346,
+    "output": 203,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: record_for_host ignores the port, so hosts saved with a :port never match.",
+     "fix": "PASS",
+     "fixReason": "The fix adds host:port as a candidate when the URI has a non-default port, so port-qualified entries match only the same port, while hostname-only matching and the nil-URI and hostless rejections still work."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Embed retrieval re-imports the entire RSS feed for a single URL",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 5394,
+   "usage": {
+    "input": 3182,
+    "output": 55,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: retrieving one embed URL synchronously re-imports the whole RSS feed.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so the fix is not graded."
+    }
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Light-theme color for .group-member-info .name regressed from 30% to 50% lightness",
+    "fixStatus": "local",
+    "improvedCode": "        color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));"
+   },
+   "ms": 2872,
+   "usage": {
+    "input": 3944,
+    "output": 101,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the regression: the light-theme color of .group-member-info .name changed from 30% to 50% lightness.",
+     "fix": "PASS",
+     "fixReason": "The replacement line restores primary at 30% lightness and uses secondary at 70% for the dark theme, keeps the indentation and the surrounding styling, and matches the obligations."
+    }
+   }
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Same-domain check matches unrelated sites on public-suffix domains like co.uk",
+    "fixStatus": "local",
+    "improvedCode": "    elsif (website_host.split('.').length == discourse_host.split('.').length) && discourse_host.split('.').length > 2\n      # www.example.com == forum.example.com (compare registrable domains, so forum.co.uk != evil.co.uk)\n      website_domain = PublicSuffix.domain(website_host)\n      discourse_domain = PublicSuffix.domain(discourse_host)\n      website_domain.present? && website_domain == discourse_domain ? website_host + URI(website.to_s).path : website_host"
+   },
+   "ms": 9954,
+   "usage": {
+    "input": 3823,
+    "output": 948,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the same-domain check treats unrelated hosts on public-suffix domains such as co.uk as matching.",
+     "fix": "FAIL",
+     "fixReason": "The fix calls PublicSuffix.domain, but the reference says no public-suffix dependency exists in the repository, so this code would fail at runtime without changes outside the cited lines."
+    }
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Client-side upload size check hardcodes 10 MB instead of site settings",
+    "fixStatus": "local",
+    "improvedCode": "    // check file size\n    var fileSizeKB = file.size / 1024;\n    var maxSizeKB = Discourse.SiteSettings['max_' + type + '_size_kb'];\n    if (fileSizeKB > maxSizeKB) {\n      bootbox.alert(I18n.t('post.errors.file_too_large', { max_size_kb: maxSizeKB }));\n      return false;\n    }"
+   },
+   "ms": 3232,
+   "usage": {
+    "input": 4473,
+    "output": 190,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the size check uses a hardcoded 10 MB limit instead of the configured site settings.",
+     "fix": "PASS",
+     "fixReason": "The improvedCode picks max_image_size_kb or max_attachment_size_kb based on type, compares sizes in KB with a strict greater-than, and shows the configured limit in the existing error message, which meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "State-changing unsubscribe action reachable via GET without CSRF protection",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 6180,
+   "usage": {
+    "input": 5003,
+    "output": 55,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: a state-changing unsubscribe action that can be reached via GET without CSRF protection.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#11",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Save callback clears host category when no category was selected",
+    "fixStatus": "local",
+    "improvedCode": "      host.save(props).then(() => {\n        const categoryId = this.get('categoryId') || host.get('category_id');\n        if (categoryId) {\n          host.set('category', Discourse.Category.findById(categoryId));\n        }"
+   },
+   "ms": 6920,
+   "usage": {
+    "input": 3387,
+    "output": 608,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the save callback clears the host's category when no category was selected, which matches the finding.",
+     "fix": "PASS",
+     "fixReason": "With no selection it falls back to the persisted host.category_id, so the server's uncategorized default is shown; explicit selections still resolve correctly, and the following lines still end editing and keep popupAjaxError, so the syntax holds."
+    }
+   }
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Same-domain check misses websites that are subdomains of the instance host",
+    "fixStatus": "local",
+    "improvedCode": "    else\n      # example.com == forum.example.com (match in either direction)\n      if discourse_host.ends_with?(\".\" + website_host) || website_host.ends_with?(\".\" + discourse_host)\n        website_host + URI(website.to_s).path\n      else\n        website_host\n      end\n    end"
+   },
+   "ms": 6309,
+   "usage": {
+    "input": 3790,
+    "output": 416,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the same-domain check fails for websites hosted on a subdomain of the instance host.",
+     "fix": "PASS",
+     "fixReason": "The code checks dot-bounded suffixes in both directions, so it covers subdomains (including nested ones) and parent domains, and returns only the host for unrelated domains; it uses the same `ends_with?` API as the existing code, and switching from `<<` to `+` avoids mutating the string literal."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Unauthenticated embed requests enqueue unbounded RetrieveTopic jobs",
+    "fixStatus": "local",
+    "improvedCode": "    else\n      RateLimiter.new(nil, \"embed-retrieve-topic-ip-#{request.remote_ip}\", 10, 1.minute).performed!\n      Jobs.enqueue(:retrieve_topic, user_id: current_user.try(:id), embed_url: embed_url)\n      render 'loading'"
+   },
+   "ms": 7750,
+   "usage": {
+    "input": 2732,
+    "output": 630,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: unauthenticated embed requests can enqueue an unbounded number of RetrieveTopic jobs.",
+     "fix": "PASS",
+     "fixReason": "Discourse's Redis-backed RateLimiter, keyed on the client IP, caps enqueueing across workers independent of the URL while still letting anonymous retrieval through within the limit and leaving existing-topic rendering untouched; this depends on that existing Discourse class, which is not shown in the provided code."
+    }
+   }
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "I18n translate cache key ignores default_locale used in fallback chain",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 2565,
+   "usage": {
+    "input": 2450,
+    "output": 53,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the translate cache key leaves out default_locale even though the fallback chain depends on it.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "add_members raises RecordNotUnique on duplicate or repeated usernames, non-atomic",
+    "fixStatus": "local",
+    "improvedCode": "  def add_members\n    group = Group.find(params.require(:group_id).to_i)\n    usernames = params.require(:usernames)\n\n    return can_not_modify_automatic if group.automatic\n\n    saved = false\n    Group.transaction do\n      existing_ids = group.user_ids\n      usernames.split(\",\").map(&:strip).uniq.each do |username|\n        user = User.find_by_username(username)\n        next unless user\n        next if existing_ids.include?(user.id)\n        group.add(user)\n        existing_ids << user.id\n      end\n\n      saved = group.save\n      raise ActiveRecord::Rollback unless saved\n    end\n\n    if saved\n      render json: success_json\n    else\n      render_json_error(group)\n    end\n  end"
+   },
+   "ms": 3793,
+   "usage": {
+    "input": 4635,
+    "output": 327,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: add_members raises RecordNotUnique on existing or repeated usernames, and it also notes the missing atomicity.",
+     "fix": "PASS",
+     "fixReason": "The fix skips existing members and repeated users by resolved user id inside a transaction that rolls back on a failed save, and it keeps the automatic-group rejection, the handling of unknown usernames, and both responses unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unsubscribe route shows confirmation without changing notification level",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 2115,
+   "usage": {
+    "input": 2243,
+    "output": 50,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect accurately: the route shows the unsubscribe confirmation while the notification level stays unchanged.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is insufficient-context rather than local, so there is no fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Mobile modal message-length color lightness values are swapped for both themes",
+    "fixStatus": "local",
+    "improvedCode": "  color: dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%));"
+   },
+   "ms": 3311,
+   "usage": {
+    "input": 3187,
+    "output": 94,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the lightness values in the mobile message-length color are swapped for both themes, which is the inversion defect described.",
+     "fix": "PASS",
+     "fixReason": "The replacement uses $primary at 70% lightness for light themes and $secondary at 30% for dark themes, keeps the theme-aware dark-light-choose, and is valid SCSS for the cited line."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Protocol-relative URLs in links are wrongly rewritten to the embed host",
+    "fixStatus": "local",
+    "improvedCode": "      if href.present? && href.start_with?('/') && !href.start_with?('//')\n        a['href'] = \"#{prefix}/#{href.sub(/^\\/+/, '')}\"\n      end"
+   },
+   "ms": 3492,
+   "usage": {
+    "input": 4230,
+    "output": 121,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: protocol-relative URLs are wrongly rewritten onto the embed host, which matches the finding.",
+     "fix": "FAIL",
+     "fixReason": "The change only excludes protocol-relative hrefs on the anchor lines, so the image src branch at lines 70-72 stays broken and path-relative references are still not resolved against the article URL, missing reference obligations."
+    }
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Light-theme color of .group-member-info .name changed from 30% to 50% lightness",
+    "fixStatus": "local",
+    "improvedCode": "        color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));"
+   },
+   "ms": 3727,
+   "usage": {
+    "input": 3772,
+    "output": 100,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the light-theme lightness for `.group-member-info .name` was changed from 30% to 50%.",
+     "fix": "PASS",
+     "fixReason": "The replacement restores primary at 30% lightness and uses secondary at 70% for the dark theme, keeps the indentation, and leaves the surrounding declarations untouched."
+    }
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "canManage() grants group management to subjects with only VIEW permission",
+    "fixStatus": "local",
+    "improvedCode": "    @Override\n    public boolean canManage() {\n        if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS)) {\n            return true;\n        }\n\n        return hasPermission(null, AdminPermissionsSchema.MANAGE);\n    }"
+   },
+   "ms": 2799,
+   "usage": {
+    "input": 7147,
+    "output": 144,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the no-arg canManage() grants group management to a subject that holds only VIEW permission.",
+     "fix": "PASS",
+     "fixReason": "The replacement removes VIEW from the scopes, still accepts all-groups MANAGE, keeps the MANAGE_USERS role bypass, and uses only names already present in the file."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "getClientsWithPermission never matches per-client resources in V2",
+    "fixStatus": "local",
+    "improvedCode": "        Set<String> granted = new HashSet<>();\n\n        realm.getClientsStream().forEach(client -> {\n            Resource resource = resourceStore.findByName(server, client.getId(), server.getId());\n            if (resource != null && hasGrantedPermission(resource, scope)) {\n                granted.add(client.getId());\n            }\n        });\n\n        return granted;"
+   },
+   "ms": 12565,
+   "usage": {
+    "input": 8090,
+    "output": 694,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: in V2, the type-based lookup never matches the per-client resources.",
+     "fix": "FAIL",
+     "fixReason": "The fix only checks per-client resources and drops applicable all-clients (resource-type) grants, which misses the obligation to include all-clients grants."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Global canView() grant bypasses per-client permission evaluation in canView(client)",
+    "fixStatus": "local",
+    "improvedCode": "        if (canViewClientDefault() || canConfigure(client)) {\n            return true;"
+   },
+   "ms": 11639,
+   "usage": {
+    "input": 7945,
+    "output": 473,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says that the global canView() grant bypasses per-client permission evaluation in canView(client), which is the defect described.",
+     "fix": "FAIL",
+     "fixReason": "Swapping in canViewClientDefault() fixes only the direct check, but ClientsResource.getClients() can still use the global canView() shortcut to skip client-specific denials, so the listing obligation is unmet and the reference marks this as needing a wider change."
+    }
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "V2 group IDs are filtered by JPA code that requires legacy group.resource.<id> names",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 2842,
+   "usage": {
+    "input": 6588,
+    "output": 62,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states that V2 group IDs are passed to JPA filtering that requires legacy group.resource.<id> resource names, which is the defect described.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is needs-wider-change rather than local, so no improvedCode is graded."
+    }
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "getGroupIdsWithViewPermission returns resource UUIDs instead of group ids",
+    "fixStatus": "local",
+    "improvedCode": "        resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> {\n            if (hasPermission(groupResource.getName(), AdminPermissionsSchema.VIEW_MEMBERS, AdminPermissionsSchema.MANAGE_MEMBERS)) {\n                granted.add(groupResource.getName());\n            }\n        });"
+   },
+   "ms": 3988,
+   "usage": {
+    "input": 6835,
+    "output": 200,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the method returns resource UUIDs instead of group IDs.",
+     "fix": "PASS",
+     "fixReason": "The fix replaces both getId() calls with getName(), so the permission check and the returned set both use the actual group ID, and it keeps the VIEW_MEMBERS/MANAGE_MEMBERS check and the exclusion of groups that fail it."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Team destination calendars dropped when evt.destinationCalendar is null",
+    "fixStatus": "local",
+    "improvedCode": "  if (isTeamEventType && eventType.schedulingType === \"COLLECTIVE\") {\n    evt.destinationCalendar = evt.destinationCalendar ?? [];\n    evt.destinationCalendar.push(...teamDestinationCalendars);"
+   },
+   "ms": 2508,
+   "usage": {
+    "input": 7025,
+    "output": 140,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states that team destination calendars are dropped when evt.destinationCalendar is null, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "The fix initializes the array when it is null, keeps any existing calendar ahead of the team calendars it pushes, stays inside the COLLECTIVE condition, and leaves the closing brace outside the cited lines."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "updateEvent fallback calendar lookup never matches when externalCalendarId is falsy",
+    "fixStatus": "local",
+    "improvedCode": "      const selectedCalendar = externalCalendarId\n        ? externalCalendarId\n        : mainHostDestinationCalendar?.externalId;"
+   },
+   "ms": 2741,
+   "usage": {
+    "input": 5292,
+    "output": 106,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says the fallback lookup in updateEvent can never match when externalCalendarId is falsy, which is the defect described.",
+     "fix": "PASS",
+     "fixReason": "The improved code keeps a supplied externalCalendarId, otherwise falls back to mainHostDestinationCalendar?.externalId (a variable defined at line 198 that safely handles a null or empty destinationCalendar), and so meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Date override short-circuits availability and skips the busy-time overlap check",
+    "fixStatus": "local",
+    "improvedCode": "  if (dateOverrideExist) {\n    // a date override replaces normal working hours, but busy times must still be checked\n    workingHours = [];\n  }"
+   },
+   "ms": 5046,
+   "usage": {
+    "input": 6225,
+    "output": 433,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: a date override returns early and skips the busy-time overlap check.",
+     "fix": "PASS",
+     "fixReason": "Clearing the reassignable `workingHours` parameter lets override slots skip the recurring working-hours check and fall through to the existing busy check, which rejects overlaps and allows endpoint-touching slots, while the currentSeats and non-override paths are unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "One failed SendGrid cancel aborts the loop and skips remaining reminders",
+    "fixStatus": "local",
+    "improvedCode": "  const workflowRemindersToDelete: Prisma.Prisma__WorkflowReminderClient<WorkflowReminder, never>[] = [];\n\n  for (const reminder of remindersToCancel) {\n    try {\n      await client.request({\n        url: \"/v3/user/scheduled_sends\",\n        method: \"POST\",\n        body: {\n          batch_id: reminder.referenceId,\n          status: \"cancel\",\n        },\n      });\n\n      const workflowReminderToDelete = prisma.workflowReminder.delete({\n        where: {\n          id: reminder.id,\n        },\n      });\n\n      workflowRemindersToDelete.push(workflowReminderToDelete);\n    } catch (error) {\n      console.log(`Error cancelling scheduled Email ${reminder.id}: ${error}`);\n    }\n  }\n\n  try {\n    await Promise.all(workflowRemindersToDelete);\n  } catch (error) {\n    console.log(`Error deleting cancelled workflow reminders: ${error}`);\n  }"
+   },
+   "ms": 3899,
+   "usage": {
+    "input": 5156,
+    "output": 425,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: one failed SendGrid cancel aborts the loop and the remaining reminders are skipped.",
+     "fix": "PASS",
+     "fixReason": "Each cancellation now has its own try/catch, so later reminders are still attempted; successful deletes are awaited in a separate try/catch, errors are only logged so the scheduling phase continues, and reminders whose cancel failed are kept."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Null dereference of mainHostDestinationCalendar when destinationCalendar is empty",
+    "fixStatus": "local",
+    "improvedCode": "    const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];\n    if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\") {"
+   },
+   "ms": 3266,
+   "usage": {
+    "input": 7734,
+    "output": 133,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: `mainHostDestinationCalendar` is dereferenced when `destinationCalendar` is empty, so the property access throws.",
+     "fix": "PASS",
+     "fixReason": "Optional chaining makes an absent first calendar evaluate to undefined, which is not \"google_calendar\", so Meet falls back to Cal Video without throwing, while Google Calendar destinations and unrelated locations are unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Locked SMS sending counted as failure, causing reminder deletion",
+    "fixStatus": "local",
+    "improvedCode": "        } else {\n          // scheduleSMS returns undefined when sending is skipped (e.g. SMS locked for user/team).\n          // This is not a send failure, so leave retryCount untouched and retry on a later run.\n          console.log(`SMS reminder ${reminder.id} was not scheduled (sending skipped or locked)`);"
+   },
+   "ms": 4564,
+   "usage": {
+    "input": 3989,
+    "output": 160,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: a locked or skipped SMS send is counted as a failure, which leads to the reminder being deleted.",
+     "fix": "PASS",
+     "fixReason": "The else branch keeps its opening brace, which the existing brace on line 187 closes; it only logs and no longer increments retryCount, so skipped reminders stay eligible for later scheduling while successful updates and catch-block retry counting are unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Placeholder refresh_token overwrites valid stored token when response omits it",
+    "fixStatus": "local",
+    "improvedCode": "  if (\n    !refreshTokenResponse.data.refresh_token &&\n    APP_CREDENTIAL_SHARING_ENABLED &&\n    process.env.CALCOM_CREDENTIAL_SYNC_ENDPOINT\n  ) {\n    // Only needed for the credential sync flow; otherwise keep the stored refresh token intact\n    refreshTokenResponse.data.refresh_token = \"refresh_token\";\n  }"
+   },
+   "ms": 4179,
+   "usage": {
+    "input": 3007,
+    "output": 209,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: a placeholder refresh_token overwrites the valid stored token when the provider response omits it.",
+     "fix": "PASS",
+     "fixReason": "The placeholder is now injected only when both sharing conditions that select the minimum-schema branch hold, so the non-sharing branch never synthesizes a token, existing refresh tokens are kept, and the sharing/sync behavior is unchanged, using only names already in scope."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Slug condition inverted: slug set only when team billing is enabled",
+    "fixStatus": "local",
+    "improvedCode": "            ...(!IS_TEAM_BILLING_ENABLED ? { slug } : {}),\n            metadata: {\n              ...(IS_TEAM_BILLING_ENABLED ? { requestedSlug: slug } : {}),"
+   },
+   "ms": 3622,
+   "usage": {
+    "input": 3703,
+    "output": 129,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says the slug condition is inverted, so the slug is set only when billing is enabled.",
+     "fix": "PASS",
+     "fixReason": "The improved code negates the slug condition, keeps requestedSlug only when billing is enabled, and leaves the rest of the metadata intact, matching the reference."
+    }
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Guest blacklist check bypassed via email case or plus-address alias",
+    "fixStatus": "local",
+    "improvedCode": "  const blacklistedGuestEmails = process.env.BLACKLISTED_GUEST_EMAILS\n    ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.trim().toLowerCase())\n    : [];\n\n  const toBaseEmail = (email: string) => {\n    const lower = email.trim().toLowerCase();\n    const atIndex = lower.lastIndexOf(\"@\");\n    if (atIndex === -1) return lower;\n    const local = lower.slice(0, atIndex).split(\"+\")[0];\n    return `${local}${lower.slice(atIndex)}`;\n  };\n\n  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(toBaseEmail(guest))"
+   },
+   "ms": 7792,
+   "usage": {
+    "input": 6233,
+    "output": 703,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: case variants or plus-address aliases let a guest get past the blacklist check.",
+     "fix": "PASS",
+     "fixReason": "Guests are reduced to their lowercase base address (plus-suffix stripped) before checking the lowercased blacklist; existing-attendee exclusion, original guest emails, empty-blacklist behavior and the closing `);` on line 78 are all preserved, and the code is valid TypeScript."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Dayjs objects compared with === so full-day unavailable override is never detected",
+    "fixStatus": "local",
+    "improvedCode": "        if (dayjs(date.start).add(utcOffset, \"minutes\").isSame(dayjs(date.end).add(utcOffset, \"minutes\"))) {\n          return true;\n        }"
+   },
+   "ms": 3195,
+   "usage": {
+    "input": 6166,
+    "output": 118,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: Dayjs objects are compared by reference with ===, so the equal-endpoint (full-day unavailable) override is never detected.",
+     "fix": "PASS",
+     "fixReason": "Using isSame compares the endpoints by timestamp value and returns true for equal endpoints on the matching day, while leaving unequal overrides to the existing bounds checks, which meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Same-day date overrides are checked one at a time, rejecting slots inside another override",
+    "fixStatus": "local",
+    "improvedCode": "  const slotDayKey = slotStartTime.format(\"YYYY MM DD\");\n  const getOverrideRange = (date: { start: Date; end: Date }) => {\n    const utcOffset = organizerTimeZone ? dayjs.tz(date.start, organizerTimeZone).utcOffset() * -1 : 0;\n    return {\n      start: dayjs(date.start).add(utcOffset, \"minutes\"),\n      end: dayjs(date.end).add(utcOffset, \"minutes\"),\n    };\n  };\n  const overridesForDay = dateOverrides\n    .map(getOverrideRange)\n    .filter((range) => range.start.format(\"YYYY MM DD\") === slotDayKey);\n\n  if (overridesForDay.length > 0) {\n    dateOverrideExist = true;\n    // slot must be within at least one of the overrides for that day\n    const withinSomeOverride = overridesForDay.some((range) => {\n      if (range.start.isSame(range.end)) {\n        return false;\n      }\n      return slotEndTime.isAfter(range.start) && !slotStartTime.isAfter(range.end);\n    });\n    if (!withinSomeOverride) {\n      // slot is not within any date override\n      return false;\n    }\n  }"
+   },
+   "ms": 8676,
+   "usage": {
+    "input": 6971,
+    "output": 1005,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: same-day overrides are checked one at a time, so a slot inside one override is rejected because of another.",
+     "fix": "FAIL",
+     "fixReason": "The `some` check (`slotEndTime.isAfter(range.start) && !slotStartTime.isAfter(range.end)`) only tests overlap, not full containment, so it accepts slots that extend past an override's start or end or straddle a gap, which misses the containment obligation."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Recurring cancellation deletes with organizer credentials instead of each reference's credential",
+    "fixStatus": "local",
+    "improvedCode": "            const promises = [calendarCredential]\n              .map(async (credential) => {\n                const calendar = await getCalendar(credential);\n                for (const updBooking of updatedBookings) {\n                  const bookingRef = updBooking.references.find(\n                    (ref) => ref.type.includes(\"_calendar\") && ref.credentialId === credentialId\n                  );\n                  if (bookingRef) {\n                    const { uid, externalCalendarId } = bookingRef;\n                    const deletedEvent = await calendar?.deleteEvent(uid, evt, externalCalendarId);"
+   },
+   "ms": 7978,
+   "usage": {
+    "input": 6411,
+    "output": 777,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: recurring cancellation deletes events with the organizer's credentials instead of each reference's own credential.",
+     "fix": "PASS",
+     "fixReason": "It iterates only the resolved `calendarCredential` (including one loaded from the DB) and matches each occurrence's reference by `credentialId`, which equals that credential's id; it deletes using that reference's `uid` and `externalCalendarId` and leaves the push and the `Promise.all` error handling intact."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Video booking references lose credentialId (hard-coded undefined)",
+    "fixStatus": "local",
+    "improvedCode": "        externalCalendarId: isCalendarType ? result.externalId : undefined,\n        credentialId: result.credentialId,"
+   },
+   "ms": 2317,
+   "usage": {
+    "input": 7788,
+    "output": 89,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states that video booking references lose their credentialId because it is hard-coded to undefined.",
+     "fix": "PASS",
+     "fixReason": "The improved code uses result.credentialId for all references and keeps externalCalendarId limited to calendar results, which matches every obligation and the example fix."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Working-hours check ignores slot end and rejects multi-range days",
+    "fixStatus": "local",
+    "improvedCode": "  const slotStartMinutes = slotStartTime.hour() * 60 + slotStartTime.minute();\n  const slotEndMinutes = slotStartMinutes + slotEndTime.diff(slotStartTime, \"minutes\");\n  const workingHoursForDay = workingHours.filter((workingHour) =>\n    workingHour.days.includes(slotStartTime.day())\n  );\n  if (\n    workingHoursForDay.length > 0 &&\n    !workingHoursForDay.some(\n      (workingHour) => slotStartMinutes >= workingHour.startTime && slotEndMinutes <= workingHour.endTime\n    )\n  ) {\n    // slot is outside of working hours\n    return false;\n  }"
+   },
+   "ms": 8181,
+   "usage": {
+    "input": 6705,
+    "output": 640,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names both defects: the end bound is ignored, and slots on days with several working-hour ranges are wrongly rejected.",
+     "fix": "FAIL",
+     "fixReason": "The fix gates on `workingHoursForDay.length > 0`, so when working hours are supplied but none cover the slot's day, the slot is accepted instead of rejected, which misses the obligation to reject slots outside every applicable interval."
+    }
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "isTeamAdminOrOwner uses && so team admins who are not owners are denied",
+    "fixStatus": "local",
+    "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));"
+   },
+   "ms": 3360,
+   "usage": {
+    "input": 5799,
+    "output": 140,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly identifies that the && operator in isTeamAdminOrOwner wrongly denies team admins who are not owners.",
+     "fix": "PASS",
+     "fixReason": "Replacing && with || authorizes either an admin or an owner, leaves the organizer and attendee checks unchanged, and still rejects users who hold none of these roles."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Office365 createEvent ignores credentialId and always uses first host's destination calendar",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3608,
+   "usage": {
+    "input": 3937,
+    "output": 272,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: createEvent ignores the invoking credential and always targets the first host's destination calendar, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Working-hours check rejects slots on days with multiple ranges",
+    "fixStatus": "local",
+    "improvedCode": "  const slotDayWorkingHours = workingHours.filter((workingHour) =>\n    workingHour.days.includes(slotStartTime.day())\n  );\n  if (slotDayWorkingHours.length > 0) {\n    const start = slotStartTime.hour() * 60 + slotStartTime.minute();\n    const end = start + slotEndTime.diff(slotStartTime, \"minutes\");\n    const isWithinWorkingHours = slotDayWorkingHours.some(\n      (workingHour) => start >= workingHour.startTime && end <= workingHour.endTime\n    );\n    if (!isWithinWorkingHours) {\n      // slot is outside of working hours\n      return false;\n    }\n  }"
+   },
+   "ms": 8080,
+   "usage": {
+    "input": 6679,
+    "output": 592,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: slots are wrongly rejected on days that have multiple working-hours ranges.",
+     "fix": "FAIL",
+     "fixReason": "The `some`-based containment and the real slot end fix the split-day case, but the check is skipped entirely when no interval matches the slot's weekday, so slots on non-working days pass even when working hours are supplied, missing the obligation to reject slots outside all applicable intervals."
+    }
+   }
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Catch-block retryCount update uses stale value, losing concurrent increments",
+    "fixStatus": "local",
+    "improvedCode": "    } catch (error) {\n      await prisma.workflowReminder.update({\n        where: {\n          id: reminder.id,\n        },\n        data: {\n          retryCount: { increment: 1 },\n        },"
+   },
+   "ms": 4609,
+   "usage": {
+    "input": 3533,
+    "output": 122,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the problem: the catch block's retryCount update uses a stale value, so concurrent increments get lost.",
+     "fix": "PASS",
+     "fixReason": "The improvedCode swaps in Prisma's atomic `{ increment: 1 }`, keeps the reminder.id target and the await, preserves the catch structure, and does not duplicate the closing `});` that sits outside the cited range."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Recurring bulk calendar delete runs once per calendar reference",
+    "fixStatus": "local",
+    "improvedCode": "          if (\n            reference === bookingCalendarReference[0] &&\n            bookingToDelete.eventType?.recurringEvent &&\n            bookingToDelete.recurringEventId &&\n            allRemainingBookings\n          ) {\n            const promises = bookingToDelete.user.credentials\n              .filter((credential) => credential.type.endsWith(\"_calendar\"))\n              .map(async (credential) => {\n                const calendar = await getCalendar(credential);\n                for (const updBooking of updatedBookings) {\n                  const bookingRef = updBooking.references.find((ref) => ref.type.includes(\"_calendar\"));\n                  if (bookingRef) {\n                    const { uid, externalCalendarId } = bookingRef;\n                    const deletedEvent = await calendar?.deleteEvent(uid, evt, externalCalendarId);\n                    apiDeletes.push(deletedEvent);\n                  }\n                }\n              });"
+   },
+   "ms": 8568,
+   "usage": {
+    "input": 6678,
+    "output": 919,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the recurring bulk delete runs once for every calendar reference.",
+     "fix": "FAIL",
+     "fixReason": "Gating the block on the first reference does not scope deletions to that reference's credential. It still matches only the first calendar reference of each occurrence and deletes it through every organizer credential, so co-host events are still not deleted with their own credentials."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#06",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Override start/end wrap past midnight after timezone shift, giving wrong or empty slots",
+    "fixStatus": "local",
+    "improvedCode": "      return {\n        userIds: override.userId ? [override.userId] : [],\n        startTime: dayjs(override.start).tz(timeZone).diff(startOfInviteeDay, \"minute\"),\n        endTime: dayjs(override.end).tz(timeZone).diff(startOfInviteeDay, \"minute\"),\n      };"
+   },
+   "ms": 6054,
+   "usage": {
+    "input": 4319,
+    "output": 619,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: override endpoints wrap past midnight after the timezone shift, which produces slots on the wrong day or no slots.",
+     "fix": "FAIL",
+     "fixReason": "It drops the organizer-to-invitee offset conversion and uses a direct .tz(timeZone).diff, which the reference says is not equivalent because override dates encode organizer wall time in UTC-shaped values, so it breaks the 'preserve existing offset conversion' obligation."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Salesforce token refresh bypasses refreshOAuthTokens and runs on every client creation",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 6802,
+   "usage": {
+    "input": 5594,
+    "output": 412,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the token refresh runs on every client creation and bypasses refreshOAuthTokens, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is not \"local\", so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Unprotected retryCount update in catch block can abort the whole cron batch",
+    "fixStatus": "local",
+    "improvedCode": "    } catch (error) {\n      console.log(`Error scheduling SMS with error ${error}`);\n      try {\n        await prisma.workflowReminder.update({\n          where: {\n            id: reminder.id,\n          },\n          data: {\n            retryCount: reminder.retryCount + 1,\n          },\n        });\n      } catch (updateError) {\n        console.log(`Error updating retryCount for reminder ${reminder.id}: ${updateError}`);\n      }"
+   },
+   "ms": 4665,
+   "usage": {
+    "input": 3595,
+    "output": 213,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: an unprotected retryCount update in the catch block whose failure can abort the whole cron batch.",
+     "fix": "PASS",
+     "fixReason": "The update still runs and is wrapped in its own try/catch so remaining reminders keep processing, and the original error is still logged; the only side effect is that line 198 stays outside the replacement, so the error is logged twice, which is harmless redundancy rather than broken behavior."
+    }
+   }
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Meet link patch uses undefined calendarId when no destination calendar matches",
+    "fixStatus": "local",
+    "improvedCode": "      // Find in calEventRaw.destinationCalendar the one with the same credentialId\n\n      const selectedCalendar =\n        calEventRaw.destinationCalendar?.find((cal) => cal.credentialId === credentialId)?.externalId ||\n        \"primary\";\n\n      calendar.events.insert(\n        {\n          auth: myGoogleAuth,\n          calendarId: selectedCalendar,"
+   },
+   "ms": 3956,
+   "usage": {
+    "input": 5645,
+    "output": 195,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the Meet link patch is sent with an undefined calendarId when no destination calendar matches.",
+     "fix": "PASS",
+     "fixReason": "Resolving selectedCalendar to \"primary\" makes the insert and the later patch share the same calendar ID, keeps credential-specific selection when a match exists, and leaves the syntax intact."
+    }
+   }
+  },
+  {
+   "issueId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#13",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Twilio cancel failure skips deleting the workflow reminder row",
+    "fixStatus": "local",
+    "improvedCode": "export const deleteScheduledSMSReminder = async (reminderId: number, referenceId: string | null) => {\n  try {\n    try {\n      if (referenceId) {\n        await twilio.cancelSMS(referenceId);\n      }\n    } finally {\n      await prisma.workflowReminder.delete({\n        where: {\n          id: reminderId,\n        },\n      });\n    }"
+   },
+   "ms": 7811,
+   "usage": {
+    "input": 3300,
+    "output": 602,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: a failed Twilio cancel skips deleting the reminder row.",
+     "fix": "PASS",
+     "fixReason": "The try/finally always attempts and awaits the prisma delete, whether or not Twilio rejects, and still calls Twilio only when referenceId is set; any error then reaches the existing outer catch, which logs and contains it, and the syntax fits that catch."
+    }
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "deleteCache mutation does not invalidate connectedCalendars query, leaving stale cacheUpdatedAt",
+    "fixStatus": "local",
+    "improvedCode": "  const deleteCacheMutation = trpc.viewer.calendars.deleteCache.useMutation({\n    onSuccess: () => {\n      showToast(t(\"cache_deleted_successfully\"), \"success\");\n      onSuccess?.();\n    },\n    onError: () => {\n      showToast(t(\"error_deleting_cache\"), \"error\");\n    },\n    async onSettled() {\n      await utils.viewer.calendars.connectedCalendars.invalidate();\n    },\n  });"
+   },
+   "ms": 5758,
+   "usage": {
+    "input": 6004,
+    "output": 440,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the deleteCache mutation does not invalidate the connectedCalendars query, so a stale cacheUpdatedAt stays visible.",
+     "fix": "PASS",
+     "fixReason": "The code adds an onSettled that invalidates connectedCalendars and keeps the success toast, the optional onSuccess call and the error toast; utils is declared later but is only read inside the deferred callback, so it is defined when that callback runs."
+    }
+   }
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "App store dynamic imports run eagerly at module load, not lazily",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4067,
+   "usage": {
+    "input": 4244,
+    "output": 52,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly identifies the defect: the app store's dynamic imports run eagerly when the module loads instead of lazily.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unhandled ZodError on malformed webhook body causes 500 instead of 400",
+    "fixStatus": "local",
+    "improvedCode": "  const parsedBody = appCredentialWebhookRequestBodySchema.safeParse(req.body);\n\n  if (!parsedBody.success) {\n    return res.status(400).json({ message: \"Invalid request body\", issues: parsedBody.error.issues });\n  }\n\n  const reqBody = parsedBody.data;"
+   },
+   "ms": 4113,
+   "usage": {
+    "input": 4488,
+    "output": 167,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the unhandled ZodError on a malformed body, which produces a 500 instead of a 400.",
+     "fix": "FAIL",
+     "fixReason": "The safeParse replacement handles schema failures, but it misses the obligation to return 400 for undecryptable keys or invalid decrypted JSON, which still throw at lines 57-59."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#05",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Date override check accepts slots that only partially overlap the override",
+    "fixStatus": "local",
+    "improvedCode": "        if (slotStartTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\"))) {\n          return true;\n        }\n        if (slotEndTime.isAfter(dayjs(date.end).add(utcOffset, \"minutes\"))) {\n          return true;"
+   },
+   "ms": 5701,
+   "usage": {
+    "input": 6329,
+    "output": 459,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the containment check is too loose and accepts slots that only partially overlap the override.",
+     "fix": "PASS",
+     "fixReason": "The replacement rejects slots that start before the override start or end after the override end, allows equality at both boundaries, keeps the return-true rejection semantics, and leaves the closing brace on line 125."
+    }
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "addGuests schema accepts duplicate guest emails",
+    "fixStatus": "local",
+    "improvedCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z\n    .array(z.string().email())\n    .refine(\n      (guests) => new Set(guests.map((g) => g.trim().toLowerCase())).size === guests.length,\n      { message: \"Duplicate guest emails are not allowed\" }\n    ),\n});"
+   },
+   "ms": 4009,
+   "usage": {
+    "input": 1877,
+    "output": 184,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states that the addGuests schema accepts duplicate guest emails, which is the defect described.",
+     "fix": "PASS",
+     "fixReason": "The refine rejects requests that repeat an email, even with different case or spacing, so repeated emails can no longer create duplicate attendee rows; email and numeric bookingId validation are unchanged, and distinct valid emails are still accepted."
+    }
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Guest duplicate and blacklist checks are case-sensitive",
+    "fixStatus": "local",
+    "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );"
+   },
+   "ms": 3842,
+   "usage": {
+    "input": 6092,
+    "output": 150,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the duplicate and blacklist checks are case-sensitive.",
+     "fix": "FAIL",
+     "fixReason": "It makes the attendee and blacklist comparisons case-insensitive, but it does not dedupe case variants within the same request (e.g. 'A@x.com' and 'a@x.com' would both be accepted), so it misses an obligation."
+    }
+   }
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Calendar/video deletions in reschedule request are not awaited (forEach async)",
+    "fixStatus": "local",
+    "improvedCode": "        await Promise.all(\n          bookingRefsFiltered.map(async (bookingRef) => {\n            if (bookingRef.uid) {\n              if (bookingRef.type.endsWith(\"_calendar\")) {\n                const calendar = await getCalendar(credentialsMap.get(bookingRef.type));\n\n                return calendar?.deleteEvent(\n                  bookingRef.uid,\n                  builder.calendarEvent,\n                  bookingRef.externalCalendarId\n                );\n              } else if (bookingRef.type.endsWith(\"_video\")) {\n                return deleteMeeting(credentialsMap.get(bookingRef.type), bookingRef.uid);\n              }\n            }\n          })\n        );"
+   },
+   "ms": 3827,
+   "usage": {
+    "input": 4994,
+    "output": 309,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the calendar and video deletions in the reschedule request are not awaited because of the async forEach.",
+     "fix": "PASS",
+     "fixReason": "Wrapping the map in an awaited Promise.all makes the handler wait for every calendar load and deletion and propagate rejections, while keeping the UID check, the type dispatch, the optional calendar handling and the deletion arguments unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "BuildIndex no longer serializes concurrent builds for the same key",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4329,
+   "usage": {
+    "input": 4315,
+    "output": 53,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states the defect: concurrent builds for the same key are no longer serialized.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is needs-wider-change rather than local, so no improvedCode is graded."
+    }
+   }
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Duplicate ability enabled for skipToken rule in useAllGrafanaPromRuleAbilities",
+    "fixStatus": "local",
+    "improvedCode": "    // GrafanaPromRuleDTO rules are always supported (no loading state for ruler availability)\n    // When there is no rule (e.g. skipToken), nothing is supported\n    const MaybeSupported = !rule || loading ? NotSupported : AlwaysSupported;\n    const MaybeSupportedUnlessImmutable = immutableRule ? NotSupported : MaybeSupported;\n\n    // Creating duplicates of plugin-provided rules does not seem to make a lot of sense\n    const duplicateSupported = isPluginProvided ? NotSupported : MaybeSupported;\n\n    const rulesPermissions = getRulesPermissions('grafana');\n\n    const abilities: Abilities<AlertRuleAction> = {\n      [AlertRuleAction.Duplicate]: toAbility(duplicateSupported, rulesPermissions.create),"
+   },
+   "ms": 4311,
+   "usage": {
+    "input": 10444,
+    "output": 362,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says Duplicate is wrongly enabled when the rule is undefined (skipToken) in the Grafana prom ability hook, which is the defect described.",
+     "fix": "PASS",
+     "fixReason": "Adding a `!rule` guard to MaybeSupported makes Duplicate unsupported for an undefined rule, keeps the loading and plugin-provided restrictions and the create-permission requirement, and uses only names that already exist."
+    }
+   }
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#08",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Cleanup ticker interval reduced from 10 minutes to 1 minute without justification",
+    "fixStatus": "local",
+    "improvedCode": "func (srv *CleanUpService) Run(ctx context.Context) error {\n\tsrv.cleanUpTmpFiles(ctx)\n\n\tticker := time.NewTicker(time.Minute * 10)\n\tfor {"
+   },
+   "ms": 3301,
+   "usage": {
+    "input": 4463,
+    "output": 137,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the shared cleanup ticker interval was cut from 10 minutes to 1 minute.",
+     "fix": "PASS",
+     "fixReason": "The replacement restores the 10-minute ticker, keeps the immediate cleanUpTmpFiles call and the loop opening, and leaves the select/ctx.Done handling intact."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#snapi-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Async legacy create error is dropped without logging",
+    "fixStatus": "local",
+    "improvedCode": "\t\t_, errObjectSt := d.Legacy.Create(ctx, obj, createValidation, options)\n\t\tif errObjectSt != nil {\n\t\t\tlog.Error(errObjectSt, \"unable to create object in legacy storage\")\n\t\t}\n\t\td.recordLegacyDuration(errObjectSt != nil, mode3Str, options.Kind, method, startLegacy)"
+   },
+   "ms": 2626,
+   "usage": {
+    "input": 8635,
+    "output": 184,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states that the async legacy write error is dropped without being logged, though it mentions only create while the defect also covers the other three operations.",
+     "fix": "FAIL",
+     "fixReason": "The change adds logging only to the Create goroutine, so it misses the obligation to log legacy errors for Update, Delete, and DeleteCollection as well."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Delete success metric uses object name as kind label",
+    "fixStatus": "local",
+    "improvedCode": "\td.recordStorageDuration(false, mode3Str, options.Kind, method, startStorage)"
+   },
+   "ms": 3347,
+   "usage": {
+    "input": 8957,
+    "output": 73,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the successful Delete metric uses the object name as the kind label.",
+     "fix": "PASS",
+     "fixReason": "The replacement passes options.Kind as the kind label and keeps the storage recorder, the false success flag, mode3Str, method, and startStorage unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Strategy close/terminate shuts down factory-shared queue pool used by new strategies",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3364,
+   "usage": {
+    "input": 7321,
+    "output": 59,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: close/terminate shut down the factory-shared queue pool that new strategies still use.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, so no local fix was provided to grade."
+    }
+   }
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "join() breaks on deadline and leaves remaining flusher processes unterminated",
+    "fixStatus": "local",
+    "improvedCode": "        for process_index, process in self.processes.items():\n            if deadline is None or deadline > time.time():\n                while process.is_alive() and (deadline is None or deadline > time.time()):\n                    time.sleep(0.1)\n\n            if isinstance(process, multiprocessing.Process):\n                process.terminate()"
+   },
+   "ms": 4412,
+   "usage": {
+    "input": 7854,
+    "output": 158,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: join() breaks out of the loop when the deadline passes, so the remaining flusher processes are never terminated.",
+     "fix": "FAIL",
+     "fixReason": "It still guards termination with isinstance(process, multiprocessing.Process), which does not match the SpawnProcess workers created by self.mp_context, so remaining spawned processes are still not terminated."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#muse13-02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "FilteredPayload messages are never tracked or committed in submit()",
+    "fixStatus": "local",
+    "improvedCode": "    def submit(self, message: Message[KafkaPayload | FilteredPayload]) -> None:\n        try:\n            assert isinstance(message.value, BrokerValue)\n            partition = message.value.partition\n            offset = message.value.offset\n\n            if isinstance(message.payload, FilteredPayload):\n                self.queue_pool.offset_tracker.add_offset(partition, offset)\n                self.queue_pool.offset_tracker.complete_offset(partition, offset)\n                return\n\n            result = self.decoder(message.payload)\n\n            if result is None:\n                self.queue_pool.offset_tracker.add_offset(partition, offset)\n                self.queue_pool.offset_tracker.complete_offset(partition, offset)\n                return\n\n            group_key = self.grouping_fn(result)\n\n            work_item = WorkItem(\n                partition=partition,\n                offset=offset,\n                result=result,\n                message=message,\n            )\n\n            self.queue_pool.submit(group_key, work_item)\n\n        except Exception:\n            logger.exception(\"Error submitting message to queue\")\n            if isinstance(message.value, BrokerValue):\n                self.queue_pool.offset_tracker.add_offset(\n                    message.value.partition, message.value.offset\n                )\n                self.queue_pool.offset_tracker.complete_offset(\n                    message.value.partition, message.value.offset\n                )"
+   },
+   "ms": 6630,
+   "usage": {
+    "input": 8282,
+    "output": 936,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": false,
+     "titleReason": "The title repeats the finding's blanket claim that filtered offsets are never tracked, but the reference says BrokerValue-wrapped filtered messages do get their offsets completed through the exception handler; the real defect is that filtered payloads are sent to the decoder and handled as errors.",
+     "fix": "PASS",
+     "fixReason": "It checks message.payload for FilteredPayload before calling the decoder, then adds and completes the offset and returns without logging or enqueueing, while leaving decoding, grouping, submission and None-result handling unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#05",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Error-handling test asserts no commit but real behavior commits offset 102",
+    "fixStatus": "local",
+    "improvedCode": "                if stats[\"total_items\"] == 0 and mock_processor_call.call_count >= 2:\n                    # Wait for the commit loop (1s tick) to commit the completed offsets\n                    for _ in range(30):\n                        if test_partition in committed_offsets:\n                            break\n                        time.sleep(0.1)\n                    break\n                time.sleep(0.1)\n\n            assert mock_processor_call.call_count == 2\n            assert test_partition in committed_offsets\n            assert committed_offsets[test_partition] == 102"
+   },
+   "ms": 3844,
+   "usage": {
+    "input": 11285,
+    "output": 244,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the test asserts that no commit happens, while the real behavior commits offset 102.",
+     "fix": "PASS",
+     "fixReason": "The replacement waits up to 3 seconds for a commit, fails if none is observed, asserts the committed offset is 102 and keeps the two-call check, which meets every obligation (there is a small remaining race if a commit of 101 lands first)."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#12",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Commit callback invoked from background thread instead of the processor's main thread",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 2300,
+   "usage": {
+    "input": 8523,
+    "output": 53,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the commit callback is invoked from a background thread rather than the processor's main thread.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, so no local fix is graded."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#06",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unbounded work queues give no backpressure and can exhaust memory under load",
+    "fixStatus": "local",
+    "improvedCode": "        for i in range(num_queues):\n            # Bounded queue: put() blocks when full, applying backpressure to the consumer.\n            work_queue: queue.Queue[WorkItem[T]] = queue.Queue(maxsize=1000)\n            self.queues.append(work_queue)\n\n            worker = OrderedQueueWorker[T](\n                worker_id=i,\n                work_queue=work_queue,\n                result_processor=result_processor,\n                identifier=identifier,\n                offset_tracker=self.offset_tracker,\n            )\n            worker.start()\n            self.workers.append(worker)\n\n    def get_queue_for_group(self, group_key: str) -> int:\n        \"\"\"\n        Get queue index for a group using consistent hashing.\n        \"\"\"\n        return hash(group_key) % self.num_queues\n\n    def submit(self, group_key: str, work_item: WorkItem[T]) -> None:\n        \"\"\"\n        Submit a work item to the appropriate queue.\n\n        Blocks when the target queue is full, providing backpressure.\n        \"\"\"\n        queue_index = self.get_queue_for_group(group_key)\n        work_queue = self.queues[queue_index]\n\n        self.offset_tracker.add_offset(work_item.partition, work_item.offset)\n        work_queue.put(work_item)"
+   },
+   "ms": 8011,
+   "usage": {
+    "input": 8791,
+    "output": 800,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the work queues are unbounded, which leaves no backpressure and risks running out of memory, and that is exactly the defect described.",
+     "fix": "PASS",
+     "fixReason": "The fix sets a finite maxsize so put() blocks when a queue is full, which applies backpressure without dropping messages, keeps the same hashing and FIFO order, and still calls add_offset before put."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Error timestamps in seconds compared with replay event timestamps in milliseconds",
+    "fixStatus": "local",
+    "improvedCode": "            while error_idx < len(error_events) and error_events[error_idx][\n                \"timestamp\"\n            ] * 1000 < event.get(\"timestamp\", 0):"
+   },
+   "ms": 3390,
+   "usage": {
+    "input": 6296,
+    "output": 112,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the seconds-versus-milliseconds unit mismatch in the timestamp comparison, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "Multiplying the error timestamp by 1000 puts both sides of the comparison in milliseconds without losing precision, keeps the bounds check and strict comparison, and leaves the stored timestamps and message formatting unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Query key for trace item attribute keys omits the organization, so cached keys leak across orgs",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3790,
+   "usage": {
+    "input": 4717,
+    "output": 220,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says the query key leaves out the organization, so cached attribute keys leak across orgs, which matches the finding's defect.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#05",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Span eviction via zpopmin can drop the segment root span",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 6023,
+   "usage": {
+    "input": 3838,
+    "output": 262,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the zpopmin eviction can drop the segment root span, which is the defect described.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so the fix is not graded."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "ZUNIONSTORE uses default SUM aggregate, corrupting scores of duplicate spans",
+    "fixStatus": "local",
+    "improvedCode": "if not is_root_span and redis.call(\"zcard\", span_key) > 0 then\n    span_count = redis.call(\"zunionstore\", set_key, 2, set_key, span_key, \"AGGREGATE\", \"MAX\")\n    redis.call(\"unlink\", span_key)\nend\n\nlocal parent_key = string.format(\"span-buf:s:{%s}:%s\", project_and_trace, parent_span_id)\nif set_span_id ~= parent_span_id and redis.call(\"zcard\", parent_key) > 0 then\n    span_count = redis.call(\"zunionstore\", set_key, 2, set_key, parent_key, \"AGGREGATE\", \"MAX\")\n    redis.call(\"unlink\", parent_key)"
+   },
+   "ms": 4574,
+   "usage": {
+    "input": 3880,
+    "output": 328,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the default SUM aggregation corrupts the scores of duplicate spans, which matches the finding.",
+     "fix": "PASS",
+     "fixReason": "The improved code adds AGGREGATE MAX to both zunionstore calls and keeps the membership, span_count assignment, conditions, and unlink cleanup exactly as they were, with the closing end correctly left outside the cited range."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#sncc-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Redirect-chase loop limit reduced from 10000 to 1000, breaking deep segment trees",
+    "fixStatus": "local",
+    "improvedCode": "local set_span_id = parent_span_id\nlocal redirect_depth = 0\n\nfor i = 0, 10000 do  -- theoretically this limit means that segment trees of depth 10k may not be joined together correctly.\n    local new_set_span = redis.call(\"hget\", main_redirect_key, set_span_id)\n    redirect_depth = i\n    if not new_set_span or new_set_span == set_span_id then"
+   },
+   "ms": 4288,
+   "usage": {
+    "input": 3754,
+    "output": 203,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the redirect-chase limit was cut from 10000 to 1000 and that this breaks deep segment trees, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "The fix restores the loop bound to 10000, keeps the early break and the redirect_depth assignment, and leaves the 1000 eviction cap separate; the added Lua comment is valid syntax."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Flex .contents lets header-extra-info item overflow, breaking title ellipsis",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 6883,
+   "usage": {
+    "input": 2777,
+    "output": 354,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: making .contents a flex container lets the header-extra-info item overflow, which breaks the title ellipsis.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is insufficient-context rather than local, so there is no fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "website_name never hidden for restricted users due to missing ? in include method",
+    "fixStatus": "local",
+    "improvedCode": "  def include_website_name?\n    website.present? && !scope.restrict_user_fields?(object)\n  end"
+   },
+   "ms": 4409,
+   "usage": {
+    "input": 3731,
+    "output": 83,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: website_name is not hidden for restricted users, and it ties this to the missing `?` on the include method.",
+     "fix": "PASS",
+     "fixReason": "The replacement defines the recognized `include_website_name?` hook, omits website_name when the website is blank or when `scope.restrict_user_fields?(object)` is true, and allows it otherwise, which meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "remove_member leaves removed user's primary_group_id pointing at the group",
+    "fixStatus": "local",
+    "improvedCode": "    group.users.delete(user_id)\n    User.where(id: user_id, primary_group_id: group.id).update_all(primary_group_id: nil)"
+   },
+   "ms": 6933,
+   "usage": {
+    "input": 4139,
+    "output": 99,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says the removed user's primary_group_id is left pointing at the group, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "The improved code deletes the membership and then clears primary_group_id only for that user and only when it equals this group's id, which meets all obligations."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "SSRF via unvalidated open(url) fetch in TopicEmbed.import_remote",
+    "fixStatus": "local",
+    "improvedCode": "    doc = Readability::Document.new((lambda do\n                                          uri = URI.parse(url)\n                                          unless %w(http https).include?(uri.scheme) && uri.host.present? && [80, 443].include?(uri.port)\n                                            raise ArgumentError, 'invalid embed url'\n                                          end\n                                          Addrinfo.getaddrinfo(uri.host, uri.port, nil, :STREAM).each do |addr|\n                                            if addr.ip_loopback? || addr.ip_private? || addr.ipv4_multicast? || addr.ipv6_linklocal? ||\n                                               addr.ip_address =~ /\\A(0\\.0\\.0\\.0|169\\.254\\.|::\\z)/\n                                              raise ArgumentError, 'embed url resolves to a disallowed address'\n                                            end\n                                          end\n                                          uri.open(redirect: false, read_timeout: 10).read\n                                        end).call,"
+   },
+   "ms": 11193,
+   "usage": {
+    "input": 4414,
+    "output": 1225,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the SSRF from fetching an attacker-influenced URL with open(url) in import_remote, which is the defect described.",
+     "fix": "FAIL",
+     "fixReason": "It blocks redirects, restricts scheme and port, and makes non-success responses raise, but it never checks that uri.host matches SiteSetting.embeddable_host, so it misses the obligation to restrict the initial request to the configured host."
+    }
+   }
+  },
+  {
+   "issueId": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Fallback locales only loaded in web set_locale, not background jobs or mailers",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3098,
+   "usage": {
+    "input": 3596,
+    "output": 57,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says fallback locales are loaded only in the web set_locale path and not in jobs or mailers, which is the defect.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "NoMethodError on RSS items without content aborts whole feed import",
+    "fixStatus": "local",
+    "improvedCode": "        body = i.content || i.description\n        next if body.blank?\n\n        content = CGI.unescapeHTML(body.scrub)"
+   },
+   "ms": 3994,
+   "usage": {
+    "input": 2803,
+    "output": 92,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: a NoMethodError on RSS items that lack content, which aborts the whole feed import.",
+     "fix": "PASS",
+     "fixReason": "The fix falls back to description when content is nil, skips items with a blank body using next inside the each block, and keeps scrub and unescapeHTML, so every obligation is met."
+    }
+   }
+  },
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Migration crashes with NoMethodError when settings rows are missing",
+    "fixStatus": "local",
+    "improvedCode": "    embed_rows = execute(\"SELECT c.id FROM categories AS c\n                        INNER JOIN site_settings AS s ON s.value = c.name\n                        WHERE s.name = 'embed_category'\")\n    category_id = embed_rows.cmd_tuples > 0 ? embed_rows[0]['id'].to_i : 0\n\n    if category_id == 0\n      uncategorized_rows = execute(\"SELECT value FROM site_settings WHERE name = 'uncategorized_category_id'\")\n      category_id = uncategorized_rows.cmd_tuples > 0 ? uncategorized_rows[0]['value'].to_i : 0\n    end\n\n    if category_id == 0\n      category_id = execute(\"SELECT id FROM categories ORDER BY id LIMIT 1\").to_a.first.try(:[], 'id').to_i\n    end"
+   },
+   "ms": 4120,
+   "usage": {
+    "input": 2913,
+    "output": 353,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the migration crashes with a NoMethodError when the queried settings rows are missing.",
+     "fix": "FAIL",
+     "fixReason": "The empty-result guards work, but when the uncategorized setting is absent the code assigns hosts to an arbitrary lowest-id category rather than the application's uncategorized default, missing the fallback obligation and possibly binding hosts to an unrelated category."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#06",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Public group members page only shows first 50 members with no pagination",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3703,
+   "usage": {
+    "input": 2058,
+    "output": 49,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the public members page shows only the first 50 members and has no pagination.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so no improvedCode is graded."
+    }
+   }
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unsubscribe action raises NoMethodError when user has no TopicUser record",
+    "fixStatus": "local",
+    "improvedCode": "    tu = TopicUser.find_or_initialize_by(user_id: current_user.id, topic_id: params[:topic_id])\n    tu.notification_level ||= TopicUser.notification_levels[:regular]\n\n    if tu.notification_level > TopicUser.notification_levels[:regular]"
+   },
+   "ms": 3141,
+   "usage": {
+    "input": 4569,
+    "output": 154,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the unsubscribe action raises NoMethodError when the user has no TopicUser record.",
+     "fix": "PASS",
+     "fixReason": "find_or_initialize_by returns a record tied to the current user and requested topic, a new record defaults to regular so the existing branch mutes it, existing records keep their transitions, and the existing save! persists the change."
+    }
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Downsizing the open Tempfile can leave it reading the stale original inode",
+    "fixStatus": "local",
+    "improvedCode": "      # allow users to upload large images that will be automatically reduced to allowed size\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)\n        attempt = 5\n        while attempt > 0 && File.size(tempfile.path) > SiteSetting.max_image_size_kb.kilobytes\n          OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n          # reopen so the Tempfile's file descriptor points at the rewritten file, not the old inode\n          tempfile.open\n          attempt -= 1\n        end\n      end"
+   },
+   "ms": 6923,
+   "usage": {
+    "input": 4008,
+    "output": 831,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: after in-place downsizing, the open Tempfile can keep reading the stale original inode.",
+     "fix": "PASS",
+     "fixReason": "Calling tempfile.open after each downsize reopens the handle at position zero, so the later tempfile.size and Upload.create_for see the current content; the loop check via File.size is equivalent, and the five-attempt bound, eligibility checks, 80% reduction, animation option and cleanup are all kept."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Offset commit stalls permanently at the first gap in Kafka offsets",
+    "fixStatus": "local",
+    "improvedCode": "                # Offsets are submitted in order per partition, so any numeric gap below\n                # the max submitted offset is a real gap (transaction markers, compaction)\n                # and must be skipped rather than treated as a blocker.\n                highest_committable = last_committed\n                for offset in sorted(o for o in all_offsets if o > last_committed):\n                    if offset in outstanding:\n                        break\n                    highest_committable = offset\n\n                if highest_committable > last_committed:\n                    committable[partition] = highest_committable"
+   },
+   "ms": 6192,
+   "usage": {
+    "input": 8403,
+    "output": 538,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: offset commits stall at a gap in Kafka offsets, which matches the finding, though the reference notes the stall is not actually permanent.",
+     "fix": "PASS",
+     "fixReason": "Walking the sorted delivered offsets above last_committed and stopping at the first outstanding one skips absent offsets, stops at earlier pending work, keeps the watermark and lock, and returns the processed offset by the existing convention."
+    }
+   }
+  },
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "MetricAlertDetectorHandler is abstract and cannot be instantiated",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 2683,
+   "usage": {
+    "input": 2770,
+    "output": 56,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect correctly: the handler is left abstract, so it cannot be instantiated.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is insufficient-context rather than local, so there is no fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "TableWidgetVisualization renders empty columns and data when feature flag is on",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 3901,
+   "usage": {
+    "input": 5450,
+    "output": 177,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states that the feature-flagged TableWidgetVisualization renders empty columns and data, which matches the defect.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is insufficient-context rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Failed messages are marked complete and their offsets committed, dropping them",
+    "fixStatus": "local",
+    "improvedCode": "            except Exception:\n                logger.exception(\n                    \"Unexpected error in queue worker\", extra={\"worker_id\": self.worker_id}\n                )\n                # Leave the offset outstanding so it is not committed after a failure\n                work_item.__dict__[\"_processing_failed\"] = True\n            finally:\n                if not work_item.__dict__.get(\"_processing_failed\", False):\n                    self.offset_tracker.complete_offset(work_item.partition, work_item.offset)"
+   },
+   "ms": 9743,
+   "usage": {
+    "input": 8288,
+    "output": 866,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: failed messages are marked complete and their offsets committed, so they are dropped.",
+     "fix": "FAIL",
+     "fixReason": "When result_processor raises queue.ShutDown, the flag is never set, so the finally block still completes the offset, leaving interrupted work committable against the obligation; the `__dict__` flag also assumes WorkItem has an instance dict, which the shown code does not establish."
+    }
+   }
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Upsampling transform misses count() variants such as aliases or inner whitespace",
+    "fixStatus": "local",
+    "improvedCode": "def transform_query_columns_for_error_upsampling(\n    query_columns: Sequence[str],\n) -> list[str]:\n    \"\"\"\n    Transform aggregation functions to use sum(sample_weight) instead of count()\n    for error upsampling. Only called when all projects are allowlisted.\n    \"\"\"\n    import re\n\n    count_pattern = re.compile(\n        r\"^count\\s*\\(\\s*\\)(?:\\s+as\\s+(?P<alias>[A-Za-z_][\\w.]*|`[^`]+`|\\\"[^\\\"]+\\\"))?$\",\n        re.IGNORECASE,\n    )\n    transformed_columns = []\n    for column in query_columns:\n        match = count_pattern.match(column.strip())\n\n        if match:\n            # Simple count becomes sum of sample weights, preserving any alias\n            alias = match.group(\"alias\") or \"count\"\n            transformed_columns.append(f\"upsampled_count() as {alias}\")\n\n        else:\n            transformed_columns.append(column)\n\n    return transformed_columns"
+   },
+   "ms": 5923,
+   "usage": {
+    "input": 4603,
+    "output": 618,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the transform misses equivalent count() forms such as aliased counts and counts with whitespace inside the parentheses.",
+     "fix": "PASS",
+     "fixReason": "The case-insensitive anchored regex matches stripped zero-argument count() with optional inner whitespace and an optional alias, keeps the alias text as written (defaulting to count), and leaves all other columns unchanged and in order."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Permission cleanup listener ignores ADMIN_FINE_GRAINED_AUTHZ_V2 and can throw",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 10249,
+   "usage": {
+    "input": 5380,
+    "output": 434,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the cleanup listener ignores the V2 feature flag and can throw, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is insufficient-context rather than local, so there is no fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Org BROKER_PUBLIC clause in shared getLoginPredicate breaks linked IDP listing",
+    "fixStatus": "local",
+    "improvedCode": "        public static Predicate<IdentityProviderModel> getLoginPredicate() {\n            return ((Predicate<IdentityProviderModel>) Objects::nonNull)\n                    .and(Stream.of(values()).map(LoginFilter::getFilter).reduce(Predicate::and).get());\n        }\n\n        public static Predicate<IdentityProviderModel> getLoginCachePredicate() {\n            return getLoginPredicate()\n                    .and(idp -> idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig().get(OrganizationModel.BROKER_PUBLIC)));\n        }"
+   },
+   "ms": 9696,
+   "usage": {
+    "input": 4537,
+    "output": 287,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the org/BROKER_PUBLIC clause added to the shared getLoginPredicate wrongly filters the already-linked IDP listing.",
+     "fix": "FAIL",
+     "fixReason": "The new getLoginCachePredicate has no callers, so the Infinispan invalidation code still uses getLoginPredicate without the BROKER_PUBLIC clause, which breaks cache invalidation for BROKER_PUBLIC changes; updating those callers is a wider change outside the cited lines."
+    }
+   }
+  },
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Overlapping prefix/suffix stripping can throw StringIndexOutOfBoundsException",
+    "fixStatus": "local",
+    "improvedCode": "                int start = 0;\n                while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {\n                    start++;\n                }\n                int end = 0;\n                while (end < sanitized.length() - start && end < value.length() - start && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {\n                    end++;\n                }\n\n                messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");"
+   },
+   "ms": 5584,
+   "usage": {
+    "input": 7238,
+    "output": 299,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the prefix and suffix stripping can overlap and throw StringIndexOutOfBoundsException.",
+     "fix": "PASS",
+     "fixReason": "Limiting end to the remaining length after start in both strings keeps start <= length-end for each substring, covering empty and overlapping cases, while keeping the differing content and the unchanged diagnostic message."
+    }
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "getSubGroups lost canViewGlobal fast path, evaluating permission per subgroup",
+    "fixStatus": "local",
+    "improvedCode": "        this.auth.groups().requireView(group);\n        boolean canViewGlobal = auth.groups().canView();\n        return paginatedStream(\n            group.getSubGroupsStream(search, exact, -1, -1)\n            .filter(g -> canViewGlobal || auth.groups().canView(g)), first, max)\n            .map(g -> GroupUtils.populateSubGroupCount(g, GroupUtils.toRepresentation(auth.groups(), g, !briefRepresentation)));"
+   },
+   "ms": 4579,
+   "usage": {
+    "input": 5014,
+    "output": 226,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: getSubGroups lost its canViewGlobal fast path and now evaluates permission once per subgroup.",
+     "fix": "PASS",
+     "fixReason": "The code computes canViewGlobal once before filtering and short-circuits the per-subgroup canView check, while keeping per-group filtering when global visibility is denied and leaving parent authorization, search, filter-before-pagination and mapping unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Missing null check on Clients type resource causes NPE in hasPermission",
+    "fixStatus": "local",
+    "improvedCode": "        if (resource == null) {\n            // check if there is permission for \"all-clients\". If so, load its resource and proceed with evaluation\n            resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE);\n\n            if (resource == null) {\n                return false;\n            }\n\n            if (authz.getStoreFactory().getPolicyStore().findByResource(server, resource).isEmpty()) {\n                return false;\n            }"
+   },
+   "ms": 6503,
+   "usage": {
+    "input": 8045,
+    "output": 240,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the Clients type resource is not null-checked, which causes an NPE in hasPermission.",
+     "fix": "PASS",
+     "fixReason": "The added null guard returns false before findByResource runs, and the existing policy check and evaluation are unchanged, with the outer closing brace left outside the anchor as required."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "ClientPermissionsV2.canView() ignores global MANAGE permission",
+    "fixStatus": "local",
+    "improvedCode": "    @Override\n    public boolean canView() {\n        return canViewClientDefault() || hasPermission(AdminPermissionsSchema.VIEW) || hasPermission(AdminPermissionsSchema.MANAGE);\n    }"
+   },
+   "ms": 3065,
+   "usage": {
+    "input": 8007,
+    "output": 132,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly says that canView() ignores the global MANAGE permission, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "The fix adds hasPermission(AdminPermissionsSchema.MANAGE) to the existing default-role and VIEW checks, uses the global (non-client-specific) hasPermission overload, and matches the example fix."
+    }
+   }
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Pause/Resume action missing from Grafana rules in new rule list",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3137,
+   "usage": {
+    "input": 4086,
+    "output": 53,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly states the defect: Grafana rules in the new rule list no longer show the Pause/Resume action.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#sncc-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Delete skips legacy delete when storage returns NotFound",
+    "fixStatus": "local",
+    "improvedCode": "\tstartStorage := time.Now()\n\tres, async, err := d.Storage.Delete(ctx, name, deleteValidation, options)\n\tif err != nil {\n\t\t// NotFound in storage must not skip the legacy delete: the object may exist only in legacy.\n\t\tvar statusErr interface{ Status() metav1.Status }\n\t\tnotFound := errors.As(err, &statusErr) && statusErr.Status().Reason == metav1.StatusReasonNotFound\n\t\tif !notFound {\n\t\t\tlog.Error(err, \"unable to delete object in storage\")\n\t\t\td.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)\n\t\t\treturn res, async, err\n\t\t}\n\t}"
+   },
+   "ms": 6952,
+   "usage": {
+    "input": 9224,
+    "output": 766,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: a NotFound from storage makes Delete skip the legacy delete.",
+     "fix": "FAIL",
+     "fixReason": "On NotFound the code falls through to the unconditional `recordStorageDuration(false, ...)` at line 106, so a NotFound is recorded as a successful storage deletion, which breaks the metrics obligation."
+    }
+   }
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#11",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Silence drawer never renders in list view because rule is undefined",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 4509,
+   "usage": {
+    "input": 6240,
+    "output": 317,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the silence drawer never renders in the list view because the ruler rule is undefined, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is insufficient-context, not local, so no fix is graded."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#06",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Legacy update in mode 3 receives original objInfo instead of committed unified object",
+    "fixStatus": "local",
+    "improvedCode": "\t\t_, _, errObjectSt := d.Legacy.Update(ctx, name, &updateWrapper{upstream: objInfo, updated: res}, createValidation, updateValidation, forceAllowCreate, options)"
+   },
+   "ms": 2818,
+   "usage": {
+    "input": 8856,
+    "output": 128,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the mode-3 legacy update gets the original objInfo instead of the object committed to unified storage.",
+     "fix": "PASS",
+     "fixReason": "Wrapping objInfo and res in an updateWrapper passes the committed object to legacy, keeps the upstream preconditions, and leaves the other arguments and the errObjectSt variable unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "TotalDocs reads b.cache without holding cacheMu, racing with BuildIndex",
+    "fixStatus": "local",
+    "improvedCode": "\tb.cacheMu.Lock()\n\tb.cache[key] = idx\n\tb.cacheMu.Unlock()\n\treturn idx, nil\n}\n\n// TotalDocs returns the total number of documents across all indices\nfunc (b *bleveBackend) TotalDocs() int64 {\n\tvar totalDocs int64\n\tb.cacheMu.RLock()\n\tdefer b.cacheMu.RUnlock()\n\tfor _, v := range b.cache {\n\t\tc, err := v.index.DocCount()\n\t\tif err != nil {\n\t\t\tcontinue\n\t\t}\n\t\ttotalDocs += int64(c)\n\t}\n\treturn totalDocs"
+   },
+   "ms": 5925,
+   "usage": {
+    "input": 4567,
+    "output": 314,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: TotalDocs reads b.cache without holding cacheMu, which races with writes in BuildIndex.",
+     "fix": "PASS",
+     "fixReason": "The replacement takes cacheMu.RLock with a deferred RUnlock before iterating b.cache, keeps the summing and error-skipping logic, and leaves BuildIndex's locked insertion intact, matching the reference's own RLock usage."
+    }
+   }
+  },
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Device cache entry persists after device-limit rejection, letting the next request through",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4144,
+   "usage": {
+    "input": 4318,
+    "output": 216,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the cache entry is left behind after the device-limit rejection, so the next request gets through.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Refresh token update persists SafeParse result object instead of credential key",
+    "fixStatus": "local",
+    "improvedCode": "        const key = parseRefreshTokenResponse(googleCredentials, googleCredentialSchema).data;\n        await prisma.credential.update({\n          where: { id: credential.id },\n          data: { key },"
+   },
+   "ms": 3475,
+   "usage": {
+    "input": 4716,
+    "output": 117,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states that the refresh update persists the SafeParse result object instead of the credential key, which is the defect.",
+     "fix": "PASS",
+     "fixReason": "Taking `.data` from the parse result persists the parsed credentials, keeps validation, and leaves the same update call with its closing delimiter outside the anchor, matching the reference."
+    }
+   }
+  },
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Backup code login bypasses password check when a dummy totpCode is sent",
+    "fixStatus": "local",
+    "improvedCode": "      if (user.twoFactorEnabled && credentials.backupCode) {\n        // The password check above is skipped whenever totpCode is non-empty, so never\n        // allow a backup code to be combined with a totpCode.\n        if (credentials.totpCode) {\n          throw new Error(ErrorCode.IncorrectEmailPassword);\n        }\n\n        if (!process.env.CALENDSO_ENCRYPTION_KEY) {\n          console.error(\"Missing encryption key; cannot proceed with backup code login.\");\n          throw new Error(ErrorCode.InternalServerError);\n        }\n\n        if (!user.backupCodes) throw new Error(ErrorCode.MissingBackupCodes);\n\n        const backupCodes = JSON.parse(\n          symmetricDecrypt(user.backupCodes, process.env.CALENDSO_ENCRYPTION_KEY)\n        );\n\n        // check if user-supplied code matches one\n        const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));\n        if (index === -1) throw new Error(ErrorCode.IncorrectBackupCode);\n\n        // delete verified backup code and re-encrypt remaining\n        backupCodes[index] = null;\n        await prisma.user.update({\n          where: {\n            id: user.id,\n          },\n          data: {\n            backupCodes: symmetricEncrypt(JSON.stringify(backupCodes), process.env.CALENDSO_ENCRYPTION_KEY),\n          },\n        });\n      } else if (user.twoFactorEnabled) {"
+   },
+   "ms": 7186,
+   "usage": {
+    "input": 5724,
+    "output": 928,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: sending a dummy totpCode with a backup code skips the password check.",
+     "fix": "PASS",
+     "fixReason": "Rejecting requests that carry a totpCode in the backup-code branch, before any backup code is consumed, closes the bypass while keeping password-verified backup-code login, code consumption, and the TOTP-only path unchanged, matching the reference fix."
+    }
+   }
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Cleanup removes IDP with literal alias \"alias\" instead of created IDP aliases",
+    "fixStatus": "local",
+    "improvedCode": "            getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-\" + i)::remove);\n        }\n\n        String orgaId = testRealm().organizations().getAll().get(0).getId();\n        for (int i = 10; i < 20; i++) {\n            testRealm().organizations().get(orgaId).identityProviders().addIdentityProvider(\"idp-alias-\" + i);\n        }\n\n        getTestingClient().server(TEST_REALM_NAME).run((RunOnServer) session -> {\n            RealmModel realm = session.getContext().getRealm();\n            RealmCacheSession realmCache = (RealmCacheSession) session.getProvider(CacheRealmProvider.class);\n\n            // check all caches for login don't exist yet\n            for (FetchMode fetchMode : IdentityProviderStorageProvider.FetchMode.values()) {\n                String cachedKey = cacheKeyForLogin(realm, fetchMode);\n                IdentityProviderListQuery identityProviderListQuery = realmCache.getCache().get(cachedKey, IdentityProviderListQuery.class);\n                assertNull(identityProviderListQuery);\n            }\n\n            // perform some login IDP searches and ensure they are cached.\n            session.identityProviders().getForLogin(FetchMode.REALM_ONLY, null);\n            IdentityProviderListQuery identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.REALM_ONLY), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(5, identityProviderListQuery.getIDPs(\"\").size());\n\n            session.identityProviders().getForLogin(FetchMode.ORG_ONLY, orgaId);\n            identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.ORG_ONLY), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(5, identityProviderListQuery.getIDPs(orgaId).size());\n\n            session.identityProviders().getForLogin(FetchMode.ALL, orgaId);\n            identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.ALL), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(10, identityProviderListQuery.getIDPs(orgaId).size());\n        });\n\n        // 1- add/remove IDPs that are not available for login - none of these operations should invalidate the login caches.\n        IdentityProviderRepresentation idpRep = new IdentityProviderRepresentation();\n        idpRep.setAlias(\"idp-alias-\" + 20);\n        idpRep.setEnabled(true);\n        idpRep.setHideOnLogin(true); // this will make the new IDP not available for login.\n        idpRep.setDisplayName(\"Broker \" + 20);\n        idpRep.setProviderId(\"keycloak-oidc\");\n        testRealm().identityProviders().create(idpRep).close();\n        getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-20\")::remove);"
+   },
+   "ms": 14641,
+   "usage": {
+    "input": 12130,
+    "output": 1472,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the cleanup targets the literal alias \"alias\" instead of the aliases of the providers the test created.",
+     "fix": "PASS",
+     "fixReason": "The improved code registers cleanup for each \"idp-alias-\" + i in the loop and for \"idp-alias-20\", leaves all setup and assertions unchanged, and compiles because a bound method reference evaluates its receiver immediately, so it does not capture the non-final loop variable."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Unescaped URL injected into href attribute and link text allows stored XSS",
+    "fixStatus": "local",
+    "improvedCode": "    escaped_url = ERB::Util.html_escape(url)\n    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped_url}'>#{escaped_url}</a>\")}</small>\\n\""
+   },
+   "ms": 3613,
+   "usage": {
+    "input": 4186,
+    "output": 157,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the URL goes into the href attribute and the link text without escaping, which allows stored XSS.",
+     "fix": "FAIL",
+     "fixReason": "The URL is now escaped correctly (html_escape escapes apostrophes), but the fix still appends with `<<`, so it misses the obligation to handle nil contents without raising."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Global all-clients grant ignored when a per-client resource exists",
+    "fixStatus": "local",
+    "improvedCode": "        Resource resource =  resourceStore.findByName(server, client.getId(), server.getId());\n        if (resource != null && hasGrantedPermission(resource, scope)) {\n            return true;\n        }\n\n        // fall back to the \"all-clients\" resource type so a global grant also applies\n        resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE);\n\n        if (resource == null || authz.getStoreFactory().getPolicyStore().findByResource(server, resource).isEmpty()) {\n            return false;\n        }"
+   },
+   "ms": 5746,
+   "usage": {
+    "input": 8086,
+    "output": 618,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: an existing per-client resource causes the global all-clients grant to be ignored.",
+     "fix": "PASS",
+     "fixReason": "It returns true on a per-client grant, otherwise falls through to the existing evaluation of the all-clients resource, denies when that resource is null or has no policies, keeps the same-realm and server checks, and uses the existing hasGrantedPermission helper, matching the reference."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Forbidden check may come from reading scopes rather than removing the scope",
+    "fixStatus": "local",
+    "improvedCode": "        ClientScopeRepresentation scopeToRemove = realm.admin().clients().get(myclient.getId()).getDefaultClientScopes().get(1);\n        try {\n            clientResource.removeDefaultClientScope(scopeToRemove.getId());\n            fail(\"Expected exception wasn't thrown.\");\n        } catch (Exception ex) {\n            assertThat(ex, instanceOf(ForbiddenException.class));"
+   },
+   "ms": 3441,
+   "usage": {
+    "input": 11192,
+    "output": 201,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the expected Forbidden error may come from the scope read rather than the removal, which is exactly the defect the finding describes.",
+     "fix": "PASS",
+     "fixReason": "It fetches the scope through the privileged realm.admin() client outside the try block and calls only removeDefaultClientScope through the restricted client, using a new variable name that doesn't clash with the later clientScopeRep and leaving the authorized removal test intact."
+    }
+   }
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "canExchangeTo throws UnsupportedOperationException in V2 instead of returning boolean",
+    "fixStatus": "local",
+    "improvedCode": "    @Override\n    public boolean canExchangeTo(ClientModel authorizedClient, ClientModel to, AccessToken token) {\n        // Token exchange permissions are not supported in V2; deny instead of throwing\n        return false;\n    }"
+   },
+   "ms": 2991,
+   "usage": {
+    "input": 7817,
+    "output": 141,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: canExchangeTo throws UnsupportedOperationException in V2 when it should return a boolean decision.",
+     "fix": "PASS",
+     "fixReason": "The replacement keeps the same signature and returns false, so unsupported V2 exchanges are denied instead of throwing, which meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "feed_polling_enabled? test passes even without the enabled check",
+    "fixStatus": "local",
+    "improvedCode": "    it \"requires feed_polling_enabled?\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(false)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end"
+   },
+   "ms": 3267,
+   "usage": {
+    "input": 2804,
+    "output": 187,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the enabled-flag test passes even without the enabled check, which is the defect: the test is vacuous.",
+     "fix": "PASS",
+     "fixReason": "The replacement keeps feed_polling_enabled? false, stubs the URL and username to the existing let values, and keeps the never-poll assertion, so it meets every obligation."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Stale member-fetch responses can overwrite newer pagination state",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 8198,
+   "usage": {
+    "input": 4575,
+    "output": 716,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: stale member-fetch responses that arrive late overwrite newer pagination state, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The answer's fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Group create ignores alias_level param so selected level is not saved",
+    "fixStatus": "local",
+    "improvedCode": "    group = Group.new\n    group.name = (params[:name] || '').strip\n    group.alias_level = params[:alias_level].to_i if params[:alias_level].present?\n    group.visible = params[:visible] == \"true\"\n\n    if group.save"
+   },
+   "ms": 3580,
+   "usage": {
+    "input": 4300,
+    "output": 131,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states that group create ignores the alias_level param, which is the defect the finding describes.",
+     "fix": "PASS",
+     "fixReason": "The answer assigns alias_level with the same to_i/present? guard that update uses, so a blank value keeps the default, and name trimming, visibility and save behavior are unchanged."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Tests for feed_polling_url and embed_by_username never reach their guards",
+    "fixStatus": "local",
+    "improvedCode": "    it \"requires feed_polling_url\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(nil)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end\n\n    it \"requires embed_by_username\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(nil)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end"
+   },
+   "ms": 4202,
+   "usage": {
+    "input": 2991,
+    "output": 326,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the URL and username tests never reach the guards they are named after.",
+     "fix": "PASS",
+     "fixReason": "Each test now enables polling, sets the other prerequisite to a nonblank value using the existing let helpers, and still asserts poll_feed is never called, so each test fails if its own guard is removed."
+    }
+   }
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unanchored domain regex lets allow-list be bypassed via suffix domains",
+    "fixStatus": "local",
+    "improvedCode": "  def email_in_restriction_setting?(setting, value)\n    domains = setting.split('|').map(&:strip).reject(&:empty?).map { |d| Regexp.escape(d) }\n    return false if domains.empty?\n    regexp = Regexp.new(\"\\\\A[^@\\\\s]+@(?:#{domains.join('|')})\\\\z\", true)\n    !!(value.to_s =~ regexp)\n  end"
+   },
+   "ms": 3043,
+   "usage": {
+    "input": 2568,
+    "output": 204,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the unanchored domain regex lets suffixed domains bypass the allow-list.",
+     "fix": "FAIL",
+     "fixReason": "Escaping each domain and anchoring at \\z is correct, but the extra `\\A[^@\\s]+` local-part requirement changes blacklist matching, so blacklisted-domain emails whose local part contains whitespace or '@' (e.g. quoted local parts) no longer match and get through, a new bypass."
+    }
+   }
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#08",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Unsubscribe confirmation overstates that all topic notifications stop",
+    "fixStatus": "local",
+    "improvedCode": "        stop_notifications: \"You will stop receiving notifications for every new post in <strong>{{title}}</strong>.\""
+   },
+   "ms": 2278,
+   "usage": {
+    "input": 4559,
+    "output": 89,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the confirmation overstates that all topic notifications stop.",
+     "fix": "PASS",
+     "fixReason": "Narrowing the promise to 'every new post' holds for both regular and muted outcomes, no longer claims that all notifications stop, and keeps the key and the {{title}} interpolation."
+    }
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Auto-downsize branch rewrites SVG uploads with ImageMagick, corrupting vectors",
+    "fixStatus": "local",
+    "improvedCode": "      # allow users to upload large images that will be automatically reduced to allowed size\n      # (skip SVGs: they are vector files and must not be rasterized/rewritten)\n      if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename) && filename !~ /\\.svg$/i\n        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)"
+   },
+   "ms": 3722,
+   "usage": {
+    "input": 3864,
+    "output": 293,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the auto-downsize branch rewrites SVG uploads and corrupts the vectors.",
+     "fix": "PASS",
+     "fixReason": "Adding `filename !~ /\\.svg$/i` to the guard skips SVGs case-insensitively, leaves the downsizing eligibility and loop unchanged for other formats, and leaves the SVG bytes intact for Upload.create_for."
+    }
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#05",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Light-theme h3 color regressed from 20% to 50% lightness in topic-map",
+    "fixStatus": "local",
+    "improvedCode": "    color: dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%));"
+   },
+   "ms": 4099,
+   "usage": {
+    "input": 4225,
+    "output": 100,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the light-theme topic-map h3 color changed from 20% to 50% lightness, which is what the reference describes.",
+     "fix": "PASS",
+     "fixReason": "The replacement line restores primary at 20% lightness for the light theme and uses secondary at 80% for the dark theme, and it changes only the cited color line, so the other h3 styles are preserved."
+    }
+   }
+  },
+  {
+   "issueId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#08",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Dark-theme notification badge has dark text on a dark background",
+    "fixStatus": "local",
+    "improvedCode": "  background-color: scale-color($primary, $lightness: 70%);"
+   },
+   "ms": 14369,
+   "usage": {
+    "input": 7174,
+    "output": 978,
+    "cacheRead": 0,
+    "calls": 2
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect from the finding: in the dark theme the notification badge shows dark text on a dark background.",
+     "fix": "PASS",
+     "fixReason": "Using scale-color($primary, $lightness: 70%) in both themes keeps the light-theme background unchanged and gives the dark theme a light background behind the $secondary text on linked and unlinked badges, while the specialized variants still apply their own overrides."
+    }
+   }
+  },
+  {
+   "issueId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#prod-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Stale rejectedEmails entries permanently block email after server rule changes",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 2588,
+   "usage": {
+    "input": 4408,
+    "output": 54,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: stale rejectedEmails entries keep blocking an address after the server-side rule changes.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "remove_member skips GroupUser callbacks so user_count counter cache goes stale",
+    "fixStatus": "local",
+    "improvedCode": "  def remove_member\n    group = Group.find(params.require(:group_id).to_i)\n    user_id = params.require(:user_id).to_i\n\n    return can_not_modify_automatic if group.automatic\n\n    group.group_users.where(user_id: user_id).destroy_all\n\n    if group.save\n      render json: success_json\n    else\n      render_json_error(group)\n    end\n  end"
+   },
+   "ms": 4073,
+   "usage": {
+    "input": 4349,
+    "output": 190,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: remove_member skips the GroupUser callbacks, so the user_count counter cache becomes stale.",
+     "fix": "PASS",
+     "fixReason": "The fix destroys only this group's matching GroupUser record with callbacks via destroy_all, and it keeps the automatic-group guard and the response handling."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Token refresh success check relies on statusText instead of response.ok",
+    "fixStatus": "local",
+    "improvedCode": "    if (!response.ok) throw new HttpError({ statusCode: response.status || 400, message: response.statusText || `Salesforce token refresh failed with status ${response.status}` });"
+   },
+   "ms": 2867,
+   "usage": {
+    "input": 4717,
+    "output": 106,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the token refresh success check uses statusText instead of real HTTP success, which matches the finding.",
+     "fix": "PASS",
+     "fixReason": "Switching to `!response.ok` accepts any 2xx response whatever its statusText and still throws an HttpError on failure; the status code and fallback message changes are valid and introduce no new defect."
+    }
+   }
+  },
+  {
+   "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "sendAddGuestsEmails receives unfiltered guests instead of uniqueGuests",
+    "fixStatus": "local",
+    "improvedCode": "    await sendAddGuestsEmails(evt, uniqueGuests);"
+   },
+   "ms": 3753,
+   "usage": {
+    "input": 5322,
+    "output": 81,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: sendAddGuestsEmails receives the unfiltered request guests instead of the filtered uniqueGuests.",
+     "fix": "PASS",
+     "fixReason": "Passing uniqueGuests, which the finding and reference describe as computed earlier in the handler, means only the filtered newly added guests are treated as new while evt.attendees stays intact, matching the reference fix."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Date override check allows slots starting before override start",
+    "fixStatus": "local",
+    "improvedCode": "        if (\n          slotStartTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\")) ||\n          slotEndTime.isBefore(dayjs(date.start).add(utcOffset, \"minutes\")) ||\n          slotEndTime.isSame(dayjs(date.start).add(utcOffset, \"minutes\"))\n        ) {\n          return true;\n        }"
+   },
+   "ms": 2818,
+   "usage": {
+    "input": 6243,
+    "output": 181,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the date override check lets slots through even when they start before the override start.",
+     "fix": "PASS",
+     "fixReason": "Adding slotStartTime.isBefore(offset-adjusted start) rejects slots that start early, still allows a slot starting exactly at the override start, keeps the utcOffset adjustment and the return-true semantics, and leaves the old end-time conditions as harmless redundancy."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Token schema uses toString() computed keys, stripping expiry fields",
+    "fixStatus": "local",
+    "improvedCode": "const minimumTokenResponseSchema = z\n  .object({\n    access_token: z.string(),\n    //   Expiry may be provided under different names depending on the provider\n    expires_in: z.number().optional(),\n    expiry_date: z.number().optional(),\n    ext_expires_in: z.number().optional(),\n  })\n  //   Allow other properties in the token response (e.g. refresh_token, provider-specific fields)\n  .passthrough();"
+   },
+   "ms": 3989,
+   "usage": {
+    "input": 2842,
+    "output": 202,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the toString() computed keys cause the schema to strip the expiry fields.",
+     "fix": "PASS",
+     "fixReason": "The fix requires a string access_token, makes expires_in and expiry_date optional numbers, and uses passthrough to keep refresh_token and other provider fields; the extra optional ext_expires_in is harmless."
+    }
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Plain Error thrown for missing credential yields 500 instead of NOT_FOUND",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3461,
+   "usage": {
+    "input": 2420,
+    "output": 60,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: a plain Error for a missing credential produces a 500 instead of a NOT_FOUND client error.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so no improvedCode is graded."
+    }
+   }
+  },
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "getBaseConditions returns unparenthesized fragments, breaking AND precedence",
+    "fixStatus": "local",
+    "improvedCode": "    if (authConditions && filterConditions) {\n      return Prisma.sql`(${authConditions}) AND (${filterConditions})`;\n    } else if (authConditions) {\n      return Prisma.sql`(${authConditions})`;\n    } else if (filterConditions) {\n      return Prisma.sql`(${filterConditions})`;\n    } else {\n      return Prisma.sql`(${NOTHING_CONDITION})`;\n    }"
+   },
+   "ms": 3373,
+   "usage": {
+    "input": 7845,
+    "output": 208,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: getBaseConditions returns fragments without parentheses, so an appended AND binds with the wrong precedence.",
+     "fix": "PASS",
+     "fixReason": "Each single-operand branch is now wrapped in parentheses through Prisma.sql, and the both-present branch was already correctly grouped for an appended AND, so authorization, filter intersection, parameterization and deny-all behavior are all preserved."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Connection built with stale access token instead of refreshed one",
+    "fixStatus": "local",
+    "improvedCode": "    await prisma.credential.update({\n      where: { id: credential.id },\n      data: { key: { ...accessTokenParsed.data, refresh_token: credentialKey.refresh_token } },\n    });\n\n    return new jsforce.Connection({\n      clientId: consumer_key,\n      clientSecret: consumer_secret,\n      redirectUri: WEBAPP_URL + \"/api/integrations/salesforce/callback\",\n      instanceUrl: accessTokenParsed.data.instance_url || credentialKey.instance_url,\n      accessToken: accessTokenParsed.data.access_token,\n      refreshToken: credentialKey.refresh_token,\n    });"
+   },
+   "ms": 4515,
+   "usage": {
+    "input": 5282,
+    "output": 279,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the connection is built with the stale pre-refresh access token instead of the refreshed one.",
+     "fix": "PASS",
+     "fixReason": "The connection is now built with the refreshed access_token and the refreshed instance_url (required non-empty string, so the fallback is harmless), and the awaited persistence, refresh_token, client config and redirect URI are all kept."
+    }
+   }
+  },
+  {
+   "issueId": "oauth-credential-sync-and-app-integration-enhancements-cal-com#opa-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "App metadata lookup uses slug as map key, so valid apps like Google Calendar return 404",
+    "fixStatus": "local",
+    "improvedCode": "  const appMetadata = Object.values(appStoreMetadata).find(\n    (metadata) => (metadata as { slug?: string }).slug === app.slug\n  ) as (typeof appStoreMetadata)[keyof typeof appStoreMetadata] | undefined;\n\n  if (!appMetadata) {\n    return res.status(404).json({ message: \"App not found. Ensure that you have the correct app slug\" });"
+   },
+   "ms": 4089,
+   "usage": {
+    "input": 4559,
+    "output": 201,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": false,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the metadata lookup treats the database slug as the map key, so valid apps such as Google Calendar get a 404.",
+     "fix": "PASS",
+     "fixReason": "The replacement finds the metadata entry whose slug matches app.slug, keeps the 404 guard without duplicating the closing brace, and casts the result back to the metadata entry type so the downstream uses of appMetadata.slug and appMetadata.type still work."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "terminate() does not join commit thread, leaving commits running after shutdown",
+    "fixStatus": "local",
+    "improvedCode": "    def terminate(self) -> None:\n        self.shutdown_event.set()\n        self.commit_thread.join(timeout=5.0)\n        self.queue_pool.shutdown()"
+   },
+   "ms": 3268,
+   "usage": {
+    "input": 7108,
+    "output": 112,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the missing join of the commit thread in terminate(), which is the synchronization defect, though it overstates this as commits continuing to run.",
+     "fix": "FAIL",
+     "fixReason": "An unchecked join with timeout=5.0 can return while the commit thread is still alive, so it does not guarantee the thread has exited before terminate returns."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Queue depth gauge lacks worker_id tag so per-queue series overwrite each other",
+    "fixStatus": "local",
+    "improvedCode": "                metrics.gauge(\n                    \"remote_subscriptions.queue_worker.queue_depth\",\n                    self.work_queue.qsize(),\n                    tags={\n                        \"identifier\": self.identifier,\n                        \"worker_id\": str(self.worker_id),\n                    },\n                )"
+   },
+   "ms": 3822,
+   "usage": {
+    "input": 8158,
+    "output": 162,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the queue-depth gauge has no per-worker distinction, so the per-queue series overwrite each other, which is the defect described.",
+     "fix": "PASS",
+     "fixReason": "The replacement keeps the metric name, the qsize() value, and the identifier tag, and adds a worker_id tag from the stable self.worker_id defined in __init__, so each worker gets its own series."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Unbounded nodestore fetch of all replay error IDs on every page request",
+    "fixStatus": "local",
+    "improvedCode": "        error_ids = response[0].get(\"error_ids\", []) if response else []\n        # Cap the number of errors loaded from nodestore to bound latency and memory.\n        error_ids = error_ids[:100]\n\n        # Check if error fetching should be disabled\n        disable_error_fetching = (\n            request.query_params.get(\"enable_error_context\", \"true\").lower() == \"false\"\n        )\n\n        if disable_error_fetching:\n            error_events = []\n        else:\n            error_events = fetch_error_details(project_id=project.id, error_ids=error_ids)"
+   },
+   "ms": 4100,
+   "usage": {
+    "input": 6549,
+    "output": 252,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: every page request fetches all of the replay's error IDs from nodestore with no bound.",
+     "fix": "PASS",
+     "fixReason": "Slicing error_ids to 100 before the opt-out check bounds the nodestore fetch before any payloads load, keeps the empty-response and opt-out paths unchanged, and still includes error context when enabled."
+    }
+   }
+  },
+  {
+   "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Restart path never kills old flusher process due to wrong isinstance check",
+    "fixStatus": "local",
+    "improvedCode": "            try:\n                if isinstance(process, multiprocessing.context.SpawnProcess):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore"
+   },
+   "ms": 4059,
+   "usage": {
+    "input": 8974,
+    "output": 120,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the wrong isinstance check means the restart path never kills the old flusher process.",
+     "fix": "FAIL",
+     "fixReason": "The improvedCode replaces all of lines 253-259 but leaves out line 259's `self._create_process_for_shards(process_index, shards)`, so replacement processes are never created, which breaks the obligation to preserve replacement creation."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Validation-failure warning logs full attacker-controlled raw report",
+    "fixStatus": "local",
+    "improvedCode": "                logger.warning(\n                    \"browser_report_validation_failed\",\n                    extra={\n                        \"validation_errors\": serializer.errors,\n                        \"report_type\": str(report.get(\"type\"))[:64]\n                        if isinstance(report, dict)\n                        else type(report).__name__,\n                    },\n                )"
+   },
+   "ms": 4643,
+   "usage": {
+    "input": 5384,
+    "output": 163,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": true,
+    "refFixability": "local",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the validation-failure warning logs the full attacker-controlled raw report.",
+     "fix": "FAIL",
+     "fixReason": "It removes raw_report but still logs serializer.errors, which can echo invalid inputs, and adds report_type, an arbitrary caller-supplied value, so it misses the obligation not to log input values through replacement metadata or validation-error messages."
+    }
+   }
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Slots on weekdays with no working-hours entry are treated as available",
+    "fixStatus": "local",
+    "improvedCode": "      const start = slotStartTime.hour() * 60 + slotStartTime.minute();\n      const end = start + eventLength;\n      // reject unless some working-hours interval on this weekday contains the whole slot\n      return !workingHours.some(\n        (wh) => wh.days.includes(slotStartTime.day()) && start >= wh.startTime && end <= wh.endTime\n      );"
+   },
+   "ms": 8974,
+   "usage": {
+    "input": 6491,
+    "output": 760,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: slots on weekdays that have no working-hours entry are wrongly treated as available.",
+     "fix": "FAIL",
+     "fixReason": "The replacement sits inside the `find` callback, so it never runs when `workingHours` is empty; a host whose schedule has no interval on that weekday is then still not rejected, and the reference says the enclosing condition must change to handle this."
+    }
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Cache timestamp is formatted with hard-coded en-US instead of the active locale",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4831,
+   "usage": {
+    "input": 6160,
+    "output": 278,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the cache timestamp is formatted with a hard-coded en-US locale rather than the user's active locale.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#07",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Mode 3 Create test never verifies the legacy write happens",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 2054,
+   "usage": {
+    "input": 10920,
+    "output": 51,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the core defect: the Mode 3 test never verifies the legacy write. It narrows the scope to Create and leaves out the shared-mock detail, but it describes the problem faithfully rather than the fix.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Storage Create failure recorded as legacy duration instead of storage",
+    "fixStatus": "local",
+    "improvedCode": "\tif err != nil {\n\t\tlog.Error(err, \"unable to create object in storage\")\n\t\td.recordStorageDuration(true, mode3Str, options.Kind, method, startStorage)\n\t\treturn created, err"
+   },
+   "ms": 2355,
+   "usage": {
+    "input": 8401,
+    "output": 129,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: a failed Storage.Create is recorded with the legacy duration metric instead of the storage one.",
+     "fix": "FAIL",
+     "fixReason": "The edit correctly switches the Create failure to recordStorageDuration with the same arguments, but it does not record failed Storage.Update durations in the storage metric, which is a required obligation and needs an edit outside the cited lines."
+    }
+   }
+  },
+  {
+   "issueId": "database-performance-optimizations-grafana-codex#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Successful annotation cleanup batches logged at ERROR level",
+    "fixStatus": "local",
+    "improvedCode": "\t\t\tr.log.Debug(\"Annotations to clean by time\", \"count\", len(ids), \"ids\", ids, \"cond\", cond)\n\n\t\t\tx, y := r.deleteByIDs(ctx, \"annotation\", ids)\n\t\t\tif y != nil {\n\t\t\t\tr.log.Error(\"error cleaning annotations by time\", \"count\", len(ids), \"affected\", x, \"err\", y)\n\t\t\t} else {\n\t\t\t\tr.log.Debug(\"cleaned annotations by time\", \"count\", len(ids), \"affected\", x)\n\t\t\t}"
+   },
+   "ms": 4519,
+   "usage": {
+    "input": 8042,
+    "output": 278,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: successful cleanup batches are logged at ERROR level.",
+     "fix": "FAIL",
+     "fixReason": "The improvedCode fixes only the age-based flow, while the obligations require downgrading the logs in all three cleanup flows (count-based at 554/557 and orphaned-tag at 576/579), so it leaves the defect partly in place."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Async legacy create uses request context that is cancelled when handler returns",
+    "fixStatus": "local",
+    "improvedCode": "\tgo func() {\n\t\tctx, cancel := context.WithTimeoutCause(context.WithoutCancel(ctx), time.Second*10, errors.New(\"legacy create timeout\"))\n\t\tdefer cancel()\n\n\t\tstartLegacy := time.Now()\n\t\t_, errObjectSt := d.Legacy.Create(ctx, obj, createValidation, options)\n\t\td.recordLegacyDuration(errObjectSt != nil, mode3Str, options.Kind, method, startLegacy)\n\t}()"
+   },
+   "ms": 3770,
+   "usage": {
+    "input": 8779,
+    "output": 242,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the async legacy create runs on a request context that is cancelled when the handler returns.",
+     "fix": "FAIL",
+     "fixReason": "The fix corrects only the Create goroutine and leaves the Delete, Update and DeleteCollection paths still tied to request cancellation, so it misses the obligation to cover all four async legacy write paths."
+    }
+   }
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#11",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Async legacy mirror writes can reorder and diverge from Storage",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3246,
+   "usage": {
+    "input": 8985,
+    "output": 53,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: asynchronous legacy mirror writes can run out of order and leave legacy diverged from Storage, which matches the finding's ordering problem.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#02",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Delete action missing from Grafana rules in new list because AlertRuleMenu needs ruler rule",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4210,
+   "usage": {
+    "input": 4077,
+    "output": 64,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the Delete action is missing from Grafana rules in the new list, and it names the cause, which is AlertRuleMenu requiring a ruler rule.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Referer host comparison is case-sensitive and rejects valid embeddable hosts",
+    "fixStatus": "local",
+    "improvedCode": "      raise Discourse::InvalidAccess.new('invalid referer host') if URI(request.referer || '').host.to_s.downcase != SiteSetting.embeddable_host.to_s.downcase"
+   },
+   "ms": 2917,
+   "usage": {
+    "input": 2717,
+    "output": 120,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the referer host is compared case-sensitively, so valid embeddable hosts get rejected.",
+     "fix": "FAIL",
+     "fixReason": "The controller line now compares case-insensitively and handles nil hosts safely, but the obligation to fix the embed URL check in lib/topic_retriever.rb is not met, so the defect is only partly fixed."
+    }
+   }
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Embed stylesheet missing from assets.precompile list",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3094,
+   "usage": {
+    "input": 2089,
+    "output": 49,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect, embed assets missing from assets.precompile, and is faithful even though it mentions only the stylesheet and omits embed.js.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, so there is no local fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Custom cell renderers ignored when they return falsy values like 0, '' or null",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3984,
+   "usage": {
+    "input": 4383,
+    "output": 203,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect accurately: custom renderers' falsy results such as 0, '' or null get ignored and replaced by the default.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "close() stops commit thread before workers drain, losing final offsets",
+    "fixStatus": "local",
+    "improvedCode": "    def close(self) -> None:\n        self.queue_pool.shutdown()\n        self.shutdown_event.set()\n        self.commit_thread.join(timeout=5.0)\n        try:\n            committable = self.queue_pool.offset_tracker.get_committable_offsets()\n            if committable:\n                self.commit_function(committable)\n                for partition, offset in committable.items():\n                    self.queue_pool.offset_tracker.mark_committed(partition, offset)\n        except Exception:\n            logger.exception(\"Error in final commit\")"
+   },
+   "ms": 6010,
+   "usage": {
+    "input": 7217,
+    "output": 545,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: close() stops the commit thread before the workers drain, so the final offsets are never committed.",
+     "fix": "FAIL",
+     "fixReason": "The reference says the full fix needs a wider change (the pool's shutdown() sets worker stop flags before draining their queues), so reordering close() and adding a final commit cannot guarantee that queued and in-flight work finishes before the commit."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Hidden attributes are only excluded when a search query is present",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4832,
+   "usage": {
+    "input": 4319,
+    "output": 273,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": true,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the actual defect: hidden attributes are filtered out only when a search query is present, so they still show in the default view.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Buffer keys changed from sets to sorted sets without versioning, causing WRONGTYPE errors",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3790,
+   "usage": {
+    "input": 4947,
+    "output": 65,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "needs-wider-change",
+    "refContextSufficient": false,
+    "titleFormatOk": false,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the actual defect: the buffer keys changed type without versioning, which causes WRONGTYPE errors on leftover legacy keys.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Per-group resources lack type so findByType never enumerates them",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 7065,
+   "usage": {
+    "input": 7100,
+    "output": 371,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect from the finding: per-group resources have no type, so findByType never enumerates them.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Feature-disabled guard in UpdateCompatibilityCheck.run has no test coverage",
+    "fixStatus": "no-code-fix",
+    "improvedCode": ""
+   },
+   "ms": 2604,
+   "usage": {
+    "input": 3790,
+    "output": 61,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "no-code-fix",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title correctly names the defect: the feature-disabled guard in UpdateCompatibilityCheck.run lacks test coverage.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is no-code-fix, so there is no local improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Cache status query bypasses calendar-cache feature flag",
+    "fixStatus": "insufficient-context",
+    "improvedCode": ""
+   },
+   "ms": 3014,
+   "usage": {
+    "input": 3129,
+    "output": 49,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the cache-status query bypasses the calendar-cache feature flag, which is exactly the defect described.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is insufficient-context, not local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Graceful shutdown test only checks queue_pool is None, not that work drained",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 4801,
+   "usage": {
+    "input": 11110,
+    "output": 415,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the test only checks that queue_pool is None and does not verify that work drained, which matches the defect of a weak graceful-shutdown assertion.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is needs-wider-change, so there is no local fix to grade."
+    }
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Downsize loop passes percentage geometry that breaks resize and ignores failures",
+    "fixStatus": "local",
+    "improvedCode": "        attempt = 5\n        while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes\n          width, height = FastImage.size(tempfile.path)\n          break if width.nil? || height.nil?\n          dimensions = \"#{[(width * 0.8).floor, 1].max}x#{[(height * 0.8).floor, 1].max}\"\n          break unless OptimizedImage.downsize(tempfile.path, tempfile.path, dimensions, allow_animation: SiteSetting.allow_animated_thumbnails)\n          attempt -= 1\n        end"
+   },
+   "ms": 8248,
+   "usage": {
+    "input": 3994,
+    "output": 1059,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": false,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: the downsize loop passes percentage geometry that breaks resizing, and it ignores the failures.",
+     "fix": "FAIL",
+     "fixReason": "The improvedCode leaves out the cited comment and the `if tempfile && ... FileHelper.is_image?(filename)` line (63-64), so the `end` on line 70 is left unmatched, which breaks compilation and also removes the size-threshold and image guard."
+    }
+   }
+  },
+  {
+   "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Downsizing tempfile without image extension flattens animated GIFs",
+    "fixStatus": "local",
+    "improvedCode": "          # tempfile paths have no extension, so OptimizedImage can't detect animated GIFs; process a copy that keeps it\n          processing_path = \"#{tempfile.path}#{File.extname(filename)}\"\n          begin\n            FileUtils.cp(tempfile.path, processing_path)\n            OptimizedImage.downsize(processing_path, processing_path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)\n            FileUtils.cp(processing_path, tempfile.path)\n          ensure\n            File.delete(processing_path) if File.exist?(processing_path)\n          end"
+   },
+   "ms": 8845,
+   "usage": {
+    "input": 3708,
+    "output": 796,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": true,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: downsizing a tempfile that lacks an image extension flattens animated GIFs.",
+     "fix": "FAIL",
+     "fixReason": "Preserving the extension does route the GIF to animated processing, but the fix still passes \"80%\", which the reference says the gifsicle path cannot use, so the animation is not reliably reduced in size and that obligation is missed."
+    }
+   }
+  },
+  {
+   "issueId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#pf-gpt-C1",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Flex container on .small-action breaks float:right alignment of its button",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3499,
+   "usage": {
+    "input": 3245,
+    "output": 62,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title names the defect: making .small-action a flex container breaks the right-floated buttons' alignment. It doesn't spell out the content-sized description mechanism, but it is faithful to the problem.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is \"needs-wider-change\", not \"local\", so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "split": "dev",
+   "result": {
+    "oneSentenceSummary": "Test with max_segment_id=None mocks away the code path it claims to cover",
+    "fixStatus": "needs-wider-change",
+    "improvedCode": ""
+   },
+   "ms": 3340,
+   "usage": {
+    "input": 3977,
+    "output": 55,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "no-code-fix",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title says the test with max_segment_id=None mocks out the code path it is meant to cover, which is the coverage gap the finding describes.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "The fixStatus is needs-wider-change rather than local, so there is no improvedCode to grade."
+    }
+   }
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "split": "test",
+   "result": {
+    "oneSentenceSummary": "Postgres skip hides startup regressions from eager Init in NewResourceServer",
+    "fixStatus": "no-code-fix",
+    "improvedCode": ""
+   },
+   "ms": 3743,
+   "usage": {
+    "input": 3645,
+    "output": 56,
+    "cacheRead": 0,
+    "calls": 1
+   },
+   "grade": {
+    "mustFix": false,
+    "refFixability": "local",
+    "refContextSufficient": false,
+    "titleFormatOk": true,
+    "syntaxOk": null,
+    "judge": {
+     "titleNamesProblem": true,
+     "titleReason": "The title states the defect: the postgres skip keeps startup regressions from the eager Init in NewResourceServer from being detected, which matches the finding.",
+     "fix": "NOT_APPLICABLE",
+     "fixReason": "fixStatus is no-code-fix, so there is no improvedCode to grade."
+    }
+   }
+  }
+ ]
+}

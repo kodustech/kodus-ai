@@ -1,0 +1,19 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "defectStatement": "The distribution tests exercise feature-disabled rejection only for the metadata subcommand. Removing or breaking the check subcommand's feature guard would therefore escape this coverage.",
+   "anchorCoversDefect": false,
+   "fixability": "no-code-fix",
+   "contextSufficient": false,
+   "obligations": [
+    "Exercise the check subcommand without enabling rolling-updates.",
+    "Assert the disabled-feature diagnostic and exit code 4.",
+    "Preserve the existing metadata coverage and production feature guard."
+   ],
+   "exampleFix": null,
+   "notes": "Uses the requested no-code-fix category for missing tests elsewhere. The cited production guard is correct; the remedy belongs in the distribution tests, which this item's frozen input does not show."
+  }
+ ]
+}

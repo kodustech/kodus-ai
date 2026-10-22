@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "items": [
+  {
+   "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+   "defectStatement": "When no filter is present, getBaseConditions returns a team/org authorization OR expression without enclosing parentheses. Appending AND extra therefore applies extra only to the last OR branch, allowing earlier branches to bypass the extra restriction; this does not itself bypass the base authorization predicate.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Ensure an appended AND predicate applies to every branch of the returned condition.",
+    "Preserve the intersection of authorization and filters when both exist.",
+    "Preserve parameterized SQL and deny-all behavior."
+   ],
+   "exampleFix": "    if (authConditions && filterConditions) {\n      return Prisma.sql`((${authConditions}) AND (${filterConditions}))`;\n    } else if (authConditions) {\n      return Prisma.sql`(${authConditions})`;\n    } else if (filterConditions) {\n      return Prisma.sql`(${filterConditions})`;\n    } else {\n      return Prisma.sql`(${NOTHING_CONDITION})`;\n    }",
+   "notes": "Wrapping at this boundary suffices; changing the eventTypeId fragment elsewhere is unnecessary. The both-present branch already groups its operands correctly for appended AND. No production caller using the hazardous composition was found."
+  }
+ ]
+}

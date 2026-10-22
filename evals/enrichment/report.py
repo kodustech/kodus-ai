@@ -5,8 +5,12 @@ import json, glob, os, sys, html, collections
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 OUT = sys.argv[1]
-items = {x['issueId']: x for x in json.load(open(f'{AQUI}/dataset/items.json'))['items']}
-refs = {r['issueId']: r for f in glob.glob(f'{AQUI}/dataset/references/*.json') for r in json.load(open(f))['items'] if r['issueId'] in items}
+TODOS = json.load(open(f'{AQUI}/dataset/items.json'))['items']
+# The older tabs measure the first 100 items (enrichment-v1); the dataset grew to 150 on 22/10/26, appended at the end.
+items = {x['issueId']: x for x in TODOS[:100]}
+items150 = {x['issueId']: x for x in TODOS}
+refs150 = {r['issueId']: r for f in glob.glob(f'{AQUI}/dataset/references/*.json') for r in json.load(open(f))['items'] if r['issueId'] in items150}
+refs = {i: r for i, r in refs150.items() if i in items}
 ORDEM = ['gpt-6.1-sol@sub', 'claude-opus-5.5@api', 'claude-sonnet-5.5@api', 'deepseek-v4.1-flash@together', 'kimi-k2.7-code@openrouter']
 NOME = {'gpt-6.1-sol@sub': 'GPT 6.1 Sol', 'claude-opus-5.5@api': 'Opus 5.5', 'claude-sonnet-5.5@api': 'Sonnet 5.5',
         'deepseek-v4.1-flash@together': 'DeepSeek v4.1 Flash', 'kimi-k2.7-code@openrouter': 'Kimi K2.7 Code'}
@@ -152,6 +156,32 @@ def refino(m, suf):
 tab_ref = ''.join(f'<tr><td class="ver">{NOME[m]}</td>' + ''.join(refino(m, s) for s, _ in REF_COLS) + '</tr>' for m in ORDEM)
 tab_ref_head = ''.join(f'<th>{t}</th>' for _, t in REF_COLS)
 
+# Dataset de 150: corrigíveis (código certo) e sem código (improvedCode vazio), por modelo e rodada.
+D150 = [('gpt-6.1-sol_sub', 'GPT 6.1 Sol', 'assinatura, effort low'), ('claude-opus-5.5_sdk', 'Opus 5.5', 'assinatura (Agent SDK)'), ('claude-sonnet-5.5_sdk', 'Sonnet 5.5', 'assinatura (Agent SDK)'),
+        ('deepseek-v4.1-flash_together', 'DeepSeek v4.1 Flash', 'Together'), ('kimi-k2.7-code_openrouter', 'Kimi K2.7 Code', 'OpenRouter')]
+def g150(i):
+    r = refs150[i]
+    if r['fixability'] == 'local' and r['contextSufficient']: return 'corr'
+    return 'ampla' if r['fixability'] == 'needs-wider-change' else 'semctx'
+G150 = {k: [i for i in items150 if g150(i) == k] for k in ('corr', 'ampla', 'semctx')}
+def cel(a, b, meta=None):
+    cls = '' if meta is None else (' class="ok"' if a >= meta * b else ' class="bad"')
+    return f'<td{cls}>{a}/{b}<small>{100 * a / b:.0f}%</small></td>'
+def linha150(slug, nome, via, suf, rot):
+    f = f'{AQUI}/results/{slug}-oneshot-{suf}.judged.json'
+    if not os.path.exists(f): return ''
+    R = {r['issueId']: r for r in json.load(open(f))['rows']}
+    sem = lambda i: bool(R[i].get('result')) and R[i]['result']['fixStatus'] != 'local'
+    ok = sum(1 for i in G150['corr'] if J(R[i]).get('fix') == 'PASS')
+    fail = sum(1 for i in G150['corr'] if R[i].get('result') and R[i]['result']['fixStatus'] == 'local' and J(R[i]).get('fix') != 'PASS')
+    ab = sum(1 for i in G150['corr'] if sem(i))
+    na = sum(1 for i in items150 if not R[i].get('result'))
+    vaz = [sum(1 for i in G150[k] if sem(i)) for k in ('ampla', 'semctx')]
+    tit = sum(1 for i in items150 if J(R[i]).get('titleNamesProblem'))
+    return (f'<tr><td class="ver">{nome}<small>{via}</small></td><td>{rot}</td>' + cel(ok, 100, .7) + f'<td>{fail}</td><td>{ab}</td>'
+            + cel(vaz[0] + vaz[1], 50) + cel(vaz[0], 30) + cel(vaz[1], 20) + cel(tit, 150, .95) + f'<td>{na}</td></tr>')
+tab150 = ''.join(linha150(sl, n, v, suf, rot) for sl, n, v in D150 for suf, rot in (('d150', 'rodada 1'), ('d150r2', 'rodada 2')))
+
 def chip(r):
     if not r.get('result'): return '<span class="c c-na" title="sem resposta">–</span>'
     st = r['result']['fixStatus']
@@ -221,7 +251,7 @@ thead th:first-child,thead th:nth-child(2){{text-align:left}}
 th.mod{{text-align:left;vertical-align:top;font-weight:600}}.via{{display:block;font-weight:400;font-size:12px;color:var(--mut)}}td.ver{{text-align:left;color:var(--mut)}}
 tr.gtop th,tr.gtop td{{border-top:2px solid var(--line)}}.sep{{border-left:2px solid var(--line)}}
 td.hi{{background:var(--hi);box-shadow:inset 3px 0 0 var(--hil)}}
-.t1{{min-width:560px}}.t3{{min-width:560px}}.t5{{min-width:620px}}h3{{font-size:15px;margin:18px 0 4px}}.teste{{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:10px}}.teste>summary{{padding:10px 14px;font-weight:600;cursor:pointer}}.teste .scroll{{margin-top:8px}}.t4{{min-width:760px}}.t2{{min-width:620px}}
+.t1{{min-width:560px}}.t150{{min-width:900px}}.t150 td small{{display:block;color:var(--mut);font-size:11px}}.t150 td.ver small{{font-weight:400}}.t150 td.ok{{color:var(--ok);font-weight:600}}.t150 td.bad{{color:var(--ko);font-weight:600}}.t150 th[colspan]{{text-align:center}}.t3{{min-width:560px}}.t5{{min-width:620px}}h3{{font-size:15px;margin:18px 0 4px}}.teste{{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:10px}}.teste>summary{{padding:10px 14px;font-weight:600;cursor:pointer}}.teste .scroll{{margin-top:8px}}.t4{{min-width:760px}}.t2{{min-width:620px}}
 .tabs{{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 8px;border-bottom:1px solid var(--line)}}\n.tabs button{{font:600 13px var(--sans);border:0;border-bottom:2px solid transparent;background:none;color:var(--mut);padding:8px 12px;cursor:pointer;margin-bottom:-1px}}\n.tabs button.on{{color:var(--fg);border-bottom-color:var(--acc)}}\n.leg{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0;color:var(--mut);font-size:13px;align-items:center}}
 .c{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;font:600 12px var(--mono)}}
 .c-ok{{background:var(--okb);color:var(--ok)}}.c-ko{{background:var(--kob);color:var(--ko)}}.c-ab{{background:var(--abb);color:var(--ab)}}.c-un{{background:var(--unb);color:var(--un)}}.c-na{{background:var(--nab);color:var(--na)}}
@@ -249,10 +279,21 @@ code{{font:12px var(--mono)}}.def{{background:var(--card);border:1px solid var(-
 </style>
 <div class="wrap">
 <h1>Enriquecimento do Finder</h1>
-<p class="sub">Prompt v1 · 100 TPs do gold v3 · juiz Opus 5.5 · 20/10/26</p>
-<div class="tabs" id="tabs" role="tablist"><button class="on" data-t="resultado">Resultado dos modelos</button><button data-t="refino">Refinamento</button><button data-t="diag">Diagnóstico</button><button data-t="self">Autojulgamento</button><button data-t="itens">Item a item</button><button data-t="dataset">Dataset e validação</button></div>
+<p class="sub">Dataset de 150 TPs do gold v3 (22/10/26) · abas seguintes: prompt v1 e v2 nos 100 primeiros (20–21/10/26) · juiz Opus 5.5</p>
+<div class="tabs" id="tabs" role="tablist"><button class="on" data-t="d150">Dataset 150</button><button data-t="resultado">Resultado dos modelos</button><button data-t="refino">Refinamento</button><button data-t="diag">Diagnóstico</button><button data-t="self">Autojulgamento</button><button data-t="itens">Item a item</button><button data-t="dataset">Dataset e validação</button></div>
 
-<section id="t-resultado">
+<section id="t-d150">
+<p class="nota">Dataset ampliado em 22/10/26: 150 TPs do gold v3, prompt v2, chamada única, duas rodadas por modelo, juiz Opus 5.5 pela assinatura. Cada item cai num de dois tipos, pela referência do Astra, e cada tipo tem a sua resposta certa.</p>
+<div class="scroll"><table class="t150"><thead><tr><th rowspan="2">Modelo</th><th rowspan="2">Rodada</th><th colspan="3" class="sep">Corrigíveis (100): código certo</th><th colspan="3" class="sep">Sem código (50): improvedCode vazio</th><th rowspan="2" class="sep">Título certo (150)</th><th rowspan="2">Sem resposta</th></tr>
+<tr><th class="sep">Aprovadas</th><th>Reprovadas</th><th>Sem código</th><th class="sep">Total</th><th>Mudança ampla (30)</th><th>Falta contexto (20)</th></tr></thead><tbody>{tab150}</tbody></table></div>
+<div class="def">
+<p><b>Corrigíveis (100):</b> uma correção certa cabe exatamente nas linhas citadas, e a sugestão mostra contexto suficiente para escrevê-la. Certo é devolver o código, e o juiz aprovar. <b>Aprovadas:</b> o juiz aprova a correção; meta de 70%, em verde. <b>Reprovadas:</b> o modelo deu código e o juiz não aprovou. <b>Sem código:</b> o modelo se absteve onde dava para corrigir.</p>
+<p><b>Sem código (50):</b> não existe correção que caiba nas linhas citadas. São 30 de mudança ampla (a correção precisa mexer também fora das linhas citadas) e 20 de falta de contexto (18 em que a correção exigiria nomes ou comportamento que a sugestão não mostra, e 2 que não se corrigem com código, como testes faltando em outro lugar). Certo é devolver o improvedCode vazio; qualquer código conta como erro, porque entregaria ao usuário uma correção parcial ou chutada. O fixStatus escolhido não é cobrado: para o usuário, os três dão o mesmo resultado.</p>
+<p><b>Título certo:</b> nomeia o problema da sugestão, segundo o juiz; meta de 95%, em verde. <b>Sem resposta:</b> a chamada falhou mesmo com as novas tentativas; conta como erro em todas as colunas.</p>
+</div>
+</section>
+
+<section id="t-resultado" hidden>
 <p class="nota">Cada modelo recebeu os mesmos 100 achados confirmados e, para cada um, escreveu o título e, quando achou que dava, o improvedCode. Todas as contagens são sobre os 100 achados; as quatro colunas somam 100.</p>
 <div class="scroll"><table class="t1"><thead><tr><th>Modelo</th><th>Versão</th><th>Aprovadas</th><th>Reprovadas</th><th>Juiz não decidiu</th><th>Sem código</th></tr></thead><tbody>{tab1}</tbody></table></div>
 <div class="def">
@@ -336,9 +377,9 @@ code{{font:12px var(--mono)}}.def{{background:var(--card);border:1px solid var(-
 function fit(){{document.querySelectorAll('.scroll').forEach(function(s){{s.classList.remove('fits');var t=s.querySelector('table');if(t&&t.scrollWidth<=s.clientWidth+1)s.classList.add('fits');}});}}
 window.addEventListener('load',fit);
 function aba(t){{document.querySelectorAll('#tabs button').forEach(function(x){{x.classList.toggle('on',x.dataset.t===t);}});
-['resultado','refino','diag','self','itens','dataset'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});fit();}}
+['d150','resultado','refino','diag','self','itens','dataset'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});fit();}}
 document.getElementById('tabs').addEventListener('click',function(e){{var b=e.target.closest('button');if(b){{aba(b.dataset.t);try{{history.replaceState(null,'','#'+b.dataset.t);}}catch(_){{}}}}}});
-if(['refino','diag','self','itens','dataset'].indexOf(location.hash.slice(1))>=0)aba(location.hash.slice(1));window.addEventListener('resize',fit);fit();
+if(['resultado','refino','diag','self','itens','dataset'].indexOf(location.hash.slice(1))>=0)aba(location.hash.slice(1));window.addEventListener('resize',fit);fit();
 document.getElementById('f').addEventListener('click',function(e){{var b=e.target.closest('button');if(!b)return;
 document.querySelectorAll('#f button').forEach(function(x){{x.classList.toggle('on',x===b);}});var g=b.dataset.g;
 document.querySelectorAll('#lista .item').forEach(function(it){{it.hidden=!!g&&it.dataset.g!==g;}});}});

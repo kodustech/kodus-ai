@@ -28,6 +28,21 @@
    ],
    "exampleFix": null,
    "notes": "Synchronization must begin before index creation; changing lines 137–140 cannot prevent work already performed. The diff provides enough context to restore whole-function locking, although per-key synchronization permits unrelated builds to proceed independently. Serialization alone does not coalesce queued requests. The actual disk path is Root/Namespace/Resource.Group."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "defectStatement": "The PostgreSQL-specific skip prevents the integration test from exercising storage-server startup and eager initialization. The test's resource database configuration hardcodes localhost, whereas Drone runs PostgreSQL at the host supplied by POSTGRES_HOST.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Run the integration test when GRAFANA_TEST_DB is postgres instead of skipping it.",
+    "Use the PostgreSQL test endpoint, preserving localhost:5432 defaults.",
+    "Preserve eager initialization and the existing startup and metrics assertions.",
+    "Keep connection overrides scoped to this test and preserve other database behavior."
+   ],
+   "exampleFix": "\tif dbType == \"postgres\" {\n\t\thost := os.Getenv(\"POSTGRES_HOST\")\n\t\tif host == \"\" {\n\t\t\thost = \"localhost\"\n\t\t}\n\t\tport := os.Getenv(\"POSTGRES_PORT\")\n\t\tif port == \"\" {\n\t\t\tport = \"5432\"\n\t\t}\n\t\tt.Setenv(\"GF_RESOURCE_API_DB_HOST\", host+\":\"+port)\n\t}",
+   "notes": "Repository inspection confirms that the resource database dynamically honors GF_RESOURCE_API_DB_HOST. This permits a local replacement, but that mechanism and Drone's endpoint variables are absent from the frozen input. Deleting the skip alone leaves the connection mismatch; fixing addStorageServerToConfig is an alternative requiring wider edits."
   }
  ]
 }
