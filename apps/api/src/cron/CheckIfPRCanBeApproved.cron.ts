@@ -559,11 +559,17 @@ export class CheckIfPRCanBeApprovedCronProvider {
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
-        const policy = codeReviewConfig
-            ? approvalPolicyForPlatform(
-                  approvalPolicyFromConfig(codeReviewConfig),
-                  platformType,
-              )
+        const configuredPolicy = codeReviewConfig
+            ? approvalPolicyFromConfig(codeReviewConfig)
+            : undefined;
+        if (
+            platformType === PlatformType.BITBUCKET &&
+            configuredPolicy?.labels?.length
+        ) {
+            return false;
+        }
+        const policy = configuredPolicy
+            ? approvalPolicyForPlatform(configuredPolicy, platformType)
             : undefined;
         const policyActive = !!(
             policy?.labels?.length ||

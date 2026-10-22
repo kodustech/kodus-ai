@@ -85,6 +85,22 @@ it('does not fall back to legacy approval for a saved policy without access', as
     expect(deps.codeManagementService.getPullRequest).not.toHaveBeenCalled();
 });
 
+it('does not approve a Bitbucket PR when labels cannot be verified', async () => {
+    const deps = buildDeps();
+    const provider = buildProvider(deps);
+    const result = await (provider as any).shouldApprovePR({
+        organizationAndTeamData: ORG_DATA,
+        pr: basePr({ provider: PlatformType.BITBUCKET }),
+        codeReviewConfig: {
+            pullRequestApprovalActive: true,
+            approvalLabels: ['ready'],
+        },
+        teamAutomationId: 'automation-1',
+    });
+    expect(result).toBe(false);
+    expect(deps.codeManagementService.getPullRequest).not.toHaveBeenCalled();
+});
+
 function basePr(overrides: Record<string, any> = {}) {
     return {
         number: 7,

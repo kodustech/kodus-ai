@@ -8,6 +8,7 @@ import {
     ICodeAreaRiskMapService,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
@@ -46,8 +47,20 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         ) {
             return context;
         }
+        const configuredPolicy = approvalPolicyFromConfig(config);
+        if (
+            context.platformType === PlatformType.BITBUCKET &&
+            configuredPolicy.labels?.length
+        ) {
+            return this.updateContext(context, (draft) => {
+                draft.approvalDecision = {
+                    kind: 'hold',
+                    reason: 'The provider cannot verify approval labels.',
+                };
+            });
+        }
         const policy = approvalPolicyForPlatform(
-            approvalPolicyFromConfig(config),
+            configuredPolicy,
             context.platformType,
         );
         if (

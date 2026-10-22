@@ -1,4 +1,5 @@
 import { LLM } from '@libs/llm/llm';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeAreaRiskMapService } from '@libs/platformData/infrastructure/adapters/services/code-area-risk-map.service';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
@@ -23,8 +24,12 @@ const stage = new DecidePrApprovalStage(
     conditionalApprovalAccess as any,
 );
 
-const context = (config: Record<string, unknown> = {}) =>
+const context = (
+    config: Record<string, unknown> = {},
+    platformType = PlatformType.GITHUB,
+) =>
     frozenContext({
+        platformType,
         organizationAndTeamData: {
             organizationId: 'org-1',
             teamId: 'team-1',
@@ -75,6 +80,14 @@ beforeEach(() => {
 it('holds a saved conditional policy when beta or paid access is unavailable', async () => {
     conditionalApprovalAccess.isEnabled.mockResolvedValueOnce(false);
     const result = await stage.execute(context({ approvalLabels: ['ready'] }));
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
+});
+
+it('holds a label policy on Bitbucket, where labels cannot be verified', async () => {
+    const result = await stage.execute(
+        context({ approvalLabels: ['ready'] }, PlatformType.BITBUCKET),
+    );
     expect(result.approvalDecision?.kind).toBe('hold');
     expect(codeManagement.getPullRequest).not.toHaveBeenCalled();
 });
