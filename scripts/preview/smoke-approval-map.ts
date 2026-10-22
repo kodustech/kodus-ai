@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 
 import { buildCodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 import { mongoMigrationClient } from '@libs/core/infrastructure/database/mongo/mongo-migration-client';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import type { OrganizationLicenseValidationResult } from '@libs/ee/license/interfaces/license.interface';
 
 const FETCH_TIMEOUT_MS = 10_000;
 let operation = 'initialize';
@@ -107,6 +109,30 @@ async function main() {
             headers: { Authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         });
+        if (response.status === 403 && process.env.API_CLOUD_MODE === 'false') {
+            operation = 'verify self-hosted license denial';
+            const licenseResponse = await fetch(`${api}/license/org-status`, {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
+            if (!licenseResponse.ok) {
+                throw new Error(
+                    `Self-hosted license status returned ${licenseResponse.status}`,
+                );
+            }
+            const licenseBody = (await licenseResponse.json()) as
+                | { data: OrganizationLicenseValidationResult }
+                | OrganizationLicenseValidationResult;
+            const license =
+                'data' in licenseBody ? licenseBody.data : licenseBody;
+            if (isTeamsOrEnterpriseTierAllowed(license)) {
+                throw new Error('Licensed self-hosted preview was denied');
+            }
+            console.log(
+                'preview area-map: unlicensed self-hosted access denied',
+            );
+            return;
+        }
         if (!response.ok) {
             throw new Error(
                 `Authenticated area-map read returned ${response.status}`,
