@@ -40,6 +40,7 @@ describe('ForgejoService — live PR labels', () => {
             },
             repository: { id: 'repo-1', name: 'acme/widget-api' },
             prNumber: 7,
+            includeLabels: true,
         });
 
         expect(pr?.labels).toEqual(['ready', 'security']);
@@ -61,6 +62,7 @@ describe('ForgejoService — live PR labels', () => {
             },
             repository: { id: 'repo-1', name: 'acme/widget-api' },
             prNumber: 7,
+            includeLabels: true,
         });
 
         expect(pr?.labels).toBeUndefined();
@@ -78,6 +80,7 @@ describe('ForgejoService — live PR labels', () => {
             },
             repository: { id: 'repo-1', name: 'acme/widget-api' },
             prNumber: 7,
+            includeLabels: true,
         });
 
         expect(pr?.labels).toBeUndefined();
