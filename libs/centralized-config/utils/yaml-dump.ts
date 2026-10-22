@@ -1,5 +1,7 @@
 import * as yaml from 'js-yaml';
 
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
+
 /**
  * `yaml.dump` for payloads that may have come off an HTTP request.
  *
@@ -19,7 +21,8 @@ import * as yaml from 'js-yaml';
  * per-call-site judgment about where a value came from.
  */
 export function dumpCentralizedYaml(content: unknown): string {
-    return yaml.dump(toPlainObject(content));
+    // Custom agent CLI secrets never leave the database, not even encrypted.
+    return yaml.dump(maskCliSecrets(toPlainObject(content)));
 }
 
 function toPlainObject(content: unknown): unknown {

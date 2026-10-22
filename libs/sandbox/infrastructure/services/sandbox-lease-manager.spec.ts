@@ -165,6 +165,7 @@ describe('SandboxLeaseManager', () => {
             prKey,
             expect.any(String),
             undefined,
+            undefined,
         );
 
         // Release: decrement lease
@@ -928,6 +929,67 @@ describe('SandboxLeaseManager', () => {
         expect(result.sandboxId).toBe('warm-sandbox-id');
         expect(run).toHaveBeenCalledTimes(1);
     });
+
+    it('records whether the review user was locked down at creation', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:41';
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'READY',
+            sandboxId: 'mock-sandbox-id',
+        } as any);
+        sandboxProvider.createSandboxWithRepo.mockResolvedValueOnce({
+            ...(await sandboxProvider.createSandboxWithRepo({} as any)),
+            privilegesDropped: true,
+        });
+        await manager.acquire(prKey, 'review', undefined, {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 41,
+            platform: 'GITHUB' as any,
+        });
+        expect(leaseRepo.updateReady).toHaveBeenCalledWith(
+            prKey,
+            'mock-sandbox-id',
+            undefined,
+            true,
+        );
+    });
+
+    it.each([
+        [true, true],
+        [undefined, false],
+        [false, false],
+    ])(
+        'a reconnected sandbox is locked down only when its creation recorded it (%s)',
+        async (recorded, expected) => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:42';
+            const doc = {
+                _id: prKey,
+                leaseCount: 2,
+                state: 'READY',
+                sandboxId: 'e2b-reused',
+                privilegesDropped: recorded,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any;
+            leaseRepo.upsertAcquire.mockResolvedValue(doc);
+            leaseRepo.findByPrKey.mockResolvedValue(doc);
+            const { sandbox } = await manager.acquire(prKey, 'conversation');
+            expect(Sandbox.connect).toHaveBeenCalledWith('e2b-reused', {
+                apiKey: 'test-e2b-key',
+            });
+            expect(sandbox.privilegesDropped).toBe(expected);
+        },
+    );
 
     // ─── Test 9a: release accepts custom idleMs (review uses 30s) ────────
 

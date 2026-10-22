@@ -5,9 +5,18 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-09-28T16:40:07.674Z",
+    "generated_at": "2026-10-17T16:28:20.970Z",
     "source": "manual",
     "features": {
+        "custom-agents": {
+            "name": "Custom review agents",
+            "stage": "beta",
+            "description": "Define your own reviewers with their instructions, the files they look at, the tools they may use and how their comments appear, and run them next to Kody on every pull request.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "deterministic-evidence": {
             "name": "Deterministic evidence in review",
             "stage": "beta",

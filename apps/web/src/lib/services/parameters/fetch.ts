@@ -123,6 +123,10 @@ export const createOrUpdateCodeReviewParameter = async (
     repositoryId: LiteralUnion<"global"> | undefined,
     directoryId?: string,
     directoryPaths?: string[],
+    options?: {
+        /** Revisions of the custom agents lists the save was made from. */
+        expectedRevisions?: { customAgents?: string; knowledge?: string };
+    },
 ) => {
     try {
         const trimmedCodeReviewConfigValue =
@@ -137,12 +141,17 @@ export const createOrUpdateCodeReviewParameter = async (
                     repositoryId === "global" ? undefined : repositoryId,
                 directoryId,
                 directoryPaths,
+                expectedRevisions: options?.expectedRevisions,
             },
         );
 
         return response.data;
     } catch (error: any) {
-        return { error: error.response?.status || "Erro desconhecido" };
+        return {
+            error: error.response?.status || "Erro desconhecido",
+            // What the server refused, e.g. which agent field is too long.
+            messages: error.response?.data?.message,
+        };
     }
 };
 

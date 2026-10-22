@@ -21,6 +21,7 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { SandboxSyntaxValidator } from '@libs/code-review/infrastructure/adapters/services/sandboxSyntaxValidator.service';
 import { SuggestionLLMValidator } from '@libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service';
+import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 
 @Injectable()
 export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -43,14 +44,13 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         try {
-            if (!(await this.shouldRunStage(context))) return context;
+            const changedFiles = this.reviewedFiles(context);
+            if (!(await this.shouldRunStage(context, changedFiles))) {
+                return context;
+            }
 
-            const {
-                validSuggestions,
-                changedFiles,
-                organizationAndTeamData,
-                pullRequest,
-            } = context;
+            const { validSuggestions, organizationAndTeamData, pullRequest } =
+                context;
             const prNumber = pullRequest.number;
 
             const filtered = await this.filterSuggestions(
@@ -123,14 +123,25 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
         }
     }
 
-    private async shouldRunStage(context: CodeReviewPipelineContext) {
+    /** The changed files plus the ignored ones a custom agent reviewed
+     *  (#2172), whose findings are validated like any other. */
+    private reviewedFiles(context: CodeReviewPipelineContext): FileChange[] {
+        return [
+            ...(context.changedFiles ?? []),
+            ...ignoredFilesForCustomAgents(context, context.ignoredFileChanges),
+        ];
+    }
+
+    private async shouldRunStage(
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+    ) {
         const {
             organizationAndTeamData,
             pullRequest,
             platformType,
             codeReviewConfig,
             validSuggestions,
-            changedFiles,
         } = context;
 
         const prNumber = pullRequest.number;

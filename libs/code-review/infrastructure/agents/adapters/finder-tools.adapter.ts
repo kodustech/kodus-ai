@@ -74,11 +74,17 @@ export interface FinderToolRegistryOptions {
     outlineFirst?: boolean;
     /** Cross-repo linked-repo access (#1576). When set, tools accept repo=. */
     linkedRepoAccess?: LinkedRepoAccess;
+    /** Tools appended after the finder's own (a custom agent's astGrep and
+     *  read-only MCP tools). Not memoized — an MCP server is not repo state.
+     *  One whose name is already taken is dropped: it never replaces a
+     *  finder tool. */
+    extraTools?: readonly AgentTool[];
 }
 
-export function buildFinderToolRegistry(
-    options: FinderToolRegistryOptions,
-): { registry: ToolRegistry; cache: ToolCallCache } {
+export function buildFinderToolRegistry(options: FinderToolRegistryOptions): {
+    registry: ToolRegistry;
+    cache: ToolCallCache;
+} {
     const raw = buildAgentTools(
         options.remoteCommands,
         options.gitHubToken,
@@ -127,14 +133,20 @@ export function buildFinderToolRegistry(
             tool.name === 'readFile' &&
             options.remoteCommands?.read
                 ? new OutlineFirstReadTool(tool, {
-                      readFull: (p) =>
-                          options.remoteCommands!.read(p, 0, 0),
+                      readFull: (p) => options.remoteCommands!.read(p, 0, 0),
                   })
                 : tool;
         return READ_ONLY_NAV_TOOLS.has(tool.name)
             ? new CachingTool(base, cache)
             : base;
     });
+
+    const taken = new Set(cached.map((tool) => tool.name));
+    for (const extra of options.extraTools ?? []) {
+        if (taken.has(extra.name)) continue;
+        taken.add(extra.name);
+        cached.push(extra);
+    }
 
     // Return the cache alongside the registry so the caller (composition root)
     // owns its lifecycle and can surface hit/miss stats for the run.

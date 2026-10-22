@@ -479,3 +479,56 @@ describe('the cost of recovering hunks', () => {
         expect(getFilePatches).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('a PR whose changed files are all ignored (#2172)', () => {
+    const allIgnored = (customAgents?: unknown[]) =>
+        makeContext({
+            changedFiles: [],
+            ignoredFileChanges: [
+                {
+                    filename: 'package.json',
+                    status: 'modified',
+                    patch: '@@ -0,0 +1 @@\n+"lodash": "4.17.20"',
+                },
+            ],
+            codeReviewConfig: {
+                deterministicEvidence: { tools: { dependencies: true } },
+                customAgents,
+            },
+        } as never);
+
+    const toolRunsOn = async (context: CodeReviewPipelineContext) => {
+        const run = jest.fn().mockResolvedValue([]);
+        const stage = new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            { getFilePatches: jest.fn().mockResolvedValue([]) } as never,
+            [makeTool({ run, readsIgnoredFiles: true })],
+        );
+        await (
+            stage as unknown as {
+                executeStage: (c: unknown) => Promise<unknown>;
+            }
+        ).executeStage(context);
+        return run.mock.calls.length > 0;
+    };
+
+    it('runs no analyzer when only a custom agent naming one reviews it', async () => {
+        expect(
+            await toolRunsOn(
+                allIgnored([
+                    {
+                        id: 'agent-1',
+                        name: 'Manifest',
+                        enabled: true,
+                        scope: { include: ['package.json'] },
+                    },
+                ]),
+            ),
+        ).toBe(false);
+    });
+
+    it('still scans them for a tool that reads ignored files without such an agent', async () => {
+        expect(await toolRunsOn(allIgnored())).toBe(true);
+    });
+});

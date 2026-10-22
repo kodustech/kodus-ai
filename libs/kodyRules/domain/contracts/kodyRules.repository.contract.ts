@@ -80,6 +80,17 @@ export interface IKodyRulesRepository {
         uuid: string,
         ruleId: string,
     ): Promise<KodyRulesEntity | null>;
+    /**
+     * Stamps `digestedAt` on the rule's `autoPause` / `lastAutoPause` whose
+     * `pausedAt` is one of `pausedAts`. Matching on `pausedAt` keeps a resume
+     * or a new pause that landed after the read from being overwritten.
+     */
+    markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean>;
     updateRulesStatusByFilter(
         organizationId: string,
         repositoryId: string,

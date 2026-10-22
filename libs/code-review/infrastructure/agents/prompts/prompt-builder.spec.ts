@@ -475,3 +475,32 @@ describe('buildUserPrompt', () => {
         expect(block).not.toContain('()');
     });
 });
+
+describe('CrossRepoBoundary lane', () => {
+    const linked = {
+        linkedRepoAccess: {
+            list: () => [
+                { repository: 'acme/web', preferredRef: 'main', instructions: '' },
+            ],
+        },
+    };
+
+    it('asks a built-in agent to find cross-boundary defects', () => {
+        const prompt = buildSystemPrompt(baseInput(linked), meta);
+        expect(prompt).toContain('Your goal is to find CROSS-BOUNDARY defects');
+    });
+
+    it('keeps a custom agent to its own instructions', () => {
+        const prompt = buildSystemPrompt(baseInput(linked), {
+            ...meta,
+            conventionGuides: [],
+        });
+        expect(prompt).not.toContain(
+            'Your goal is to find CROSS-BOUNDARY defects',
+        );
+        expect(prompt).toContain(
+            'Do not report boundary mismatches your instructions do not cover.',
+        );
+        expect(prompt).toContain('acme/web');
+    });
+});

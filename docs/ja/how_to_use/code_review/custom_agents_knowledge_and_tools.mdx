@@ -1,0 +1,171 @@
+---
+title: "Skills、docs、ツール"
+description: "カスタムエージェントに、リポジトリのガイド、読み取り専用のプラグイン、チームの CLI、ast-grep ルールを与えます。"
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">カスタムエージェントはベータ版です。動作や画面は今後変わる可能性があります。</Callout>
+
+## Skills & docs
+
+skills と docs は、すでにリポジトリにあるガイドです。Kodus はそれらをコピーせず、毎回のレビューで**プルリクエストのターゲットブランチ**から読み込みます。そのため、そのブランチでの編集は設定に戻らなくても反映され、プルリクエストが自分を評価するルールを変えることはできません。
+
+| | Skill | Doc |
+| --- | --- | --- |
+| 内容 | `SKILL.md` を含むフォルダー（または単一の `.md` エージェントファイル） | Markdown のガイド |
+| エージェントの読み方 | 変更が必要とするときにオンデマンドで開き、参照ファイルも読む | 毎回のレビューで全体を読み込む |
+| 向いている用途 | ルールが多い、またはコードの一部にだけ適用されるルール | エージェントがレビューするすべての変更に当てはまる短いガイド |
+
+skill 内のスクリプトはテキストとしてエージェントに渡され、実行されることはありません。
+
+### Kodus が見つける場所
+
+**Skills** は次の場所で検出されます。
+
+- `.claude/skills/*/SKILL.md`
+- `.claude/agents/*.md`
+- `.agents/skills/*/SKILL.md`
+- `.github/skills/*/SKILL.md`
+
+`SKILL.md` は、`name`（小文字・数字・ハイフンで、フォルダー名と一致）と `description` を持つ YAML フロントマターで始まります。これらがない skill は理由とともに "Not a valid skill" と表示されます。エージェントは `SKILL.md`（最大 500 行、約 5,000 トークン）と、その隣のファイルを 1 フォルダー下まで（例：`references/payments.md`）読みます。
+
+```markdown .claude/skills/ledger-rules/SKILL.md
+---
+name: ledger-rules
+description: How the ledger service records, reverses and reconciles entries.
+---
+
+# Ledger rules
+
+- Every write to `entries` goes through `LedgerWriter`; never insert directly.
+- A reversal is a new entry, never an UPDATE of the original.
+
+See references/reconciliation.md for the nightly job.
+```
+
+**Docs** は `CONTRIBUTING.md`、`ARCHITECTURE.md`、`CONVENTIONS.md`、`STYLEGUIDE.md`、`docs/**/*.md`（最大 30 件）から提案されます。任意のパスを手動で追加することもできます。拡張子のあるファイルは doc、フォルダー（またはその中の `SKILL.md`）は skill になります。
+
+### 紐付け
+
+skill や doc を紐付ける場所は 2 つあります。
+
+- **エージェントのページ**の **Files & knowledge → Skills & docs**：**Add skill or doc** でエージェントが従えるものを一覧表示するか、**Add by path** を使います。
+- **Skills & docs ページ**（What to review の **Custom agents** の横のリンク）：登録済みのすべての skill と doc に、**Main review** と各エージェントのチェックボックスがあります。**Main review** に紐付けると、Kody 自身のレビューにガイドが渡されます。
+
+グローバルレベルの Skills & docs ページでは、手入力したパスしか受け付けません。リポジトリごとに個別に読み込まれるため、各パスが存在するかはリポジトリの設定を開いて確認してください。
+
+<Warning>
+  **Also a Kody Rules source** と表示されたファイルは、すでに Kody Rules に使われています。エージェントにも紐付けると、同じルールが 2 回コメントされることがあります。
+</Warning>
+
+### 予算
+
+エージェントごと、およびメインレビューごとの制限：
+
+| 制限 | 値 |
+| --- | --- |
+| Skills | 20 |
+| Docs | 10 |
+| Doc トークン | 20,000 |
+
+エージェントやメインレビューが制限を超えると、Skills & docs ページが警告します。レビューでは、予算を超えた docs は切り詰められるかスキップされ、警告が記録されます。
+
+### 指摘での使われ方
+
+規約に関する指摘は、適用するルールを**引用**する必要があります。Kodus はターゲットブランチ上のガイドで引用を確認し、見つからなければ指摘を破棄します。投稿されるコメントはルールを引用します。
+
+```markdown
+**Rule** (`docs/ledger.md`):
+> A reversal is a new entry, never an UPDATE of the original.
+```
+
+## Plugins (MCP)
+
+エージェントは、ワークスペースにインストールされたプラグイン（課題管理、Wiki、モニタリングなど）を参照できます。**Tools → Plugins** でエージェントのプラグインをオンにし、**Use every tool** のままにするか、**Customize** で一覧を選びます。
+
+提供されるのは読み取りツールだけで、書き込みツールは決して提供されません。ツールを読み取り専用と明示するプラグインはその申告どおりに扱われます。明示しないプラグインでは、名前に読み取りの動詞（get、list、search、read、find…）があり、書き込みの動詞がないツールだけが対象になります。レビューがチームに代わってチケットを作成したりメッセージを投稿したりすることはありません。
+
+エージェントは、変更がそこに記録されたもの（プルリクエストの説明にあるチケットなど）を指しているときにプラグインを参照し、見つけた内容を引用します。インストール方法は [プラグイン](/ja/how_to_use/code_review/plugins) を参照してください。
+
+## Team CLIs
+
+エージェントはチームのコマンドラインツールを最大 **3** つ実行できます。重複コード検出、スキーマチェッカー、社内 linter などです。CLI は隔離された E2B サンドボックス内、リポジトリのチェックアウトの中でのみ実行されます。それ以外のサンドボックスでは CLI はインストールされず、エージェントは CLI なしで実行されます。
+
+**Tools → CLIs** で **Add CLI** をクリックします。
+
+| フィールド | 説明 |
+| --- | --- |
+| **Name** | エージェントとコメントでの呼び名。 |
+| **Binary** | エージェントが呼び出すもの。例：`jscpd`。 |
+| **Install** | 正確なバージョンまたはダイジェストに固定した、パッケージマネージャーのコマンド 1 つ。レビュー前にサンドボックスで 1 回実行されます。 |
+| **Allowed command prefixes** | すべての呼び出しはこのいずれかで始まる必要があります。プレフィックスはバイナリの後のサブコマンドやフラグを指定します。例：`ledgerctl check`。`/` で終わるトークンはその下の任意のパスをカバーします。 |
+| **Allowed domains** | CLI が HTTPS で接続できるホスト。名前の完全一致で判定します。それ以外は、暗号化されていない HTTP も含めてすべてブロックされます。 |
+| **Usage** | いつ、どう呼び出すかをエージェントが学ぶための Markdown。 |
+| **Runs project code** | リポジトリを読み込むテスト、ビルド、linter ではオンにします。このような CLI はシークレットを受け取りません。 |
+| **Secrets** | この CLI の環境にだけ存在し、出力ではマスクされ、プロンプトには決して入らない環境変数（例：`LEDGER_TOKEN`）。書き込み専用で、保存後は **Stored · hidden** と表示されます。 |
+
+**インストールのルール。** 対応インストーラー：`npm`、`pnpm`、`yarn`、`pip`、`pip3`、`pipx`、`uv`、`go`、`cargo`。すべてのパッケージを固定する必要があります（`tool@1.2.3`、`tool==1.2.3`、`tool@sha256:…`）。`@latest` などのタグ、バージョン範囲、URL、Git ソース、ローカルパス、シェル構文は拒否されます。
+
+<CodeGroup>
+```bash npm
+npm i -g jscpd@5.4.1
+```
+
+```bash pip
+pip install sqlfluff==3.2.5
+```
+
+```bash go
+go install github.com/acme/ledgerctl@v1.4.2
+```
+</CodeGroup>
+
+**呼び出しの実行方法。** エージェントが渡すのは引数で、シェルコマンドではありません。パイプ、リダイレクト、glob、変数は文字どおりに渡されます。許可されたプレフィックスで始まらない呼び出しは拒否されます。各 CLI は専用のユーザーで、タイムアウト、専用の一時ディレクトリ、そのユーザーだけが読めるファイルとともに実行されます。出力には上限があり、呼び出しの後には CLI が起動したものや一時ディレクトリに書いたものがすべて削除されます。CLI の各ステップは sandbox プロバイダー経由で root として実行され、レビューが動くユーザーを経由することはありません。そのユーザーはリポジトリの取得前に root になる手段（sudo を含む）をすべて失うため、プルリクエストのコードが CLI のプロセスやファイルに届くことはありません。これを確認できなかった sandbox では CLI は実行されません。
+
+**ブロックされるコマンド。** シークレットを持つ CLI では、保存時と実行時の両方で、環境を一覧表示するプレフィックスや引数（`printenv`、`env`、`set`、`export`、`declare`、`/proc` 配下のもの）、トークンを表示する一般的なコマンド（`auth token`、`auth status --show-token`、`auth:token`、`config get`、`configure get`、`print-access-token`、`get-access-token`）、バイナリとしてのシェルやインタープリター（`bash`、`node`、`python`、`npx` など）、シークレットを `$NAME` や `${NAME}` の形で参照する引数を Kodus が拒否します。引数がシェルを通ることはないため、Kodus 自身が展開することはありません。
+
+**ネットワーク。** 許可リストはホスト名で適用されます。CLI の HTTPS 接続はプロキシを通り、要求されたサーバー名がリストにある場合（完全一致、サブドメインは不可）にのみ転送されます。プロキシはその名前を自分で解決し、プライベートや内部のアドレスを拒否します。CLI にはそれ以外のネットワークアクセスはありません（DNS、暗号化されていない HTTP、他のポートはすべて不可）。許可されたホストは、認証情報を含め CLI が送るものを受け取りますし、ネットワークでは読み取りと書き込みを区別できません。読み取り専用で最小権限のトークンを使い、信頼できるホストだけを許可してください。
+
+**シークレットの扱い。** シークレットは保存時に暗号化され（AES-256-GCM、エージェント・CLI・変数名に紐づけ）、ブラウザには二度と返されず、**Stored · hidden** と表示されます。シークレットは保存された CLI とその設定レベルに紐づきます。CLI に変更（名前、インストール、バイナリ、許可されたプレフィックス、許可されたドメイン、**Runs project code**、シークレットの名前）があると、保存時にも **Try it** でもすべてのシークレットの再入力が求められます。使い方のメモとタイムアウトだけは再入力なしで変更できます。読み取れなくなった保存済みシークレットも再入力が必要です。**Try it** は編集中のレベルに保存されたシークレットだけを使い、継承したものは使いません。シークレットが届くのはその CLI のプロセスだけで、インストール、他の CLI、エージェントのプロンプトには届きません。CLI の出力では、base64、URL エンコード、16 進数、JSON エスケープで表示された場合も含め、エージェント、**Try it**、プルリクエストのコメント、ログに渡る前にすべてのシークレットが `***` に置き換えられます。マスキングではあらゆる変換（分割された値や部分的な値）を認識できないため、上記のコマンドをブロックしています。
+
+CLI に基づく指摘では、コメントにファイルを名指しする出力行が表示されます。
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+<Note>
+  インストールに失敗すると、エージェントはその CLI なしで実行され、警告が記録されます。**Try it** では **Warnings** に表示されます。
+</Note>
+
+## ast-grep rules
+
+**Tools → Advanced → Structural search (ast-grep rules)** で、エージェントに [ast-grep](https://ast-grep.github.io) のルールを次のいずれかで与えます。
+
+- **インライン**：ルールの YAML そのもの。複数のルールは `---` で区切ります。各ルールに `id` と `rule` が必要です。
+- **ルールファイル**：リポジトリ内の `.yml` または `.yaml` ファイルのパスを 1 行で。プルリクエストのターゲットブランチから読み込まれます。
+
+```yaml
+id: no-float-money
+language: typescript
+message: Parse amounts with Money.parse, never parseFloat
+rule:
+  pattern: parseFloat($A)
+```
+
+ルールはプルリクエストの変更ファイルに対して実行されます。ルールのマッチは証拠です。実行中にそのファイルでマッチしたルールを引用する指摘は、引用チェックとモデルによる検証をスキップします。ルールの上限は 64,000 バイトです。フィールドのヒントには見つかったルールが一覧表示され、`id` や `rule` のないルールが報告されます。
+
+ルールを設定していなくても、エージェントはリポジトリ全体でアドホックな構造検索を使えます。
+
+## 関連ページ
+
+<CardGroup cols={2}>
+  <Card title="カスタムエージェント" icon="robot" href="/ja/how_to_use/code_review/custom_agents">
+    レベル、エージェントのページ、Try it、レビューでの実行の流れ。
+  </Card>
+  <Card title="jscpd で重複コードを検出" icon="clone" href="/ja/cookbook/custom-agent-duplicate-code">
+    チームの CLI を使う完全なエージェントの例。
+  </Card>
+</CardGroup>

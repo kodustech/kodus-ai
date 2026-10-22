@@ -1,0 +1,92 @@
+---
+title: "Best Practices"
+description: "Write custom agents that find real problems in your pull requests and stay quiet otherwise."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
+
+## One agent per concern
+
+An agent that checks architecture, security and test coverage at once writes vague instructions and gets vague findings. Split it: one agent per concern, each with its own files, guides and tag. The tag tells the team who is speaking, and each agent's page shows what it posted in the last 30 days, so you see which one is noisy.
+
+## Write focused instructions
+
+Write the instructions as a brief to a reviewer who knows the codebase. Cover three things:
+
+1. **What to look for**, concretely: "imports from `src/domain` into `src/http`", not "architecture problems".
+2. **What to ignore**: style, naming, things another agent or Kody already covers.
+3. **What proof a finding needs**: "name the file that shows the existing pattern", "show the path from source to sink", "quote the rule from `docs/ledger.md`".
+
+The agent reports only what its instructions ask for, and the verifier drops anything outside that focus. A finding the instructions don't ask for is a finding you won't see.
+
+<Tabs>
+  <Tab title="Vague">
+    ```text
+    Review the code for quality and best practices.
+    ```
+  </Tab>
+  <Tab title="Focused">
+    ```text
+    Flag code in src/http/** that imports from src/infra/** directly.
+    Handlers reach infrastructure only through the ports in src/domain/ports.
+    Ignore tests, generated code and naming.
+    For each finding, name the port the handler should use, or say that
+    none exists yet.
+    ```
+  </Tab>
+</Tabs>
+
+## Say what proof a finding needs
+
+Findings are checked before they post. Give the agent something it can prove:
+
+- **A rule in a guide**: link the doc or skill and ask the agent to quote the rule. The quote is checked against the guide on the target branch.
+- **A CLI result**: the CLI output lines that name the file go into the comment as evidence.
+- **An ast-grep rule**: a match counts as proof on its own, with no model check.
+
+A rule that exists only in someone's head can't be quoted, so write it in the instructions or in a doc.
+
+## Make globs explicit
+
+- Set **Files** to the code the agent cares about: `src/payments/**`, not empty. An agent with no globs runs on every pull request.
+- Use **Except** for tests, fixtures and generated code.
+- Name files explicitly when they are in your ignored paths and the agent must still read them: `package.json`, `infra/**/*.tf`. A broad glob such as `**/*.ts`, or a folder such as `src/**`, does not reach ignored files.
+- At a directory, globs still start at the repository root.
+
+## Skill or doc?
+
+| Use a **doc** when | Use a **skill** when |
+| --- | --- |
+| The guide is short and applies to every change the agent reviews. | There are many rules, or rules that apply only to some changes. |
+| You want it read in full, every time. | You want the agent to open it only when the change needs it, with its reference files. |
+
+Docs count against a 20,000-token budget per agent. A long handbook is better as a skill with reference files.
+
+## Test on a real pull request before turning it on
+
+A new agent starts off. Before turning it on:
+
+1. Pick a recent pull request that touches the agent's files, ideally one where you know what a good reviewer would say.
+2. Run **Try it**. Read the tool calls, the skills it opened and every finding.
+3. Adjust the instructions, globs or minimum severity, and run again.
+4. Turn it on when the comments that would post are ones you'd want on a pull request.
+
+`@kody -v <name>` does the same on a live pull request, posting the comments, while the agent is still off.
+
+## Read the drop reasons
+
+Dropped findings tell you what to fix in the agent:
+
+| Reason | What to change |
+| --- | --- |
+| Quote not found | The guide on the target branch doesn't have that text. Link the right guide, or put the rule in the instructions. |
+| Outside the agent's focus | The instructions don't ask for it. Add it, or leave it to Kody. |
+| No support in the code | The agent guessed. Ask for concrete proof in the instructions. |
+| Below minimum severity, or over the comment limit | Expected filtering. Lower the floor if you want to see more. |
+
+## Keep the volume right
+
+- Set **Max comments per pull request** on agents that can produce many findings, such as a duplicate-code agent. The most severe are kept.
+- Use **One PR comment** for agents whose findings read better together, such as a coverage report.
+- Use **Suggested fix: Never** when a fix would be a guess, such as an architecture move.

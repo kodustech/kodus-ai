@@ -326,6 +326,23 @@ export const EVENT_DEFAULTS: Readonly<
         ]),
         icon: 'shield-alert',
     },
+    [NotificationEvent.KODY_RULES_AUTO_PAUSED]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'kody_rules',
+        label: 'Kody Rules Paused Automatically',
+        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        icon: 'bell',
+        actionLabel: 'Review',
+        defaultRoles: [Role.OWNER],
+    },
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'kody_rules',
+        label: 'Weekly Digest of Paused Kody Rules',
+        defaultChannels: new Set([NotificationChannel.EMAIL]),
+        icon: 'bell',
+        defaultRoles: [Role.OWNER],
+    },
 };
 
 /** All event categories, derived from the catalog. */

@@ -12,11 +12,19 @@
  *   RECALL_SET=full                    → on demand: every per-PR case
  *   RECALL_ALL=1                       → every per-PR case
  *   RECALL_CASES=caseId1,caseId2,...   → an explicit subset
+ *   RECALL_SET=<name>                  → a set of its own: every dataset in sets/<name>/
+ *                                        (evals/README.md, "Experiments"), outside the
+ *                                        50 PRs, so it never changes `full`
+ *   RECALL_SET=/abs/folder             → a private set: every dataset in a folder outside
+ *                                        this public repository (customer code)
+ *
+ * An unknown set name fails: it never measures the default set instead.
  */
 const fs = require('fs');
 const path = require('path');
 
 const DATASETS_DIR = path.join(__dirname, 'datasets');
+const SETS_DIR = path.join(__dirname, 'sets');
 // A repository written for the scripted model of evals/wiring-smoke.js: its one
 // finding (every string "fake", every number 1) points at line 1 of a file named
 // fake, which this PR adds, so it anchors and reaches scoring.
@@ -109,19 +117,48 @@ const CASE_SETS = {
     full: FULL_CASES,
 };
 
+// The sets of their own: each folder of sets/ holding at least one dataset.
+function namedSets(dir = SETS_DIR) {
+    if (!fs.existsSync(dir)) return [];
+    return fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((d) => d.isDirectory() && fs.readdirSync(path.join(dir, d.name)).some((f) => f.endsWith('.json')))
+        .map((d) => d.name)
+        .sort();
+}
+
+// The dataset files a set reads, and whether it takes all of them.
+function setFiles(setName, dir = SETS_DIR) {
+    if (setName in CASE_SETS) {
+        return {
+            files: fs
+                .readdirSync(DATASETS_DIR)
+                .filter((f) => f.endsWith('.json') && f !== 'smoke.json')
+                .map((f) => path.join(DATASETS_DIR, f)),
+            ids: CASE_SETS[setName],
+        };
+    }
+    if (path.isAbsolute(setName) && fs.existsSync(setName) && fs.statSync(setName).isDirectory()) {
+        return { files: fs.readdirSync(setName).filter((f) => f.endsWith('.json')).map((f) => path.join(setName, f)), ids: null };
+    }
+    if (namedSets(dir).includes(setName)) {
+        const own = path.join(dir, setName);
+        return { files: fs.readdirSync(own).filter((f) => f.endsWith('.json')).map((f) => path.join(own, f)), ids: null };
+    }
+    throw new Error(`unknown set '${setName}': ${[...Object.keys(CASE_SETS), ...namedSets(dir)].join(', ')}`);
+}
+
 module.exports = async () => {
     const setName = process.env.RECALL_SET || 'pr';
-    const all = process.env.RECALL_ALL === '1' || (setName in CASE_SETS && CASE_SETS[setName] === FULL_CASES);
-    const selectedSet = CASE_SETS[setName] || CASE_SETS.pr;
+    const { files, ids } = setFiles(setName);
+    // A set of its own, `full`, or RECALL_ALL: every dataset it reads.
+    const all = process.env.RECALL_ALL === '1' || ids === null || ids === FULL_CASES;
+    const selectedSet = ids || [];
     const only = (process.env.RECALL_CASES || '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
 
-    const files = fs
-        .readdirSync(DATASETS_DIR)
-        .filter((f) => f.endsWith('.json') && f !== 'smoke.json')
-        .map((f) => path.join(DATASETS_DIR, f));
     // The wiring smoke's case runs only when named: it measures nothing.
     if (only.includes(WIRING_CASE_ID)) files.push(WIRING_CASE_FILE);
 
@@ -158,3 +195,6 @@ module.exports = async () => {
 
 // The named sets, for the catalog (catalog.js) and anyone listing what a set runs.
 module.exports.CASE_SETS = CASE_SETS;
+module.exports.namedSets = namedSets;
+module.exports.setFiles = setFiles;
+module.exports.SETS_DIR = SETS_DIR;

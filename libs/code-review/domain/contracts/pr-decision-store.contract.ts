@@ -55,6 +55,11 @@ export interface PrDecisionRecord {
      *  (the generic finder/verifier) can ignore this field — `label` alone
      *  is enough context there. */
     readonly brokenKodyRulesIds?: readonly string[];
+    /** The custom agent (#2172) whose finding this was. A custom agent weighs
+     *  only its own earlier decisions: another reviewer's verdicts are not
+     *  about what its instructions ask, and read as "already decided" they
+     *  silenced it. */
+    readonly customAgentId?: string;
     /** The code the suggestion pointed at, as stored. Lets the repeat check
      *  (`engine/repeat-check.ts`) recognize the same occurrence without a
      *  model call. Absent on PR-level records. */

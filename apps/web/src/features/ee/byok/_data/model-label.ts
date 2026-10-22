@@ -29,7 +29,7 @@ export function formatModelLabel(id: string): string {
         tokens.pop();
     }
     return tokens
-        .map((tok) => tok.replace(/^(k?\d+)p(\d+)$/i, "$1.$2"))
+        .map((tok) => tok.replace(/^([kv]?\d+)p(\d+)$/i, "$1.$2"))
         .map((tok) =>
             ACRONYMS.has(tok.toLowerCase())
                 ? tok.toUpperCase()

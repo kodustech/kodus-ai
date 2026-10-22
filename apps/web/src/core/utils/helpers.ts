@@ -207,6 +207,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "summary",
         "isRequestChangesActive",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
         "kodyLearningExcludedReviewers",
         "kodyKnowledgeApproval",
         "runOnDraft",
@@ -228,6 +229,10 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         // the field and the UI save would never persist linked repos.
         "linkedRepositories",
         "deterministicEvidence",
+        // Custom agents and the skills and docs linked to them. Without them
+        // here the agent screens saved nothing and reported success.
+        "customAgents",
+        "knowledge",
     ];
 
     expectedKeys.forEach((key) => {
