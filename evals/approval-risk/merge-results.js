@@ -12,7 +12,13 @@ function merge(files) {
     );
     const seen = new Set();
     const rows = [];
-    const results = files.map((file) => JSON.parse(fs.readFileSync(file, 'utf8')));
+    const results = files.map((file) => {
+        try {
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+        } catch (error) {
+            throw new Error(`Reading/parsing ${file}: ${error.message}`);
+        }
+    });
     const model = results[0].model;
     for (const [index, result] of results.entries()) {
         if (result.eval !== 'approval-risk' || result.model !== model || !result.comparisons)
@@ -83,12 +89,14 @@ function merge(files) {
 }
 
 if (require.main === module) {
+    let operation = 'merging input results';
     try {
         const args = process.argv.slice(2);
         const output = args.find((arg) => arg.startsWith('--output='))?.slice(9);
         const files = args.filter((arg) => !arg.startsWith('--'));
         const result = merge(files);
         if (output) {
+            operation = `writing result ${output}`;
             fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
             fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`);
         }
@@ -98,7 +106,7 @@ if (require.main === module) {
             infra: result.infra,
         }, null, 2));
     } catch (error) {
-        console.error(`not measured: ${error.message}`);
+        console.error(`not measured while ${operation}: ${error.message}`);
         process.exitCode = 2;
     }
 }
