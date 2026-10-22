@@ -347,6 +347,38 @@ export function formatReviewFocus(directive?: string): string {
   </ReviewFocus>`;
 }
 
+/**
+ * The duplicate-logic agent's task and rules (#1628).
+ *
+ * These are a SWAP of the shared template's <Task> and <Rules> blocks, not a
+ * separate template: the CI evidence, analyzer findings, recorded decisions,
+ * commits, diffs and call graph around them are the shared ones, so the
+ * twin-pair assignment does not cost the agent that context.
+ */
+const DUPLICATE_LOGIC_TASK = `    Review this Pull Request for logic drift between sibling or duplicate functions.
+    You MUST process every <TwinPair> listed in <DuplicateCandidates> inside <CallGraph>.
+    For EACH <TwinPair>:
+    1. Call readFile on the exact file and line range specified in \`first\`.
+    2. Call readFile on the exact file and line range specified in \`second\`. Do NOT skip reading the \`second\` side.
+    3. Compare the two function implementations line-by-line for structural or functional drift: check database persistence, side-effects, validations, event emissions, and error handling.
+    4. If one twin executes critical business operations or side-effects that its sibling twin omits or implements inconsistently, flag it as a duplicate logic drift finding.
+    Deduplication Rule: If multiple <TwinPair> candidates reveal the SAME root missing logic or defect in a function, emit ONLY ONE consolidated suggestion for that defect instead of duplicate suggestions.
+    Focus exclusively on logic drift between twins — do NOT report generic syntax or schema errors in this category.`;
+
+const DUPLICATE_LOGIC_RULES = `    - Root cause must be logic drift or missing business logic between twin functions, anchored to a changed line.
+    - Focus exclusively on twin/sibling logic drift — do NOT report generic TypeScript or schema validation errors.
+    - Assign confidence 1–10. Be honest: ≥9 only when BOTH sides of the pair were read and the drift is confirmed; ≤4 = speculative, do not report below 5.`;
+
+/**
+ * The compact prompt states the same assignment in one paragraph. The label
+ * hint belongs to the generalist; the duplicate-logic agent emits a fixed
+ * label, so the hint is empty for it.
+ */
+function buildDuplicateLogicCompactTask(labelHint: string): string {
+    return `  <Task>Review this PR for logic drift between sibling or duplicate functions. You MUST process every <TwinPair> listed in <DuplicateCandidates> inside <CallGraph>. For EACH <TwinPair>: 1) call readFile on the exact file and line range given in \`first\`; 2) call readFile on the exact file and line range given in \`second\` — do NOT skip the second side; 3) compare both implementations line-by-line for structural or functional drift (database persistence, side-effects, validations, event emissions, error handling); 4) flag it when one twin performs critical business operations its sibling omits or implements inconsistently. If several pairs reveal the SAME root defect, emit ONE consolidated suggestion. Focus exclusively on logic drift between twins — do NOT report generic syntax or schema errors in this category.${labelHint}</Task>
+`;
+}
+
 /** Caps that keep a noisy pipeline from crowding out the diff itself. */
 const MAX_CI_CHECKS = 5;
 const MAX_CI_ANNOTATIONS_PER_CHECK = 10;
@@ -934,14 +966,24 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                     ? '\n    When linked repositories are listed in <CrossRepoBoundary>, use grep/readFile with repo="<fullName>" to verify producer/consumer shapes across the boundary. Only report cross-repo defects with confirmed counterpart evidence.'
                     : ''
             }`;
-        const taskBlock = lane
+        // The duplicate-logic agent has its own assignment (the twin pairs the
+        // graph context injected), so it swaps the Task and Rules blocks of
+        // the shared template and keeps every other section — CI evidence,
+        // analyzer findings, decisions, commits, diffs and call graph.
+        const isDuplicateLogic = categoryLabel === 'duplicate_logic';
+        const taskBlock = isDuplicateLogic
+            ? `${DUPLICATE_LOGIC_TASK}\n`
+            : lane
             ? LANE_TASK(toolHints)
             : `    Review this Pull Request for ${taskDescription}.
     For each changed function: grep callers → read context → challenge with adversarial questions.${toolHints}
     Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
     Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.
 `;
-        const coverageIntro = lane
+        const coverageIntro = isDuplicateLogic
+            ? `    The twin pairs below are the work: call readFile on BOTH sides of every pair and compare them line-by-line. The changed hunks are the context of each pair.
+`
+            : lane
             ? LANE_COVERAGE_INTRO
             : `    Below are the changed hunks. Go DEEP on the ones that can hide a bug — trace callers, read the surrounding logic, challenge each with adversarial questions. SKIP trivial hunks (renames, formatting, comments, config/lockfiles). You do NOT need to read every hunk: fully reasoning about the few suspicious ones beats skimming all of them. Depth of analysis over breadth of reading.
 `;
@@ -963,6 +1005,19 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
     - For security flows, challenge any value that became static, shared, or reused across requests/users when it should be per-request, per-session, or per-principal.
 `;
 
+        const rulesBlock = isDuplicateLogic
+            ? `${DUPLICATE_LOGIC_RULES}
+    - Return only the JSON object inside markdown fences, no extra text.`
+            : `    - Root cause must be in lines added or modified by this PR.
+${findingRules}    ${mixedLabelRules}
+    ${mixedLabelLensRules}
+    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
+      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
+      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
+      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
+      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+    - Return only the JSON object inside markdown fences, no extra text.`;
+
         return (
             `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
@@ -981,15 +1036,7 @@ ${coverageIntro}${coverageTargets ? `${coverageTargets}\n` : ''}
   </CoverageContract>
 
   <Rules>
-    - Root cause must be in lines added or modified by this PR.
-${findingRules}    ${mixedLabelRules}
-    ${mixedLabelLensRules}
-    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
-    - Return only the JSON object inside markdown fences, no extra text.
+${rulesBlock}
   </Rules>
 
   <OutputFormat>
@@ -1061,12 +1108,22 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             : '';
 
         const lane = hasOwnLane(meta);
-        const compactTask = lane
+        // The duplicate-logic agent has its own assignment (the twin pairs the
+        // graph context injected), so it swaps the Task and Rules blocks of
+        // the shared template and keeps every other section — CI evidence,
+        // analyzer findings, decisions, commits, diffs and call graph.
+        const isDuplicateLogic = categoryLabel === 'duplicate_logic';
+        const compactTask = isDuplicateLogic
+            ? buildDuplicateLogicCompactTask(labelHint)
+            : lane
             ? `  <Task>Review this PR for the issues your focus covers (your <Role>); the generalist reviewer covers general correctness bugs, do not report them. For the changed code your focus applies to: investigate what your focus needs, read enough to confirm. Anchor each finding to a changed line and let the verifier filter unsupported claims.</Task>
 `
             : `  <Task>Review this PR for real ${categoryLabel} issues introduced by the diff. For each changed function: grep callers, read enough to confirm. Report any defect you suspect — anchor it to a changed line and let the verifier filter unsupported claims.${labelHint}</Task>
 `;
-        const compactCoverage = lane
+        const compactCoverage = isDuplicateLogic
+            ? `  <CoverageContract>Examine every <TwinPair> candidate. Call readFile on BOTH sides of every pair before submitting.
+`
+            : lane
             ? `  <CoverageContract>Go DEEP on the hunks your focus applies to; SKIP the rest and trivial ones (renames, formatting, comments, config) unless your focus is about them. Depth of reasoning over breadth of reading.
 `
             : `  <CoverageContract>Go DEEP on hunks that can hide a bug (trace callers, read surrounding logic); SKIP trivial ones (renames, formatting, comments, config). Depth of reasoning over breadth of reading — you need not read every hunk.
@@ -1074,9 +1131,16 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
         const compactThreshold = lane
             ? `    - Report only findings within your focus, when the changed code gives you code-backed evidence of them — anchor to a changed line and name what it breaks; the verifier filters. A defect outside your focus is not yours to report.
 `
-            : `    - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor it to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
+            : `    - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
     - Resource-exhaustion, injection, bypass, perf (O(N)/N+1), and missing-defensive (CSRF/rate-limit/validation) concerns: report when the changed code makes you suspect them — anchor + let the verifier judge; do not pre-suppress by class.
 `;
+        const compactRules = isDuplicateLogic
+            ? `${DUPLICATE_LOGIC_RULES}
+    - Submit via the submitResult tool; do not print free-form JSON.`
+            : `    - Root cause must be in lines added or modified by this PR.
+${compactThreshold}    - "Looks correct" is not a dismissal — explain why it cannot fail.
+    - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
+    - Submit via the submitResult tool; do not print free-form JSON.`;
 
         return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
@@ -1086,10 +1150,7 @@ ${diffsSection}
 ${callGraphSection}
 ${compactTask}${compactCoverage}${coverageTargets ?? ''}</CoverageContract>
   <Rules>
-    - Root cause must be in lines added or modified by this PR.
-${compactThreshold}    - "Looks correct" is not a dismissal — explain why it cannot fail.
-    - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
-    - Submit via the submitResult tool; do not print free-form JSON.
+${compactRules}
   </Rules>
 </ReviewTask>`;
     }

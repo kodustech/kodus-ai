@@ -151,6 +151,7 @@ function agentReviewStage(permission, log) {
     const { SecurityAgentProvider } = lib('code-review/infrastructure/agents/providers/security-agent.provider.ts');
     const { PerformanceAgentProvider } = lib('code-review/infrastructure/agents/providers/performance-agent.provider.ts');
     const { KodyRulesAgentProvider } = lib('code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts');
+    const { DuplicateLogicAgentProvider } = lib('code-review/infrastructure/agents/providers/duplicate-logic-agent.provider.ts');
     const { GraphContextService } = lib('code-review/infrastructure/adapters/services/graph/graph-context.service.ts');
     const { KodusGraphCli } = lib('code-review/infrastructure/adapters/services/graph/kodus-graph-cli.ts');
     const { KodyRuleSummaryService } = lib('kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts');
@@ -163,6 +164,7 @@ function agentReviewStage(permission, log) {
         agent(PerformanceAgentProvider),
         agent(GeneralistAgentProvider),
         agent(KodyRulesAgentProvider),
+        agent(DuplicateLogicAgentProvider),
     );
     // The repository has no stored AST graph, so the stage builds the call
     // graph from the checkout (GraphContextService.generateContextLegacy).

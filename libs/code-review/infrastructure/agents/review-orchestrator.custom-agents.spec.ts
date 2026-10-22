@@ -36,6 +36,7 @@ function setup(customOutput?: (config: CustomAgentConfig) => any) {
     });
     const generalist = builtIn('generalist');
     const kodyRules = builtIn('kody-rules');
+    const duplicateLogic = builtIn('duplicate_logic');
     const customCalls = new Map<string, Call>();
     const factory = {
         create: jest.fn((config: CustomAgentConfig) => ({
@@ -66,6 +67,7 @@ function setup(customOutput?: (config: CustomAgentConfig) => any) {
         generalist as any,
         kodyRules as any,
         factory as any,
+        duplicateLogic as any,
     );
     return { service, generalist, kodyRules, factory, customCalls };
 }

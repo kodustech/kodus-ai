@@ -1,4 +1,4 @@
-type CategoryPromptKind = 'bug' | 'security' | 'performance';
+type CategoryPromptKind = 'bug' | 'security' | 'performance' | 'duplicate_logic';
 
 type PromptBlock = {
     mission: string;
@@ -133,6 +133,34 @@ const PROMPT_BLOCKS: Record<CategoryPromptKind, PromptBlock> = {
             '2. WHY: one sentence on the real impact with scale context (e.g. "triggers N database queries per request — O(N) growth with user count")',
             '3. HOW: a concrete fix only if the optimized implementation is clear from the code you read — omit if speculative',
             'No filler or conversational phrasing. Avoid vague statements like "this might be slow".',
+        ],
+    },
+    duplicate_logic: {
+        mission:
+            'Detect logic drift between twin or sibling functions in the codebase, flagging missing business logic, unhandled side-effects, or inconsistent updates.',
+        focus: [
+            'new sibling handlers added with missing business logic present in existing sibling handlers (e.g. missing database writes, event emissions, or audit logs)',
+            'partially updated duplicate groups where one copy is updated in this PR but sibling twins remain stale',
+            'inconsistent error handling, validation, or duplicate protection across twin functions',
+        ],
+        doNotReport: [
+            'syntax errors, general bugs, or issues outside twin logic drift',
+            'style or formatting differences between twins',
+            'standard boilerplate (basic getters/setters)',
+        ],
+        reasoningPolicy: [
+            'Process every <TwinPair> in the <DuplicateCandidates> block, one pair at a time.',
+            'For EACH pair: MUST call `readFile` on BOTH line ranges specified in `first` and `second` before drawing any conclusion.',
+            'Compare the two function bodies line-by-line for structural and functional drift.',
+            'If one twin executes critical business persistence or side-effects that its sibling twin omits or handles inconsistently, flag it as a drift finding.',
+            'Emit a verdict per pair: "drift" → report a finding; "no-drift" → skip.',
+            'Precision matters: focus exclusively on twin logic drift.',
+        ],
+        writingPolicy: [
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:',
+            '1. WHAT: name the sibling copies and their exact locations (file and line numbers)',
+            '2. WHY: state the concrete drift risk (e.g. "sibling handler performs database persistence while this handler omits it, leading to inconsistent state")',
+            '3. HOW: explain how to align them (e.g. "add missing database persistence to align with sibling twin").',
         ],
     },
 };

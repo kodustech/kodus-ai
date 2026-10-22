@@ -18,5 +18,10 @@
         "type": "business_logic",
         "name": "Business Logic",
         "description": "Validates the implementation against business rules, requirements, and acceptance criteria linked in the PR."
+    },
+    {
+        "type": "duplicate_logic",
+        "name": "Duplicate Logic",
+        "description": "Detects if a changed function has structurally similar siblings elsewhere in the codebase that were not updated."
     }
 ]

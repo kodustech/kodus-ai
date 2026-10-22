@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { createLogger } from '@libs/core/log/logger';
 
 import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
@@ -51,6 +52,8 @@ const EDGE_CHUNK_SIZE = Math.floor(65535 / EDGE_COL_COUNT); // ~9362
 
 @Injectable()
 export class AstGraphRepository {
+    private readonly logger = createLogger(AstGraphRepository.name);
+
     constructor(
         // Kept for TypeORM module registration (forFeature).
         @InjectRepository(AstNodeModel)
@@ -371,14 +374,60 @@ export class AstGraphRepository {
         repoId: string,
         changedFiles: string[],
         sha?: string,
+        includeDuplicates = false,
+        prNodesJson?: string,
+        fileChanges: Array<{ filename?: string; patch?: string }> = [],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
     ): Promise<string> {
+        const { organizationId, repository, prNumber } = options || {};
+
         if (changedFiles.length === 0) {
             return '{"sha":"","nodes":[],"edges":[]}';
         }
 
+        // Parse sandbox PR graph JSON (nodes & edges for new PR files) BEFORE the
+        // query below, which references them in its params (prNodes/prEdges).
+        // Normalize the path-like fields ONCE here, at the boundary — the sandbox
+        // CLI may emit backslashes, and every consumer (SQL $4/$5, pr_sandbox_*,
+        // and the TS matcher) relies on forward slashes.
+        let prNodes: any[] = [];
+        let prEdges: any[] = [];
+        if (prNodesJson) {
+            try {
+                const parsed = JSON.parse(prNodesJson);
+                prNodes = (parsed.nodes || []).map((n: any) => ({
+                    ...n,
+                    qualified_name: (n?.qualified_name || ''),
+                    file_path: (n?.file_path || ''),
+                }));
+                prEdges = (parsed.edges || []).map((e: any) => ({
+                    ...e,
+                    source_qualified: (e?.source_qualified || ''),
+                    target_qualified: (e?.target_qualified || ''),
+                }));
+            } catch (e) {
+                this.logger.warn({
+                    message: '[AST-GRAPH] Failed to parse prNodesJson in exportSubgraphJsonString',
+                    context: AstGraphRepository.name,
+                    error: e,
+                    metadata: {
+                        repoId,
+                        organizationId: organizationId || 'unknown',
+                        ...(repository && { repository }),
+                        ...(prNumber && { prNumber }),
+                    },
+                });
+            }
+        }
+
         const result = await this.dataSource.query(
             `WITH changed_nodes AS (
-                SELECT qualified_name
+                SELECT qualified_name, name, params, return_type,
+                       file_path, line_start, line_end
                 FROM ast_nodes
                 WHERE repo_id = $1 AND file_path = ANY($3::text[])
             ),
@@ -467,6 +516,69 @@ export class AstGraphRepository {
         );
 
         return result[0]?.graph_json || '{"sha":"","nodes":[],"edges":[]}';
+    }
+
+    /**
+     * Single batch query: fetch every repo function that shares at least one callee with any PR function.
+     */
+    public async findTwinCandidatePool(
+        repoId: string,
+        allPrCallees: string[],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
+    ): Promise<any[]> {
+        if (!allPrCallees || allPrCallees.length === 0) return [];
+        const { organizationId, repository, prNumber } = options || {};
+
+        const batchTwinQuery = `
+            SELECT n.qualified_name, n.params, n.return_type,
+                   n.file_path, COALESCE(n.line_start, 0) AS line_start,
+                   COALESCE(n.line_end, 0) AS line_end,
+                   COALESCE(array_agg(DISTINCT e.target_qualified)
+                            FILTER (WHERE e.kind = 'CALLS'
+                                    AND e.target_qualified IS NOT NULL),
+                            ARRAY[]::text[]) AS callees
+            FROM ast_nodes n
+            LEFT JOIN ast_edges e
+                 ON e.repo_id = n.repo_id
+                AND e.source_qualified = n.qualified_name
+            WHERE n.repo_id = $1
+              AND n.kind IN ('Function', 'Method')
+              AND n.params IS NOT NULL AND n.params <> ''
+            GROUP BY n.qualified_name, n.params, n.return_type,
+                     n.file_path, n.line_start, n.line_end
+            HAVING $2::text[] && COALESCE(
+                array_agg(DISTINCT e.target_qualified)
+                FILTER (WHERE e.kind = 'CALLS'
+                        AND e.target_qualified IS NOT NULL),
+                ARRAY[]::text[]
+            )
+            LIMIT 500
+        `;
+
+        try {
+            const res = await this.dataSource.query(batchTwinQuery, [
+                repoId,
+                allPrCallees,
+            ]);
+            return Array.isArray(res) ? res : (res?.rows || []);
+        } catch (err) {
+            this.logger.warn({
+                message: '[AST-GRAPH] Batch twin pool query failed',
+                context: AstGraphRepository.name,
+                error: err,
+                metadata: {
+                    repoId,
+                    organizationId: organizationId || 'unknown',
+                    ...(repository && { repository }),
+                    ...(prNumber && { prNumber }),
+                },
+            });
+            return [];
+        }
     }
 
     // -----------------------------------------------------------------------

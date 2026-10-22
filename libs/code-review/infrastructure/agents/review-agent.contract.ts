@@ -52,6 +52,9 @@ import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.pro
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
+/** DI token for the duplicate-logic agent provider. */
+export const DUPLICATE_LOGIC_AGENT_TOKEN = Symbol.for('DuplicateLogicAgentProvider');
+
 /**
  * Category-specific agent configuration provided by each concrete subclass.
  */
@@ -233,7 +236,7 @@ export interface ReviewRuleConfig {
     kodyRules?: Partial<IKodyRule>[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
     generationMain?: string;
-    /** Categories allowed for this run when using a mixed/generalist reviewer. */
+    /** Categories allowed for this run when using a mixed/generalist reviewer.*/
     requestedCategories?: Array<'bug' | 'security' | 'performance'>;
     /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';

@@ -1,7 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
-import { Injectable, Optional } from '@nestjs/common';
-
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     CodeSuggestion,
     CustomAgentConfig,
@@ -27,10 +26,8 @@ import {
     customAgentSlugClashMessage,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import {
-    ReviewAgentInput,
-    ReviewAgentOutput,
-} from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { DUPLICATE_LOGIC_AGENT_TOKEN, ReviewAgentInput, ReviewAgentOutput } from './review-agent.contract';
+import { BaseCodeReviewAgentProvider } from './providers/base-code-review-agent.provider';
 import {
     dedupReviewWarnings,
     warningsFromError,
@@ -126,6 +123,7 @@ export class ReviewOrchestratorService {
         'bug': 4,
         'security': 3,
         'performance': 3,
+        'duplicate_logic': 4,
         'kody-rules': 4,
         'custom-agent': 4,
     };
@@ -134,6 +132,7 @@ export class ReviewOrchestratorService {
         'bug': 20,
         'security': 12,
         'performance': 12,
+        'duplicate_logic': 12,
         'kody-rules': 20,
         'custom-agent': 20,
     };
@@ -148,6 +147,9 @@ export class ReviewOrchestratorService {
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
         @Optional()
         private readonly customAgentFactory?: CustomAgentProviderFactory,
+        @Optional()
+        @Inject(DUPLICATE_LOGIC_AGENT_TOKEN)
+        private readonly duplicateLogicAgent?: BaseCodeReviewAgentProvider,
     ) {}
 
     async execute(input: OrchestratorInput): Promise<OrchestratorOutput> {
@@ -198,6 +200,7 @@ export class ReviewOrchestratorService {
             reviewOptions.security !== false && 'security',
             reviewOptions.performance !== false && 'performance',
         ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
+        const duplicateLogicEnabled = reviewOptions.duplicate_logic === true;
 
         if (!builtInAgents) {
             // Only the requested custom agent runs (below).
@@ -233,6 +236,15 @@ export class ReviewOrchestratorService {
                             requestedCategories: enabledCategories,
                         }),
                 },
+                knowledge: mainKnowledge,
+            });
+        }
+
+        // Dispatched in every review mode when the flag is on
+        if (builtInAgents && duplicateLogicEnabled && this.duplicateLogicAgent) {
+            agentTasks.push({
+                name: 'duplicate_logic',
+                provider: this.duplicateLogicAgent,
                 knowledge: mainKnowledge,
             });
         }

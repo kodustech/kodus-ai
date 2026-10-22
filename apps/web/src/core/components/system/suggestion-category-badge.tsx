@@ -27,6 +27,8 @@ export const categoryClassnames = {
         "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
     cross_file:
         "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
+    duplicate_logic:
+        "bg-info/10 text-info ring-info/64 [--button-foreground:var(--color-info)]",
     default:
         "bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700",
 };
@@ -40,6 +42,7 @@ const categoryIcons: Record<IssueCategory, LucideIcon> = {
     deterministic: ShieldCheck,
     breaking_changes: AlertTriangle,
     cross_file: Network,
+    duplicate_logic: Network,
     default: Tag,
 };
 
@@ -51,6 +54,7 @@ const categoryDisplayNames: Record<IssueCategory, string> = {
     deterministic: "Deterministic",
     breaking_changes: "Breaking Change",
     cross_file: "Cross-File",
+    duplicate_logic: "Duplicate Logic",
     default: "Suggestion",
 };
 

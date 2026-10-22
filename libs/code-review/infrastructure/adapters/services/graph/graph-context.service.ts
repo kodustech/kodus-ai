@@ -7,6 +7,11 @@ import {
     REPOSITORY_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphRepository } from '../../repositories/astGraph.repository';
+import {
+    formatDuplicateCandidatesXml,
+    overlapRatio,
+    pairDuplicateTwinsInGraph,
+} from './twin-matcher.helper';
 import { KodusGraphCli, KODUS_GRAPH_TIMEOUTS } from './kodus-graph-cli';
 import { shSingleQuote } from '../shell-quote';
 
@@ -42,6 +47,7 @@ export class GraphContextService {
         sandbox: SandboxInstance,
         changedFiles: FileChange[],
         repoId: string,
+        includeDuplicates = false,
     ): Promise<string> {
         if (!sandbox?.run) {
             this.logger.warn({
@@ -90,11 +96,29 @@ export class GraphContextService {
                 });
                 return this.generateContextLegacy(sandbox, changedFiles);
             }
+            let prGraphStr: string | undefined;
+            try {
+                prGraphStr = await sandbox.readFile(`${sandbox.repoDir}/${GRAPH_PATH}`, { timeoutMs: 5000 });
+            } catch (e) {
+                this.logger.warn({
+                    message: '[KODUS-GRAPH] Could not read sandbox graph.json for PR nodes',
+                    error: e,
+                    context: GraphContextService.name,
+                });
+            }
+
             await this.writeBaseGraphToSandbox(
                 sandbox,
                 repoId,
                 filePaths,
                 repo.astGraphSha ?? undefined,
+                includeDuplicates,
+                prGraphStr,
+                changedFiles,
+                {
+                    organizationId: repo?.integrationConfigId,
+                    repository: repo?.fullName || repo?.name,
+                },
             );
 
             const diffPath = await this.writeDiffToSandbox(
@@ -106,10 +130,48 @@ export class GraphContextService {
                 context: GraphContextService.name,
                 metadata: { hasDiff: !!diffPath },
             });
-            const prompt = await this.runContext(sandbox, filePaths, {
-                graphPath: BASE_GRAPH_PATH,
-                diffPath,
-            });
+            let prompt = '';
+            try {
+                prompt = await this.runContext(sandbox, filePaths, {
+                    graphPath: BASE_GRAPH_PATH,
+                    diffPath,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `[KODUS-GRAPH] Failed with DB baseline, falling back to legacy`,
+                    context: GraphContextService.name,
+                    error,
+                    metadata: { repoId, fileCount: filePaths.length },
+                });
+                prompt = await this.generateContextLegacy(sandbox, changedFiles);
+            }
+
+            if (includeDuplicates) {
+                try {
+                    const graphJsonStr = await sandbox.readFile(`${sandbox.repoDir}/${BASE_GRAPH_PATH}`, { timeoutMs: 5000 });
+                    if (graphJsonStr) {
+                        const baseGraph = JSON.parse(graphJsonStr);
+                        const allNodes = baseGraph.nodes || [];
+                        const twins = allNodes.filter((n: any) => n.is_duplicate);
+
+                        if (twins.length > 0) {
+                            const duplicatesBlock = formatDuplicateCandidatesXml(twins);
+                            if (prompt.includes('</CallGraph>')) {
+                                prompt = prompt.replace('</CallGraph>', `${duplicatesBlock}\n</CallGraph>`);
+                            } else {
+                                prompt = `<CallGraph>\n${prompt}${duplicatesBlock}\n</CallGraph>`;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Failed to inject duplicate candidates into XML',
+                        error,
+                        context: GraphContextService.name,
+                        metadata: { repoId, fileCount: filePaths.length }
+                    });
+                }
+            }
 
             this.logger.log({
                 message: `[KODUS-GRAPH] Context generated with DB baseline: ${prompt.length} chars`,
@@ -124,10 +186,9 @@ export class GraphContextService {
             return prompt;
         } catch (error) {
             this.logger.warn({
-                message: `[KODUS-GRAPH] Failed with DB baseline, falling back to legacy`,
+                message: `[KODUS-GRAPH] Failed to generate context with DB baseline, falling back to legacy`,
                 context: GraphContextService.name,
                 error,
-                metadata: { repoId, fileCount: filePaths.length },
             });
             return this.generateContextLegacy(sandbox, changedFiles);
         }
@@ -373,14 +434,158 @@ export class GraphContextService {
         repoId: string,
         changedFiles: string[],
         sha?: string,
+        includeDuplicates = false,
+        prNodesJson?: string,
+        fileChanges: FileChange[] = [],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
     ): Promise<void> {
         // Filtered subgraph: only nodes in changed files + direct neighbors.
         // ~99% reduction vs full export (e.g. ~500 nodes instead of 50k+).
-        const jsonStr = await this.astGraphRepo.exportSubgraphJsonString(
+        let jsonStr = await this.astGraphRepo.exportSubgraphJsonString(
             repoId,
             changedFiles,
             sha,
+            includeDuplicates,
+            prNodesJson,
+            fileChanges,
+            options,
         );
+
+        if (includeDuplicates) {
+            try {
+                const parsed = JSON.parse(jsonStr);
+                let prNodes: any[] = [];
+                let prEdges: any[] = [];
+
+                if (prNodesJson) {
+                    try {
+                        const parsedPr = JSON.parse(prNodesJson);
+                        prNodes = parsedPr?.nodes || [];
+                        prEdges = parsedPr?.edges || [];
+                    } catch (e) {
+                        // handled downstream / log silently
+                    }
+                }
+
+                const hasPatches = (fileChanges || []).some((fc) => !!fc?.patch);
+                if (hasPatches) {
+                    const prCalleesBySource = new Map<string, Set<string>>();
+                    for (const e of prEdges || []) {
+                        if (e?.kind !== 'CALLS') continue;
+                        if (!e.source_qualified) continue;
+                        if (!prCalleesBySource.has(e.source_qualified)) {
+                            prCalleesBySource.set(e.source_qualified, new Set());
+                        }
+                        prCalleesBySource.get(e.source_qualified)!.add(e.target_qualified);
+                    }
+
+                    const allPrCallees = [
+                        ...new Set(
+                            [...prCalleesBySource.values()].flatMap((s) => [...s]),
+                        ),
+                    ];
+
+                    if (allPrCallees.length > 0) {
+                        const rows = await this.astGraphRepo.findTwinCandidatePool(
+                            repoId,
+                            allPrCallees,
+                            options,
+                        );
+
+                        const poolRows: any[] = [];
+                        const seenQns = new Set<string>();
+                        for (const row of rows) {
+                            if (seenQns.has(row.qualified_name)) continue;
+                            const candidateCallees: string[] = row.callees || [];
+                            const qualifies = [...prCalleesBySource.entries()].some(
+                                ([prQn, prCallees]) =>
+                                    row.qualified_name !== prQn &&
+                                    overlapRatio(candidateCallees, prCallees) >= 0.8,
+                            );
+                            if (qualifies) {
+                                seenQns.add(row.qualified_name);
+                                poolRows.push(row);
+                            }
+                        }
+
+                        const twinPool: any[] = poolRows.map((r) => ({
+                            kind: 'Function',
+                            qualified_name: r.qualified_name,
+                            name: (r.qualified_name || '').split('::').pop(),
+                            params: r.params,
+                            return_type: r.return_type,
+                            file_path: r.file_path,
+                            line_start: r.line_start ?? 0,
+                            line_end: r.line_end ?? 0,
+                        }));
+
+                        const poolEdges: any[] = poolRows.flatMap((r) =>
+                            (r.callees || []).map((cal: string) => ({
+                                kind: 'CALLS',
+                                source_qualified: r.qualified_name,
+                                target_qualified: cal,
+                            })),
+                        );
+
+                        pairDuplicateTwinsInGraph(
+                            {
+                                nodes: twinPool,
+                                edges: [...poolEdges, ...(prEdges || [])],
+                            },
+                            prEdges,
+                            prNodes || [],
+                            fileChanges,
+                        );
+
+                        const nodeIndexByQn = new Map<string, number>(
+                            (parsed.nodes as any[]).map((n: any, i: number) => [
+                                n?.qualified_name,
+                                i,
+                            ]),
+                        );
+                        const flaggedNodes = [
+                            ...(prNodes || []).filter((n: any) => n?.is_duplicate),
+                            ...twinPool.filter((n: any) => n?.is_duplicate),
+                        ];
+                        for (const f of flaggedNodes) {
+                            const idx = nodeIndexByQn.get(f.qualified_name);
+                            if (idx !== undefined) parsed.nodes[idx] = f;
+                            else {
+                                nodeIndexByQn.set(f.qualified_name, parsed.nodes.length);
+                                parsed.nodes.push(f);
+                            }
+                        }
+                    }
+                    jsonStr = JSON.stringify(parsed);
+                }
+
+                const duplicateNodes = (parsed.nodes || []).filter((n: any) => n.is_duplicate);
+                if (duplicateNodes.length > 0) {
+                    this.logger.log({
+                        message: `Flagged ${duplicateNodes.length} duplicate twin nodes in subgraph`,
+                        context: GraphContextService.name,
+                        metadata: { repoId, count: duplicateNodes.length },
+                    });
+                }
+            } catch (e) {
+                this.logger.warn({
+                    message: '[KODUS-GRAPH] Failed twin pairing in GraphContextService',
+                    context: GraphContextService.name,
+                    error: e,
+                    metadata: {
+                        repoId,
+                        ...(options?.organizationId && { organizationId: options.organizationId }),
+                        ...(options?.repository && { repository: options.repository }),
+                        ...(options?.prNumber && { prNumber: options.prNumber }),
+                    },
+                });
+            }
+        }
+
         const baseGraphPath = `${sandbox.repoDir}/${BASE_GRAPH_PATH}`;
 
         this.logger.log({
@@ -487,6 +692,6 @@ export class GraphContextService {
 
 function extractFilePaths(changedFiles: FileChange[]): string[] {
     return (changedFiles || [])
-        .map((f) => f.filename || f.previous_filename)
+        .map((f) => (f.filename || f.previous_filename)?.replace(/\\/g, '/'))
         .filter(Boolean) as string[];
 }
