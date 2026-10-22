@@ -7,14 +7,12 @@ import { ICodeBaseConfigService } from '@libs/code-review/domain/contracts/CodeB
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
-import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
     CodeReviewConfig,
     CodeReviewConfigWithoutLLMProvider,
     FileChange,
     KodusConfigFile,
-    KodyFineTuningConfig,
     ReviewModeConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
@@ -53,10 +51,6 @@ import {
     IGlobalParametersService,
 } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 import {
-    IOrganizationParametersService,
-    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
@@ -77,8 +71,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         private readonly integrationService: IIntegrationService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
-        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
-        private readonly organizationParametersService: IOrganizationParametersService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         @Inject(forwardRef(() => KODY_RULES_SERVICE_TOKEN))
@@ -106,7 +98,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 defaultBranch,
                 kodyRulesEntity,
                 reviewModeConfig,
-                kodyFineTuningConfig,
             ] = await Promise.all([
                 this.parametersService.findOne({
                     configKey: ParametersKey.CODE_REVIEW_CONFIG,
@@ -122,7 +113,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     organizationAndTeamData.organizationId,
                 ),
                 this.getReviewModeConfigParameter(organizationAndTeamData),
-                this.getKodyFineTuningConfigParameter(organizationAndTeamData),
             ]);
 
             // Self-heal: a team can reach a review without its
@@ -182,7 +172,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 kodyRules: standardRules,
                 kodyMemoryRules: memoryRules,
                 reviewModeConfig,
-                kodyFineTuningConfig,
                 // v2-only prompt overrides (categories and severity guidance). Read from repo/global parameters.
                 v2PromptOverrides: this.sanitizeV2PromptOverrides(
                     mergedConfigs.v2PromptOverrides,
@@ -856,25 +845,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         _organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ReviewModeConfig> {
         return ReviewModeConfig.HEAVY_MODE;
-    }
-
-    private async getKodyFineTuningConfigParameter(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<KodyFineTuningConfig> {
-        const kodyFineTuningConfig =
-            await this.organizationParametersService.findByKey(
-                OrganizationParametersKey.KODY_FINE_TUNING_CONFIG,
-                organizationAndTeamData,
-            );
-
-        const enableService =
-            kodyFineTuningConfig?.configValue?.enabled !== undefined
-                ? kodyFineTuningConfig.configValue.enabled
-                : true;
-
-        return {
-            enabled: enableService,
-        };
     }
 
     async getE2BIpAddress(): Promise<string | null> {

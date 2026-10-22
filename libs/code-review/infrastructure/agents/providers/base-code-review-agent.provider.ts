@@ -732,10 +732,6 @@ export abstract class BaseCodeReviewAgentProvider {
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
-                    // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
-                    // as skipHeavyPasses above: loopParams is built field-by-field,
-                    // so without this line the resample passes never run.
-                    heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

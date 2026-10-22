@@ -18,7 +18,6 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    isHeavyReviewCommand,
     parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
@@ -599,7 +598,6 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                             origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body, botUsername),
-                            heavy: isHeavyReviewCommand(comment.body, botUsername),
                             onlyCustomAgent: customAgentSlug,
                         },
                     };

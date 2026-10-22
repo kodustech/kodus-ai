@@ -78,10 +78,8 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/user.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],
@@ -188,7 +186,6 @@ describe('AgentReviewStage — kodus-config.yml keys set in the app', () => {
         const ctx = makeContext({
             codeReviewConfig: {
                 reviewOptions: {},
-                heavy: false,
                 resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
                 kodusConfigFileDroppedKeys: ['version', 'customAgents'],
             },

@@ -81,9 +81,6 @@ function reviewOptionsFromEnv() {
 // instructions in reviews" is one of them (evals/repo-instructions/team-config.json).
 // The instruction files a case gives are the repository's (prOf), on either way.
 function teamOf(caseData, teamConfig = null) {
-    if (process.env.RECALL_HEAVY === '1') {
-        throw new NotAProductionRoute('RECALL_HEAVY asks for a mode the review enables behind a release gate the eval has no org for');
-    }
     const memories = parseMaybeJson(caseData.memoryRules) || [];
     const reviewOptions = reviewOptionsFromEnv();
     const v2PromptOverrides = parseMaybeJson(caseData.v2PromptOverrides);

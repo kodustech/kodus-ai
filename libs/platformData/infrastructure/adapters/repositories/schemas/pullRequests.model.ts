@@ -25,11 +25,6 @@ export class PullRequestsModel extends CoreDocument {
     @Prop({ type: Boolean, required: false })
     public merged: boolean;
 
-    // Whether the LAST review of this PR ran in HEAVY mode (resolved after the
-    // feature gate, not just the request). Surfaced as a badge in the PRs list.
-    @Prop({ type: Boolean, required: false })
-    public heavy?: boolean;
-
     @Prop({ type: String, required: false })
     public url: string;
 

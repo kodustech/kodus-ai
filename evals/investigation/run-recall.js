@@ -210,9 +210,6 @@ function runMetaOf(args) {
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
-        // heavy = passadas de resample ativadas. Eixo de regime: não comparar
-        // entrada heavy com entrada normal sem rotular.
-        heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
         // maps per provider; without it the BYOK slot sets none.
@@ -540,7 +537,7 @@ async function main() {
         Math.min(Number(args.concurrency) || 4, selectedTests.length),
     );
     console.log(
-        `(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`,
+        `(concorrência: ${concurrency})\n`,
     );
     let cursor = 0;
     const worker = async () => {

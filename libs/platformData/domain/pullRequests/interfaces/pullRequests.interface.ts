@@ -7,7 +7,7 @@ import {
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import { ImplementationStatus } from '../enums/implementationStatus.enum';
 import { PriorityStatus } from '../enums/priorityStatus.enum';
-import { FeedbackType } from '@libs/kodyFineTuning/domain/enums/feedbackType.enum';
+import { FeedbackType } from '@libs/platformData/domain/pullRequests/enums/feedbackType.enum';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 
@@ -55,8 +55,6 @@ export interface IPullRequests {
     title: string;
     status: string;
     merged: boolean;
-    /** Whether the last review ran in HEAVY mode (resolved post feature-gate). */
-    heavy?: boolean;
     number: number;
     url: string;
     baseBranchRef: string;

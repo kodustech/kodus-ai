@@ -32,7 +32,6 @@ describe('CodeBaseConfigService.getMergedCodeReviewConfigs — kodus-config.yml 
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
             codeManagementService as any,
             {} as any,
             {} as any,

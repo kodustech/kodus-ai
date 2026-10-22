@@ -45,15 +45,6 @@ features:
             look at, the tools they may use and how their comments appear,
             and run them next to Kody on every pull request.
 
-    heavy-review:
-        name: "Heavy review (deeper pass)"
-        stage: alpha
-        audience: [cloud, self-hosted]
-        description: >-
-            An opt-in deeper review that re-runs the finder multiple times to
-            surface more real bugs, for the changes where catching everything
-            matters more than speed.
-
     kodus-trace-review-context:
         name: "Kodus Trace review context"
         stage: alpha

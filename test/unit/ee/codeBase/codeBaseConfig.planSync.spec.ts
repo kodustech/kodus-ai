@@ -56,7 +56,6 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         const service = new CodeBaseConfigService(
             {} as any, // integrationService
             {} as any, // integrationConfigService
-            {} as any, // organizationParametersService
             parametersService as any,
             kodyRulesService as any,
             {} as any, // globalParametersService
@@ -69,9 +68,6 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         jest.spyOn(service as any, 'getDefaultBranch').mockResolvedValue('main');
         jest
             .spyOn(service as any, 'getReviewModeConfigParameter')
-            .mockResolvedValue({});
-        jest
-            .spyOn(service as any, 'getKodyFineTuningConfigParameter')
             .mockResolvedValue({});
         jest
             .spyOn(service as any, 'getMergedCodeReviewConfigs')

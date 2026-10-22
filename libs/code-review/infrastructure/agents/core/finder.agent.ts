@@ -66,7 +66,6 @@ import {
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { LLM } from '@libs/llm/llm';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
-import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
@@ -74,12 +73,6 @@ import { z } from 'zod';
 export const FINDER_DONE_TOOL = 'submitResult' as const;
 
 const finderLogger = createLogger('finder');
-
-/** HEAVY mode: extra finder re-runs on top of the base pass (resampling for
- *  recall). 2 → 3 total runs, the offline+self-hosted-validated saturation point.
- *  The one heavy knob likely worth surfacing in a future web "advanced" config;
- *  everything else (dedup, threshold, temperature) is a fixed engine decision. */
-const HEAVY_RESAMPLE_EXTRA_RUNS = 2;
 
 /** A single finding as produced by the finder (matches the legacy
  *  FindingsOutput.suggestions item shape). */
@@ -598,9 +591,6 @@ export async function recoverFindingsFromProse(
 export interface RunFinderWithVerifyParams {
     runner: AgentRunner;
     finderSpec: AgentSpec;
-    /** Factory for a fresh finder spec (own coverage ledger) per concurrent
-     *  heavy resample pass — see RecallPassesParams.makeResampleSpec. */
-    makeResampleSpec?: () => AgentSpec;
     /** Model id for the verifier runs. */
     modelId: string;
     /** Failover target model id — threaded to the verifier so its strict tool
@@ -627,10 +617,6 @@ export interface RunFinderWithVerifyParams {
     skipHeavyPasses?: boolean;
     /** Skip ONLY the synthesis-rescue pass. */
     skipSynthesisRescue?: boolean;
-    /** HEAVY mode: run an EXTRA "what did you miss?" critic pass (on top of the
-     *  synthesis-rescue) that re-scans for missed bugs. Opt-in per review — more
-     *  recall at ~+1 finder pass of cost. Off by default. */
-    heavy?: boolean;
     /** Langfuse telemetry context (org/team/PR/repo) — names the finder, recall
      *  and per-finding verify observations so the trace is attributable. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
@@ -797,12 +783,10 @@ export async function runFinderWithVerify(
         {
             runner: params.runner,
             finderSpec: params.finderSpec,
-            makeResampleSpec: params.makeResampleSpec,
             finderState,
             userPrompt: input.prompt,
             skipHeavyPasses: params.skipHeavyPasses,
             skipSynthesisRescue: params.skipSynthesisRescue,
-            heavy: params.heavy,
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
@@ -813,26 +797,7 @@ export async function runFinderWithVerify(
         ctx,
     );
     const reasoning = recall.findings.reasoning;
-    // HEAVY: collapse near-duplicate candidates BEFORE verify. The resample
-    // re-finds the same bug with different wording — those survive the exact-content
-    // merge key and would each cost a (main-model, tool-using) verify call. Collapse
-    // by CONTENT similarity (the shared primitive + the engine's calibrated
-    // DEDUP_CONTENT_THRESHOLD), NOT by location: two DIFFERENT bugs on the same line
-    // have different text → they do NOT collapse (only same-bug paraphrases do).
-    // Self-hosted A/B: 12→4 / 11→7 candidates, ~50% fewer verify calls, all distinct
-    // bugs preserved. Heavy-only — the normal path has no resample dupes to fold.
-    let suggestions = recall.findings.suggestions;
-    if (params.heavy) {
-        const before = suggestions.length;
-        suggestions = collapseNearDuplicates(suggestions);
-        if (suggestions.length < before) {
-            finderLogger.log({
-                message: `[heavy-dedup] collapsed ${before} → ${suggestions.length} candidates before verify`,
-                context: 'finder',
-                serviceName: 'finder',
-            });
-        }
-    }
+    const suggestions = recall.findings.suggestions;
     const recallUsage = recall.usage;
 
     if (suggestions.length === 0) {
@@ -1313,19 +1278,11 @@ type FinderFindings = { reasoning: string; suggestions: FinderSuggestion[] };
 interface RecallPassesParams {
     runner: AgentRunner;
     finderSpec: AgentSpec;
-    /** Builds a FRESH finder spec with its OWN DiffCoverageLedger. Heavy resample
-     *  passes run concurrently, so they must NOT share `finderSpec`'s ledger —
-     *  the CompletionGatePolicy mutates it per tool call, and interleaved writes
-     *  would corrupt each pass's coverage/stop decisions. Each parallel pass gets
-     *  its own spec via this factory; falls back to `finderSpec` when absent. */
-    makeResampleSpec?: () => AgentSpec;
     finderState: RunState;
     /** The original review prompt — reused by the synthesis-rescue pass. */
     userPrompt: string;
     skipHeavyPasses?: boolean;
     skipSynthesisRescue?: boolean;
-    /** HEAVY mode — one EXTRA critic pass after synthesis-rescue. */
-    heavy?: boolean;
     telemetryMetadata?: LangfuseTelemetryMetadata;
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
@@ -1364,13 +1321,9 @@ export async function runRecallPasses(
     const toolCalls = collectToolCalls(params.finderState);
     // Re-run the finder with a focused prompt; merge its ADDITIONAL findings.
     // `label` names the observation so each pass is distinct in the trace.
-    const runPass = async (
-        prompt: string,
-        label: string,
-        spec: AgentSpec = params.finderSpec,
-    ): Promise<void> => {
+    const runPass = async (prompt: string, label: string): Promise<void> => {
         const state = await params.runner.run(
-            spec,
+            params.finderSpec,
             {
                 prompt,
                 ...toAiSdkTelemetryArgs(
@@ -1382,11 +1335,6 @@ export async function runRecallPasses(
             },
             ctx,
         );
-        // Extract BEFORE touching the shared accumulators: passes may run
-        // concurrently (heavy resample), and `mergeSuggestions(findings, await …)`
-        // would snapshot `findings` before the await — last writer would win and
-        // silently drop a concurrent pass's merge. Extract first, then merge
-        // synchronously (single-threaded, so the read-modify-write is atomic).
         const extracted = await extractFindingsWithRecovery(
             state,
             params.recoverProse,
@@ -1415,49 +1363,6 @@ export async function runRecallPasses(
                 params.laneScoped,
             ),
             'synthesis-rescue',
-        );
-    }
-
-    // HEAVY mode — RESAMPLE. Re-run the finder HEAVY_RESAMPLE_EXTRA_RUNS more
-    // times on the ORIGINAL prompt and dedup-merge. Validated offline
-    // (evals/shard-seeder/resample.js) + on a real self-hosted A/B: a finder's
-    // stochastic variance surfaces different real bugs each run, so the union
-    // climbs recall (~2× candidates), saturating around 3 total runs — cheap
-    // self-diversity without a 2nd model. Requires temperature > 0 (at 0 the
-    // re-runs are identical); the finder omits temperature so the PROVIDER DEFAULT
-    // (~1.0; reasoning models auto-clamp to 1) applies and diversifies out of the
-    // box — no per-run override needed. The extra recall floods candidates, folded
-    // by collapseNearDuplicates above + the verify. See project_critic_heavy_mode.
-    if (params.heavy) {
-        // Fail fast: the concurrent passes below MUST each get their own
-        // DiffCoverageLedger (via makeResampleSpec). Falling back to the shared
-        // `finderSpec` would silently reintroduce the ledger race across parallel
-        // passes — refuse to run rather than corrupt coverage/stop decisions.
-        if (!params.makeResampleSpec) {
-            throw new Error(
-                'runRecallPasses: heavy mode requires makeResampleSpec (a fresh ' +
-                    'per-pass coverage ledger); refusing to run concurrent resample ' +
-                    'passes on a shared ledger.',
-            );
-        }
-        const makeSpec = params.makeResampleSpec;
-        // The extra runs are INDEPENDENT (same original prompt, no data flow
-        // between them) → run them CONCURRENTLY. Cuts heavy latency from
-        // base+synthesis+N×finder to base+synthesis+~1×finder. Cost note: the
-        // base run has already WRITTEN the Anthropic prompt cache (system prompt
-        // via systemCacheControl), so the parallel re-runs both get
-        // cache READS on the static prefix — the marginal cost of a re-run is
-        // well under a full run's input price.
-        await Promise.all(
-            Array.from({ length: HEAVY_RESAMPLE_EXTRA_RUNS }, (_, i) =>
-                // Fresh spec per pass (own DiffCoverageLedger) — these run
-                // concurrently, so sharing a ledger would race.
-                runPass(
-                    params.userPrompt,
-                    `heavy-resample-${i + 1}`,
-                    makeSpec(),
-                ),
-            ),
         );
     }
 

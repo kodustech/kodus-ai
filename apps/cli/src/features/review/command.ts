@@ -54,7 +54,6 @@ type ReviewCommandOptions = {
     rulesOnly?: boolean;
     fast?: boolean;
     focus?: string;
-    heavy?: boolean;
     interactive?: boolean;
     fix?: boolean;
     promptOnly?: boolean;
@@ -110,10 +109,6 @@ Examples:
         .option(
             '--focus <text>',
             'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
-        )
-        .option(
-            '--heavy',
-            'Heavy mode: extra critic pass for higher recall (finds more, may be noisier)',
         )
         .option(
             '-i, --interactive',
@@ -232,7 +227,6 @@ async function reviewAction(
                         commit: options.commit,
                         branch: options.branch,
                         focus: options.focus,
-                        heavy: options.heavy,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
                             if (globalOpts.quiet || ctx.isAgent) {

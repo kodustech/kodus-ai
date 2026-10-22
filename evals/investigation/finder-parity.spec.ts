@@ -147,7 +147,6 @@ describe('finder input data', () => {
 
     it("hands over the case's memories as a member writes them, and its overrides as the team's config", () => {
         delete process.env.RECALL_CATEGORIES;
-        delete process.env.RECALL_HEAVY;
         const team = internals.teamOf({ languageResultPrompt: 'pt-BR', memoryRules: [{ title: 't', rule: 'r', type: 'memory' }], v2PromptOverrides: { generation: { main: 'x' } } });
         expect(team.language).toBe('pt-BR');
         expect(team.memories).toEqual([{ title: 't', rule: 'r', path: null }]);
@@ -170,15 +169,9 @@ describe('finder input data', () => {
 
     it("saves a run's --team-config over the case's own keys, as a team saving them would", () => {
         delete process.env.RECALL_CATEGORIES;
-        delete process.env.RECALL_HEAVY;
         const team = internals.teamOf({ reviewMode: 'light', v2PromptOverrides: { generation: { main: 'x' } } }, { reviewMode: 'heavy', newKey: true });
         expect(team.codeReviewConfig.configs).toEqual({ v2PromptOverrides: { generation: { main: 'x' } }, reviewMode: 'heavy', newKey: true });
         expect(internals.teamOf({}, { newKey: true }).codeReviewConfig.configs).toEqual({ newKey: true });
-    });
-
-    it('refuses a mode production gates behind a release the eval has no org for', () => {
-        process.env.RECALL_HEAVY = '1';
-        expect(() => internals.teamOf({})).toThrow(internals.NotAProductionRoute);
     });
 
     it("needs the platform's recorded files for a case, and hands them over as they are", () => {

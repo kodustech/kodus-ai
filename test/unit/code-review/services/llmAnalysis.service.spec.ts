@@ -110,36 +110,6 @@ describe('LLMAnalysisService', () => {
     });
 
     describe('filterSuggestionsSafeGuard', () => {
-        it('should remove suggestionEmbedded from suggestions before processing', async () => {
-            const suggestions = [
-                {
-                    id: 's1',
-                    suggestionContent: 'test',
-                    suggestionEmbedded: [0.1, 0.2, 0.3], // Should be removed
-                },
-            ];
-
-            mockSafeguardPipelineService.execute.mockResolvedValue({
-                suggestions,
-            });
-
-            // After the function runs, suggestionEmbedded should be deleted
-            await service.filterSuggestionsSafeGuard(
-                mockOrganizationAndTeamData as any,
-                123,
-                { filename: 'test.ts', fileContent: 'code' },
-                'relevant',
-                '@@ -1,1 +1,1 @@',
-                suggestions,
-                'en',
-                ReviewModeResponse.HEAVY_MODE,
-                {} as any,
-            );
-
-            // Verify the suggestion no longer has suggestionEmbedded
-            expect(suggestions[0]).not.toHaveProperty('suggestionEmbedded');
-        });
-
         it('should return original suggestions on error', async () => {
             const suggestions = [{ id: 's1', suggestionContent: 'original' }];
             mockSafeguardPipelineService.execute.mockRejectedValue(
