@@ -4,7 +4,10 @@ import { getCurrentSearchParamsOnServerComponents } from "src/core/utils/headers
 
 import { COCKPIT_PARAM } from "../_constants";
 
-export const getSelectedRepository = async (): Promise<string | null> => {
+export const getSelectedRepository = async (): Promise<{
+    repository: string | null;
+    repositoryId: string | null;
+}> => {
     const [cookieStore, searchParams] = await Promise.all([
         cookies(),
         getCurrentSearchParamsOnServerComponents(),
@@ -13,18 +16,33 @@ export const getSelectedRepository = async (): Promise<string | null> => {
     // URL wins. Presence of the param — even empty — is authoritative:
     // an empty value means "all repositories" (no repo filter).
     if (searchParams.has(COCKPIT_PARAM.repository)) {
-        return searchParams.get(COCKPIT_PARAM.repository) || null;
+        const repository = searchParams.get(COCKPIT_PARAM.repository) || null;
+        return {
+            repository,
+            repositoryId: repository
+                ? searchParams.get(COCKPIT_PARAM.repositoryId) || null
+                : null,
+        };
     }
 
     const repositoryCookie = cookieStore.get(
         "cockpit-selected-repository" satisfies CookieName,
     );
 
-    if (!repositoryCookie) return null;
+    if (!repositoryCookie) return { repository: null, repositoryId: null };
 
     try {
-        return JSON.parse(repositoryCookie.value) as string;
+        const parsed = JSON.parse(repositoryCookie.value) as
+            | string
+            | { repository?: string; repositoryId?: string | null };
+        if (typeof parsed === "string") {
+            return { repository: parsed, repositoryId: null };
+        }
+        return {
+            repository: parsed.repository || null,
+            repositoryId: parsed.repositoryId || null,
+        };
     } catch {
-        return null;
+        return { repository: null, repositoryId: null };
     }
 };
