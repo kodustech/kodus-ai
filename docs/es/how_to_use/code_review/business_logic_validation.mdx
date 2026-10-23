@@ -7,7 +7,19 @@ description: "Compara cada pull request con la tarea que referencia, requisito p
 
 La Validación de Lógica de Negocio comprueba que un pull request entrega lo que pide su tarea. Kody encuentra la tarea que referencia el PR, la lee de tu gestor de tareas y lista cada requisito con su estado en el código. El resultado es un único comentario en el PR, siempre actualizado, igual en GitHub, GitLab, Bitbucket, Azure Repos y Forgejo.
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
+Así se ve el comentario en un PR que entrega parte de su tarea:
+
+> **Kody · Business Logic**
+>
+> **#291 · Ticket SLA badge** — Por corregir: 2 requisitos faltantes
+>
+> | | Requisito | En este PR |
+> |---|---|---|
+> | ✅ **MET** | El encabezado del ticket muestra un badge con el tiempo de SLA restante. | `TicketPanel.tsx:40` · El badge se muestra en el encabezado como "SLA Xh Ym". |
+> | ❌ **MISSING** | El badge se vuelve rojo cuando queda menos de 1 hora. | `SlaBadge.tsx:14` · El badge siempre usa el tono "info". **Do:** pasar al tono de peligro por debajo de 60 minutos. |
+> | ❌ **MISSING** | Los tickets resueltos no muestran badge. | `TicketPanel.tsx:40` · Se muestra sea cual sea el estado. **Do:** ocultarlo cuando el ticket está resuelto. |
+
+Tras la corrección, el mismo comentario dice "All requirements met · ✅ 3 of 3 met", y conserva debajo la verificación anterior.
 
 ## Requisitos previos
 
@@ -42,6 +54,8 @@ Kody también lee lo que enlaza la tarea:
 - **Una tarea padre** (un sub-issue de Linear, una subtarea de Jira, una subtarea de ClickUp): el PR se compara con los requisitos del padre que cubre el título de esta tarea. Un sub-issue que dice "ver el padre" también se comprueba.
 - **Subtareas**: un requisito que entrega una de ellas aparece como CHECK MANUALLY ("Delivered by KOD-20"), nunca como faltante.
 - **Documentos adjuntos a la tarea** (docs de Linear): se leen como parte de la tarea, criterios incluidos.
+
+### Cómo el PR nombra la tarea
 
 - **"Closes PROJ-1"** o una clave en el título o la rama: el PR se compara con la tarea completa.
 - **"Part of PROJ-1"**: el PR entrega una parte. Lo que falta se lista, pero no como algo pendiente para el merge.
@@ -82,6 +96,15 @@ Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comen
 - **Discrepar**: "Está cubierto en `useDrag.ts`". Kody vuelve a comprobar lo que señalaste y lo marca como MET o dice qué revisó y lo mantiene.
 - **Aceptar un hallazgo** (alguien que no es el autor del PR: en GitHub, con permiso de escritura en el repositorio; en GitLab, Developer o superior en el repositorio; en Bitbucket, Azure Repos y Forgejo, un miembro de la organización que la plataforma lista): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores, aunque Kody redacte el requisito de forma un poco distinta, mientras el texto de la tarea no cambie; si la tarea se edita, hay que aceptar el requisito de nuevo.
 
+Lo que responde Kody:
+
+| Respuesta | Kody |
+|---|---|
+| Un revisor acepta y lo mueve a SAA-102 | "Got it. SAA-102 exists, I marked AC #2 as accepted by @rafa and updated the table above." |
+| El autor del PR intenta aceptar | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
+| Alguien sin el acceso indicado arriba | "Only someone with write access to the repository can accept a requirement…" |
+| La tarea a la que se movió no existe | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
+
 ## Cuándo Kody no comenta
 
 Kody solo comenta cuando el autor puede hacer algo al respecto:
@@ -110,21 +133,44 @@ Abre **Code review → What to review** y haz clic en **Business Logic** (o **�
 
 - **Task source**: todos los gestores conectados (plugins de tareas personalizados como ClickUp incluidos), o un solo plugin. Para un plugin personalizado, elige la herramienta que lee una tarea por su id; solo se ofrecen herramientas de solo lectura. Usa **Try it**, fijo a la derecha de la página (necesita permiso para editar esta configuración): una tarea sola muestra lo que Kody lee de ella, y un pull request ejecuta la comprobación completa sin publicar, con la configuración que hay en pantalla, guardada o no. **Post to the pull request** publica el resultado mostrado, sin ejecutarlo de nuevo, una vez por prueba; se rechaza si el pull request recibió un commit después de la prueba, así que vuelve a ejecutarla primero.
 - **Custom task id format** (opcional): una expresión regular para ids que Kody no encuentra por sí solo: `T(\d{4})` lee `T1234` como la tarea 1234. Claves como `SAA-96`, `#12`, `AB#8`, `CU-…` y los enlaces de gestores se encuentran sin ella, igual que una clave en minúsculas como `sc-123` en el nombre de una rama. En un título o una descripción, una clave en minúsculas solo cuenta cuando Linear o Jira tienen ese equipo o proyecto; para otro gestor, define el formato. Un número que el formato captura solo se lee como issue de Git cuando Git Issues es la fuente de tareas; con todos los gestores conectados, `T1234` nunca es la issue #1234 del repositorio.
-- **Where acceptance criteria live**: detectado automáticamente, bajo un encabezado en la descripción, o en un campo personalizado; una tarea sin ese campo se lee desde su descripción.
+- **Where acceptance criteria live**: detectado automáticamente (un campo de criterios, un checklist o una lista en la descripción), bajo un encabezado en la descripción, o en un campo personalizado; una tarea sin ese campo se lee desde su descripción. Con **Under a heading** en `Acceptance criteria`, esta tarea se compara con sus tres viñetas, y el párrafo de arriba es contexto:
+
+  ```markdown
+  Agents should see at a glance how much time is left on a ticket's SLA.
+
+  ## Acceptance criteria
+  - The ticket header shows a badge with the remaining SLA time.
+  - The badge turns red when less than 1 hour is left.
+  - Resolved tickets show no badge.
+  ```
+- **Comment when every requirement is met** (activado por defecto): un PR que cumple su tarea recibe un comentario de una línea. Desactivado, no recibe ninguno; los huecos se publican igual.
 - **Ask for a task when the PR references none**: Kody comenta preguntando para qué tarea es el PR (o señalando el error tipográfico), en lugar de omitirlo. Los PRs abiertos por bots, como Dependabot o Renovate, se dejan en paz. Un gestor caído nunca cuenta.
-- **Re-check**: solo a petición (por defecto), en cada push mientras falte algo, o en cada push.
+- **Re-check**: solo a petición (por defecto), en cada push mientras falte algo, o en cada push. Cada verificación usa el modelo de tu organización, como una revisión, así que **en cada push** cuesta una validación por push.
 - **Skipped pull requests**: los que omite la revisión de código también se omiten aquí: títulos con una palabra clave ignorada (`ignoredTitleKeywords`, como `wip`) y borradores cuando `runOnDraft` está desactivado. Un comentario `@kody -v business-logic` siempre se ejecuta.
 - **Team guidance**: notas que Kody sigue al juzgar, por ejemplo "Los feature flags cuentan como implementados cuando el flag existe y está desactivado por defecto". No pueden cambiar el formato del veredicto ni hacer que Kody invente requisitos.
+
+### Configuraciones comunes
+
+| Equipo | Configuración |
+|---|---|
+| Quiere la verificación, no el ruido (por defecto) | Re-check a petición, **Comment when every requirement is met** activado |
+| Cada PR debe entregar una tarea | **Ask for a task** activado, re-check **mientras falte algo**: a un PR sin tarea se le pide una, y cada corrección actualiza el comentario hasta que pase |
+| Solo quiere saber de los huecos | **Comment when every requirement is met** desactivado |
+| Monorepo con un gestor por área | Define **Task source** y **Where acceptance criteria live** por directorio |
 
 La misma configuración en `kodus-config.yml`:
 
 ```yaml
 businessLogic:
-  taskSource: 'auto'
-  criteriaLocation: 'heading'
+  taskSource: 'auto'              # o el integration id de un plugin
+  taskSourceTool: 'get_ticket'    # solo plugin personalizado: la herramienta que lee una tarea por id
+  taskIdPattern: 'T(\d{4})'       # opcional: ids que Kody no encuentra solo
+  criteriaLocation: 'heading'     # auto | heading | field
   criteriaHeading: 'Acceptance criteria'
+  # criteriaField: 'Acceptance Criteria'   # con criteriaLocation: 'field'
+  teamGuidance: 'Feature flags count as implemented when the flag exists and defaults to off.'
   commentWhenMet: true
-  recheckOn: 'request' # request | failing | push
+  recheckOn: 'request'            # request | failing | push
   requireTask: false
 ```
 

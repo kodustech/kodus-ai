@@ -7,7 +7,19 @@ description: "各プルリクエストを、それが参照するタスクと要
 
 ビジネスロジック検証は、プルリクエストがタスクで求められている内容を実現しているかを確認します。Kody は PR が参照しているタスクを見つけ、タスク管理ツールから読み込み、すべての要件についてコード上でどの状態にあるかを一覧にします。結果は PR 上の 1 つのコメントとして常に最新の状態に保たれ、GitHub、GitLab、Bitbucket、Azure Repos、Forgejo のいずれでも同じです。
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
+タスクの一部を実装した PR では、コメントは次のようになります:
+
+> **Kody · Business Logic**
+>
+> **#291 · Ticket SLA badge** — 修正が必要: 不足している要件 2 件
+>
+> | | 要件 | この PR |
+> |---|---|---|
+> | ✅ **MET** | チケットのヘッダーに、SLA の残り時間を示すバッジが表示される。 | `TicketPanel.tsx:40` · ヘッダーにバッジが表示され、"SLA Xh Ym" と表示されます。 |
+> | ❌ **MISSING** | 残り時間が 1 時間未満になるとバッジが赤くなる。 | `SlaBadge.tsx:14` · バッジは常に "info" のトーンです。**Do:** 60 分未満で danger のトーンに切り替えてください。 |
+> | ❌ **MISSING** | 解決済みのチケットにはバッジを表示しない。 | `TicketPanel.tsx:40` · ステータスに関係なく表示されます。**Do:** チケットが解決済みのときは非表示にしてください。 |
+
+修正後は、同じコメントが "All requirements met · ✅ 3 of 3 met" になり、前回のチェック結果がその下に残ります。
 
 ## 前提条件
 
@@ -42,6 +54,8 @@ Kody はタスクがリンクしているものも読み取ります:
 - **親タスク** (Linear の sub-issue、Jira のサブタスク、ClickUp のサブタスク): PR は、このタスクのタイトルが対象とする親タスクの要件と照合されます。「親を参照」とだけ書かれた sub-issue もチェックされます。
 - **サブタスク**: いずれかのサブタスクが実現する要件は CHECK MANUALLY ("Delivered by KOD-20") として表示され、不足として扱われることはありません。
 - **タスクに添付されたドキュメント** (Linear docs): 受け入れ基準を含め、タスクの一部として読み取られます。
+
+### PR でのタスクの示し方
 
 - **"Closes PROJ-1"**、またはタイトルやブランチ内のキー: PR はタスク全体と照合されます。
 - **"Part of PROJ-1"**: PR はタスクの一部を実現するものです。不足分は一覧に表示されますが、マージ前に対応すべきものとしては扱われません。
@@ -82,6 +96,15 @@ Business Logic のコメントに返信し、`@kody` をメンションします
 - **異議を唱える**: 「`useDrag.ts` で対応済みです」。Kody は指摘された箇所を再チェックし、MET にするか、何を確認したかを説明したうえで状態を維持します。
 - **指摘を受け入れる** (PR の作成者以外の人。GitHub ではリポジトリへの書き込み権限を持つ人、GitLab ではリポジトリで Developer 以上の権限を持つ人、Bitbucket・Azure Repos・Forgejo ではプラットフォームが返す組織のメンバー): 「キーボードでの並べ替えはスコープ外のため SAA-102 に移しました」。Kody は SAA-102 が存在することを確認し、その行を受け入れた人とともに **ACCEPTED** にします。その行は修正対象から外れます。この判断は、Kody が要件を少し違う言い回しで書いた場合も含め、タスクの本文が変わらない限り以降の再チェックでも維持されます。タスクが編集された場合は、もう一度受け入れる必要があります。
 
+Kody の返答:
+
+| 返信 | Kody |
+|---|---|
+| レビュアーが受け入れ、SAA-102 に移す | "Got it. SAA-102 exists, I marked AC #2 as accepted by @rafa and updated the table above." |
+| PR の作成者が受け入れようとする | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
+| 上記の権限を持たない人 | "Only someone with write access to the repository can accept a requirement…" |
+| 移動先のタスクが存在しない | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
+
 ## Kody がコメントしない場合
 
 Kody は作成者が何か対処できる場合にのみコメントします:
@@ -110,21 +133,44 @@ PR に (コードの行ではなく) コメントします:
 
 - **Task source**: 接続されているすべてのタスク管理ツール (ClickUp などのカスタムタスクプラグインを含む)、または 1 つのプラグイン。カスタムプラグインの場合は、ID で 1 つのタスクを読み取るツールを選択します。読み取り専用のツールのみが表示されます。ページ右側に固定された **Try it** (この設定の編集権限が必要) を使うと、タスクのみの場合は Kody がそこから何を読み取るかが表示され、プルリクエストの場合は画面上の設定 (保存済みかどうかを問わず) でチェック全体を投稿せずに実行します。**Post to the pull request** は、表示された結果を再実行せずに、テストごとに 1 回だけ投稿します。テスト後にプルリクエストへ新しいコミットがあった場合は投稿が拒否されるので、先にテストを再実行してください。
 - **Custom task id format** (任意): Kody が自動では見つけられない ID のための正規表現。`T(\d{4})` は `T1234` をタスク 1234 として読み取ります。`SAA-96`、`#12`、`AB#8`、`CU-…` のようなキーとタスク管理ツールのリンクはこの設定がなくても見つかります。ブランチ名の `sc-123` のような小文字のキーも同様です。タイトルや説明文の小文字のキーは、Linear または Jira にそのチームやプロジェクトがある場合にのみ有効です。それ以外のツールでは形式を設定してください。形式が取り出した数字は、Git Issues がタスクソースの場合にのみ Git の issue として読まれます。接続されているすべてのツールを使う設定では、`T1234` がリポジトリの issue #1234 になることはありません。
-- **Where acceptance criteria live**: 自動検出、説明内の見出しの下、またはカスタムフィールド。そのフィールドがないタスクは説明から読み取られます。
+- **Where acceptance criteria live**: 自動検出 (受け入れ基準のフィールド、チェックリスト、または説明内のリスト)、説明内の見出しの下、またはカスタムフィールド。そのフィールドがないタスクは説明から読み取られます。**Under a heading** を `Acceptance criteria` に設定すると、次のタスクは 3 つの箇条書きと照合され、その上の段落は背景情報として扱われます:
+
+  ```markdown
+  Agents should see at a glance how much time is left on a ticket's SLA.
+
+  ## Acceptance criteria
+  - The ticket header shows a badge with the remaining SLA time.
+  - The badge turns red when less than 1 hour is left.
+  - Resolved tickets show no badge.
+  ```
+- **Comment when every requirement is met** (デフォルトでオン): タスクを満たした PR には 1 行のコメントが付きます。オフにするとコメントは付きませんが、不足点は引き続き投稿されます。
 - **Ask for a task when the PR references none**: Kody はスキップする代わりに、PR がどのタスクに対応するかを尋ねる (またはタイプミスを指摘する) コメントを投稿します。Dependabot や Renovate などの bot が作成した PR には何もしません。タスク管理ツールのダウンは対象外です。
-- **Re-check**: リクエスト時のみ (デフォルト)、何かが不足している間の push のたび、または push のたび。
+- **Re-check**: リクエスト時のみ (デフォルト)、何かが不足している間の push のたび、または push のたび。各チェックはレビューと同じく組織のモデルで実行されるため、**push のたび** を選ぶと push ごとに検証 1 回分のコストがかかります。
 - **Skipped pull requests**: コードレビューがスキップする PR はここでもスキップされます。無視するキーワードを含むタイトル (`ignoredTitleKeywords`、たとえば `wip`) と、`runOnDraft` がオフの場合のドラフトです。`@kody -v business-logic` のコメントは常に実行されます。
 - **Team guidance**: Kody が判断するときに従うメモ。たとえば「フィーチャーフラグは、フラグが存在しデフォルトでオフになっていれば実装済みとみなす」。判定の形式を変えたり、Kody に要件を作り出させたりすることはできません。
+
+### よくある設定
+
+| チーム | 設定 |
+|---|---|
+| チェックは欲しいがノイズは不要 (デフォルト) | Re-check はリクエスト時のみ、**Comment when every requirement is met** をオン |
+| すべての PR がタスクを実装すべき | **Ask for a task** をオン、re-check を **何かが不足している間**: タスクのない PR にはタスクを求め、修正のたびにコメントが更新され、満たされるまで続きます |
+| 不足点だけ知りたい | **Comment when every requirement is met** をオフ |
+| 領域ごとにタスク管理ツールが異なるモノレポ | **Task source** と **Where acceptance criteria live** をディレクトリごとに設定 |
 
 `kodus-config.yml` での同じ設定:
 
 ```yaml
 businessLogic:
-  taskSource: 'auto'
-  criteriaLocation: 'heading'
+  taskSource: 'auto'              # またはプラグインの integration id
+  taskSourceTool: 'get_ticket'    # カスタムプラグインのみ: ID で 1 つのタスクを読み取るツール
+  taskIdPattern: 'T(\d{4})'       # 任意: Kody が自動で見つけられない ID
+  criteriaLocation: 'heading'     # auto | heading | field
   criteriaHeading: 'Acceptance criteria'
+  # criteriaField: 'Acceptance Criteria'   # criteriaLocation: 'field' と併用
+  teamGuidance: 'Feature flags count as implemented when the flag exists and defaults to off.'
   commentWhenMet: true
-  recheckOn: 'request' # request | failing | push
+  recheckOn: 'request'            # request | failing | push
   requireTask: false
 ```
 

@@ -7,7 +7,19 @@ description: "将每个拉取请求与其引用的任务逐条需求进行核对
 
 业务逻辑验证检查拉取请求是否交付了任务所要求的内容。Kody 找到 PR 引用的任务，从你的任务管理工具中读取它，并列出每条需求在代码中的状态。结果是 PR 上的一条评论，并保持最新，在 GitHub、GitLab、Bitbucket、Azure Repos 和 Forgejo 上都一样。
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
+当 PR 只交付了任务的一部分时，评论如下：
+
+> **Kody · Business Logic**
+>
+> **#291 · Ticket SLA badge** — 待修复：缺少 2 项需求
+>
+> | | 需求 | 在此 PR 中 |
+> |---|---|---|
+> | ✅ **MET** | 工单标题栏显示一个标出剩余 SLA 时间的徽章。 | `TicketPanel.tsx:40` · 标题栏中显示了徽章，内容为 "SLA Xh Ym"。 |
+> | ❌ **MISSING** | 剩余时间少于 1 小时时，徽章变为红色。 | `SlaBadge.tsx:14` · 徽章始终使用 "info" 色调。**Do:** 少于 60 分钟时切换为 danger 色调。 |
+> | ❌ **MISSING** | 已解决的工单不显示徽章。 | `TicketPanel.tsx:40` · 无论状态如何都会显示。**Do:** 工单已解决时隐藏它。 |
+
+修复后，同一条评论会变为 "All requirements met · ✅ 3 of 3 met"，并在下方保留之前的检查结果。
 
 ## 前提条件
 
@@ -42,6 +54,8 @@ Kody 还会读取任务所链接的内容：
 - **父任务**（Linear 子 issue、Jira 子任务、ClickUp 子任务）：PR 会与本任务标题所涵盖的父任务需求进行核对。只写着"见父任务"的子 issue 也会被检查。
 - **子任务**：由某个子任务交付的需求显示为 CHECK MANUALLY（"Delivered by KOD-20"），永远不会显示为缺失。
 - **附加到任务的文档**（Linear docs）：作为任务的一部分读取，包括其中的验收标准。
+
+### PR 如何引用任务
 
 - **"Closes PROJ-1"**，或标题、分支中的键：PR 与整个任务进行核对。
 - **"Part of PROJ-1"**：PR 只交付其中一部分。缺失的内容会列出，但不作为合并前需要完成的事项。
@@ -82,6 +96,15 @@ Kody 还会读取任务所链接的内容：
 - **提出异议**："这在 `useDrag.ts` 中已经覆盖了"。Kody 会重新检查你指出的内容，要么将其标记为 MET，要么说明它查看了什么并保留原状态。
 - **接受某项发现**（PR 作者以外的人：在 GitHub 上需对仓库有写权限；在 GitLab 上需在仓库中拥有 Developer 或更高权限；在 Bitbucket、Azure Repos 和 Forgejo 上需是平台列出的组织成员）："键盘重新排序不在范围内，已移至 SAA-102"。Kody 确认 SAA-102 存在，将该行标记为 **ACCEPTED** 并注明接受者，该行不再需要修复。只要任务文本没有变化，即使 Kody 对需求的措辞略有不同，这一决定在之后的重新检查中也保持不变；任务被编辑后，需要重新接受该需求。
 
+Kody 的回复：
+
+| 回复 | Kody |
+|---|---|
+| 评审者接受并移至 SAA-102 | "Got it. SAA-102 exists, I marked AC #2 as accepted by @rafa and updated the table above." |
+| PR 作者尝试接受 | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
+| 没有上述权限的人 | "Only someone with write access to the repository can accept a requirement…" |
+| 移至的任务不存在 | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
+
 ## Kody 何时不发表评论
 
 Kody 只在作者能够采取行动时才发表评论：
@@ -110,21 +133,44 @@ Kody 只在作者能够采取行动时才发表评论：
 
 - **Task source**：所有已连接的任务管理工具（包括 ClickUp 等自定义任务插件），或某一个插件。对于自定义插件，选择按 ID 读取单个任务的工具；只会提供只读工具。使用固定在页面右侧的 **Try it**（需要编辑这些设置的权限）：只填任务时会显示 Kody 从中读取的内容，填写拉取请求时会使用屏幕上的设置（无论是否已保存）运行完整检查且不发布任何内容。**Post to the pull request** 会发布所显示的结果，而不会重新运行，每次测试只发布一次；如果测试之后拉取请求有了新的提交，发布会被拒绝，请先重新运行测试。
 - **Custom task id format**（可选）：用于 Kody 自身无法识别的 ID 的正则表达式：`T(\d{4})` 会将 `T1234` 读作任务 1234。类似 `SAA-96` 的键、`#12`、`AB#8`、`CU-…` 以及任务管理工具链接无需此设置即可识别，分支名中类似 `sc-123` 的小写键也是如此。标题或描述中的小写键只有在 Linear 或 Jira 存在该团队或项目时才会被采用；其他任务管理工具请设置格式。格式捕获的数字只有在 Git Issues 是任务来源时才会被读作 Git issue；使用所有已连接工具时，`T1234` 永远不会被当作仓库的 issue #1234。
-- **Where acceptance criteria live**：自动检测、在描述中的某个标题下，或在自定义字段中；没有该字段的任务从其描述中读取。
+- **Where acceptance criteria live**：自动检测（验收标准字段、清单或描述中的列表）、在描述中的某个标题下，或在自定义字段中；没有该字段的任务从其描述中读取。将 **Under a heading** 设为 `Acceptance criteria` 时，下面的任务会按其中三个要点核对，上方的段落作为背景：
+
+  ```markdown
+  Agents should see at a glance how much time is left on a ticket's SLA.
+
+  ## Acceptance criteria
+  - The ticket header shows a badge with the remaining SLA time.
+  - The badge turns red when less than 1 hour is left.
+  - Resolved tickets show no badge.
+  ```
+- **Comment when every requirement is met**（默认开启）：满足任务的 PR 会收到一行评论。关闭后不会收到评论；缺失项仍会发布。
 - **Ask for a task when the PR references none**：Kody 会发表评论询问该 PR 对应哪个任务（或指出拼写错误），而不是跳过它。由机器人（如 Dependabot 或 Renovate）创建的 PR 不受影响。任务管理工具宕机永远不算在内。
-- **Re-check**：仅在请求时（默认）、仍有缺失时每次 push，或每次 push。
+- **Re-check**：仅在请求时（默认）、仍有缺失时每次 push，或每次 push。每次检查都像评审一样使用组织的模型，因此选择**每次 push** 意味着每次 push 消耗一次验证。
 - **Skipped pull requests**：代码审查跳过的 PR 在这里也会被跳过：标题包含被忽略关键词（`ignoredTitleKeywords`，例如 `wip`）的 PR，以及 `runOnDraft` 关闭时的草稿。`@kody -v business-logic` 评论始终会运行。
 - **Team guidance**：Kody 判断时遵循的说明，例如"当功能开关存在且默认关闭时，视为已实现"。它不能改变判定格式，也不能让 Kody 编造需求。
+
+### 常见配置
+
+| 团队 | 设置 |
+|---|---|
+| 需要检查，但不要噪音（默认） | Re-check 仅在请求时，开启 **Comment when every requirement is met** |
+| 每个 PR 都必须交付一个任务 | 开启 **Ask for a task**，re-check 设为**仍有缺失时**：没有任务的 PR 会被要求提供任务，每次修复都会更新评论，直到通过 |
+| 只想了解缺失项 | 关闭 **Comment when every requirement is met** |
+| 各领域使用不同任务管理工具的 monorepo | 按目录设置 **Task source** 和 **Where acceptance criteria live** |
 
 `kodus-config.yml` 中的相同设置：
 
 ```yaml
 businessLogic:
-  taskSource: 'auto'
-  criteriaLocation: 'heading'
+  taskSource: 'auto'              # 或插件的 integration id
+  taskSourceTool: 'get_ticket'    # 仅自定义插件：按 ID 读取单个任务的工具
+  taskIdPattern: 'T(\d{4})'       # 可选：Kody 自己找不到的 ID
+  criteriaLocation: 'heading'     # auto | heading | field
   criteriaHeading: 'Acceptance criteria'
+  # criteriaField: 'Acceptance Criteria'   # 与 criteriaLocation: 'field' 一起使用
+  teamGuidance: 'Feature flags count as implemented when the flag exists and defaults to off.'
   commentWhenMet: true
-  recheckOn: 'request' # request | failing | push
+  recheckOn: 'request'            # request | failing | push
   requireTask: false
 ```
 
