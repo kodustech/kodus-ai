@@ -58,8 +58,9 @@ fs.mkdirSync(path.dirname(CACHE), { recursive: true });
 const cache = fs.existsSync(CACHE) ? JSON.parse(fs.readFileSync(CACHE, 'utf8')) : {};
 
 // ── deterministic ────────────────────────────────────────────────────────────
-const titleFormatOk = (t) => !!t && !t.includes('\n') && t.length <= 80 && !/[.]$/.test(t.trim());
-const mustFix = (it, ref) => it.deterministic.anchorStatus === 'ok' && ref.fixability === 'local' && ref.contextSufficient;
+// The ruler is shared with the step's eval (evals/suggestion-enrichment/judge.js).
+const shared = require('../suggestion-enrichment/judge');
+const { titleFormatOk, mustFix, VERDICT, SYSTEM } = shared;
 
 const headCache = new Map();
 function headFile(it) {
@@ -105,37 +106,13 @@ function syntaxOk(it, improvedCode) {
 }
 
 // ── judge ────────────────────────────────────────────────────────────────────
-const VERDICT = z.object({
-    titleNamesProblem: z.boolean(),
-    titleReason: z.string(),
-    fix: z.enum(['PASS', 'FAIL', 'UNASSESSABLE', 'NOT_APPLICABLE']),
-    fixReason: z.string(),
-});
-const SYSTEM = `You grade one answer of an enrichment step for a code-review finding. The finding is a confirmed defect. The answer has a title and, when fixStatus is "local", improvedCode: a replacement for EXACTLY the cited lines of the file (an empty improvedCode means deleting them).
-
-Grade two things, each on its own:
-1. titleNamesProblem: true if the title names the defect the finding describes (what is wrong), is faithful to it, and does not describe the fix instead of the problem. Wording and style do not matter.
-2. fix (only when fixStatus is "local"; otherwise answer NOT_APPLICABLE):
-   - PASS: putting improvedCode in place of the cited lines fixes the defect, meets every obligation listed in the reference, and introduces no new defect (wrong names, broken behavior, code that would not compile or run). Any implementation that meets the obligations passes; it does not need to resemble the example fix.
-   - FAIL: it does not fix the defect, misses an obligation, depends on names or APIs that do not exist in the shown code or reference, or breaks something else.
-   - UNASSESSABLE: the shown material is not enough to decide.
-Give a one-sentence reason for each.`;
 const SYSTEM_SELF_REF = SYSTEM.replace('Any implementation that meets the obligations passes; it does not need to resemble the example fix.', 'Any implementation that meets the obligations passes.');
 const SYSTEM_NO_REF = SYSTEM.replace('meets every obligation listed in the reference, and introduces', 'and introduces')
     .replace('Any implementation that meets the obligations passes; it does not need to resemble the example fix.', 'Any implementation that fixes the defect passes.')
     .replace('misses an obligation, depends on names or APIs that do not exist in the shown code or reference', 'misses part of the defect, depends on names or APIs that do not exist in the shown code');
 
-function selfRefBlock(r) {
-    return `<Reference>\ndefect: ${r.defectStatement}\nobligations:\n${r.obligations.map((o) => `- ${o}`).join('\n')}\nnotes: ${r.notes}\n</Reference>`;
-}
 function judgePrompt(it, ref, ans) {
-    return [
-        `<Finding>\nfile: ${it.finding.relevantFile}\ncited lines: ${it.finding.relevantLinesStart}-${it.finding.relevantLinesEnd}\ntext: ${it.finding.suggestionContent}\n</Finding>`,
-        selfRefs ? selfRefBlock(selfRefs.get(it.issueId)) : NO_REF ? null : `<Reference>\ndefect: ${ref.defectStatement}\nobligations:\n${ref.obligations.map((o) => `- ${o}`).join('\n')}\nfixability: ${ref.fixability}\nexample fix (guidance only${ref.fixability === 'local' ? '' : '; not applicable to the cited lines'}):\n${ref.exampleFix ?? '(none)'}\nnotes: ${ref.notes}\n</Reference>`,
-        `<CitedCode>\n${it.deterministic.existingCode || '(none)'}\n</CitedCode>`,
-        `<FileWindow>\n${it.context.window || '(none)'}\n</FileWindow>`,
-        `<Answer>\ntitle: ${ans.oneSentenceSummary}\nfixStatus: ${ans.fixStatus}\nimprovedCode:\n${ans.fixStatus === 'local' ? ans.improvedCode || '(empty: delete the cited lines)' : '(none)'}\n</Answer>`,
-    ].filter(Boolean).join('\n\n');
+    return shared.judgePrompt(it, NO_REF ? null : ref, ans, { selfRef: selfRefs ? selfRefs.get(it.issueId) : undefined });
 }
 
 let judgeModel;

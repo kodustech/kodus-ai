@@ -6,6 +6,7 @@ import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
 import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
+import { enrichSuggestions } from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
 import {
     buildSanitizerPrompt,
     SANITIZER_SCHEMA,
@@ -1635,6 +1636,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 customAgentsById,
             );
 
+            // Enrichment (#1821): the title, cited code and fix of each finder
+            // suggestion still standing. After the severity step, so only what
+            // reaches the team is enriched; before the title and the formatter,
+            // which read what it writes.
+            deduped = await this.enrichFinderSuggestions(
+                deduped,
+                context,
+                [...changedFiles, ...ignoredChangedFiles],
+                telemetryMeta,
+            );
+
             // The agent's fix policy (its floor and limit applied before dedup).
             if (customAgentsById.size > 0) {
                 stripCustomAgentFixes(deduped, customAgentsById);
@@ -2507,6 +2519,43 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * findings below it moved to `allDiscarded`. Returns the findings that stay.
      * Called by executeStage; the severity evals call it too.
      */
+    /**
+     * The enrichment step (enrich-suggestions.ts) on the finder suggestions;
+     * Kody Rules, analyzer and custom agent findings keep what their own
+     * steps wrote. Called by executeStage; the enrichment eval calls it too.
+     */
+    private async enrichFinderSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const prNumber = context.pullRequest?.number;
+        const { suggestions: enriched, counts } = await enrichSuggestions(
+            suggestions,
+            changedFiles,
+            {
+                shouldEnrich: (s) =>
+                    s.label !== 'kody_rules' &&
+                    !isAnalyzerSuggestion(s) &&
+                    !isCustomAgentFinding(s),
+                byokConfig: context.codeReviewConfig?.byokConfig,
+                telemetryMetadata: telemetryMeta,
+            },
+        );
+        this.logger.log({
+            message: `[ENRICH] PR#${prNumber}: enriched ${counts.enriched}, failed ${counts.failed}, skipped ${counts.skipped}`,
+            context: this.stageName,
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+                ...counts,
+            },
+        });
+        return enriched;
+    }
+
     private async reclassifyAndFilterSeverity(
         suggestions: Partial<CodeSuggestion>[],
         context: CodeReviewPipelineContext,

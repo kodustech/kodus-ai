@@ -406,6 +406,33 @@ const STAGES = [
         },
     },
     {
+        id: 'enrichment',
+        name: 'Enrichment',
+        short: 'Writes the title, cited code and fix of each finding',
+        group: 'After the agents',
+        does: 'Completes each finding the review keeps: the cited code and its language from the file at the PR head, then one model call for a title that names the problem and, when a fix fits exactly the cited lines, the code that replaces them. A finding with no fix that fits ships with no code.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'What the call gets and what the finding keeps',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/enrich-suggestions.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/enrich-deterministic.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.post-finder.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: 'Enriches each finding in one call and keeps it when the call fails', wiring: ['suggestion-enrichment'] },
+        ],
+        eval: {
+            path: 'evals/suggestion-enrichment',
+            metric: 'of fixable findings, a fix the judge passes; of the others, no code; of all, a title that names the problem in 80 characters',
+            sets: { controlled: 'the 150 confirmed findings of the enrichment dataset, each with its file at the PR head', full: null },
+            nightly: 'shared',
+            caveat: 'Graded by Opus 5.5 against Astra references: a floor holds only under that judge.',
+        },
+    },
+    {
         id: 'format',
         name: 'Formatting',
         short: 'Writes the comment the developer reads',

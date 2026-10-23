@@ -163,4 +163,36 @@ describe('AgentReviewStage — after the finder (#1821)', () => {
             }),
         );
     });
+
+    it('enriches the suggestions that reach the team with a title, the cited code and the fix', async () => {
+        runSpy.mockImplementation((async (req: any) =>
+            req.runName === 'code-review-enrich'
+                ? {
+                      title: 'Total ignores item quantity',
+                      fixStatus: 'local',
+                      improvedCode: 'for (const item of items) total += item.price * item.qty;',
+                  }
+                : { verdicts: [] }) as any);
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(envelope([{ ...kept, label: 'bug' }]));
+
+        const result = await (stage as any).executeStage(makeContext());
+
+        const enrichCalls = runSpy.mock.calls.filter(
+            ([req]: any[]) => req.runName === 'code-review-enrich',
+        );
+        expect(enrichCalls).toHaveLength(1);
+        expect(enrichCalls[0][0].user).toContain(kept.suggestionContent);
+        const published = (result.fileAnalysisResults ?? []).flatMap(
+            (f: any) => f.validSuggestionsToAnalyze ?? [],
+        );
+        expect(published).toHaveLength(1);
+        expect(published[0]).toEqual(
+            expect.objectContaining({
+                oneSentenceSummary: 'Total ignores item quantity',
+                improvedCode:
+                    'for (const item of items) total += item.price * item.qty;',
+            }),
+        );
+    });
 });

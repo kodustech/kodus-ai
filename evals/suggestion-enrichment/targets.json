@@ -1,0 +1,178 @@
+{
+ "__doc": [
+  "Floors per model for suggestion-enrichment, as ratios of the cases each metric covers (README.md). fix: the 100 fixable findings, a fix that ships and the judge passes. noCode: the 50 others, no code shipped. title: all 150, a title that names the problem (judge) and has the format the prompt asks for (one line, 80 characters or fewer, no trailing period).",
+  "Judge: Opus 5.5 with Astra's references. The floors hold under that judge only; a run with another judge reports ungated.",
+  "fix and noCode: the floors set on 22/10/26 from the research runs (evals/enrichment/targets.json). title: the mean of the same runs with the format check added, rounded down to a multiple of 5 and capped at 90%.",
+  "measuredOn: the route the research runs took (subscription and Agent SDK routes for GPT and Claude, the Opus judge by the SDK while the API was out of quota). Each model's inputs are the same as production's (equivalence checked on all 150 findings), but the floors are re-measured on the production route before they are trusted as a gate."
+ ],
+ "sets": {
+  "controlled": {
+   "models": {
+    "gpt-6.1-sol@api": {
+     "measuredOn": "gpt-6.1-sol@sub",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.8,
+      "observed": 0.82
+     },
+     "noCode": {
+      "floor": 0.8,
+      "observed": 0.84
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.976
+     }
+    },
+    "claude-opus-5.5@api": {
+     "measuredOn": "claude-opus-5.5@sdk",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.75,
+      "observed": 0.785
+     },
+     "noCode": {
+      "floor": 0.75,
+      "observed": 0.79
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.967
+     }
+    },
+    "claude-sonnet-5.5@api": {
+     "measuredOn": "claude-sonnet-5.5@sdk",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.75,
+      "observed": 0.775
+     },
+     "noCode": {
+      "floor": 0.6,
+      "observed": 0.63
+     },
+     "title": {
+      "floor": 0.8,
+      "observed": 0.825
+     }
+    },
+    "deepseek-v4.1-flash@together": {
+     "measuredOn": "deepseek-v4.1-flash@together",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.6,
+      "observed": 0.67
+     },
+     "noCode": {
+      "floor": 0.65,
+      "observed": 0.68
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.957
+     }
+    },
+    "kimi-k2.7-code@openrouter": {
+     "measuredOn": "kimi-k2.7-code@openrouter",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.6,
+      "observed": 0.665
+     },
+     "noCode": {
+      "floor": 0.55,
+      "observed": 0.58
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.927
+     }
+    }
+   }
+  },
+  "full": {
+   "models": {
+    "gpt-6.1-sol@api": {
+     "measuredOn": "gpt-6.1-sol@sub",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.8,
+      "observed": 0.82
+     },
+     "noCode": {
+      "floor": 0.8,
+      "observed": 0.84
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.976
+     }
+    },
+    "claude-opus-5.5@api": {
+     "measuredOn": "claude-opus-5.5@sdk",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.75,
+      "observed": 0.785
+     },
+     "noCode": {
+      "floor": 0.75,
+      "observed": 0.79
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.967
+     }
+    },
+    "claude-sonnet-5.5@api": {
+     "measuredOn": "claude-sonnet-5.5@sdk",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.75,
+      "observed": 0.775
+     },
+     "noCode": {
+      "floor": 0.6,
+      "observed": 0.63
+     },
+     "title": {
+      "floor": 0.8,
+      "observed": 0.825
+     }
+    },
+    "deepseek-v4.1-flash@together": {
+     "measuredOn": "deepseek-v4.1-flash@together",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.6,
+      "observed": 0.67
+     },
+     "noCode": {
+      "floor": 0.65,
+      "observed": 0.68
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.957
+     }
+    },
+    "kimi-k2.7-code@openrouter": {
+     "measuredOn": "kimi-k2.7-code@openrouter",
+     "judge": "claude-opus-5.5@api",
+     "fix": {
+      "floor": 0.6,
+      "observed": 0.665
+     },
+     "noCode": {
+      "floor": 0.55,
+      "observed": 0.58
+     },
+     "title": {
+      "floor": 0.9,
+      "observed": 0.927
+     }
+    }
+   }
+  }
+ }
+}

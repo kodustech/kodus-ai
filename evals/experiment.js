@@ -125,6 +125,17 @@ const STEP_EVALS = {
         },
         guards: [{ id: 'funnel-severity', label: 'Known bugs kept', run: ['evals/funnel/severity/run.js', '--set=full'], question: 'Of the known bugs reaching the severity step in a real review, how many does it keep above the threshold?' }],
     },
+    enrichment: {
+        // On demand only: each case is a model call plus a judge call.
+        smoke: [],
+        primary: {
+            id: 'suggestion-enrichment',
+            label: 'Fixes the judge passes',
+            run: ['evals/suggestion-enrichment/run.js'],
+            question: 'Does the enrichment write a fix that the judge passes, no code where none fits, and a title that names the problem?',
+        },
+        guards: [],
+    },
     finder: {
         // On demand only, never a PR's check: every case is a full review, so the
         // controlled set at 2 runs is 60 reviews, and nearly every engine change
