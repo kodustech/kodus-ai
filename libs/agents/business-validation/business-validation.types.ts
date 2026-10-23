@@ -1,0 +1,320 @@
+import type { RepositoryReader } from './judge/gap-check';
+import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+
+import type { ValidationResult } from './judge/validation.types';
+import type { BusinessLogicSettings } from './settings';
+
+/** Where in the request a task reference was written. Earlier wins. */
+export type ReferenceSource = 'command' | 'title' | 'branch' | 'body';
+
+/**
+ * What the PR says it does to the task. "Part of SAA-96" delivers a slice, so
+ * a missing requirement is shown but doesn't fail the PR (UC-18).
+ */
+export type ReferenceIntent = 'closes' | 'part_of' | 'mentions';
+
+/**
+ * A task a PR points at, as written. Nothing here is confirmed: a reference
+ * counts only once a tracker returns the task with this id.
+ */
+export type TaskReference = (
+    | {
+          kind: 'key';
+          /** `PROJ-12`, upper-cased. Jira, Linear and most custom trackers. */
+          id: string;
+          raw: string;
+          source: ReferenceSource;
+          intent: ReferenceIntent;
+          /** Set when the key came from a tracker URL, or ClickUp's `CU-` prefix. */
+          host?: 'linear' | 'jira' | 'clickup';
+          url?: string;
+          /**
+           * Written in lower case in a title or description (`feat(kod-10)`),
+           * where `gpt-5` and `node-22` are names: it counts only where a
+           * connected tracker has that team or project.
+           */
+          loose?: true;
+          /**
+           * Captured by the team's own id pattern (`T(\d{4})` on `T1234`). It
+           * names no tracker, so a bare number is an issue only where Git
+           * Issues is the source the team chose.
+           */
+          teamPattern?: true;
+      }
+    | {
+          kind: 'git_issue';
+          /** The issue number, as a string. */
+          id: string;
+          raw: string;
+          source: ReferenceSource;
+          intent: ReferenceIntent;
+          /** Another repository than the PR's (`owner/repo#12`, issue URL). */
+          repository?: { owner: string; name: string };
+          url?: string;
+          /**
+           * The rest of a branch name that put the number after a prefix
+           * (`fix/12-add-login` → `add-login`): the issue counts only if its
+           * title shares a word with it.
+           */
+          titleHint?: string;
+      }
+    | {
+          kind: 'work_item';
+          /** Azure Boards work item number (`AB#27`, `_workitems/edit/27`). */
+          id: string;
+          raw: string;
+          source: ReferenceSource;
+          intent: ReferenceIntent;
+          url?: string;
+      }
+    | {
+          kind: 'page';
+          /** A Notion page URL; the id is the page id it ends with. */
+          id: string;
+          raw: string;
+          source: ReferenceSource;
+          intent: ReferenceIntent;
+          url: string;
+      }
+) & {
+    /**
+     * Written after `Refs` or `See` in the body: cited on purpose, so a `#12`
+     * there counts as `Refs SAA-96` does when the PR states nothing else.
+     */
+    cited?: true;
+};
+
+/** A task as a tracker returned it. */
+export interface Task {
+    tracker: string;
+    id: string;
+    title?: string;
+    description?: string;
+    acceptanceCriteria?: string[];
+    url?: string;
+    /** When the tracker last changed it, if it says. */
+    updatedAt?: string;
+    /** Images or files attached; their content is never read. */
+    hasAttachments?: boolean;
+    /** Long text fields beyond the description (Jira custom fields), by name. */
+    fields?: Record<string, string>;
+    /**
+     * The task this one is part of (a sub-issue's parent), read alongside it:
+     * context for the judge, never requirements of its own.
+     */
+    parent?: RelatedTask;
+    /** The pieces the task is split into, by title and status. */
+    subtasks?: RelatedTask[];
+    /**
+     * What the tracker's answer links to, still to be read by the tracker
+     * that found it (`McpTaskTracker.relate`). Never reaches the judge.
+     */
+    links?: TaskLinks;
+}
+
+/** Another work item a task points at: its parent or one of its sub-tasks. */
+export interface RelatedTask {
+    id: string;
+    title?: string;
+    description?: string;
+    status?: string;
+}
+
+/** The ids and documents a tracker's answer names next to the task itself. */
+export interface TaskLinks {
+    parentId?: string;
+    parentTitle?: string;
+    subtasks?: RelatedTask[];
+    /** Documents attached to the task (Linear docs); `content` when the answer carries it. */
+    documents?: Array<{ id: string; title?: string; content?: string }>;
+}
+
+export interface FoundTask {
+    /** Absent when the task was given as text, not referenced. */
+    reference?: TaskReference;
+    task: Task;
+}
+
+/** What one tracker said about one reference. */
+export type TrackerLookup =
+    /**
+     * `incomplete`: the record came back without the field the task's text
+     * lives in (no `description` key at all), so the answer's shape moved.
+     */
+    (
+        | { status: 'found'; task: Task; incomplete?: boolean }
+        /**
+         * `unread`: the server answered, but in a shape this tracker could not
+         * read; only then, or on an error, may an agent look again. A clean
+         * "no such task" costs nothing more.
+         */
+        | { status: 'not_found'; unread?: boolean }
+        /**
+         * The tracker could not be reached or failed: outage, auth, timeout.
+         * `setup`: it answers, but is set up so no task can be read (a plugin
+         * with no tool that reads one by id); retrying won't help.
+         */
+        | { status: 'error'; message: string; setup?: boolean }
+    ) & {
+        /** The MCP tools called for this read, in order. */
+        tools?: string[];
+        /** The direct read missed; the task finder agent found it. */
+        byAgent?: boolean;
+    };
+
+export interface ResolutionAttempt {
+    reference: string;
+    tracker: string;
+    status: TrackerLookup['status'];
+    message?: string;
+    /** A setup problem, not an outage: see {@link TrackerLookup}. */
+    setup?: boolean;
+    /** The MCP tools called to read it, so a team can see how it was found. */
+    tools?: string[];
+    /** Found by the task finder agent after the direct read missed. */
+    byAgent?: boolean;
+}
+
+export type TaskResolution =
+    | { kind: 'found'; tasks: FoundTask[]; attempts: ResolutionAttempt[] }
+    /** The PR names no task. */
+    | { kind: 'no_reference'; attempts: ResolutionAttempt[] }
+    /** The PR states more tasks than one validation covers (a release, a merge). */
+    | { kind: 'too_many_references'; attempts: ResolutionAttempt[] }
+    /** No task tracker is connected for the organization. */
+    | { kind: 'no_tracker'; attempts: ResolutionAttempt[] }
+    /** References exist, but no connected tracker reads that kind (#183 with only Linear). */
+    | { kind: 'no_capable_tracker'; attempts: ResolutionAttempt[] }
+    /**
+     * Every tracker that could read a reference says it does not exist.
+     * `looksIntended` when the tracker has a team or project with that prefix,
+     * so it reads as a typo rather than a version number.
+     */
+    | {
+          kind: 'not_found';
+          looksIntended: boolean;
+          /** The reference that reads as a typo, and real tasks one typo away. */
+          intended?: {
+              reference: TaskReference;
+              tracker: string;
+              nearby: string[];
+          };
+          attempts: ResolutionAttempt[];
+      }
+    /** A tracker that could read a reference failed. */
+    | { kind: 'tracker_unavailable'; attempts: ResolutionAttempt[] };
+
+/** Which entry point asked for the validation. */
+export type ValidationDoor = 'auto' | 'force' | 'command' | 'cli';
+
+export interface BusinessValidationRequest {
+    door: ValidationDoor;
+    organizationAndTeamData: OrganizationAndTeamData;
+    repository?: {
+        id: string;
+        name: string;
+        owner?: string;
+        fullName?: string;
+    };
+    pullRequest?: {
+        number: number;
+        title?: string;
+        body?: string;
+        headRef?: string;
+        baseRef?: string;
+        /** Opened by a bot (dependabot, renovate): never asked for a task. */
+        authorIsBot?: boolean;
+    };
+    platformType?: string;
+    /**
+     * The repository at the PR head, read-only, so a requirement the diff
+     * doesn't show can be looked for in the code that already exists. Absent
+     * (the CLI's local diff), MISSING is judged from the diff alone.
+     */
+    repositoryReader?: RepositoryReader;
+    /** What the user passed with the command or CLI: a task id, a URL or the task text itself. */
+    taskInput?: string;
+    /** The code to judge, or how to load it once a task was found. */
+    diff: string | (() => Promise<string>);
+    customInstructions?: string;
+    byokModel?: string;
+    byokModelId?: string;
+    /** The team's Business Logic settings; defaults when absent. */
+    settings?: BusinessLogicSettings;
+    /** Fires when the caller gave up (the stage's timeout): every agent and tracker call stops. */
+    signal?: AbortSignal;
+    /**
+     * The author disputes findings (UC-38): what they said, for the judge to
+     * check against the diff before keeping or changing those states.
+     */
+    authorClaim?: { claim: string; requirements: string[]; files: string[] };
+}
+
+export type SkipReason =
+    | 'no_reference'
+    | 'too_many_references'
+    | 'no_tracker'
+    | 'no_capable_tracker'
+    | 'task_not_found'
+    | 'tracker_unavailable'
+    | 'diff_unavailable'
+    | 'judge_failed';
+
+/** One task judged against the PR. */
+export interface TaskCheck {
+    task: Task;
+    reference?: TaskReference;
+    verdict: ValidationResult;
+    /** Whether this task alone passes, under the team's settings. */
+    passed: boolean;
+    /** When the task was read, so a later edit to it is visible (UC-25). */
+    readAt: string;
+    /**
+     * The task's text as judged, hashed: carried by a run rebuilt from a
+     * stored one, whose task no longer has its text. See {@link taskTextHash}.
+     */
+    textHash?: string;
+}
+
+export type BusinessValidationOutcome =
+    | {
+          kind: 'validated';
+          checks: TaskCheck[];
+          /** Tasks that were read but say too little to judge. */
+          thinTasks: Task[];
+          passed: boolean;
+          /** Changed files left out because the diff was over budget. */
+          unseenFiles: string[];
+      }
+    /** Every task read says too little to judge against. */
+    | { kind: 'task_too_thin'; tasks: Task[]; message: string }
+    /**
+     * The reference looks like a real task id (its prefix is a team in the
+     * tracker) but no such task exists: worth telling the author (UC-21).
+     */
+    | {
+          kind: 'task_missing';
+          references: TaskReference[];
+          tracker: string;
+          message: string;
+          /** The team requires a task, so a missing one fails the PR. */
+          required?: true;
+      }
+    /**
+     * No task is referenced, or none the PR names exists, and the team requires one: the author
+     * is asked to reference it, and the PR fails.
+     */
+    | { kind: 'task_required'; message: string }
+    /**
+     * Nothing was judged. `message` explains why, for a door that must answer
+     * (command, CLI); the automatic review posts nothing.
+     */
+    | { kind: 'skipped'; reason: SkipReason; message: string };
+
+export interface BusinessValidationResult {
+    outcome: BusinessValidationOutcome;
+    references: TaskReference[];
+    attempts: ResolutionAttempt[];
+    /** The trackers that were asked, in connection order. */
+    trackers: string[];
+}

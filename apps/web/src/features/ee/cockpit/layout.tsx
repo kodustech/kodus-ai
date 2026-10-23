@@ -24,6 +24,7 @@ import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
 import { CodeAreasTab } from "./_components/code-areas-tab";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
+import { IntentTab } from "./_components/intent-tab";
 import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
 import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
@@ -209,6 +210,7 @@ async function CockpitLayoutBody({
     const showProductivity = metricsVisibility.tabs?.productivity ?? true;
     const tabsVisibility: Record<TabValue, boolean> = {
         "kodus-review": showKodusReview,
+        "intent": metricsVisibility.tabs?.intent ?? true,
         "productivity": showProductivity || !showKodusReview,
         "code-areas": codeAreasEnabled,
     };
@@ -306,6 +308,19 @@ async function CockpitLayoutBody({
                                         </div>
                                     )}
                                 </div>
+                            </TabsContent>
+                        )}
+
+                        {tabsVisibility.intent && (
+                            <TabsContent
+                                value={"intent" satisfies TabValue}
+                                className="flex flex-col gap-4">
+                                <IntentTab
+                                    cookieValue={dateRangeCookieValue}
+                                    repositoryCookieValue={
+                                        repositoryCookieValue
+                                    }
+                                />
                             </TabsContent>
                         )}
 

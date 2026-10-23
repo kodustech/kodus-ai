@@ -1,0 +1,24 @@
+{
+    "name": "branch-status-code-is-not-an-issue",
+    "issue": "#2018",
+    "repository": {
+        "issues": [
+            {
+                "number": 404,
+                "title": "Dark mode toggle in settings",
+                "body": "Users switch between light and dark themes."
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "fix: show a friendly page when a recipe is missing",
+        "body": "Renders a not-found page instead of a blank screen.",
+        "branch": "fix/404-on-recipe-page"
+    },
+    "expect": {
+        "outcome": "silent",
+        "taskNotContains": ["Dark mode"]
+    }
+}

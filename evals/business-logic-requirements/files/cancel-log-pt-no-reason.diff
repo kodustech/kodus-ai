@@ -1,0 +1,8 @@
+diff --git a/src/appointments/cancel.ts b/src/appointments/cancel.ts
+--- a/src/appointments/cancel.ts
++++ b/src/appointments/cancel.ts
+@@ -1,3 +1,4 @@
+ export async function cancelAppointment(id: string, reason: string) {
+   await db.appointments.update(id, { status: 'cancelled' });
++  logger.info({ message: 'appointment cancelled', appointmentId: id });
+ }

@@ -276,26 +276,21 @@ export async function runAgentLoopViaCore(
 
     // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
     // fast mode, self-contained (no tools) trial flow, or when the caller asks.
-    // EXCEPTION: an explicit `heavy` opt-in (CLI `--heavy` / PR `@kody review
-    // --heavy`) forces the recall passes to run regardless — the whole point of
-    // heavy is more recall via resampling, so it must not be silently nullified
-    // by the default fast/self-contained gating.
     const skipHeavyPasses =
-        !input.heavy &&
-        (input.reviewMode === 'fast' ||
-            isSelfContained ||
-            !!input.skipHeavyPasses);
+        input.reviewMode === 'fast' ||
+        isSelfContained ||
+        !!input.skipHeavyPasses;
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
-    const buildSpecWithLedger = (ledger: DiffCoverageLedger) =>
-        buildFinderAgentSpec({
+    // The ledger is read back below for the coverage summary.
+    const finderSpec = buildFinderAgentSpec({
             systemPrompt: input.systemPrompt,
             modelId: specModelId,
             fallbackModelId,
             usageRunName: input.usageRunName,
             agentName: input.agentName,
             tools,
-            coverageLedger: ledger,
+            coverageLedger,
             compressor: contextWindowTokens
                 ? new ContextWindowCompressor(contextWindowTokens, {
                       overheadTokens,
@@ -307,18 +302,6 @@ export async function runAgentLoopViaCore(
             acceptsConventions: !!readGuide,
         });
 
-    // Base pass uses the reported `coverageLedger` (read back below for the
-    // coverage summary). Heavy resample passes run CONCURRENTLY, so each gets a
-    // FRESH ledger via makeResampleSpec — the CompletionGatePolicy mutates the
-    // ledger per tool call, and a shared one would race across parallel passes.
-    const finderSpec = buildSpecWithLedger(coverageLedger);
-    const makeResampleSpec = () =>
-        buildSpecWithLedger(
-            new DiffCoverageLedger({
-                changedFiles: input.changedFiles,
-                fileTiers: input.fileTiers,
-            }),
-        );
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
@@ -371,12 +354,8 @@ export async function runAgentLoopViaCore(
             ...verifyParams,
             ...ownVerify,
             finderSpec,
-            makeResampleSpec,
             skipHeavyPasses,
             skipSynthesisRescue,
-            // HEAVY mode — extra critic pass. Only meaningful when heavy passes
-            // run at all (not fast/self-contained); harmless otherwise.
-            heavy: !!input.heavy && !skipHeavyPasses,
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
             ...(readGuide && {

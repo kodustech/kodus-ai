@@ -87,21 +87,3 @@ export interface AgentRunInput {
      *  halves are the domain's call. */
     readonly runtimeContext?: Readonly<Record<string, unknown>>;
 }
-
-/** Adapter that exposes an AgentSpec AS A TOOL (sub-agent-as-tool pattern).
- *  This is how orchestration composes agents: a parent calls a sub-agent
- *  the same way it calls grep. Gives context isolation (own window) and
- *  returns a distilled summary, not the full transcript. */
-export interface SubAgentFactory {
-    asTool(params: {
-        name: string;
-        description: string;
-        spec: AgentSpec;
-        /** Input contract the parent calls with. Defaults to {task:string}. */
-        inputSchema?: AgentTool['inputSchema'];
-        /** Maps the parent's tool input -> the sub-agent's prompt. */
-        toPrompt: (input: unknown) => string;
-        /** Distills the sub-agent RunState -> the string returned to parent. */
-        summarize: (state: RunState) => string;
-    }): AgentTool;
-}

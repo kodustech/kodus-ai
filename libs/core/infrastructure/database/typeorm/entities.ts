@@ -17,7 +17,6 @@ import { AuthIntegrationModel } from '../../../../integrations/infrastructure/ad
 import { IntegrationModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integration.model';
 import { IntegrationConfigModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integrationConfig.model';
 import { IssuesModel } from '../../../../issues/infrastructure/adapters/repositories/schemas/issues.model';
-import { SuggestionEmbeddedModel } from '../../../../kodyFineTuning/infrastructure/adapters/repositories/schemas/suggestionEmbedded.model';
 import { KodyRulesModel } from '../../../../kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { GlobalParametersModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/global-parameters.model';
 import { OrganizationModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/organization.model';
@@ -45,7 +44,6 @@ export const ENTITIES = [
     OrganizationModel,
     UserModel,
     ContextReferenceModel,
-    SuggestionEmbeddedModel,
     AuthIntegrationModel,
     PullRequestsModel,
     ParametersModel,

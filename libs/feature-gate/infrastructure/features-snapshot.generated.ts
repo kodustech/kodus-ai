@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-10-22T15:36:14.679Z",
+    "generated_at": "2026-10-23T18:39:31.119Z",
     "source": "manual",
     "features": {
         "conditional-pr-approval": {

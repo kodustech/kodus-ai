@@ -35,6 +35,7 @@ import {
     GitPullRequestIcon,
     GlobeIcon,
     KeyRoundIcon,
+    ListChecksIcon,
     LockIcon,
     MessageSquareTextIcon,
     PuzzleIcon,
@@ -222,6 +223,12 @@ const SETTINGS_TABS = [
         icon: ScanSearchIcon,
         keywords:
             "categories severity instructions coding-agent claude.md agents.md cursor",
+    },
+    {
+        label: "Business Logic",
+        href: "business-logic",
+        icon: ListChecksIcon,
+        keywords: "task tracker requirements acceptance criteria jira linear",
     },
     {
         label: "Kody Rules",

@@ -185,7 +185,7 @@ async function main() {
             model: true,
             args: ['evals/format/run.js', '--model=eval-fake', '--gate'],
         },
-        // The stage, its MCP adapter over HTTP and production's Kodus MCP server.
+        // The stage, its MCP adapter over HTTP and a Jira MCP answering from the cases.
         {
             name: 'business-logic',
             result: 'shared',
@@ -196,6 +196,7 @@ async function main() {
                 '--gate',
             ],
         },
+        { name: 'business-logic-requirements', result: 'shared', model: true, args: ['evals/business-logic-requirements/run.js', '--model=eval-fake', '--gate'] },
         {
             name: 'approval-risk',
             result: 'shared',

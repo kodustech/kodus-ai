@@ -783,11 +783,6 @@ export class PullRequestsService implements IPullRequestsService {
         await this.update(existingPR, {
             status: await this.identifyPullRequestStatus(pullRequest),
             merged: this.extractMergedStatus(pullRequest),
-            // Reflect how the last review ran; only overwrite when the caller
-            // passed it (review path) so a plain webhook update doesn't clear it.
-            ...(pullRequest.heavy !== undefined
-                ? { heavy: pullRequest.heavy }
-                : {}),
             updatedAt: new Date().toISOString(),
             closedAt: this.extractClosedAt(pullRequest),
             user: await this.extractUser(
@@ -865,7 +860,6 @@ export class PullRequestsService implements IPullRequestsService {
                 title: pullRequest.title || '',
                 status: await this.identifyPullRequestStatus(pullRequest),
                 merged: this.extractMergedStatus(pullRequest),
-                heavy: pullRequest.heavy ?? false,
                 number: pullRequest.number,
                 url: pullRequest.url || '',
                 baseBranchRef: this.extractBaseBranchRef(pullRequest),

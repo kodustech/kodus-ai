@@ -208,6 +208,14 @@
     }
   },
   {
+    "route": "/settings/code-review/x/business-logic",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/custom-messages",
     "expected": {
       "billing_manager": "allow",

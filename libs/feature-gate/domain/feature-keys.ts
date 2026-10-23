@@ -6,7 +6,6 @@
  */
 export const FEATURE_KEYS = {
     githubEnterpriseServerPat: 'github-enterprise-server-pat',
-    heavyReview: 'heavy-review',
     kodusTraceReviewContext: 'kodus-trace-review-context',
     kodusProvider: 'kodus-provider',
     deterministicEvidence: 'deterministic-evidence',

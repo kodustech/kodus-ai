@@ -425,6 +425,50 @@ class DeterministicEvidenceDto {
     tools?: DeterministicEvidenceToolsDto;
 }
 
+class BusinessLogicDto {
+    @IsOptional()
+    @IsString()
+    taskSource?: string;
+
+    @IsOptional()
+    @IsString()
+    taskSourceTool?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    taskIdPattern?: string;
+
+    @IsOptional()
+    @IsIn(['auto', 'heading', 'field'])
+    criteriaLocation?: 'auto' | 'heading' | 'field';
+
+    @IsOptional()
+    @IsString()
+    criteriaHeading?: string;
+
+    @IsOptional()
+    @IsString()
+    criteriaField?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(2000)
+    teamGuidance?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    commentWhenMet?: boolean;
+
+    @IsOptional()
+    @IsIn(['failing', 'push', 'request'])
+    recheckOn?: 'failing' | 'push' | 'request';
+
+    @IsOptional()
+    @IsBoolean()
+    requireTask?: boolean;
+}
+
 /**
  * A secret is write-only: the screen sends `value` when the user types one,
  * or echoes back the masked `ciphertext` it read to keep the stored value.
@@ -893,6 +937,11 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @Type(() => DeterministicEvidenceDto)
     @ApiPropertyOptional({ type: DeterministicEvidenceDto })
     deterministicEvidence?: DeterministicEvidenceDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => BusinessLogicDto)
+    businessLogic?: BusinessLogicDto;
 
     @IsOptional()
     @IsEnum(CodeReviewVersion)

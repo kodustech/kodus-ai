@@ -186,9 +186,42 @@ export class CliBusinessValidationResponseDto {
 
     @ApiProperty({
         description:
-            'Business validation result returned by the business rules provider.',
+            'The verdict as text: one line per requirement, then the status.',
         example:
-            '## Business Rules Validation\n\nI found 1 potential gap between implementation and acceptance criteria...',
+            'AB#8 · Compact density toggle (Azure DevOps)\n  MET            AC-1 Persists per user src/settings/density.ts:14\n  MISSING        AC-2 Defaults to comfortable density.ts:6\n\nstatus: issues_found (--json for the full verdict)',
     })
     result: string;
+
+    @ApiProperty({
+        description:
+            'The same verdict, structured: status, whether the check would pass, and per task the requirements with their state (met, partial, missing, check_manually), evidence and action, plus changes not in the task.',
+        example: {
+            status: 'issues_found',
+            passed: false,
+            tasks: [
+                {
+                    tracker: 'Azure DevOps',
+                    id: 'AB#8',
+                    title: 'Compact density toggle',
+                    readAt: '2026-10-05T12:00:00.000Z',
+                    passed: false,
+                    requirements: [
+                        {
+                            requirement: 'Defaults to comfortable',
+                            source: 'AC #2',
+                            state: 'missing',
+                            evidence: [
+                                { file: 'src/settings/density.ts', line: 6 },
+                            ],
+                            note: 'Sets "compact" as the default.',
+                            action: 'Change the default to "comfortable".',
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                },
+            ],
+        },
+    })
+    verdict: Record<string, unknown>;
 }

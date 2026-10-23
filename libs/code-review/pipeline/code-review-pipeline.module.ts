@@ -38,10 +38,8 @@ import { PipelineChecksService } from '@libs/core/infrastructure/pipeline/servic
 import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.module';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { FileReviewModule } from '@libs/ee/codeReview/fileReviewContextPreparation/fileReview.module';
-import { KodyFineTuningStage } from '@libs/ee/codeReview/stages/kody-fine-tuning.stage';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
-import { KodyFineTuningContextModule } from '@libs/kodyFineTuning/kodyFineTuningContext.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { FeatureGateModule } from '@libs/feature-gate';
@@ -112,7 +110,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => AIEngineModule),
         forwardRef(() => PlatformModule),
         forwardRef(() => PlatformDataModule),
-        forwardRef(() => KodyFineTuningContextModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => GithubModule),
         forwardRef(() => ForgejoModule),
@@ -207,9 +204,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CustomAgentProviderFactory,
         // ReflectionAgentProvider removed
         ReviewOrchestratorService,
-
-        // EE Stages
-        KodyFineTuningStage,
 
         // For GitHub Checks
         GithubChecksService,

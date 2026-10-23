@@ -4803,6 +4803,31 @@ export class GitlabService implements Omit<
         }
     }
 
+    /** Developer (30) or above, on the project or inherited from its group. */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        userId: string | number;
+    }): Promise<boolean | undefined> {
+        const authDetails = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetails) {
+            return undefined;
+        }
+        try {
+            const member = await this.instanceGitlabApi(
+                authDetails,
+            ).ProjectMembers.show(params.repository.id, Number(params.userId), {
+                includeInherited: true,
+            });
+            return (member?.access_level ?? 0) >= 30;
+        } catch (error) {
+            // Not a member answers 404; a credential that can't look, 401/403.
+            return isDeniedStatus(error) ? false : undefined;
+        }
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

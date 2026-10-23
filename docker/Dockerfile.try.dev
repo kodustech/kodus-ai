@@ -6,7 +6,7 @@
 # supplied by the named volume `try_node_modules_cache`. The install here
 # only exists to seed the node_modules volume the first time it's created.
 
-FROM docker.io/library/node:22.22.2-slim
+FROM docker.io/library/node:22.23.4-slim
 
 WORKDIR /usr/src/app
 

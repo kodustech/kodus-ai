@@ -1,8 +1,5 @@
 import { extractProviderMessage } from './review-error-diagnostics';
-import {
-    AgentContextWindowTooSmallError,
-    AgentPromptTooLargeError,
-} from './errors';
+import { AgentContextWindowTooSmallError } from './errors';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -481,9 +478,9 @@ function buildFriendlyMessage(
                 ? `Your Google Cloud project doesn't have access to the configured model on Vertex AI. Enable it in the project's Vertex AI Model Garden (open the model and accept the provider's terms), then comment \`@kody review\` to retry. The model id and region are fine — this is a one-time per-model enablement in Google Cloud.`
                 : `Your account doesn't have access to the configured model${providerLabel}. Enable or request access to it on the provider, then retry.`;
         case LlmErrorCategory.CONTEXT_OVERFLOW:
-            // Generic fallback only — typed AgentContextWindowTooSmallError /
-            // AgentPromptTooLargeError go through buildContextOverflowMessage
-            // with the specific numbers and actionable options.
+            // Generic fallback only — a typed AgentContextWindowTooSmallError
+            // goes through buildContextOverflowMessage with the specific
+            // numbers and actionable options.
             return `The PR exceeded the maximum context size accepted by the model${providerLabel}.`;
         case LlmErrorCategory.TRANSIENT:
             return `Transient error reaching the provider${providerLabel}. Try again.`;
@@ -524,18 +521,6 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
         const window = err.contextWindow.toLocaleString('en-US');
         return [
             `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but this review needs at least ${err.overheadTokens.toLocaleString('en-US')} tokens of context.`,
-            '',
-            '**To resolve, choose one:**',
-            `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
-            `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
-        ].join('\n');
-    }
-
-    if (err instanceof AgentPromptTooLargeError) {
-        const window = err.contextWindowTokens.toLocaleString('en-US');
-        return [
-            `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but the assembled prompt would need ${err.estimatedTokens.toLocaleString('en-US')} tokens.`,
             '',
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,

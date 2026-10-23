@@ -7,7 +7,7 @@
 // Each case is a PR, its diff and the ticket it closes (cases.json, files/).
 // A case is right when the stage records the expected outcome (a gap found, a
 // pass, or skipped for a ticket it cannot read) and, for a gap, its published
-// comment names what is missing. --verify runs the skill with its verify pass
+// comment names what is missing. --verify runs the judge with its verify pass
 // on (SkillExecutionPolicy.verifyAnalyzerResult), which production ships off.
 //
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
@@ -35,7 +35,7 @@ const ROUTE = orgRouteOrExit(MODEL);
 // What the stage did, against what the case expects.
 function score(c, run) {
     const kind = run.outcome?.kind || 'none';
-    const comment = run.published.map((s) => String(s.suggestionContent || '')).join('\n');
+    const comment = run.comments.join('\n');
     const detail = [{ what: `outcome ${kind}${run.outcome?.reason ? ` (${run.outcome.reason})` : ''}, expected ${c.expect.outcome}`, ok: kind === c.expect.outcome }];
     for (const word of c.expect.mentions || []) {
         detail.push({ what: `published comment names "${word}"`, ok: new RegExp(word, 'i').test(comment) });
@@ -60,6 +60,9 @@ async function main() {
                 const run = await harness.reviewCase(world, c, { verifyAnalyzerResult: !!args.verify, storedConfig: ROUTE.storedConfig });
                 // A stage that threw recorded it as an error outcome: not a measurement.
                 if (run.outcome?.kind === 'error') throw new Error(run.outcome.message);
+                // The judge's call failed (a key, a quota, a timeout): nothing was judged.
+                const failedCall = run.judgeFailures.find((f) => f.reason === 'analyzer_failure');
+                if (failedCall) throw new Error(`the judge's call failed: ${failedCall.cause}`);
                 results.push({ id: c.id, checks: c.checks, ...score(c, run) });
                 console.log(`  ${c.id.padEnd(22)} ${results[results.length - 1].detail.map((d) => `${d.ok ? '✓' : '✗'} ${d.what}`).join('  ')}`);
             } catch (error) {

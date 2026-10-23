@@ -2,14 +2,9 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 
 /**
- * Deterministic repository-slice primitives.
- *
- * Extracted verbatim from call-graph.helper.ts, which was their only home and
- * kept them module-private. The Kody Rules path needs the same three moves —
- * "which symbols did this hunk change", "where else does this symbol appear"
- * and "read a window around a line" — so they live here and the call-graph
- * helper imports them back. Behavior is unchanged; call-graph.helper.spec.ts is
- * the regression guard.
+ * Deterministic repository-slice primitives for the Kody Rules path: "which
+ * symbols did this hunk change", "where else does this symbol appear" and
+ * "read a window around a line".
  */
 
 export const MAX_CALLGRAPH_CHARS = 6000;

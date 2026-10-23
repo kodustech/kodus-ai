@@ -41,6 +41,7 @@ import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
 import { KodyRulesAutoPauseCron } from './cron/kody-rules-auto-pause.cron';
 import { KodyRulesAutoPauseDigestCron } from './cron/kody-rules-auto-pause-digest.cron';
 import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
+import { BusinessLogicRecheckCron } from './cron/business-logic-recheck.cron';
 import { OrgReportCron } from './cron/org-report.cron';
 import { RepoReportCron } from './cron/repo-report.cron';
 import { RefreshCodeAreaRiskMapCron } from './cron/refresh-code-area-risk-map.cron';
@@ -112,6 +113,7 @@ export class WorkerModule {
                         useClass: ConditionalApprovalAccessService,
                     },
                     RefreshCodeAreaRiskMapCron,
+                    BusinessLogicRecheckCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],
             };

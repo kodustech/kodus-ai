@@ -361,6 +361,16 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
      * repository. Never throws; anything the provider does not report is
      * `unknown`. Optional so a provider without it degrades to `unknown`.
      */
+    /**
+     * Whether one user can push to the repository (GitLab: Developer or
+     * above). Undefined when the provider can't say.
+     */
+    userCanWrite?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        userId: string | number;
+    }): Promise<boolean | undefined>;
+
     diagnoseRepositoryAccess?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

@@ -3,6 +3,8 @@ export interface ICockpitMetricsVisibility {
     readonly tabs: {
         readonly kodusReview: boolean;
         readonly productivity: boolean;
+        /** Delivered as asked: Business Logic's view of PRs against their task. */
+        readonly intent: boolean;
     };
     readonly summary: {
         readonly deployFrequency: boolean;
@@ -24,6 +26,7 @@ export const DEFAULT_COCKPIT_METRICS_VISIBILITY: ICockpitMetricsVisibility = {
     tabs: {
         kodusReview: true,
         productivity: true,
+        intent: true,
     },
     summary: {
         deployFrequency: true,

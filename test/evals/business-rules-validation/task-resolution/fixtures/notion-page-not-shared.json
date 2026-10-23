@@ -1,0 +1,52 @@
+{
+    "name": "notion-page-not-shared",
+    "issue": "#1941",
+    "trackers": [
+        {
+            "integrationId": "notion-default",
+            "appName": "Notion",
+            "provider": "kodusmcp",
+            "category": "task-management",
+            "responseShape": "notion",
+            "tools": [
+                {
+                    "name": "notion-fetch",
+                    "kind": "get",
+                    "idArg": "id",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["id"]
+                    }
+                },
+                {
+                    "name": "notion-search",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["notion-create-pages", "notion-update-page"],
+            "tasks": []
+        }
+    ],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes https://www.notion.so/acme/Scale-servings-1a2b3c4d5e6f40718293a4b5c6d7e8f9"
+    },
+    "expect": {
+        "outcome": "silent",
+        "toolsCalled": ["notion-fetch", "notion-fetch"]
+    }
+}

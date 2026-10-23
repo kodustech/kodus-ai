@@ -141,7 +141,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     context.platformType,
                     context.fileMetadata,
                     allCommits,
-                    context.heavy,
                 );
 
                 this.logger.log({
@@ -324,7 +323,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 platformType,
                 context.fileMetadata,
                 context.prAllCommits,
-                context.heavy,
             );
         } catch (error) {
             this.logger.error({
@@ -554,7 +552,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         platformType: string,
         fileMetadata?: Map<string, any>,
         prCommits?: Commit[],
-        heavy?: boolean,
     ) {
         const enrichedFiles = changedFiles.map((file) => {
             const metadata = fileMetadata?.get(file.filename);
@@ -594,18 +591,8 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         // Reutilizar commits do context (buscados no ValidateNewCommitsStage)
         const pullRequestCommits = prCommits || [];
 
-        // Carry the resolved HEAVY flag on the PR object so the persisted record
-        // reflects how the LAST review actually ran (post feature-gate).
-        // `pullRequest` comes from the Immer-frozen pipeline context, so it
-        // must be copied, not mutated — a direct `pullRequest.heavy = …`
-        // threw "Cannot assign to read only property" here, which skipped
-        // aggregateAndSaveDataStructure on EVERY review (comments posted,
-        // zero suggestions ever persisted). Same failure class as the
-        // `context.heavy` write fixed in agent-review.stage (#1522).
-        const pullRequestWithHeavy = { ...pullRequest, heavy };
-
         await this.pullRequestService.aggregateAndSaveDataStructure(
-            pullRequestWithHeavy,
+            pullRequest,
             repository,
             enrichedFiles,
             allPrioritizedSuggestions,
