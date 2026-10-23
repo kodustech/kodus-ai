@@ -71,7 +71,11 @@ describe('CodeReviewJobProcessorService — rate-limit gate integration', () => 
         );
 
         mockJobRepository.findOne.mockResolvedValue(makeJob());
-        mockJobRepository.update.mockResolvedValue(undefined);
+        // The guarded writes answer `true` when the fence matched, `false` when
+        // the row belongs to another worker (#1902 review). `undefined` made
+        // every failure path read as "someone else owns it" and return instead
+        // of rethrowing.
+        mockJobRepository.update.mockResolvedValue(true);
     });
 
     it('happy path: gate ok → use-case executes', async () => {
@@ -104,5 +108,22 @@ describe('CodeReviewJobProcessorService — rate-limit gate integration', () => 
             expect(e).toBeInstanceOf(RateLimitError);
             expect((e as RateLimitError).resetAt).toEqual(resetAt);
         }
+    });
+
+    it('fence refused: the row belongs to another worker, so the run does not rethrow', async () => {
+        // `handleFailure` answers its guarded write, and `false` means another
+        // worker owns the row now: rethrowing would make the catches stamp
+        // FAILED/PERMANENT unguarded over the row that worker is running, which
+        // is the state the fence exists to leave alone (#1902 review).
+        mockJobRepository.update.mockResolvedValue(false);
+        gateCheck.mockRejectedValue(
+            new RateLimitError({
+                resetAt: new Date(Date.now() + 47 * 60 * 1000),
+                remaining: 12,
+            }),
+        );
+
+        await expect(processor.process('job-rl-1')).resolves.toBeUndefined();
+        expect(useCaseExecute).not.toHaveBeenCalled();
     });
 });

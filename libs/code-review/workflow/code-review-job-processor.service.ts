@@ -1,5 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject, Optional } from '@nestjs/common';
+import os from 'os';
+import { randomUUID } from 'crypto';
 
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import {
@@ -20,6 +22,10 @@ import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
 import { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 import {
+    JOB_LEASE_TTL_MS,
+    startJobLeaseRenewal,
+} from '@libs/core/workflow/infrastructure/job-lease.renewer';
+import {
     IRateLimitGateService,
     RATE_LIMIT_GATE_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
@@ -32,6 +38,37 @@ import { PrReviewDeferralService } from './pr-review-deferral.service';
 @Injectable()
 export class CodeReviewJobProcessorService implements IJobProcessorService {
     private readonly logger = createLogger(CodeReviewJobProcessorService.name);
+    // Stamp for the job-ownership lease: distinguishes "this worker is alive
+    // and renewing" from "the worker died", letting the stale-job reaper
+    // reclaim by expired lease (#1830).
+    // The instance prefix of a lease owner: it keeps log lines searchable by
+    // host, but it is never the owner itself - see `ownerForAttempt`.
+    private readonly instanceId = os.hostname();
+
+    // The lease owner of the attempt that is processing a job. `process` writes
+    // it, `markCompleted` reads it: the router calls that one from outside
+    // `process`, so the owner cannot travel as a parameter.
+    private readonly attemptOwnerByJob = new Map<string, string>();
+
+    /**
+     * One owner per attempt, not per worker (#1902): if a lease lapses without
+     * this process dying - a renewal that hangs, a freeze like the 106s one in
+     * #1830 - the reaper republishes the job and this same worker can claim it
+     * again. With a per-worker owner both attempts write the same name, so the
+     * first attempt's guarded renewal and terminal writes still match the
+     * second one's claim and both runs post the review. On a single
+     * self-hosted worker that is the only possible outcome.
+     */
+    private ownerForAttempt(): string {
+        return `${this.instanceId}:${randomUUID()}`;
+    }
+
+    /** Forget an attempt's owner, unless a later attempt owns the job now. */
+    private forgetAttemptOwner(jobId: string, owner: string): void {
+        if (this.attemptOwnerByJob.get(jobId) === owner) {
+            this.attemptOwnerByJob.delete(jobId);
+        }
+    }
 
     constructor(
         @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
@@ -49,6 +86,11 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     ) {}
 
     async process(jobId: string, signal?: AbortSignal): Promise<void> {
+        // The owner of THIS attempt, written into every guarded statement
+        // below (#1902).
+        const leaseOwner = this.ownerForAttempt();
+        this.attemptOwnerByJob.set(jobId, leaseOwner);
+
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
@@ -70,6 +112,24 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         const startTime = Date.now();
         let acquiredLock: DistributedLock | null = null;
 
+        // Set when the lease is lost mid-run so the catch below can avoid
+        // terminally failing a job that a transient renewal blip
+        // (connection-pool exhaustion, lock/statement timeout) caused to look
+        // dead — the reaper reclaims it for retry instead of permanently
+        // failing it (#1830). Declared in `process` scope (not the try): the
+        // `catch` is a sibling lexical scope and would not see a `let` from
+        // inside the try.
+        let leaseLost = false;
+
+        // Set once this run has actually claimed the lease (the PROCESSING +
+        // leaseOwner write below). The catch needs to tell "this run never held
+        // the lease" (payload validation, the rate-limit gate — both throw
+        // before the claim) from "this run lost it", because the ownership fence
+        // only answers for a run that had one: on a row nobody owns yet, a guard
+        // miss means "no lease to lose", not "another worker took it over"
+        // (#1830 review).
+        let leaseClaimed = false;
+
         try {
             const jobPayload = job.payload || {};
             const {
@@ -85,6 +145,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 !event ||
                 !platformType ||
                 !organizationAndTeamData ||
+                !organizationAndTeamData.organizationId ||
                 !teamAutomationId
             ) {
                 throw new Error('Invalid payload: missing required fields');
@@ -149,7 +210,31 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     previousMetadata.byokSlotExhausted?.notifiedAt,
                 );
 
-                await this.handleFailure(jobId, error);
+                // No lease is held on this path, so the write cannot be fenced on
+                // one — but it must still not land over a worker that IS running
+                // the job: a redelivery of the same jobId can be consumed while
+                // another worker has already claimed the row (see the note on
+                // `requireNoLiveOwner`), and stamping FAILED there would kill that
+                // worker's completion, drop its review and send the author a
+                // failure notice for a review that is still running.
+                //
+                // So the write is conditional on nobody live owning the row. When
+                // it does not land, this delivery stops here: the review belongs
+                // to that worker, and the notice is its call to make.
+                const recorded = await this.handleFailure(jobId, error, {
+                    organizationId: this.organizationIdFor(job),
+                    requireNoLiveOwner: true,
+                });
+
+                if (!recorded) {
+                    this.logger.warn({
+                        message:
+                            'BYOK slot exhausted, but a live worker owns the job — leaving the outcome to it',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                    return;
+                }
 
                 if (alreadyNotified) {
                     this.logger.debug({
@@ -205,10 +290,115 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 acquiredLock = admission.lock;
             }
 
-            await this.jobRepository.update(jobId, {
-                status: JobStatus.PROCESSING,
-                startedAt: new Date(),
-                metadata: this.removeByokConcurrencyGateMetadata(job.metadata),
+            // Guarded like every other ownership write in this class: a second
+            // delivery of the same jobId must not overwrite a row whose lease
+            // is still live, which strips the running worker of its lease while
+            // the use-case it already started keeps going - the double
+            // execution this fence exists to prevent (#1902 review).
+            const claimed = await this.jobRepository.update(
+                jobId,
+                {
+                    status: JobStatus.PROCESSING,
+                    startedAt: new Date(),
+                    // Acquire the job-ownership lease so the stale-job reaper
+                    // can tell an actively-processing job (renewed lease) from
+                    // a dead worker (expired lease → reclaimed in ~90s, #1830).
+                    leaseOwner,
+                    leaseExpiresAt: new Date(Date.now() + JOB_LEASE_TTL_MS),
+                    metadata: this.removeByokConcurrencyGateMetadata(
+                        job.metadata,
+                    ),
+                },
+                { noLiveOwner: true },
+            );
+
+            if (claimed === false) {
+                // A live lease owner is already running this job. Acking this
+                // delivery is the honest outcome: there is nothing left to do
+                // and the owner will complete it (#1902 review).
+                this.logger.warn({
+                    message:
+                        'Job already has a live lease owner — leaving it to the worker running it',
+                    context: CodeReviewJobProcessorService.name,
+                    metadata: { jobId },
+                });
+                return;
+            }
+
+            // Past this line the row is ours: every failure from here on has a
+            // lease to lose, which is what the guarded failure write assumes.
+            leaseClaimed = true;
+
+            // A local controller mirrors the parent signal and can ALSO be
+            // aborted when the lease is lost: two consecutive renewal failures
+            // mean this worker may no longer own the job (the reaper is free to
+            // reclaim a lease older than the TTL), so we stop running it rather
+            // than race the reaper toward a double execution (#1830 review).
+            const runController = new AbortController();
+            const abortRun = () => runController.abort(signal?.reason);
+            if (signal) {
+                if (signal.aborted) {
+                    runController.abort(signal.reason);
+                } else {
+                    signal.addEventListener('abort', abortRun, { once: true });
+                }
+            }
+            const runSignal = runController.signal;
+
+            // Renew the lease on a ~30s cadence for as long as the review
+            // runs. A killed worker (OOM, ECS eviction, kill -9) cannot renew,
+            // so its lease lapses and the reaper reclaims instead of waiting
+            // out the 180-min in-process timeout that dies with the process.
+            const leaseRenewal = startJobLeaseRenewal({
+                signal: runSignal,
+                logger: this.logger,
+                jobId,
+                organizationId: organizationAndTeamData.organizationId,
+                // Guarded on ownership: if the reaper already requeued this job
+                // and another worker picked it up, the renewal writes nothing
+                // and the renewer treats it as a lost lease rather than racing
+                // that worker toward the same review (#1830 review).
+                renew: () =>
+                    this.jobRepository.update(
+                        jobId,
+                        {
+                            leaseOwner,
+                            leaseExpiresAt: new Date(
+                                Date.now() + JOB_LEASE_TTL_MS,
+                            ),
+                        },
+                        { leaseOwner },
+                    ),
+                onRenewError: (error) =>
+                    this.logger.warn({
+                        message:
+                            'Could not renew workflow job lease — it will expire and be reclaimed if this worker is dead',
+                        context: CodeReviewJobProcessorService.name,
+                        error: error instanceof Error ? error : undefined,
+                        metadata: {
+                            jobId,
+                            instanceId: leaseOwner,
+                        },
+                    }),
+                onLeaseLost: (error) => {
+                    leaseLost = true;
+                    this.logger.error({
+                        message:
+                            'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
+                        context: CodeReviewJobProcessorService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: {
+                            jobId,
+                            instanceId: leaseOwner,
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                        },
+                    });
+                    runController.abort(new Error('Job lease lost'));
+                },
             });
 
             // Race the use-case against the parent's AbortSignal. The use
@@ -219,21 +409,28 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // pending past the 1h45min router timeout, holding the worker
             // slot zombie. The race guarantees the processor unblocks
             // when the signal fires regardless of how deep the stall is.
-            await raceWithAbortSignal(
-                this.runCodeReviewAutomationUseCase.execute(
-                    {
-                        codeManagementPayload,
-                        event,
-                        platformType,
-                        correlationId,
-                        organizationAndTeamData,
-                        teamAutomationId,
-                        workflowJobId: jobId,
-                    },
-                    signal,
-                ),
-                signal,
-            );
+            try {
+                await raceWithAbortSignal(
+                    this.runCodeReviewAutomationUseCase.execute(
+                        {
+                            codeManagementPayload,
+                            event,
+                            platformType,
+                            correlationId,
+                            organizationAndTeamData,
+                            teamAutomationId,
+                            workflowJobId: jobId,
+                        },
+                        runSignal,
+                    ),
+                    runSignal,
+                );
+            } finally {
+                leaseRenewal.stop();
+                if (signal) {
+                    signal.removeEventListener('abort', abortRun);
+                }
+            }
 
             await this.markCompleted(jobId);
 
@@ -252,6 +449,35 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
 
+            // The lease was lost mid-run (transient renewal failures). This is
+            // reclaimable, not terminal: leave the row PROCESSING for the lease
+            // reaper to requeue once the lease expires. We must NOT throw here —
+            // the router/consumer catch (job-processor-router.service.ts,
+            // workflow-job-consumer.service.ts) would overwrite the row with
+            // FAILED/PERMANENT, and the lease reaper only reclaims rows still in
+            // PROCESSING, so the intended salvage would never happen and the
+            // author would get a bogus failure notice. Returning resolves the
+            // consumer (which acks the message) with the row left untouched
+            // (#1830).
+            if (leaseLost) {
+                const orgId =
+                    (
+                        (job?.payload ?? {}) as {
+                            organizationAndTeamData?: {
+                                organizationId?: string;
+                            };
+                        }
+                    )?.organizationAndTeamData?.organizationId;
+                this.logger.warn({
+                    message:
+                        'Job lease lost after repeated renewal failures — leaving the row PROCESSING for the lease reaper to reclaim',
+                    context: CodeReviewJobProcessorService.name,
+                    error,
+                    metadata: { jobId, organizationId: orgId },
+                });
+                return;
+            }
+
             // A user asked for this review and another run held the PR.
             // Dropping it here is what made the request vanish (#1700), so
             // wait for the holder and try again; only once the retry window
@@ -267,18 +493,33 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     return;
                 }
 
-                await this.abandonBusyReview(job, error);
+                await this.abandonBusyReview(job, error, leaseOwner);
                 return;
             }
 
             if (error.name === 'WorkflowPausedError') {
-                await this.jobRepository.update(jobId, {
-                    status: JobStatus.WAITING_FOR_EVENT,
-                    waitingForEvent: {
-                        eventType: (error as any).eventType,
-                        eventKey: (error as any).eventKey,
+                // Same fence as the other writes reached from this catch: a
+                // worker that lost its lease mid-run must not move a row the
+                // reaper already handed to another worker.
+                const stillOwned = await this.jobRepository.update(
+                    jobId,
+                    {
+                        status: JobStatus.WAITING_FOR_EVENT,
+                        waitingForEvent: {
+                            eventType: (error as any).eventType,
+                            eventKey: (error as any).eventKey,
+                        },
                     },
-                });
+                    { leaseOwner },
+                );
+                if (stillOwned === false) {
+                    this.logger.warn({
+                        message:
+                            'Job lease no longer owned when pausing for an event — leaving the row to the worker that took it over',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, instanceId: leaseOwner },
+                    });
+                }
                 return;
             }
 
@@ -288,7 +529,38 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 context: CodeReviewJobProcessorService.name,
             });
 
-            await this.handleFailure(jobId, error);
+            const owned = await this.handleFailure(jobId, error, {
+                // A run that DID claim the lease is answered on its own lease; a
+                // failure raised before the claim (the payload check, the
+                // rate-limit gate — both throw before the PROCESSING/leaseOwner
+                // write) has no lease to match. Reading that miss as "another
+                // worker owns this" returned early, so the consumer acked the
+                // message and the job vanished with no FAILED stamp, no
+                // republish and no notice. But no lease is not the same as
+                // nobody running the job: a redelivery of the same jobId can be
+                // consumed while another worker holds the row (the inbox dedupes
+                // on (consumerId, messageId), and the reaper republishes with a
+                // fresh messageId), so this path asks whether any live worker
+                // owns the row instead. On a row nobody owns the write still
+                // lands, which is what stamps the FAILED status and lets the
+                // rethrow below reach the consumer's error handler for a
+                // republish (#1830 review).
+                ownedBy: leaseClaimed ? leaseOwner : undefined,
+                requireNoLiveOwner: !leaseClaimed,
+                organizationId: this.organizationIdFor(job),
+            });
+
+            // An explicit `false` means another worker owns the row now: there
+            // is nobody left to notify on this run, and rethrowing would make
+            // the catches above stamp FAILED/PERMANENT unguarded over the row
+            // that worker is running — the very state the fence refused to
+            // write (#1830 review). A run that never held the lease and found
+            // the row free has nothing to have lost, so it keeps failing loudly
+            // and republishing.
+            if (owned === false) {
+                return;
+            }
+
             // Don't spam the author with a failure notification when we
             // know the job is going to retry on its own (rate-limit will
             // resolve when the GitHub bucket resets). They'd get one
@@ -298,6 +570,12 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             }
             throw error;
         } finally {
+            // The owner entry deliberately outlives this attempt: the router
+            // completes the job AFTER `process` returns, so dropping it here
+            // left `markCompleted` with no owner to guard on and minting a
+            // fresh one that can never match the row - the completion was
+            // silently refused. It is dropped by whoever completes the job
+            // (#1902 review).
             if (acquiredLock && !acquiredLock.isReleased()) {
                 try {
                     await acquiredLock.release();
@@ -328,6 +606,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     private async abandonBusyReview(
         job: IWorkflowJob,
         error: Error & { target?: unknown; gate?: string },
+        leaseOwner: string,
     ): Promise<void> {
         this.logger.error({
             message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
@@ -339,6 +618,34 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 gate: error.gate,
             },
         });
+
+        // The guarded write runs FIRST, because its outcome decides whether the
+        // notice is honest. If the lease was reclaimed while this run was giving
+        // up (the renewer stalled long enough for the reaper to requeue and
+        // another worker to claim the job), the row belongs to that worker, which
+        // will re-drive and may complete the review — telling the author their
+        // request was dropped would contradict what actually happens, and the
+        // drop would be recorded on a row this run no longer owns. Gating the
+        // notice on the write is the same fence as everywhere else, applied to
+        // the notification instead of to the status (#1830 review).
+        const recorded = await this.handleFailure(job.id, error, {
+            ownedBy: leaseOwner,
+            organizationId: this.organizationIdFor(job),
+        });
+
+        if (!recorded) {
+            this.logger.warn({
+                message:
+                    'Skipping the refusal notice — the job was reclaimed by another worker before the drop was recorded',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId: job.id,
+                    instanceId: leaseOwner,
+                    organizationId: this.organizationIdFor(job),
+                },
+            });
+            return;
+        }
 
         try {
             await this.codeReviewHandlerService.notifyCommandReviewRefused(
@@ -354,11 +661,36 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 metadata: { jobId: job.id },
             });
         }
-
-        await this.handleFailure(job.id, error);
     }
 
-    async handleFailure(jobId: string, error: Error): Promise<void> {
+    private organizationIdFor(job: any): string | undefined {
+        return (
+            (job?.payload as {
+                organizationAndTeamData?: { organizationId?: string };
+            })?.organizationAndTeamData?.organizationId
+        );
+    }
+
+    /**
+     * Marks a job FAILED. Returns whether the write landed, so a caller whose
+     * lease was reclaimed can stop instead of notifying the author and
+     * rethrowing into catches that stamp FAILED unguarded (#1830 review).
+     */
+    async handleFailure(
+        jobId: string,
+        error: Error,
+        options?: {
+            ownedBy?: string;
+            organizationId?: string;
+            /**
+             * For a caller that holds NO lease and must still not stamp over a
+             * live worker: the write lands only while no worker is running the
+             * job. `false` then means "a live worker owns it" rather than "the
+             * lease this run held is gone" (#1830 review).
+             */
+            requireNoLiveOwner?: boolean;
+        },
+    ): Promise<boolean> {
         this.metricsCollector?.recordCounter('code_review_errors_total', 1, {
             errorType: error.name || 'UnknownError',
         });
@@ -372,20 +704,120 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             ? ErrorClassification.RATE_LIMITED
             : ErrorClassification.PERMANENT;
 
-        await this.jobRepository.update(jobId, {
+        const failurePatch = {
             status: JobStatus.FAILED,
             errorClassification: classification,
             lastError: error.message,
             failedAt: new Date(),
-        });
+        };
+
+        if (options?.requireNoLiveOwner) {
+            // No lease of our own, but that does NOT mean nobody is running the
+            // job: a redelivery of the same jobId can reach this branch while
+            // another worker holds the row (the inbox dedupes on
+            // (consumerId, messageId), not jobId, and the reaper republishes
+            // with a fresh messageId). So the write asks whether a live worker
+            // owns it instead of assuming one does not.
+            const landed = await this.jobRepository.update(
+                jobId,
+                failurePatch,
+                {
+                    noLiveOwner: true,
+                },
+            );
+
+            if (!landed) {
+                this.logger.warn({
+                    message:
+                        'Not failing the job — a live worker owns the row, so the outcome is its to record',
+                    context: CodeReviewJobProcessorService.name,
+                    metadata: {
+                        jobId,
+                        organizationId: options.organizationId,
+                        errorClassification: classification,
+                    },
+                });
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!options?.ownedBy) {
+            // The router's exhausted-retry path: no worker owns the row any
+            // more, and this FAILED status is what stops the job being
+            // redelivered forever, so it must land unguarded.
+            await this.jobRepository.update(jobId, failurePatch);
+            return true;
+        }
+
+        // Same ownership fence as markCompleted: a worker whose lease lapsed
+        // must not stamp FAILED over the row the reaper already handed to
+        // another worker, whose own terminal write would then be blocked by a
+        // status it never wrote (#1830 review).
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            failurePatch,
+            { leaseOwner: options.ownedBy },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned when marking the failure — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: options.ownedBy,
+                    organizationId: options.organizationId,
+                    errorClassification: classification,
+                },
+            });
+            return false;
+        }
+
+        return true;
     }
 
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        await this.jobRepository.update(jobId, {
-            status: JobStatus.COMPLETED,
-            completedAt: new Date(),
-            result: result,
-        });
+        // Terminal transition, guarded the same way: a worker that lost its
+        // lease mid-run must not mark COMPLETED a job the reaper already handed
+        // to someone else, or that retry would be swallowed and the row would
+        // look finished while the other worker is still reviewing (#1830
+        // review).
+        // The router calls this from outside `process`, so the owner comes
+        // from the attempt that claimed the job. With none recorded, this call
+        // never held the lease: a fresh owner is used, which cannot match the
+        // row and leaves it to whoever holds it (#1902).
+        const leaseOwner =
+            this.attemptOwnerByJob.get(jobId) ?? this.ownerForAttempt();
+        const stillOwned = await this.jobRepository.update(
+            jobId,
+            {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                result: result,
+            },
+            { leaseOwner },
+        );
+
+        if (stillOwned === false) {
+            this.logger.warn({
+                message:
+                    'Job lease no longer owned at completion — leaving the row to the worker that took it over',
+                context: CodeReviewJobProcessorService.name,
+                metadata: {
+                    jobId,
+                    instanceId: leaseOwner,
+                },
+            });
+            return;
+        }
+
+        // Compare-and-delete: the entry is dropped by the completion that used
+        // it, so a second completion for the same attempt resolves nothing and
+        // gets a fresh owner minted, which cannot match the row (#1902 review).
+        this.forgetAttemptOwner(jobId, leaseOwner);
     }
 
     private removeByokConcurrencyGateMetadata(

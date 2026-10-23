@@ -1,6 +1,8 @@
 import { CodeReviewJobProcessorService } from './code-review-job-processor.service';
 import { PrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { JOB_LEASE_RENEW_INTERVAL_MS } from '@libs/core/workflow/infrastructure/job-lease.renewer';
+import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
 const TARGET = {
     organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
@@ -145,12 +147,34 @@ describe('CodeReviewJobProcessorService', () => {
             ).toHaveBeenCalledWith(TARGET);
         });
 
+        it('stays quiet when the lease was reclaimed while giving up', async () => {
+            // The guarded failure write matched no row: the reaper requeued the
+            // job and another worker owns it now, so that worker will re-drive
+            // the review. Telling the author it was dropped would contradict
+            // what actually happens, and the drop would be recorded on a row
+            // this run no longer owns.
+            jobRepository.update.mockImplementation((_id: string, data: any) =>
+                data?.status === JobStatus.FAILED
+                    ? Promise.resolve(false)
+                    : Promise.resolve(undefined),
+            );
+
+            await service.process('job-1');
+
+            expect(
+                codeReviewHandlerService.notifyCommandReviewRefused,
+            ).not.toHaveBeenCalled();
+        });
+
         it('records the job as failed rather than completed', async () => {
             await service.process('job-1');
 
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                // The abandon path runs inside the leased run, so the same
+                // ownership fence applies as everywhere else.
+                { leaseOwner: expect.any(String) },
             );
         });
 
@@ -181,8 +205,205 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                // The failure path reached from a run that still holds the lease
+                // carries the same ownership guard as completion.
+                { leaseOwner: expect.any(String) },
             );
             expect(prReviewDeferralService.defer).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleFailure ownership (#1830 review)', () => {
+        it('leaves the row to the worker that took it over, and says so', async () => {
+            const warn = jest
+                .spyOn((service as unknown as { logger: any }).logger, 'warn')
+                .mockImplementation(() => undefined);
+            // The guarded write matched no row: the reaper already requeued
+            // this job and another worker owns it now.
+            jobRepository.update.mockResolvedValueOnce(false);
+
+            const landed = await service.handleFailure('job-1', new Error('boom'), {
+                ownedBy: 'instance-1',
+                organizationId: 'org-1',
+            });
+
+            // The caller needs this answer. Told nothing, it went on to notify
+            // the author and rethrow, and the catches above stamped
+            // FAILED/PERMANENT unguarded over the row the new worker is running.
+            expect(landed).toBe(false);
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { leaseOwner: 'instance-1' },
+            );
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('no longer owned'),
+                    metadata: expect.objectContaining({
+                        jobId: 'job-1',
+                        instanceId: 'instance-1',
+                        organizationId: 'org-1',
+                    }),
+                }),
+            );
+            warn.mockRestore();
+        });
+
+        it('reports the failure as landed when the guarded write matched', async () => {
+            jobRepository.update.mockResolvedValueOnce(true);
+
+            await expect(
+                service.handleFailure('job-1', new Error('boom'), {
+                    ownedBy: 'instance-1',
+                }),
+            ).resolves.toBe(true);
+        });
+
+        it('still writes the failure unguarded on the exhausted-retry path', async () => {
+            // No worker owns the row by then, and this status is what stops the
+            // job being redelivered forever.
+            const landed = await service.handleFailure(
+                'job-1',
+                new Error('boom'),
+            );
+
+            expect(landed).toBe(true);
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+            );
+        });
+
+        it('fences the no-lease failure write on "nobody live owns it"', async () => {
+            // The caller holds no lease, so there is none to match — but that is
+            // not the same as nobody running the job: a redelivery of the same
+            // jobId can reach that branch while another worker holds the row.
+            jobRepository.update.mockResolvedValueOnce(true);
+
+            await expect(
+                service.handleFailure('job-1', new Error('boom'), {
+                    organizationId: 'org-1',
+                    requireNoLiveOwner: true,
+                }),
+            ).resolves.toBe(true);
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
+            );
+        });
+
+        it('reports a live owner instead of stamping FAILED over its row', async () => {
+            const warn = jest
+                .spyOn((service as unknown as { logger: any }).logger, 'warn')
+                .mockImplementation(() => undefined);
+            jobRepository.update.mockResolvedValueOnce(false);
+
+            await expect(
+                service.handleFailure('job-1', new Error('boom'), {
+                    organizationId: 'org-1',
+                    requireNoLiveOwner: true,
+                }),
+            ).resolves.toBe(false);
+
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'live worker owns the row',
+                    ),
+                    metadata: expect.objectContaining({
+                        jobId: 'job-1',
+                        organizationId: 'org-1',
+                    }),
+                }),
+            );
+            warn.mockRestore();
+        });
+    });
+
+    describe('a failure raised before the lease was claimed', () => {
+        it('fails loudly and lets the message be republished instead of vanishing', async () => {
+            // The rate-limit gate throws BEFORE the PROCESSING/leaseOwner write,
+            // so the ownership guard has no lease to match. Reading its miss as
+            // "another worker owns this" returned early: the consumer acked the
+            // message, the job vanished with no FAILED stamp, no republish and no
+            // notice, and the row stayed PENDING where neither
+            // findStaleProcessing nor requeueStaleJobs ever selects it. The write
+            // is still fenced, though — on "no live owner" rather than on a lease,
+            // because a redelivery of the same jobId can be consumed while
+            // another worker runs it (#1902 review).
+            rateLimitGate.check.mockRejectedValue(
+                new RateLimitError({ resetAt: new Date() }),
+            );
+            // The row is free, so the guarded write lands and the failure is
+            // recorded and republished.
+            jobRepository.update.mockResolvedValue(true);
+
+            await expect(service.process('job-1')).rejects.toThrow(
+                /rate limit/i,
+            );
+
+            const failureCall = jobRepository.update.mock.calls.find(
+                ([, data]) => data?.status === JobStatus.FAILED,
+            );
+            expect(failureCall).toBeDefined();
+            expect(failureCall).toEqual([
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
+            ]);
+        });
+
+        it('leaves the row alone when a live worker owns it, without notifying or republishing', async () => {
+            // The same pre-claim failure, but this delivery was consumed while
+            // another worker holds the row (the inbox dedupes on
+            // (consumerId, messageId), not jobId). The guarded write matches
+            // nothing, so this run must not stamp FAILED over that worker's row,
+            // must not email the author about a review that is still running,
+            // and must not rethrow — a republish would deliver it again.
+            const notify = jest
+                .spyOn(
+                    service as unknown as { notifyReviewFailed: jest.Mock },
+                    'notifyReviewFailed',
+                )
+                .mockResolvedValue(undefined);
+            // A pre-claim failure that is NOT a rate-limit one, so the notice
+            // would be sent if the run went on.
+            jobRepository.findOne.mockResolvedValue(
+                makeJob({ payload: { event: 'issue_comment' } }),
+            );
+            jobRepository.update.mockResolvedValue(false);
+
+            await expect(service.process('job-1')).resolves.toBeUndefined();
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
+            );
+            expect(notify).not.toHaveBeenCalled();
+            expect(notificationService.emit).not.toHaveBeenCalled();
+            notify.mockRestore();
+        });
+
+        it('stops quietly when the lease it held was reclaimed', async () => {
+            // The mirror case: this run DID claim the lease, and the guarded
+            // failure write matched no row, so the reaper already requeued the
+            // job for another worker. There is nothing left to record or notify
+            // on this run, and rethrowing would stamp FAILED over the row that
+            // worker is running.
+            runCodeReviewAutomationUseCase.execute.mockRejectedValue(
+                new Error('pipeline exploded'),
+            );
+            jobRepository.update.mockImplementation((_id: string, data: any) =>
+                data?.status === JobStatus.FAILED
+                    ? Promise.resolve(false)
+                    : Promise.resolve(undefined),
+            );
+
+            await expect(service.process('job-1')).resolves.toBeUndefined();
+            expect(notificationService.emit).not.toHaveBeenCalled();
         });
     });
 
@@ -193,7 +414,87 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
+                // Terminal transition carries the ownership guard: only the
+                // worker still holding the lease may complete the job.
+                { leaseOwner: expect.any(String) },
             );
+        });
+
+        it('leaves the row alone when the lease was reclaimed mid-run', async () => {
+            // The guarded write matched no row (reaper requeued it, another
+            // worker owns it now), so the completion must not flip the row to
+            // COMPLETED behind that worker's back and swallow its retry.
+            jobRepository.update.mockImplementation(
+                (_id: string, data: any) =>
+                    data && data.status === JobStatus.COMPLETED
+                        ? Promise.resolve(false)
+                        : Promise.resolve(undefined),
+            );
+
+            await expect(service.process('job-1')).resolves.toBeUndefined();
+
+            expect(jobRepository.update).toHaveBeenCalledWith(
+                'job-1',
+                expect.objectContaining({ status: JobStatus.COMPLETED }),
+                { leaseOwner: expect.any(String) },
+            );
+        });
+    });
+
+    describe('when the job lease is lost (repeated renewal failures)', () => {
+        it('aborts the run so the reaper cannot reclaim a live job twice', async () => {
+            jest.useFakeTimers();
+            try {
+                // State writes (PROCESSING / FAILED / COMPLETED carry a
+                // `status`) succeed; only the lease-renewal writes fail.
+                jobRepository.update.mockImplementation(
+                    (_id: string, data: any) =>
+                        data && data.status === undefined
+                            ? Promise.reject(new Error('db down'))
+                            : Promise.resolve(undefined),
+                );
+                runCodeReviewAutomationUseCase.execute.mockImplementation(
+                    () => new Promise(() => {}), // never settles
+                );
+
+                const run = service.process('job-1');
+                // Attach the resolve handler BEFORE the timers fire so the
+                // lease-lost unblock is never momentarily unhandled.
+                const assertion = expect(run).resolves.toBeUndefined();
+
+                // Two consecutive renewal failures (30s cadence) → lease lost.
+                await jest.advanceTimersByTimeAsync(
+                    JOB_LEASE_RENEW_INTERVAL_MS * 3,
+                );
+
+                // The run must unblock instead of executing a job the reaper
+                // may already own, and RESOLVE (not throw): throwing would let
+                // the router/consumer catch write FAILED/PERMANENT, and the
+                // lease reaper only reclaims PROCESSING rows.
+                await assertion;
+
+                // A lease-lost abort is a reclaimable, not a terminal,
+                // outcome: the reaper requeues the job once the lease
+                // expires, so we must NOT write FAILED/PERMANENT nor tell
+                // the author — otherwise a transient renewal blip becomes
+                // the permanent failure #1830 removes (#1830 review).
+                const statusUpdates = jobRepository.update.mock.calls.filter(
+                    ([, data]: [string, any]) => data?.status !== undefined,
+                );
+                expect(
+                    statusUpdates.some(
+                        ([, data]: [string, any]) =>
+                            data.status === JobStatus.FAILED,
+                    ),
+                ).toBe(false);
+                const notifySpy = jest.spyOn(
+                    service as any,
+                    'notifyReviewFailed',
+                );
+                expect(notifySpy).not.toHaveBeenCalled();
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 });
