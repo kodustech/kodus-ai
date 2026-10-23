@@ -51,6 +51,10 @@ import {
     IGlobalParametersService,
 } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
@@ -71,6 +75,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         private readonly integrationService: IIntegrationService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
+        // Unused since fine-tuning left; kept so the evals that build this
+        // service by position keep the same arguments on both sides.
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         @Inject(forwardRef(() => KODY_RULES_SERVICE_TOKEN))

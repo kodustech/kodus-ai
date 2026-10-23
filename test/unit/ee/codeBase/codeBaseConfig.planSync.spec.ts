@@ -56,6 +56,7 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
         const service = new CodeBaseConfigService(
             {} as any, // integrationService
             {} as any, // integrationConfigService
+            {} as any, // organizationParametersService
             parametersService as any,
             kodyRulesService as any,
             {} as any, // globalParametersService

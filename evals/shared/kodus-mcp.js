@@ -293,6 +293,7 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     codeBaseConfigService = new CodeBaseConfigService(
         integrationService,
         integrationConfigService,
+        unreached('organizationParametersService'),
         parametersService,
         kodyRulesService,
         unreached('globalParametersService'),

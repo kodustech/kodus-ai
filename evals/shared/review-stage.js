@@ -285,6 +285,7 @@ async function resolveTeamConfig({ permissionService, store, codeManagement, rep
     const service = new CodeBaseConfigService(
         undefined, // integrationService: not read by getConfig
         undefined, // integrationConfigService: not read by getConfig
+        { findByKey: async () => null }, // organizationParametersService: no review-mode or fine-tuning parameter
         store.parametersService,
         store.kodyRulesService,
         { findUpdatedAtByKey: async () => null }, // globalParametersService

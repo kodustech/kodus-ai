@@ -65,8 +65,8 @@ PR, which trip when the engine breaks rather than when recall wobbles.
 - `--no-judge`: run the review and save its findings (`.submission.json`) for
   `rejudge.js` or `evals/scorer`.
 
-Refused with exit 2: a subscription model (`@sub`) and a model not in
-`evals/shared/tier0-models.js`.
+Refused with exit 2: a subscription model (`@sub`), `RECALL_HEAVY` (behind a
+release gate), and a model not in `evals/shared/tier0-models.js`.
 
 ## A new case
 
