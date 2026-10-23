@@ -10,7 +10,7 @@ export const KODUS_GRAPH_VERSION = '0.3.3';
 // prompt tokens on every review that has a graph.
 export const KODUS_GRAPH_CONTEXT_BUDGET = {
     maxFunctions: 15,
-    maxCallees: 5,
+    maxCallees: 0,
 };
 
 export const KODUS_GRAPH_TIMEOUTS = {
