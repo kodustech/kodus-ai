@@ -43,7 +43,6 @@ kodus review --prompt-only            # 为 AI 代理优化的输出
 | `--rules-only` | — | 仅使用配置的规则审查（不生成通用建议） |
 | `--fast` | — | 快速模式：使用更轻量的检查进行更快分析 |
 | `--focus <text>` | — | 将审查引导到特定区域 —— 参见[引导一次审查](/zh/how_to_use/code_review/review_directive) |
-| `--heavy` | — | 更深入的一轮：额外的批评轮次以提升召回（alpha，见下文） |
 | `--interactive` | `-i` | 交互模式：浏览并应用修复 |
 | `--fix` | — | 自动应用所有可修复的问题 |
 | `--prompt-only` | — | 为 AI 代理优化的输出 |
@@ -52,14 +51,6 @@ kodus review --prompt-only            # 为 AI 代理优化的输出
 | `--fields <csv>` | — | 选择响应字段（JSON/代理模式），例如 `summary,issues.file` |
 | `--github-pat <token>` | — | 用于克隆私有代码库的 GitHub 令牌(`read:repo`)。仅限试用用户。也可通过 `KODUS_GITHUB_PAT` 设置。仅保留在内存中,绝不持久化。 |
 | `--no-hunk` | — | 跳过 hunk 查看器,使用旧版交互列表(仅交互式会话) |
-
-<Warning>
-  `--heavy` 是 **alpha** 功能,**需申请开通** —— 在我们为你开通之前,它对所有组织都是关闭的。
-  目前仅云端可用;自托管尚不支持。在开通之前,该标志会被接受,但审查按正常方式运行,
-  没有报错也没有警告。请通过 [Discord](https://discord.gg/TFZBRk9fT6) 或
-  [support@kodus.io](mailto:support@kodus.io) 申请访问。参见
-  [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode)。
-</Warning>
 
 ### 审查模式
 
