@@ -262,10 +262,8 @@ export function inspectFindingsResult(
 
     // `reasoning` only feeds prose recovery: a missing or non-text one must
     // not cost the findings. `reason` is the name some models give it.
-    const r =
-        normalized.reasoning !== undefined
-            ? normalized.reasoning
-            : normalized.reason;
+    const { reasoning: given, reason } = normalized;
+    const r = given !== undefined ? given : reason;
     const reasoning =
         typeof r === 'string' ? r : r == null ? '' : JSON.stringify(r);
 
