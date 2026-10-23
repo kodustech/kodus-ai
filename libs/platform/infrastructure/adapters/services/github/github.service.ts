@@ -6433,7 +6433,7 @@ This is an experimental feature that generates committable changes. Review the d
         );
 
         if (!allReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
         const myReviews = allReviews
@@ -6449,7 +6449,7 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
         if (!myReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
         const lastReview = myReviews.at(-1);
@@ -6468,6 +6468,55 @@ This is an experimental feature that generates committable changes. Review the d
             default:
                 return null;
         }
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber, reason } =
+            params;
+        if (!repository?.name || !repository.id || !prNumber) {
+            throw new Error(
+                'Repository and PR number are required to dismiss approval',
+            );
+        }
+        const githubAuth = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            organizationAndTeamData,
+            githubAuth,
+        );
+        const graphQLWithAuth = await this.instanceGraphQL(
+            organizationAndTeamData,
+        );
+        const identity: { viewer: { login: string; id: string } } =
+            await graphQLWithAuth('query { viewer { login id } }');
+        const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+            owner: githubAuth.org,
+            repo: repository.name,
+            pull_number: prNumber,
+            per_page: 100,
+        });
+        const ownApprovals = reviews.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                review.user?.login === identity.viewer.login &&
+                review.user?.node_id === identity.viewer.id,
+        );
+        for (const review of ownApprovals) {
+            await octokit.rest.pulls.dismissReview({
+                owner: githubAuth.org,
+                repo: repository.name,
+                pull_number: prNumber,
+                review_id: review.id,
+                message: `Kody held automatic approval after a new review: ${reason}`,
+            });
+        }
+        return ownApprovals.length;
     }
 
     async checkIfPullRequestShouldBeApproved(params: {

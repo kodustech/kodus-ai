@@ -127,6 +127,7 @@ export type PullRequestsWithChangesRequested = {
 
 // For now it's only relevant for github
 export enum PullRequestReviewState {
+    NONE = 'NONE',
     COMMENTED = 'COMMENTED',
     PENDING = 'PENDING',
     APPROVED = 'APPROVED',

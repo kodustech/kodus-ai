@@ -7,6 +7,7 @@ import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-au
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
@@ -29,6 +30,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             | 'getReviewStatusByPullRequest'
             | 'requestChangesPullRequest'
             | 'createIssueComment'
+            | 'dismissOwnPullRequestApprovals'
         >
     >;
     let notificationService: jest.Mocked<Pick<NotificationService, 'emit'>>;
@@ -68,6 +70,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 .mockResolvedValue(PullRequestReviewState.PENDING),
             requestChangesPullRequest: jest.fn().mockResolvedValue(undefined),
             createIssueComment: jest.fn().mockResolvedValue(undefined),
+            dismissOwnPullRequestApprovals: jest.fn().mockResolvedValue(1),
         };
         notificationService = { emit: jest.fn().mockResolvedValue(undefined) };
         prAuthorResolver = { resolve: jest.fn() };
@@ -225,6 +228,49 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
         expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
+    it('dismisses Kody approvals when a new GitHub review holds approval', async () => {
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Sensitive path changed.',
+                },
+            }),
+        );
+
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 42,
+                reason: 'Sensitive path changed.',
+            }),
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('records a failed dismissal so an old GitHub approval is not silent', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockRejectedValueOnce(
+            new Error('GitHub denied dismissal'),
+        );
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Sensitive path changed.',
+                },
+            }),
+        );
+
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ substage: 'dismiss-prior-approval' }),
+            ]),
+        );
     });
 
     it('holds when a configured policy has no decision', async () => {

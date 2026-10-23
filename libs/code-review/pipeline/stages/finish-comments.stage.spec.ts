@@ -230,6 +230,39 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             'Authentication changes need a person.',
         );
     });
+
+    it('keeps hold reasons out of end comments created on each push', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const context = baseContext({
+            lineComments: [],
+            approvalDecision: {
+                kind: 'hold',
+                reason: 'Authentication changes need a person.',
+            },
+            pullRequestMessagesConfig: {
+                startReviewMessage: { status: PullRequestMessageStatus.OFF },
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.EVERY_PUSH,
+                    content: 'Done!',
+                },
+            },
+        });
+
+        await (stage as any).executeStage(context);
+
+        expect(
+            commentManagerService.postApprovalHoldReason,
+        ).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            7,
+            context.repository,
+            'Authentication changes need a person.',
+        );
+        expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
+        expect(
+            commentManagerService.createComment.mock.calls[0][16],
+        ).toBeUndefined();
+    });
 });
 
 describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => {

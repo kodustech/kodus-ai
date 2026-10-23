@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { GithubService } from './github.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 describe('GithubService', () => {
     const organizationAndTeamData = {
@@ -53,6 +54,78 @@ describe('GithubService', () => {
             cacheService as any,
             configService,
         );
+    });
+
+    it.each([
+        ['the PR has no reviews', []],
+        [
+            'the PR has only other reviewers',
+            [{ user: { login: 'someone-else', node_id: 'other-id' } }],
+        ],
+    ])('reports no Kody review when %s', async (_scenario, reviews) => {
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue(reviews),
+            rest: { pulls: { listReviews: jest.fn() } },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+
+        await expect(
+            service.getReviewStatusByPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+            }),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+    });
+
+    it('dismisses only Kody approvals when a later review holds the PR', async () => {
+        const dismissReview = jest.fn().mockResolvedValue({});
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue([
+                {
+                    id: 10,
+                    state: 'APPROVED',
+                    user: { login: 'kody-ai[bot]', node_id: 'kody-id' },
+                },
+                {
+                    id: 11,
+                    state: 'APPROVED',
+                    user: { login: 'reviewer', node_id: 'other-id' },
+                },
+            ]),
+            rest: { pulls: { listReviews: jest.fn(), dismissReview } },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+
+        await expect(
+            service.dismissOwnPullRequestApprovals({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                reason: 'Sensitive path changed.',
+            }),
+        ).resolves.toBe(1);
+        expect(dismissReview).toHaveBeenCalledWith(
+            expect.objectContaining({
+                review_id: 10,
+                pull_number: 42,
+            }),
+        );
+        expect(dismissReview).toHaveBeenCalledTimes(1);
     });
 
     it('updates the repository config before removing deselected webhooks and recreating selected ones', async () => {

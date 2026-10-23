@@ -81,3 +81,56 @@ it('returns unknown when the model fails, so approval cannot proceed', async () 
         reviewedHeadSha: 'abc123',
     });
 });
+
+it.each([
+    ['PricingService.cs', '+        if (preco == 0) return 0m;'],
+    [
+        'EmailService.cs',
+        '+        if (IsNullOrWhiteSpace(destinatario)) return false;',
+    ],
+])(
+    'holds an untested control-flow guard in %s even if the model says low',
+    async (filename, addedLine) => {
+        (LLM.run as jest.Mock).mockResolvedValue({
+            level: 'low',
+            reason: 'Behavior unchanged.',
+        });
+
+        const result = await assessApprovalRisk({
+            ...input,
+            files: [
+                {
+                    filename,
+                    status: 'modified',
+                    patch: `@@ -1 +1 @@\n${addedLine}`,
+                } as any,
+            ],
+        });
+
+        expect(result.level).toBe('medium');
+        expect(result.reason).toContain('without test evidence');
+    },
+);
+
+it('allows a low judgment when the PR includes a test for the control-flow change', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior is covered by the added test.',
+    });
+
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/EmailService.cs',
+                patch: '@@ -1 +1 @@\n+if (missing) return false;',
+            } as any,
+            {
+                filename: 'tests/EmailServiceTests.cs',
+                patch: '@@ -1 +1 @@\n+test',
+            } as any,
+        ],
+    });
+
+    expect(result.level).toBe('low');
+});

@@ -18,6 +18,7 @@ import {
     approvalPolicyFromConfig,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -46,6 +47,38 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             repository,
             codeReviewConfig,
         } = context;
+
+        if (
+            codeReviewConfig?.pullRequestApprovalActive &&
+            context.platformType === PlatformType.GITHUB &&
+            context.approvalDecision?.kind === 'hold'
+        ) {
+            try {
+                await this.codeManagementService.dismissOwnPullRequestApprovals(
+                    {
+                        organizationAndTeamData,
+                        repository,
+                        prNumber: pullRequest.number,
+                        reason: context.approvalDecision.reason,
+                    },
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: `Could not dismiss Kody's earlier approval for PR#${pullRequest.number}`,
+                    context: this.stageName,
+                    error,
+                });
+                context = this.updateContext(context, (draft) => {
+                    draft.errors ??= [];
+                    draft.errors.push({
+                        stage: this.stageName,
+                        substage: 'dismiss-prior-approval',
+                        severity: 'partial',
+                        error,
+                    });
+                });
+            }
+        }
 
         if (!lineComments) {
             this.logger.warn({

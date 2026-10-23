@@ -176,12 +176,10 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                     organizationId,
                     repository.id,
                 );
-                // A partial backfill can overstate safety in untouched areas.
-                areaMap =
-                    storedMap?.coverage.scanComplete &&
-                    !storedMap.coverage.sampled
-                        ? storedMap
-                        : null;
+                // Partial history still contains positive bug evidence. The
+                // assessment receives coverage and treats missing areas as
+                // unknown rather than as proof of safety.
+                areaMap = storedMap;
             } catch (error) {
                 this.logger.warn({
                     message: 'Area map unavailable during approval assessment',

@@ -309,7 +309,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
     it('approves a clean zero-comment PR after its configured label is added', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getReviewStatusByPullRequest
-            .mockResolvedValueOnce(PullRequestReviewState.PENDING)
+            .mockResolvedValueOnce(PullRequestReviewState.NONE)
             .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
         deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
             {

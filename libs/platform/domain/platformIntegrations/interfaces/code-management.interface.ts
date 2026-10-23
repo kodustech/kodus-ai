@@ -418,6 +418,13 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         prNumber: number;
     }): Promise<PullRequestReviewState | null>;
 
+    dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
+
     addReactionToPR?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id?: string; name?: string };

@@ -148,46 +148,57 @@ it('judges an in-scope PR with the review model and records the map version', as
     expect(LLM.run).toHaveBeenCalledTimes(1);
 });
 
-it('does not pass an unfinished history scan into the risk judgment', async () => {
+it('passes positive evidence and coverage from an unfinished history scan', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'medium',
         reason: 'The change needs human review.',
     });
     areaMaps.read.mockResolvedValue({
         version: 'partial-map',
-        files: [{ path: 'src/auth/login.ts', linkedBugFixPrs: 0 }],
+        files: [
+            {
+                path: 'src/auth/login.ts',
+                linkedBugFixPrs: 5,
+                recentEvidence: [],
+            },
+        ],
         coverage: { scannedPrs: 1, scanComplete: false },
     });
 
     const result = await stage.execute(context({ approvalRiskActive: true }));
 
     expect(result.approvalDecision?.kind).toBe('hold');
-    expect(result.approvalRisk?.areaMapVersion).toBeUndefined();
+    expect(result.approvalRisk?.areaMapVersion).toBe('partial-map');
     const request = (LLM.run as jest.Mock).mock.calls[0][0];
     expect(JSON.parse(request.user)).toMatchObject({
-        historyCoverage: null,
-        historyWindow: null,
+        historyCoverage: { scannedPrs: 1, scanComplete: false },
+        historicalAreas: [{ path: 'src/auth/login.ts', linkedBugFixPrs: 5 }],
     });
 });
 
-it('does not pass capped historical coverage into the risk judgment', async () => {
+it('passes capped historical coverage into the risk judgment', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'low',
         reason: 'Small isolated change.',
     });
     areaMaps.read.mockResolvedValue({
         version: 'sampled-map',
-        files: [{ path: 'src/auth/login.ts', linkedBugFixPrs: 0 }],
+        files: [
+            {
+                path: 'src/auth/login.ts',
+                linkedBugFixPrs: 0,
+                recentEvidence: [],
+            },
+        ],
         coverage: { scannedPrs: 100, scanComplete: true, sampled: true },
     });
 
     const result = await stage.execute(context({ approvalRiskActive: true }));
 
-    expect(result.approvalRisk?.areaMapVersion).toBeUndefined();
+    expect(result.approvalRisk?.areaMapVersion).toBe('sampled-map');
     const request = (LLM.run as jest.Mock).mock.calls[0][0];
     expect(JSON.parse(request.user)).toMatchObject({
-        historyCoverage: null,
-        historyWindow: null,
+        historyCoverage: { scannedPrs: 100, scanComplete: true, sampled: true },
     });
 });
 

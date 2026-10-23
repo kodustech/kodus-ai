@@ -72,9 +72,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         if (
             context.approvalDecision?.kind !== 'hold' ||
             reviewFailed ||
-            reviewHasPartialErrors ||
-            (context.lineComments?.length ?? 0) > 0 ||
-            (context.prLevelCommentResults?.length ?? 0) > 0
+            reviewHasPartialErrors
         ) {
             return;
         }
@@ -492,6 +490,15 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         ) {
             const finalCommentBody = endReviewMessage.content;
 
+            // End-review messages can be created on every push. Keep the
+            // approval reason in its marked comment so an older message does
+            // not keep showing a stale hold after a later review.
+            await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
+
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -509,7 +516,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.reviewWarnings,
-                context.approvalDecision,
+                undefined,
             );
         }
 

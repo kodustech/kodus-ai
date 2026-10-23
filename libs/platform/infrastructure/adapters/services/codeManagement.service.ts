@@ -1712,6 +1712,26 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getReviewStatusByPullRequest(params);
     }
 
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        if (type !== PlatformType.GITHUB) {
+            return 0;
+        }
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        if (!provider.dismissOwnPullRequestApprovals) {
+            throw new Error('GitHub approval dismissal is unavailable');
+        }
+        return provider.dismissOwnPullRequestApprovals(params);
+    }
+
     async addReactionToPR(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id?: string; name?: string };
