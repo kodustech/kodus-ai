@@ -24,7 +24,7 @@ reviewOptions:
   business_logic: true
 ```
 
-Clique em **Configure** nessa linha para abrir as configurações de Business Logic.
+Clique em **Business Logic** nessa linha para abrir as configurações, ou use o menu **⋯** da linha: **Edit** abre as configurações e **Try it** abre direto no painel de teste.
 
 ## Como Kody encontra a tarefa
 
@@ -80,7 +80,7 @@ Um gap manda o autor refazer trabalho, então Kody confronta cada um com o códi
 Responda ao comentário de Business Logic mencionando `@kody`. Kody lê um comentário como resposta quando ele está na thread desse comentário (GitLab, Bitbucket, Azure Repos), cita o comentário, ou nomeia o requisito, o estado dele (MISSING, PARTIAL) ou o id da tarefa; qualquer outro comentário vai para o chat.
 
 - **Discordar**: "Está coberto em `useDrag.ts`". Kody confere de novo o que você apontou e marca como MET ou diz o que olhou e mantém.
-- **Aceitar um apontamento** (alguém que não é o autor do PR: no GitHub, com permissão de escrita no repositório; nas outras plataformas, um membro da organização que a plataforma lista): "Reordenar pelo teclado está fora do escopo, foi para SAA-102". Kody confirma que SAA-102 existe, marca a linha como **ACCEPTED** com quem aceitou, e ela deixa de ficar pendente. A decisão se mantém nas próximas conferências, mesmo quando Kody escreve o requisito de um jeito um pouco diferente.
+- **Aceitar um apontamento** (alguém que não é o autor do PR: no GitHub, com permissão de escrita no repositório; no GitLab, Developer ou acima no repositório; no Bitbucket, Azure Repos e Forgejo, um membro da organização que a plataforma lista): "Reordenar pelo teclado está fora do escopo, foi para SAA-102". Kody confirma que SAA-102 existe, marca a linha como **ACCEPTED** com quem aceitou, e ela deixa de ficar pendente. A decisão se mantém nas próximas conferências, mesmo quando Kody escreve o requisito de um jeito um pouco diferente, enquanto o texto da tarefa não mudar; se a tarefa for editada, o requisito precisa ser aceito de novo.
 
 ## Quando Kody fica em silêncio
 
@@ -106,9 +106,9 @@ Comente no PR (não numa linha de código):
 
 ## Configurações
 
-Abra **Code review → What to review → Business Logic → Configure**. Toda configuração pode ser global e sobrescrita por repositório ou diretório.
+Abra **Code review → What to review** e clique em **Business Logic** (ou **⋯ → Edit**). Toda configuração pode ser global e sobrescrita por repositório ou diretório.
 
-- **Task source**: todos os gerenciadores conectados (plugins de tarefa customizados como o ClickUp incluídos), ou um plugin. Para um plugin customizado, escolha a ferramenta que lê uma tarefa pelo id; só ferramentas de leitura são oferecidas. Use **Try it** no fim da página (precisa de permissão para editar essas configurações): uma tarefa sozinha mostra o que Kody lê dela, e um pull request roda a conferência inteira sem postar, com as configurações da tela, salvas ou não. **Post to the pull request** posta o resultado mostrado, sem rodar de novo.
+- **Task source**: todos os gerenciadores conectados (plugins de tarefa customizados como o ClickUp incluídos), ou um plugin. Para um plugin customizado, escolha a ferramenta que lê uma tarefa pelo id; só ferramentas de leitura são oferecidas. Use **Try it**, fixo à direita da página (precisa de permissão para editar essas configurações): uma tarefa sozinha mostra o que Kody lê dela, e um pull request roda a conferência inteira sem postar, com as configurações da tela, salvas ou não. **Post to the pull request** posta o resultado mostrado, sem rodar de novo, uma vez por teste; é recusado se o pull request recebeu um commit depois do teste, então rode o teste de novo antes.
 - **Custom task id format** (opcional): uma expressão regular para ids que Kody não encontra sozinho: `T(\d{4})` lê `T1234` como a tarefa 1234. Chaves como `SAA-96`, `#12`, `AB#8`, `CU-…` e links de gerenciadores são encontrados sem ela, assim como uma chave em minúsculas como `sc-123` no nome da branch. No título ou na descrição, uma chave em minúsculas só conta quando o Linear ou o Jira tem aquele time ou projeto; para outro gerenciador, defina o formato. Um número que o formato captura só é lido como issue do Git quando Git Issues é a fonte de tarefas; com todos os gerenciadores conectados, `T1234` nunca vira a issue #1234 do repositório.
 - **Where acceptance criteria live**: detectado automaticamente, sob um título na descrição, ou num campo customizado; uma tarefa sem o campo é lida pela descrição.
 - **Ask for a task when the PR references none**: Kody comenta perguntando qual é a tarefa do PR (ou apontando o erro de digitação), em vez de pular. PRs abertos por bots, como Dependabot ou Renovate, ficam de fora. Um gerenciador fora do ar nunca conta.
