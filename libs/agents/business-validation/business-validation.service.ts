@@ -238,6 +238,17 @@ export class BusinessValidationService {
                 },
             },
             () => this.run(request),
+            {
+                input: {
+                    door: request.door,
+                    taskInput: request.taskInput,
+                    pullRequest: request.pullRequest && {
+                        number: request.pullRequest.number,
+                        title: request.pullRequest.title,
+                    },
+                },
+                output: (result) => result,
+            },
         );
     }
 

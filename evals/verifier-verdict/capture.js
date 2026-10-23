@@ -2,7 +2,7 @@
 // run.js can replay, and print how often each delivery shape occurs.
 //
 //   node evals/verifier-verdict/capture.js --days 10 --limit 200
-//   node evals/verifier-verdict/capture.js --trace <id>          # one trace
+//   node evals/verifier-verdict/capture.js --trace <id>          # one trace (within --days)
 //   node evals/verifier-verdict/capture.js --out DIR             # where to write
 //   node evals/verifier-verdict/capture.js --write-observed      # refresh observed.json
 //
@@ -71,6 +71,49 @@ async function lf(pathname, params) {
     if (!r.ok)
         throw new Error(`langfuse ${r.status} on ${u.pathname}${u.search}`);
     return r.json();
+}
+
+// Observations API v2 (Langfuse v4): there is no trace object — a trace is its
+// observations, the root one carrying the trace output. Input/output come back
+// as raw strings, and a start-time window is required on every read.
+async function traceFromObservations(traceId, fromStartTime, toStartTime) {
+    const observations = [];
+    let cursor;
+    do {
+        const r = await lf('/api/public/v2/observations', {
+            traceId,
+            fromStartTime,
+            toStartTime,
+            fields: 'core,basic,io,model',
+            limit: 1000,
+            ...(cursor ? { cursor } : {}),
+        });
+        observations.push(...(r.data || []).map(parseIo));
+        cursor = r.meta?.cursor;
+    } while (cursor);
+    if (!observations.length)
+        throw new Error(`trace ${traceId} has no observations in the window`);
+    const root =
+        observations.find((o) => o.isRootObservation) ||
+        observations.find((o) => !o.parentObservationId);
+    return {
+        id: traceId,
+        timestamp: root?.startTime,
+        output: root?.output,
+        observations,
+    };
+}
+
+function parseIo(o) {
+    const parse = (v) => {
+        if (typeof v !== 'string') return v;
+        try {
+            return JSON.parse(v);
+        } catch {
+            return v;
+        }
+    };
+    return { ...o, input: parse(o.input), output: parse(o.output) };
 }
 
 const S = (v) =>
@@ -176,30 +219,61 @@ const KEEP_FALSE =
 
 (async () => {
     const one = arg('trace');
+    const days = Number(arg('days', 10));
+    const fromStartTime = new Date(Date.now() - days * 864e5).toISOString();
+    const toStartTime = new Date().toISOString();
     let traces = [];
     if (one) {
-        traces = [await lf(`/api/public/traces/${one}`)];
+        traces = [await traceFromObservations(one, fromStartTime, toStartTime)];
     } else {
-        const days = Number(arg('days', 10));
         const limit = Number(arg('limit', 200));
-        const fromTimestamp = new Date(Date.now() - days * 864e5).toISOString();
         const ids = [];
-        for (let page = 1; ids.length < limit; page++) {
-            const r = await lf('/api/public/traces', {
-                name: 'kodus-generalist-review-agent',
-                fromTimestamp,
-                limit: 50,
-                page,
+        let cursor;
+        do {
+            // Root observations of the review trace: one row per trace.
+            const r = await lf('/api/public/v2/observations', {
+                filter: JSON.stringify([
+                    {
+                        type: 'string',
+                        column: 'traceName',
+                        operator: '=',
+                        value: 'kodus-generalist-review-agent',
+                    },
+                    {
+                        type: 'boolean',
+                        column: 'isRootObservation',
+                        operator: '=',
+                        value: true,
+                    },
+                    {
+                        type: 'datetime',
+                        column: 'startTime',
+                        operator: '>=',
+                        value: fromStartTime,
+                    },
+                    {
+                        type: 'datetime',
+                        column: 'startTime',
+                        operator: '<',
+                        value: toStartTime,
+                    },
+                ]),
+                fields: 'core',
+                limit: Math.min(1000, limit),
+                ...(cursor ? { cursor } : {}),
             });
-            const d = r.data || [];
-            if (!d.length) break;
-            for (const t of d) if (ids.length < limit) ids.push(t.id);
-        }
+            for (const o of r.data || [])
+                if (ids.length < limit && !ids.includes(o.traceId))
+                    ids.push(o.traceId);
+            cursor = r.meta?.cursor;
+        } while (cursor && ids.length < limit);
         process.stderr.write(`fetching ${ids.length} traces…\n`);
         let failed = 0;
         for (const id of ids) {
             try {
-                traces.push(await lf(`/api/public/traces/${id}`));
+                traces.push(
+                    await traceFromObservations(id, fromStartTime, toStartTime),
+                );
             } catch {
                 failed++;
             }
