@@ -150,6 +150,35 @@ describe('rebaseInterdiff', () => {
         expect(result.files[0].deletions).toBe(0);
     });
 
+    it('keeps a whole file too rewritten to compare cheaply, and names it', () => {
+        const lines = (prefix: string) =>
+            Array.from({ length: 5000 }, (_, i) => `+${prefix}${i}`);
+        const before = hunk('@@ -0,0 +1,5000 @@', ...lines('old'));
+        const after = hunk('@@ -0,0 +1,5000 @@', ...lines('new'));
+        const current = file('package-lock.json', after);
+
+        const result = rebaseInterdiff(
+            [current],
+            [file('package-lock.json', before)],
+        );
+
+        expect(result.files).toEqual([current]);
+        expect(result.uncomparedFiles).toEqual(['package-lock.json']);
+    });
+
+    it('keeps an empty context line at the end of a hunk', () => {
+        const after = hunk('@@ -1,2 +1,4 @@', ' a', '+b', '+c', ' ');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', `${after}\n`)],
+            [file('src/a.ts', hunk('@@ -1,1 +1,2 @@', ' a', '+b'))],
+        );
+
+        expect(result.files[0].patch).toBe(
+            hunk('@@ -1,3 +1,4 @@', ' a', ' b', '+c', ' '),
+        );
+    });
+
     it('keeps a file the PR did not touch before the rebase', () => {
         const added = file('src/new.ts', hunkB, { status: 'added' });
 

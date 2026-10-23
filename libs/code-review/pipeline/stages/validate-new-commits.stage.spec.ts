@@ -411,6 +411,7 @@ describe('ValidateNewCommitsStage', () => {
                 files,
                 unchangedFiles: ['src/same.ts'],
                 partialFiles: files.length ? ['src/edited.ts'] : [],
+                uncomparedFiles: files.length ? ['package-lock.json'] : [],
                 hunksKept: files.length,
                 hunksDropped: 3,
             });
@@ -455,6 +456,7 @@ describe('ValidateNewCommitsStage', () => {
                         filesToReview: 1,
                         unchangedFiles: 1,
                         partialFiles: 1,
+                        uncomparedFiles: 1,
                         hunksKept: 1,
                         hunksDropped: 3,
                     },

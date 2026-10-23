@@ -178,6 +178,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
                   filesToReview: number;
                   unchangedFiles: number;
                   partialFiles: number;
+                  uncomparedFiles: number;
                   hunksKept: number;
                   hunksDropped: number;
               }

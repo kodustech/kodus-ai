@@ -21,6 +21,8 @@ export interface RebaseInterdiffResult {
     unchangedFiles: string[];
     /** Files that kept some of their diff and lost the rest. */
     partialFiles: string[];
+    /** Files too rewritten to compare within the bound; reviewed whole. */
+    uncomparedFiles: string[];
     hunksKept: number;
     hunksDropped: number;
 }
@@ -29,6 +31,11 @@ interface Hunk {
     header: string;
     lines: string[];
 }
+
+/** Past this many line edits, or this long, a file is reviewed whole: the
+ *  comparison runs on the review worker, before ignore paths are applied. */
+const MAX_EDIT_LENGTH = 1_000;
+const COMPARE_TIMEOUT_MS = 200;
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+(?:,\d+)?) @@(.*)$/;
 
@@ -48,7 +55,7 @@ function splitHunks(patch: string): Hunk[] {
     }
     // Trailing empty lines come from the patch's final newline, not the hunk.
     for (const hunk of hunks) {
-        while (hunk.lines.at(-1) === '') hunk.lines.pop();
+        while (hunk.lines.length && !hunk.lines.at(-1)) hunk.lines.pop();
     }
     return hunks;
 }
@@ -56,10 +63,19 @@ function splitHunks(patch: string): Hunk[] {
 const changesOf = (hunks: Hunk[]) =>
     hunks.flatMap((hunk) => hunk.lines.filter(isChange));
 
-/** For each change line of `current`, in order: was it in `previous`? */
-function reviewedFlags(current: string[], previous: string[]): boolean[] {
+/** For each change line of `current`, in order: was it in `previous`?
+ *  Null when the comparison would take more than the bound. */
+function reviewedFlags(
+    current: string[],
+    previous: string[],
+): boolean[] | null {
+    const parts = diffArrays(previous, current, {
+        maxEditLength: MAX_EDIT_LENGTH,
+        timeout: COMPARE_TIMEOUT_MS,
+    });
+    if (!parts) return null;
     const flags: boolean[] = [];
-    for (const part of diffArrays(previous, current)) {
+    for (const part of parts) {
         if (part.removed) continue;
         for (let i = 0; i < part.value.length; i++) flags.push(!part.added);
     }
@@ -113,6 +129,7 @@ export function rebaseInterdiff(
         files: [],
         unchangedFiles: [],
         partialFiles: [],
+        uncomparedFiles: [],
         hunksKept: 0,
         hunksDropped: 0,
     };
@@ -134,6 +151,11 @@ export function rebaseInterdiff(
             changesOf(hunks),
             changesOf(splitHunks(before.patch)),
         );
+        if (!flags) {
+            result.uncomparedFiles.push(file.filename);
+            result.files.push(file);
+            continue;
+        }
         let next = 0;
         const reviewed = () => flags[next++];
         const kept = hunks

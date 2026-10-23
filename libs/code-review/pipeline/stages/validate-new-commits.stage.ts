@@ -203,6 +203,7 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                         filesToReview: interdiff.files.length,
                         unchangedFiles: interdiff.unchangedFiles.length,
                         partialFiles: interdiff.partialFiles.length,
+                        uncomparedFiles: interdiff.uncomparedFiles.length,
                         hunksKept: interdiff.hunksKept,
                         hunksDropped: interdiff.hunksDropped,
                     };
@@ -223,6 +224,7 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                         interdiff: orphanedBaseCommit.interdiff,
                         unchangedFiles: interdiff?.unchangedFiles,
                         partialFiles: interdiff?.partialFiles,
+                        uncomparedFiles: interdiff?.uncomparedFiles,
                         reason: 'rebase_interdiff',
                     },
                 });
