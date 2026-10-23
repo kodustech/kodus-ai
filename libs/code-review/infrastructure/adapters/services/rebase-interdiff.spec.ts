@@ -48,11 +48,11 @@ describe('rebaseInterdiff', () => {
         expect(result.hunksKept).toBe(0);
     });
 
-    it('treats a hunk whose line numbers and context moved as unchanged', () => {
+    it('treats a hunk whose line numbers and later context moved as unchanged', () => {
         const previous = [file('src/a.ts', hunkA)];
         const shifted = hunk(
             '@@ -25,4 +25,5 @@ function a()',
-            ' const x = 10;',
+            ' const x = 1;',
             '-return x;',
             '+const y = 2;',
             '+return x + y;',
@@ -212,7 +212,7 @@ describe('rebaseInterdiff', () => {
             '-b',
             '+B',
             ' c',
-            ' i2',
+            ' g',
             '-h',
             '+H',
             ' i',
@@ -221,6 +221,43 @@ describe('rebaseInterdiff', () => {
         const result = rebaseInterdiff([file('src/a.ts', merged)], previous);
 
         expect(result.files).toEqual([]);
+    });
+
+    it('reviews a change the rebase moved to another place in the file', () => {
+        // The same line, now under another function: a normal push would show
+        // it removed from one place and added to the other.
+        const before = hunk(
+            '@@ -1,2 +1,3 @@',
+            ' function a() {',
+            '+return true;',
+        );
+        const after = hunk(
+            '@@ -9,2 +9,3 @@',
+            ' function b() {',
+            '+return true;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.files).toHaveLength(1);
+        expect(result.files[0].patch).toBe(after);
+    });
+
+    it('reviews a change again when the line right above it changed', () => {
+        // The price of telling moved changes apart: the target branch editing
+        // the line above a change makes that change read as new.
+        const before = hunk('@@ -1,2 +1,3 @@', ' const x = 1;', '+use(x);');
+        const after = hunk('@@ -1,2 +1,3 @@', ' const x = 2;', '+use(x);');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.files).toHaveLength(1);
     });
 
     it('keeps the second copy of a change that appeared once before', () => {

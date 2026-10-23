@@ -7,8 +7,9 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
  * there is no `compare(last...head)` to say what is new. This gives the same
  * answer from the PR diff before and after the rebase. A changed line (`-` or
  * `+`) of the current diff is already reviewed when the previous diff of the
- * same file has it in the same order (their longest common subsequence). Line
- * numbers and context lines are not compared, because the rebase moves both.
+ * same file has it in the same order (their longest common subsequence), under
+ * the same context line. Line numbers and the rest of the context are not
+ * compared, because the rebase moves them.
  *
  * What is left reads like a normal push: an already reviewed `+` line stays
  * as context, an already reviewed `-` line is left out, and a hunk with
@@ -60,8 +61,19 @@ function splitHunks(patch: string): Hunk[] {
     return hunks;
 }
 
-const changesOf = (hunks: Hunk[]) =>
-    hunks.flatMap((hunk) => hunk.lines.filter(isChange));
+/** Each change line with the context line right above it in its hunk, so a
+ *  change the rebase moved elsewhere in the file does not read as reviewed. */
+function changesOf(hunks: Hunk[]): string[] {
+    const changes: string[] = [];
+    for (const hunk of hunks) {
+        let above = '';
+        for (const line of hunk.lines) {
+            if (isChange(line)) changes.push(`${above}\u0000${line}`);
+            else if (!line.startsWith('\\')) above = line;
+        }
+    }
+    return changes;
+}
 
 /** For each change line of `current`, in order: was it in `previous`?
  *  Null when the comparison would take more than the bound. */
