@@ -146,6 +146,31 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         ).toHaveBeenCalledTimes(1);
     });
 
+    it('records the reviewed head as analyzed, not whichever commit sorts last (#2037)', async () => {
+        // Rebased commits share one committer date, so a date-sorted list can
+        // end on the oldest commit. Bitbucket's head sha is 12 characters.
+        const head = 'abcdef123456' + '0'.repeat(28);
+        const ctx = baseContext({
+            pullRequest: { number: 99, head: { sha: 'abcdef123456' } },
+            prAllCommits: [{ sha: head }, { sha: 'oldest' }],
+        } as any);
+
+        const result = await stage.execute(ctx);
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: head });
+    });
+
+    it('falls back to the last listed commit when the head is not in the list', async () => {
+        const ctx = baseContext({
+            pullRequest: { number: 99, head: { sha: 'gone-by-force-push' } },
+            prAllCommits: [{ sha: 'commit-1' }, { sha: 'commit-2' }],
+        } as any);
+
+        const result = await stage.execute(ctx);
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: 'commit-2' });
+    });
+
     it('aborts early (no save) when there are no commits', async () => {
         // The early-return on missing commits predates the fix and must
         // still hold — otherwise we would call aggregateAndSave with stale

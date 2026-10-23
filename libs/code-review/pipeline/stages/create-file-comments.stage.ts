@@ -1,3 +1,4 @@
+import { reviewedCommitIn } from '@libs/code-review/utils/reviewed-commit';
 import { createLogger } from '@libs/core/log/logger';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -124,7 +125,11 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 return context;
             }
 
-            const lastAnalyzedCommit = allCommits[allCommits.length - 1];
+            // The head this review read, while the PR still has it: a
+            // date-sorted list can end on another commit after a rebase.
+            const lastAnalyzedCommit =
+                reviewedCommitIn(allCommits, context.pullRequest?.head?.sha) ??
+                allCommits[allCommits.length - 1];
 
             // Persist changed files (and any discarded suggestions) even when
             // there are no valid suggestions — otherwise PRs with nothing to
