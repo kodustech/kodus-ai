@@ -9,10 +9,13 @@ const HINT: CacheHint = { anthropic: { cacheControl: { type: 'ephemeral' } } };
 
 describe('markLastToolForCache', () => {
     it('stamps the hint on the LAST tool only', () => {
-        const tools = { a: { description: 'a' }, b: { description: 'b' } };
+        const tools: Record<
+            string,
+            { description: string; providerOptions?: unknown }
+        > = { a: { description: 'a' }, b: { description: 'b' } };
         const out = markLastToolForCache(tools, HINT);
         expect(out.b.providerOptions).toEqual(HINT);
-        expect((out.a as any).providerOptions).toBeUndefined();
+        expect(out.a.providerOptions).toBeUndefined();
     });
 
     it('merges into existing providerOptions without clobbering other vendors', () => {
@@ -39,12 +42,19 @@ describe('markLastToolForCache', () => {
 });
 
 describe('markLatestUserForCache', () => {
-    const user = (text: string): ModelMessage => ({ role: 'user', content: text });
+    const user = (text: string): ModelMessage => ({
+        role: 'user',
+        content: text,
+    });
     const assistant = (text: string): ModelMessage =>
         ({ role: 'assistant', content: text }) as ModelMessage;
 
     it('stamps the hint on the LAST user message', () => {
-        const msgs: ModelMessage[] = [user('first'), assistant('a'), user('task')];
+        const msgs: ModelMessage[] = [
+            user('first'),
+            assistant('a'),
+            user('task'),
+        ];
         const out = markLatestUserForCache(msgs, HINT);
         expect((out[2] as any).providerOptions).toEqual(HINT);
         // earlier user message untouched
@@ -64,7 +74,11 @@ describe('markLatestUserForCache', () => {
 
     it('merges into existing message providerOptions', () => {
         const msgs: ModelMessage[] = [
-            { role: 'user', content: 'task', providerOptions: { x: { y: 1 } } } as any,
+            {
+                role: 'user',
+                content: 'task',
+                providerOptions: { x: { y: 1 } },
+            } as any,
         ];
         const out = markLatestUserForCache(msgs, HINT);
         expect((out[0] as any).providerOptions).toEqual({

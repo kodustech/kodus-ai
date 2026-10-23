@@ -57,7 +57,6 @@ diferentes — **verify não é policy.**
 | `compression/` → `ContextWindowCompressor` (+ `context-compressor`) | impl canônica do `Compressor` (janela de token); usada por code-review **e** pelo fetcher de skills via `CompressionPolicy` |
 | `verify/` → `llm-verdict` (`buildVerifierAgentSpec` / `extractVerdict` / `submitVerdictTool`) | scaffolding genérico de `Verdict` (doer≠checker, fail-open) — um domínio só fornece prompt + candidato→prompt |
 | `orchestration/verification-pass` → `runVerificationPass<T>` | driver do `Verifier<T>` sobre um conjunto de candidatos |
-| `orchestration/sub-agent.factory` → `DefaultSubAgentFactory` | sub-agent-como-tool |
 
 ## Capacidades do `AiSdkAgentRunner`
 
@@ -185,7 +184,7 @@ fetcher é um agent do runner (com MCP); a **análise** é single-shot no runner
 - [x] L1 contracts (`domain/contracts`)
 - [x] L1 infra: `AiSdkAgentRunner` sobre Vercel AI SDK (stopWhen/prepareStep/tools/telemetry)
 - [x] Policies: Budget, Compression, CompletionGate, ForceFinalize
-- [x] Verifier + `runVerificationPass` (Splits) · `SubAgentFactory`
+- [x] Verifier + `runVerificationPass` (Splits)
 - [x] `AiSdkToolRegistry` (tools nativos AI SDK sem round-trip)
 - [x] `finalText(state)` helper (`domain/run-state.util`) — usado por conversation + business
 - [x] Consumidores: code-review (full), skills (fetcher), conversation, **business (todo no harness)**

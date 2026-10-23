@@ -9,10 +9,7 @@ import {
 import { APICallError } from '@ai-sdk/provider';
 import { RetryError } from 'ai';
 
-import {
-    AgentContextWindowTooSmallError,
-    AgentPromptTooLargeError,
-} from './errors';
+import { AgentContextWindowTooSmallError } from './errors';
 
 function errorWithStatus(message: string, status: number): Error {
     const err = new Error(message) as Error & { status: number };
@@ -530,19 +527,6 @@ describe('classifyLLMError', () => {
             // settings — admins should recognize these).
             expect(msg).toContain('Claude Sonnet 4.6');
             expect(msg).toContain('Gemini 3.1 Pro');
-        });
-
-        it('AgentPromptTooLargeError surfaces the estimated prompt size', () => {
-            const err = new AgentPromptTooLargeError({
-                estimatedTokens: 71_110,
-                contextWindowTokens: 12_288,
-                modelName: 'llama-12k',
-            });
-            const msg = classifyLLMError(err).friendlyMessage;
-            expect(msg).toContain('llama-12k');
-            expect(msg).toContain('12,288');
-            expect(msg).toContain('71,110');
-            expect(msg).toContain('Switch to a recommended model');
         });
 
         it('raw provider context-overflow (no typed error) omits BYOK-limit option but keeps the others', () => {
