@@ -3834,7 +3834,7 @@ export class ForgejoService implements Omit<
                       )
                     : content?.content;
 
-            return {
+            const file = {
                 name: content?.name,
                 path: content?.path,
                 sha: content?.sha,
@@ -3845,6 +3845,8 @@ export class ForgejoService implements Omit<
                 html_url: content?.html_url,
                 download_url: content?.download_url,
             };
+
+            return { data: file };
         } catch (error) {
             if ((error as any)?.status === 404) {
                 return null;
