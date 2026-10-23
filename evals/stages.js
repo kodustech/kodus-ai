@@ -396,6 +396,7 @@ const STAGES = [
                 specs: ['libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts', 'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts'],
             },
             { kind: 'contract', name: 'Keeps a crash and drops a naming nit at the default threshold', wiring: ['funnel-severity'] },
+            { kind: 'contract', name: "Rates a PR's suggestions in one call and maps each level back", wiring: ['severity-levels'] },
         ],
         eval: {
             path: 'evals/funnel/severity',

@@ -113,6 +113,18 @@ const STEP_EVALS = {
         },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
+    severity: {
+        // On demand only, never a PR's check: its files include the review stage,
+        // which nearly every engine change touches.
+        smoke: [],
+        primary: {
+            id: 'severity-levels',
+            label: 'Suggestions at their level',
+            run: ['evals/severity-levels/run.js'],
+            question: 'Does the severity step rate each suggestion at the level its text defines?',
+        },
+        guards: [{ id: 'funnel-severity', label: 'Known bugs kept', run: ['evals/funnel/severity/run.js', '--set=full'], question: 'Of the known bugs reaching the severity step in a real review, how many does it keep above the threshold?' }],
+    },
     finder: {
         // On demand only, never a PR's check: every case is a full review, so the
         // controlled set at 2 runs is 60 reviews, and nearly every engine change

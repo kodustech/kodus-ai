@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Severity tests page: reads results/<prompt>/*.json, newest test first.
   python3 evals/severity/report.py <out.html>"""
-import json, os, sys, html
+import json, os, sys, html, glob
+from collections import Counter
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 OUT = sys.argv[1]
@@ -27,13 +28,29 @@ def por_nivel(rows, rotulo='texto'):
 def celula(lv):
     if not lv or not lv['n']: return '<td class="na">—</td>'
     p = 100 * lv['right'] / lv['n']
-    cls = 'ok' if p >= 80 else 'mid' if p >= 70 else 'bad'
+    cls = 'ok' if p >= 85 else 'mid' if p >= 75 else 'bad'
     return f'<td class="{cls}">{lv["right"]}/{lv["n"]}<small>{p:.0f}%</small></td>'
 
 
-def tabela(pasta, rotulo='texto'):
+# Uma chamada por PR, como em produção: cada voto de uma rodada de 3 é uma chamada independente,
+# e cada chamada vira uma linha própria, sem combinar.
+def linhas_uma(nome, rows, rotulo):
+    k = len(rows[0].get('votes') or [])
+    out = []
+    for i in range(k):
+        pl = por_nivel([{**r, 'got': r['votes'][i]} for r in rows], rotulo)
+        tot = sum(pl[l]['right'] for l in NIVEIS)
+        n = sum(pl[l]['n'] for l in NIVEIS)
+        piso = min(100 * pl[l]['right'] / pl[l]['n'] for l in NIVEIS if pl[l]['n'])
+        cls = 'ok' if piso >= 85 else 'mid' if piso >= 75 else 'bad'
+        out.append(f'<tr><td>{nome} · chamada {i + 1}</td>' + ''.join(celula(pl[l]) for l in NIVEIS) + f'<td class="sep">{tot}/{n}<small>{100 * tot / n:.0f}%</small></td><td class="{cls}">{piso:.0f}%</td></tr>')
+    return ''.join(out)
+
+
+def tabela(pasta, rotulo='texto', uma=False, so=None):
     linhas = []
     for slug, nome in MODELOS:
+        if so and nome not in so: continue
         f = f'{AQUI}/results/{pasta}/{slug}.json'
         sub = f.replace('_api.json', '_sdk.json')  # Claude by subscription when the API was out of quota
         if not os.path.exists(f) and os.path.exists(sub): f = sub
@@ -43,12 +60,19 @@ def tabela(pasta, rotulo='texto'):
             linhas.append(f'<tr><td>{nome}</td>' + '<td class="na">—</td>' * 5 + '</tr>')
             continue
         d = json.load(open(f))
+        if uma:
+            # Rodadas repetidas (<modelo>-run2.json...) entram como mais chamadas do mesmo item.
+            votos = {r['issueId']: list(r['votes']) for r in d['rows']}
+            for extra in sorted(glob.glob(f.replace('.json', '-run*.json'))):
+                for r in json.load(open(extra))['rows']: votos[r['issueId']] += r['votes']
+            linhas.append(linhas_uma(nome, [{**r, 'votes': votos[r['issueId']]} for r in d['rows']], rotulo))
+            continue
         pl = por_nivel(d['rows'], rotulo)
         d['rows'] = [r for r in d['rows'] if r['issueId'] in ROTULOS[rotulo]]
         tot = sum(pl[l]['right'] for l in NIVEIS)
         n = sum(1 for _ in d['rows'])
         piso = min(100 * pl[l]['right'] / pl[l]['n'] for l in NIVEIS if pl[l]['n'])
-        cls = 'ok' if piso >= 80 else 'mid' if piso >= 70 else 'bad'
+        cls = 'ok' if piso >= 85 else 'mid' if piso >= 75 else 'bad'
         linhas.append(f'<tr><td>{nome}</td>' + ''.join(celula(pl[l]) for l in NIVEIS) + f'<td class="sep">{tot}/{n}<small>{100 * tot / n:.0f}%</small></td><td class="{cls}">{piso:.0f}%</td></tr>')
     return ''.join(linhas)
 
@@ -90,6 +114,76 @@ def tab_defs():
 <pre class="en">{E(DEF_EN)}</pre>
 """
 
+
+# Aba Erros: por nível atribuído, quantos itens receberam aquele nível sem ser dele (rótulo pelo texto).
+# Uma linha por chamada. Aqui critical respondido como high conta como high errado.
+def erros_linhas(nome, rows):
+    GOLD = ROTULOS['texto']
+    k = len(rows[0]['votes'])
+    # Só a melhor chamada: a de menos itens com nível errado (estrito).
+    i = min(range(k), key=lambda j: sum(r['votes'][j] != GOLD[r['issueId']] for r in rows))
+    cel = []
+    for l in reversed(NIVEIS):
+        dados = [r for r in rows if r['votes'][i] == l]
+        errados = [GOLD[r['issueId']] for r in dados if GOLD[r['issueId']] != l]
+        if not dados:
+            cel.append('<td class="na">—</td>')
+            continue
+        p = 100 * len(errados) / len(dados)
+        # Azul: na faixa amarela, mas todo erro é um nível só abaixo do real (subestima, não infla).
+        um_abaixo = errados and all(NIVEIS.index(g) == NIVEIS.index(l) + 1 for g in errados)
+        cls = 'ok' if p <= 15 else ('blue' if um_abaixo else 'mid') if p <= 25 else 'bad'
+        de = ', '.join(f'{errados.count(g)} {g}' for g in reversed(NIVEIS) if errados.count(g))
+        cel.append(f'<td class="{cls}">{len(errados)}/{len(dados)} · {p:.0f}%<small>{de or "nenhum"}</small></td>')
+    errs = sum(r['votes'][i] != GOLD[r['issueId']] for r in rows)
+    return f'<tr><td>{nome}<small>chamada {i + 1} de {k} · {errs} erros</small></td>{"".join(cel)}</tr>'
+
+
+# Veredito: por chamada, quantos erros sobem (nível dado acima do real) e quantos descem, e os passos mais comuns.
+def veredito(nome, teste, rows):
+    GOLD = ROTULOS['texto']
+    k = len(rows[0]['votes'])
+    sobe, desce = Counter(), Counter()
+    for r in rows:
+        g = NIVEIS.index(GOLD[r['issueId']])
+        for v in r['votes']:
+            if v not in NIVEIS: continue
+            d = NIVEIS.index(v) - g
+            if d > 0: sobe[(GOLD[r['issueId']], v)] += 1
+            if d < 0: desce[(GOLD[r['issueId']], v)] += 1
+    s, d = sum(sobe.values()) / k, sum(desce.values()) / k
+    if d >= 1.5 * s: lado, cls = 'erra mais para baixo', 'baixo'
+    elif s >= 1.5 * d: lado, cls = 'erra mais para cima', 'cima'
+    else: lado, cls = 'erra para os dois lados', 'meio'
+    passos = lambda c: ', '.join(f'{a}→{b} {n / k:.1f}' for (a, b), n in c.most_common(3)) or 'nenhum'
+    return f'<tr><td>{E(nome)}</td><td>{E(teste)}</td><td class="sep">{s:.1f}</td><td>{d:.1f}</td><td class="v-{cls}">{lado}</td><td class="mot">sobe: {passos(sobe)}<br>desce: {passos(desce)}</td></tr>'
+
+
+def tab_erros():
+    blocos, vered = [], []
+    for t in [x for x in TESTES if x.get('uma')]:
+        linhas = []
+        for slug, nome in MODELOS:
+            if t.get('modelos') and nome not in t['modelos']: continue
+            f = f'{AQUI}/results/{t["pasta"]}/{slug}.json'.replace('_api.json', '_sdk.json')
+            if not os.path.exists(f): continue
+            rows = [r for r in json.load(open(f))['rows'] if r['issueId'] in ROTULOS['texto']]
+            votos = {r['issueId']: list(r['votes']) for r in rows}
+            for extra in sorted(glob.glob(f.replace('.json', '-run*.json'))):
+                for r in json.load(open(extra))['rows']: votos[r['issueId']] += r['votes']
+            todas = [{**r, 'votes': votos[r['issueId']]} for r in rows]
+            linhas.append(erros_linhas(nome, todas))
+            vered.append((nome, t['titulo'].split(' · ')[0], todas))
+        blocos.append(f'''<section><h2>{E(t["titulo"])}</h2>
+<div class="wrap"><table><thead><tr><th>Modelo</th><th>recebeu critical</th><th>recebeu high</th><th>recebeu medium</th><th>recebeu low</th></tr></thead>
+<tbody>{"".join(linhas)}</tbody></table></div></section>''')
+    return f'''<p>O avesso da aba Testes: em vez de quanto de cada nível o modelo acertou, quanto do que ele <b>deu</b> a cada nível estava errado. Cada célula: itens que receberam o nível sem ser dele / itens que receberam o nível, o %, e embaixo o nível real dos errados. Aqui é estrito: um critical respondido como high conta como high errado (na aba Testes ele conta como acerto). Uma chamada por PR, como em produção, e só a melhor chamada de cada modelo em cada teste: a que errou menos itens no total. Meta: até 15% errado (85% de acerto) é verde; 16–25% é amarelo, ou azul quando todo erro da célula é um nível só abaixo do real (o modelo subestimou, não inflou); acima de 25% é sempre vermelho.</p>
+{"".join(blocos)}
+<section><h2>Veredito: para que lado erra</h2>
+<p>Erros por chamada, em média de todas as chamadas (não só a melhor): sobe é o nível dado acima do real (infla), desce é abaixo (rebaixa). Um lado ganha quando tem pelo menos 1,5 vez os erros do outro. Ao lado, os três passos mais comuns de cada lado, com a média por chamada. Estrito como as tabelas acima: critical respondido como high conta como descer.</p>
+<div class="wrap"><table><thead><tr><th>Modelo</th><th>Teste</th><th class="sep">Sobe</th><th>Desce</th><th>Veredito</th><th>Passos mais comuns</th></tr></thead>
+<tbody>{"".join(veredito(n, t, r) for n, t, r in sorted(vered, key=lambda x: ([m for _, m in MODELOS].index(x[0]), x[1])))}</tbody></table></div></section>'''
+
 blocos = []
 for t in TESTES:
     blocos.append(f'''<section>
@@ -97,17 +191,17 @@ for t in TESTES:
 {'<p class="hist">Histórico: 158 itens medidos pelo rótulo do gold v3 (o problema), não pelo texto; prompt desalinhado da definição final.</p>' if t.get("rotulo") == "gold" else ''}
 <p>{E(t["mudou"])}</p>
 <div class="wrap"><table><thead><tr><th>Modelo</th><th>low</th><th>medium</th><th>high</th><th>critical</th><th class="sep">Total</th><th>Pior nível</th></tr></thead>
-<tbody>{tabela(t["pasta"], t.get("rotulo", "texto"))}</tbody></table></div>
+<tbody>{tabela(t["pasta"], t.get("rotulo", "texto"), t.get("uma", False), t.get("modelos"))}</tbody></table></div>
 {f'<p class="leitura">{E(t["leitura"])}</p>' if t.get("leitura") else ''}
 </section>''')
 
 page = f'''<title>Severidade em produção</title>
 <style>
 /* Testes empilhados, o mais novo em cima. */
-:root{{--bg:#f6f7f9;--card:#fff;--fg:#1b2330;--mut:#5d6878;--line:#dfe3ea;--ok:#1f7a4d;--okb:#e3f3ea;--mid:#8a5a00;--midb:#fbf0d9;--bad:#b4362c;--badb:#fbe6e3;--acc:#2f5aa8;
+:root{{--bg:#f6f7f9;--card:#fff;--fg:#1b2330;--mut:#5d6878;--line:#dfe3ea;--ok:#1f7a4d;--okb:#e3f3ea;--mid:#8a5a00;--midb:#fbf0d9;--bad:#b4362c;--badb:#fbe6e3;--acc:#2f5aa8;--blueb:#e3ebf8;
 --sans:"IBM Plex Sans",system-ui,sans-serif}}
-@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#12161d;--card:#1a2029;--fg:#e4e8ef;--mut:#98a3b3;--line:#2c3542;--ok:#5cc58f;--okb:#183528;--mid:#e0b45a;--midb:#3a2f17;--bad:#f07a6f;--badb:#3d1f1c;--acc:#8fb0ee;color-scheme:dark}}}}
-:root[data-theme="dark"]{{--bg:#12161d;--card:#1a2029;--fg:#e4e8ef;--mut:#98a3b3;--line:#2c3542;--ok:#5cc58f;--okb:#183528;--mid:#e0b45a;--midb:#3a2f17;--bad:#f07a6f;--badb:#3d1f1c;--acc:#8fb0ee;color-scheme:dark}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#12161d;--card:#1a2029;--fg:#e4e8ef;--mut:#98a3b3;--line:#2c3542;--ok:#5cc58f;--okb:#183528;--mid:#e0b45a;--midb:#3a2f17;--bad:#f07a6f;--badb:#3d1f1c;--acc:#8fb0ee;--blueb:#1c2a44;color-scheme:dark}}}}
+:root[data-theme="dark"]{{--bg:#12161d;--card:#1a2029;--fg:#e4e8ef;--mut:#98a3b3;--line:#2c3542;--ok:#5cc58f;--okb:#183528;--mid:#e0b45a;--midb:#3a2f17;--bad:#f07a6f;--badb:#3d1f1c;--acc:#8fb0ee;--blueb:#1c2a44;color-scheme:dark}}
 body{{background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans);padding-inline:16px;padding-block:28px}}
 main{{max-width:980px;margin:0 auto;display:grid;gap:26px}}
 h1{{font-size:1.5rem;margin:0;text-wrap:balance}}h2{{font-size:1.1rem;margin:0 0 4px}}
@@ -119,31 +213,33 @@ th:first-child,td:first-child{{text-align:left}}
 thead th{{font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);font-weight:600}}
 tbody tr:last-child td{{border-bottom:0}}
 td small{{display:inline-block;min-width:3.2em;margin-left:6px;color:inherit;opacity:.8}}
-td.ok{{color:var(--ok);background:var(--okb);font-weight:600}}td.mid{{color:var(--mid);background:var(--midb);font-weight:600}}td.bad{{color:var(--bad);background:var(--badb);font-weight:600}}td.na{{color:var(--mut)}}
+td.ok{{color:var(--ok);background:var(--okb);font-weight:600}}td.mid{{color:var(--mid);background:var(--midb);font-weight:600}}td.bad{{color:var(--bad);background:var(--badb);font-weight:600}}td.blue{{color:var(--acc);background:var(--blueb);font-weight:600}}td.na{{color:var(--mut)}}
 .tabs{{display:flex;gap:4px;border-bottom:1px solid var(--line)}}.tabs button{{font:inherit;font-weight:600;background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;color:var(--mut);cursor:pointer}}.tabs button.on{{color:var(--fg);border-bottom-color:var(--fg)}}.tabs button:focus-visible{{outline:2px solid var(--fg)}}
 .aba{{display:grid;gap:26px}}
 .lvls{{display:grid;gap:12px}}.lvl{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;padding:12px 16px;min-width:0}}.lvl h3{{margin:0 0 6px;text-transform:uppercase;letter-spacing:.05em;font-size:.85rem;color:var(--c)}}.lvl p{{color:var(--fg)}}.lvl ul{{margin:10px 0 0;padding-left:18px;color:var(--mut);columns:2 22em;column-gap:28px}}.lvl li{{break-inside:avoid;margin-bottom:4px}}.lvl .ex{{margin-top:10px;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);font-weight:600}}
 .lvl-critical{{--c:var(--bad)}}.lvl-high{{--c:var(--mid)}}.lvl-medium{{--c:var(--acc)}}.lvl-low{{--c:var(--mut)}}
 .regras{{margin:0;padding-left:20px;display:grid;gap:6px}}
 pre.en{{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px;font:13px/1.5 ui-monospace,monospace;margin:0;overflow-x:auto}}
+td.mot{{white-space:normal;text-align:left;color:var(--mut);font-size:.85rem;min-width:18em}}td.v-cima,td.v-baixo,td.v-meio{{text-align:left;font-weight:600}}td.v-cima{{color:var(--bad)}}td.v-baixo{{color:var(--acc)}}
 details summary{{cursor:pointer;font-weight:600;margin-bottom:8px}}table.rev td{{white-space:normal;text-align:left;vertical-align:top}}table.rev td.id{{font:12px ui-monospace,monospace;word-break:break-all;min-width:16em}}table.rev td.mot{{color:var(--mut)}}
 .sep{{border-left:1px solid var(--line)}}.hist{{color:var(--mut);font-size:12px;font-style:italic;margin:2px 0}}.leitura{{color:var(--fg)}}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap">
 <main>
 <h1>Severidade: testes de prompt</h1>
-<div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="defs">Definições</button></div>
+<div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="erros">Erros</button><button data-t="defs">Definições</button></div>
 <section id="t-testes" class="aba">
-<p>Meta: 80% de acerto em cada nível, separado. Dataset: 205 sugestões rotuladas pelo próprio texto, contra a definição da aba Definições (50 low, 70 medium, 50 high, 35 critical; 31 dos critical são sintéticos, confirmados pelo Astra, porque o gold só tem 4). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 80% (na meta), amarelo 70–79%, vermelho abaixo de 70%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
-<p class="leitura"><b>Resultado:</b> o teste 16 (definição final, voto de 3) bate a meta de 80% em todos os níveis no Opus (86/93/84/100), no DeepSeek (90/89/88/100) e no GPT (86/93/80/100). O Kimi fica a 3 itens em medium (76%, sobe medium para high) e o Sonnet em high (62%, rebaixa high para medium). O prompt de produção, nos mesmos itens, fica em 27–51% no medium e 42–58% no high. Os testes 1 a 15 abaixo são histórico, medidos pelo rótulo do gold.</p>
+<p>Meta: 85% de acerto em cada nível, separado. Dataset: 205 sugestões rotuladas pelo próprio texto, contra a definição da aba Definições (50 low, 70 medium, 50 high, 35 critical; 31 dos critical são sintéticos, confirmados pelo Astra, porque o gold só tem 4). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 85% (na meta), amarelo 75–84%, vermelho abaixo de 75%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
+<p class="leitura"><b>Resultado:</b> com a meta de 85% e uma chamada por PR, como em produção, só o DeepSeek passa em todos os níveis em toda chamada no teste 16 (pior nível 86%). O Opus fica no limite (84–86%), o GPT oscila no high (80–90%), o Kimi fica em 76–77% no medium (sobe medium para high). O Sonnet, que no teste 16 ficava em 58–64% no high, sobe para 74–80% com o 17b, que é o escolhido para ele. O prompt de produção fica em 27–51% no medium e 42–58% no high. Os testes 1 a 15 abaixo são histórico, medidos pelo rótulo do gold.</p>
 {''.join(blocos)}
 </section>
+<section id="t-erros" class="aba" hidden>{tab_erros()}</section>
 <section id="t-defs" class="aba" hidden>{tab_defs()}</section>
 </main>
 <script>
-function aba(t){{document.querySelectorAll('#tabs button').forEach(function(b){{b.classList.toggle('on',b.dataset.t===t);}});['testes','defs'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});}}
+function aba(t){{document.querySelectorAll('#tabs button').forEach(function(b){{b.classList.toggle('on',b.dataset.t===t);}});['testes','erros','defs'].forEach(function(n){{document.getElementById('t-'+n).hidden=n!==t;}});}}
 document.getElementById('tabs').addEventListener('click',function(e){{var b=e.target.closest('button');if(b){{aba(b.dataset.t);try{{history.replaceState(null,'','#'+b.dataset.t);}}catch(_){{}}}}}});
-if(location.hash.slice(1)==='defs')aba('defs');
+if(['defs','erros'].indexOf(location.hash.slice(1))>=0)aba(location.hash.slice(1));
 </script>
 '''
 open(OUT, 'w').write(page)

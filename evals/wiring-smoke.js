@@ -154,6 +154,8 @@ async function main() {
         { name: 'funnel-anchoring', result: 'shared', args: ['evals/funnel/anchoring/run.js', '--gate', '--controls'] },
         { name: 'funnel-dedup', result: 'shared', model: true, args: ['evals/funnel/dedup/run.js', '--model=eval-fake', '--gate', '--controls'] },
         { name: 'funnel-severity', result: 'shared', model: true, args: ['evals/funnel/severity/run.js', '--model=eval-fake', '--gate', '--controls'] },
+        // The severity step on two PRs of the severity dataset: one call per PR, each level mapped back.
+        { name: 'severity-levels', result: 'shared', model: true, args: ['evals/severity-levels/run.js', '--model=eval-fake', '--gate', '--limit=2', '--concurrency=1'] },
         { name: 'funnel-verify', result: 'shared', model: true, args: ['evals/funnel/verify/run.js', '--model=eval-fake', '--gate', '--controls'] },
         {
             name: 'finder-recall',

@@ -2426,7 +2426,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             customAgentsById ??
             indexCustomAgents(await this.resolveCustomAgents(context));
         let deduped = suggestions;
-        // Reclassify severity using dedicated criteria (Gemini Flash)
+        // Reclassify severity with the defined levels (or the team's own criteria).
         // The agent assigns rough severity during investigation; this step
         // applies the definitive criteria (default or client-custom) without
         // biasing the agent's bug-finding behavior.
@@ -2437,6 +2437,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const severityMap = await classifySeverity(
                 deduped.map((s) => ({
                     relevantFile: s.relevantFile || '',
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
                     suggestionContent: s.suggestionContent || '',
                     oneSentenceSummary: s.oneSentenceSummary || '',
                     existingCode: s.existingCode || '',

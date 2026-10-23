@@ -7,7 +7,7 @@
  * = line the PR added or changed, ">" = line the comment cites).
  */
 const path = require('path');
-const { buildSeverityPrompt } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/engine/severity-prompt.ts'));
+const { buildCriteriaSeverityPrompt: buildSeverityPrompt } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/engine/severity-prompt.ts'));
 
 const OUTPUT = `Respond with ONLY a JSON object:
 \`\`\`json
@@ -154,7 +154,46 @@ const FINAL_EXAMPLES = `Examples (invented, for calibration only):
 - "A viewer can call the endpoint that grants administrator access." -> critical
 - "A failed send still marks every job of the batch as done, so they are never retried." -> critical (work marked done without being processed)`;
 
+// Sonnet tests: on r13 it rated 19 of 61 high items medium, mostly a failure it took as
+// limited because it hits only some users, one view or one configuration.
+const r13With = ({ before = '', after = '', output = OUTPUT }) => (items) => [
+    'Assign each code review comment below one severity: low, medium, high or critical. Return one item per comment index.',
+    FINAL_RULE,
+    defsOf('definitions.md'),
+    before,
+    FINAL_EXAMPLES,
+    after,
+    'Comments:',
+    items.map((x, i) => block(x, i, {})).join('\n\n'),
+    output,
+].filter(Boolean).join('\n\n');
+
+// 17a: check the levels from the top down, with high spelled out as questions.
+const TOP_DOWN = `Pick the level from the top down, stopping at the first one the stated consequence meets:
+1. Critical: does it meet one of the critical cases above?
+2. High: when it happens, does a supported path stop working for valid input (a page, action, menu item, endpoint, job or feature that errors, crashes, hangs, never appears or cannot be turned on); does an essential durable effect fail or diverge (primary records, calendar events, storage the system reads back); or does an admission or security control stop being enforced (a limit, blocklist, compliance check or permission)? Then high, even when it happens only for some users or records, in one view, under one setting or flag, or under concurrency.
+3. Medium: a bounded defect from the medium list.
+4. Low: otherwise.`;
+
+// 17b: say what does not lower a failure, with examples of high that sound limited.
+const NOT_LOWER = `How often the trigger occurs never lowers the level: a failure that happens only for users or records missing some row, only when a setting, flag or environment variable is used, only in one view, or only when a dependency throws is rated by what fails when it happens.`;
+const NOT_LOWER_EXAMPLES = `More examples of high (invented):
+- "Projects created before the migration have no owner row, so opening their settings returns a 500." -> high (a supported path fails for those projects)
+- "The flag check always returns false, so the export feature cannot be turned on." -> high (a supported feature is unusable)
+- "The rate limit is read before environment overrides are applied, so setting it through the environment leaves it disabled." -> high (an admission control is not enforced)
+- "The archive action is gated on a field the list view never loads, so archiving is impossible from the list." -> high (a UI path is unusable)
+- "The order is saved, but the warehouse sync after it is not handled; if it throws, the order exists without its shipment." -> high (an essential durable effect diverges)`;
+
+// 17c: name the failing path or effect before the level.
+const OUTPUT_PATH = `Respond with ONLY a JSON object. For each comment, first write the reason: what stops working or goes wrong when the problem happens (the path, record, control or output), and which definition above that matches; then the severity:
+\`\`\`json
+{"classifications": [{"index": 0, "reason": "saving a draft fails for users without a profile: a supported path unusable for valid input", "severity": "high"}]}
+\`\`\``;
+
 module.exports = {
+    r17a: { describe: 'Teste 16 com a escolha de cima para baixo e o high em perguntas (Sonnet).', build: r13With({ before: TOP_DOWN }) },
+    r17b: { describe: 'Teste 16 com a regra de que gatilho restrito não rebaixa e 5 exemplos de high (Sonnet).', build: r13With({ before: NOT_LOWER, after: NOT_LOWER_EXAMPLES }) },
+    r17c: { describe: 'Teste 16 com o motivo antes do nível: o que deixa de funcionar e qual definição casa (Sonnet).', build: r13With({ output: OUTPUT_PATH }) },
     r13: { describe: 'Definição final (definitions.md), regra de exploit afirmado, exemplos alinhados; 205 itens rotulados pelo texto.', build: (items) => [
         'Assign each code review comment below one severity: low, medium, high or critical. Return one item per comment index.',
         FINAL_RULE,
@@ -173,7 +212,7 @@ module.exports = {
         items.map((x, i) => block(x, i, {})).join('\n\n'),
         OUTPUT,
     ].join('\n\n') },
-    prod: { describe: 'Prompt de produção.', build: (items) => buildSeverityPrompt(items.map((x) => ({ relevantFile: x.file, suggestionContent: x.text }))) },
+    prod: { describe: 'Prompt de produção até o teste 17 (o de critérios, hoje só para quem customizou as flags).', build: (items) => buildSeverityPrompt(items.map((x) => ({ relevantFile: x.file, suggestionContent: x.text }))) },
     r11: { describe: 'Refino 2 com 12 exemplos reais do gold de fora do dataset.', build: calibrated({ code: false, examples: `${EXAMPLES_V2}\n\n${REAL_EXAMPLES}`, levels: `${CALIBRATE_FULL}\n\n${SOFT_KINDS}\n\n${TIE_UP}` }) },
     r10: { describe: 'Teste 8 sem desconto para sugestão que hesita.', build: calibrated({ code: false, examples: EXAMPLES_V2, levels: `${CALIBRATE_FULL}\n\n${SOFT_KINDS}\n\n${TIE_UP}` }) },
     r9: { describe: 'Teste 8 com mais casos de low.', build: calibrated({ code: false, examples: EXAMPLES_V2, levels: `${CALIBRATE}\n\n${SOFT_KINDS}\n${LOW_MORE}\n\n${TIE_UP}` }) },

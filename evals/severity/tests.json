@@ -1,10 +1,30 @@
 [
  {
+  "pasta": "r17bx3",
+  "rotulo": "texto",
+  "uma": true,
+  "titulo": "Teste 17b · gatilho restrito não rebaixa",
+  "mudou": "Teste 16 com uma regra dizendo que gatilho restrito (só usuários sem certo registro, só com uma configuração, flag ou variável de ambiente, só numa tela, só quando uma dependência falha) não rebaixa o nível, e 5 exemplos inventados de high que soam limitados. Uma chamada por PR, como em produção; cada linha é uma chamada. Sonnet com duas rodadas de 3 chamadas (6 linhas); os outros modelos com uma chamada só.",
+  "leitura": "Contra o teste 16 (média das 3 chamadas), em low/medium/high/critical: GPT 90/91/94/100 (era 87/93/83), passa a meta de 85% em todos os níveis; DeepSeek 92/87/88/100 (era 90/88/87), passa; Opus 84/84/90/100 (era 86/91/85), ganha high mas fica a 1 ponto em low e medium porque sobe 8 medium para high; Sonnet 82/83/77/100 (era 84/82/61); Kimi 80/71/92/100 (era 81/77/85), infla ainda mais medium para high. A regra sobe o high em todos; nos que já erravam para cima (Kimi) ou para os dois lados (Opus), o custo vai para o medium."
+ },
+ {
+  "pasta": "r17ax3",
+  "rotulo": "texto",
+  "uma": true,
+  "modelos": [
+   "Sonnet"
+  ],
+  "titulo": "Teste 17a · escolha de cima para baixo (Sonnet)",
+  "mudou": "Teste 16 com uma mudança no prompt, só no Sonnet, que rebaixava high para medium. Uma chamada por PR, como em produção: cada linha é uma chamada independente, sem combinar (duas rodadas de 3 chamadas, 6 linhas). Mudança: o modelo checa os níveis de cima para baixo, com o high escrito como três perguntas (caminho suportado para de funcionar, efeito durável essencial falha, controle de admissão ou segurança deixa de valer) e a ressalva de que grupo restrito, uma tela, uma configuração ou concorrência não rebaixam.",
+  "leitura": "High sobe de 61% para 81%, mas medium cai para 78% e oscila de 71% a 83% entre chamadas: às vezes sobe medium para high."
+ },
+ {
   "pasta": "r13x3",
   "rotulo": "texto",
   "titulo": "Teste 16 · definição final, rótulos pelo texto",
-  "mudou": "Dataset novo: 205 itens rotulados pelo texto de cada sugestão contra a definição final (50 low, 70 medium, 50 high, 35 critical, dos quais 31 sintéticos confirmados pelo Astra). Prompt com a definição final (log é low, CI só de desenvolvimento é medium, latente no máximo medium, exploit só afirmado vale pela fraqueza), 10 exemplos alinhados, sem código, voto de 3. Opus e Sonnet pela assinatura.",
-  "leitura": "Opus (86/93/84/100), DeepSeek (90/89/88/100) e GPT (86/93/80/100) passam de 80% em todos os níveis. O Kimi (80/76/90/100) fica a 3 itens da meta em medium: sobe 17 medium para high, o inverso do Sonnet, que segura em high (62) porque rebaixa high para medium em todos os testes. Os 35 critical acertam nos cinco modelos; os sintéticos são fáceis, servem para pegar quem rebaixa critical."
+  "mudou": "Dataset novo: 205 itens rotulados pelo texto de cada sugestão contra a definição final (50 low, 70 medium, 50 high, 35 critical, dos quais 31 sintéticos confirmados pelo Astra). Prompt com a definição final (log é low, CI só de desenvolvimento é medium, latente no máximo medium, exploit só afirmado vale pela fraqueza), 10 exemplos alinhados, sem código. Uma chamada por PR, como em produção: cada linha é uma chamada independente, sem combinar (a rodada fez 3 por PR). Opus e Sonnet pela assinatura.",
+  "leitura": "Com uma chamada só, o resultado fica a 1–3 pontos do voto de 3: o voto não estava inflando o teste. Pela meta de 85%, só o DeepSeek (pior nível 86% em toda chamada) passa; o Opus fica no limite (84–86% no high), o GPT oscila no high (80–90%), o Kimi fica em 76–77% no medium porque sobe medium para high, e o Sonnet em 58–64% no high porque rebaixa high para medium. Os 35 critical acertam nos cinco modelos.",
+  "uma": true
  },
  {
   "pasta": "prod-205",

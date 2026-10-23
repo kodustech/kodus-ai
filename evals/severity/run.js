@@ -33,13 +33,15 @@ const PROMPT = arg('prompt', 'prod');
 const SAMPLES = Number(arg('samples', 1));
 // --single: one call per suggestion instead of one per PR.
 const SINGLE = process.argv.includes('--single');
-const OUT = arg('out', path.join(__dirname, 'results', `${PROMPT}${SINGLE ? '-1' : ''}${SAMPLES > 1 ? `x${SAMPLES}` : ''}`, `${(MODEL || '').replace(/[^\w.-]+/g, '_')}.json`));
+const OUT = arg('out', path.join(__dirname, 'results', `${PROMPT}${SINGLE ? '-1' : ''}${SAMPLES > 1 ? `x${SAMPLES}` : ''}${arg('levels', '') ? `-${arg('levels', '').replace(/,/g, '-')}` : ''}`, `${(MODEL || '').replace(/[^\w.-]+/g, '_')}.json`));
 if (!MODEL || !PROMPTS[PROMPT]) {
     console.error(`RECALL_MODEL=<id> --prompt=${Object.keys(PROMPTS).join('|')}`);
     process.exit(2);
 }
 const LEVELS = ['low', 'medium', 'high', 'critical'];
-const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.json'), 'utf8')).items;
+// --levels=high: only the items of those gold levels (calls still grouped per PR).
+const ONLY = arg('levels', '');
+const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.json'), 'utf8')).items.filter((x) => !ONLY || ONLY.split(',').includes(x.severity));
 const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
 const right = (gold, got) => (gold === 'critical' ? got === 'high' || got === 'critical' : got === gold);
 
