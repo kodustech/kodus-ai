@@ -313,7 +313,16 @@ function matchByHttpStatus(
  * Please recharge." says neither quota nor credit, and four GLM scopes in
  * production were being retried against a spent balance.
  *
- * One list, both callers.
+ * Anthropic is the second shape: an organization's spend cap says "You have
+ * reached your specified API usage limits", which names neither quota nor
+ * billing either, so a cap that only clears next month was read as an unknown
+ * failure -- and UNKNOWN is deliberately never cascaded.
+ *
+ * One list, both callers. That is also why the asymmetry above applies to
+ * every entry, not just this one: whatever a false match resolves to here is
+ * what the 429 branch will resolve to as well, so a new entry is pinned in
+ * BOTH directions -- the wording it must catch, and the neighbouring
+ * temporary wording it must leave on RATE_LIMIT.
  */
 function looksLikeQuota(lower: string): boolean {
     return (
@@ -329,6 +338,20 @@ function looksLikeQuota(lower: string): boolean {
         // billing-shaped status code.
         lower.includes('suspended') ||
         lower.includes('spending limit') ||
+        // Anthropic's organization spend cap (#2110), matched on its observed
+        // wording rather than a bare "usage limit". The wording is narrow
+        // because this list also decides the ambiguous 429, and the two
+        // misreadings do not cost the same:
+        //   - a false QUOTA_EXCEEDED is the expensive direction. It is a
+        //     terminal category, so it arms no slot cooldown (byok-model-
+        //     wrapper) and cascades to the fallback on every sub-call, with
+        //     copy that sends a funded customer to chase billing.
+        //   - a false RATE_LIMIT only costs a cooldown. A delay.
+        // So on ambiguity, resolve toward RATE_LIMIT: if this phrase ever has
+        // to be loosened, loosen it toward RATE_LIMIT, never away from it. The
+        // failure mode of matching the exact phrase is exactly that delay --
+        // if Anthropic rewords the cap, we wait instead of mislabelling.
+        lower.includes('specified api usage limits') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
