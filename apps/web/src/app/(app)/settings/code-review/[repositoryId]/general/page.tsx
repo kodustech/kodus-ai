@@ -327,10 +327,10 @@ export default function General() {
                                         />
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="text-text-primary flex items-center gap-2 text-sm font-semibold">
+                                        <div className="text-text-primary flex items-center gap-2 text-sm font-semibold">
                                             Conditional approval{" "}
                                             <Badge>Beta</Badge>
-                                        </p>
+                                        </div>
                                         <p className="text-text-secondary mt-1 max-w-2xl text-sm leading-5">
                                             {conditionalApprovalPlanAllowed
                                                 ? "Beta access is not enabled for this workspace yet. Automatic approval without conditions remains available."
