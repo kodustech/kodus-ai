@@ -63,23 +63,6 @@ export class ASTEventHandler {
             },
         },
     })
-    @RabbitSubscribe({
-        exchange: 'workflow.events.delayed',
-        routingKey: 'ast.task.completed',
-        queue: 'workflow.events.ast',
-        allowNonJsonMessages: false,
-        errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: createRabbitMQErrorHandlerWithFallback(
-            'workflow.events.dlq',
-        ),
-        queueOptions: {
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.events.dlx',
-                'x-dead-letter-routing-key': 'workflow.events.dlq',
-            },
-        },
-    })
     async handleASTCompleted(
         message: ASTCompletedMessage,
         amqpMsg: ConsumeMessage,

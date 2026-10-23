@@ -72,7 +72,7 @@ describe('RabbitMQErrorHandler', () => {
         });
 
         expect(amqpConnection.publish).toHaveBeenCalledWith(
-            'workflow.exchange.delayed',
+            'kodus.retry',
             'workflow.jobs.created.CODE_REVIEW',
             msg.content,
             expect.objectContaining({
@@ -81,7 +81,8 @@ describe('RabbitMQErrorHandler', () => {
                 persistent: true,
                 headers: expect.objectContaining({
                     'x-retry-count': 1,
-                    'x-delay': expect.any(Number),
+                    'kodus-retry-target': 'workflow.exchange',
+                    'kodus-retry-bucket': expect.any(String),
                 }),
             }),
         );
@@ -154,9 +155,9 @@ describe('RabbitMQErrorHandler', () => {
 
             const published = amqpConnection.publish.mock.calls[0];
             const headers = (published[3] as any).headers;
-            // 30min + 5min buffer = 35min ≈ 2_100_000ms. Allow ±10s drift.
-            expect(headers['x-delay']).toBeGreaterThan(34 * 60 * 1000);
-            expect(headers['x-delay']).toBeLessThanOrEqual(36 * 60 * 1000);
+            // 30min + 5min buffer = 35min -> the 45min wait queue, not the
+            // seconds-long backoff.
+            expect(headers['kodus-retry-bucket']).toBe(String(45 * 60_000));
         });
 
         // H8 — resetAt in the past (clock skew / already reset).
@@ -175,8 +176,7 @@ describe('RabbitMQErrorHandler', () => {
             const headers = (amqpConnection.publish.mock.calls[0][3] as any)
                 .headers;
             // Past resetAt → raw wait clipped to 0, just the 5min buffer.
-            expect(headers['x-delay']).toBeGreaterThanOrEqual(5 * 60 * 1000);
-            expect(headers['x-delay']).toBeLessThan(6 * 60 * 1000);
+            expect(headers['kodus-retry-bucket']).toBe(String(5 * 60_000));
         });
 
         // H9 — resetAt absurdly far in the future (corrupted header).
@@ -194,7 +194,7 @@ describe('RabbitMQErrorHandler', () => {
 
             const headers = (amqpConnection.publish.mock.calls[0][3] as any)
                 .headers;
-            expect(headers['x-delay']).toBeLessThanOrEqual(60 * 60 * 1000);
+            expect(headers['kodus-retry-bucket']).toBe(String(60 * 60_000));
         });
 
         // Duck-typed recognition: plain objects with the right shape
@@ -214,8 +214,8 @@ describe('RabbitMQErrorHandler', () => {
 
             const headers = (amqpConnection.publish.mock.calls[0][3] as any)
                 .headers;
-            // Around 10 + 5 = 15 min ± drift.
-            expect(headers['x-delay']).toBeGreaterThan(14 * 60 * 1000);
+            // Just under 10 + 5 = 15 min.
+            expect(headers['kodus-retry-bucket']).toBe(String(15 * 60_000));
         });
 
         // H11 — RATE_LIMITED still counts toward the retry budget.
@@ -241,6 +241,69 @@ describe('RabbitMQErrorHandler', () => {
                 'workflow.job.failed',
                 msg.content,
                 expect.any(Object),
+            );
+        });
+    });
+
+    describe('retry path without the delayed-message plugin (#1663)', () => {
+        it('returns a retry that came back through the return exchange to the base in its header', async () => {
+            const { handler, amqpConnection } = makeHandler();
+            const msg = makeMessage({
+                'x-retry-count': 1,
+                'kodus-retry-target': 'workflow.events',
+            });
+            msg.fields.exchange = 'kodus.retry.return';
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('again'));
+
+            expect(amqpConnection.publish.mock.calls[0][0]).toBe('kodus.retry');
+            expect(
+                amqpConnection.publish.mock.calls[0][3].headers,
+            ).toMatchObject({
+                'x-retry-count': 2,
+                'kodus-retry-target': 'workflow.events',
+            });
+        });
+
+        it('sends an exhausted retry to the DLX of the base in its header', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 1 });
+            const msg = makeMessage({
+                'x-retry-count': 1,
+                'kodus-retry-target': 'orchestrator.exchange',
+            });
+            msg.fields.exchange = 'kodus.retry.return';
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('again'), {
+                dlqRoutingKey: 'codeReviewFeedback.syncCodeReviewReactions',
+            });
+
+            expect(amqpConnection.publish.mock.calls[0][0]).toBe(
+                'orchestrator.exchange.dlx',
+            );
+        });
+
+        it('retries a message the old plugin delivered through a .delayed exchange', async () => {
+            const { handler, amqpConnection } = makeHandler();
+            const msg = makeMessage({ 'x-retry-count': 1, 'x-delay': 4000 });
+            msg.fields.exchange = 'workflow.exchange.delayed';
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('again'));
+
+            const headers = amqpConnection.publish.mock.calls[0][3].headers;
+            expect(amqpConnection.publish.mock.calls[0][0]).toBe('kodus.retry');
+            expect(headers['kodus-retry-target']).toBe('workflow.exchange');
+            expect(headers).not.toHaveProperty('x-delay');
+        });
+
+        it('sends straight to the DLQ when the base exchange has no way back from the wait queues', async () => {
+            const { handler, amqpConnection } = makeHandler();
+            const msg = makeMessage();
+            msg.fields.exchange = 'notification.exchange';
+
+            await handler.handle({ ack: jest.fn() }, msg, new Error('boom'));
+
+            expect(amqpConnection.publish.mock.calls[0][0]).toBe(
+                'notification.exchange.dlx',
             );
         });
     });

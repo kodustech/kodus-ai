@@ -373,7 +373,7 @@ export class CodeReviewFeedbackCronProvider {
 
         await this.messageBroker.publishMessage(
             {
-                exchange: 'orchestrator.exchange.delayed',
+                exchange: 'orchestrator.exchange',
                 routingKey: 'codeReviewFeedback.syncCodeReviewReactions',
             },
             runCodeReviewReactionsPayload,
