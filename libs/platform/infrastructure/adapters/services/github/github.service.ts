@@ -1716,18 +1716,39 @@ export class GithubService
             );
 
         const authMode = githubAuthDetail?.authMode || AuthMode.OAUTH;
-        // An App install saved before API_GITHUB_APP_HOST was set has no host
-        // of its own; it lives where the App does.
-        const appHost =
-            authMode === AuthMode.OAUTH && !githubAuthDetail?.host
-                ? this.getGithubAppHost()
-                : undefined;
+
+        if (authMode !== AuthMode.OAUTH) {
+            return { ...githubAuthDetail, authMode };
+        }
+
+        // An App installation lives where the App does: its installation
+        // tokens are issued and validated against API_GITHUB_APP_HOST (unset =
+        // github.com). The host is one per deployment, so the App host wins
+        // over whatever an older record stored; otherwise REST would go to the
+        // stored host with a token minted on another one.
+        const appHost = this.getGithubAppHost();
+        const storedHost = this.normalizeGithubHost(githubAuthDetail?.host);
+
+        if (storedHost && storedHost !== appHost) {
+            this.logger.warn({
+                message:
+                    'GitHub App installation has a stored host that differs from API_GITHUB_APP_HOST; using the App host',
+                context: GithubService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    storedHost,
+                    appHost: appHost ?? 'https://github.com',
+                },
+            });
+        }
+
+        const { host: _storedHost, ...rest } = githubAuthDetail ?? {};
 
         return {
-            ...githubAuthDetail,
+            ...rest,
             authMode,
             ...(appHost && { host: appHost }),
-        };
+        } as GithubAuthDetail;
     }
 
     /**

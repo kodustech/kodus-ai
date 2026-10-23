@@ -110,26 +110,67 @@ describe('GithubService — GitHub App on GitHub Enterprise Server', () => {
             expect(details.host).toBe('https://ghe.example.com');
         });
 
-        it('leaves PAT integrations and stored hosts alone', async () => {
+        it('leaves the host of a PAT integration alone', async () => {
             const svc = createService({
                 API_GITHUB_APP_HOST: 'https://ghe.example.com',
             });
             svc.integrationService = {
-                getPlatformAuthDetails: jest
-                    .fn()
-                    .mockResolvedValueOnce({ authMode: AuthMode.TOKEN })
-                    .mockResolvedValueOnce({
-                        authMode: AuthMode.OAUTH,
-                        installationId: '42',
-                        host: 'https://other.example.com',
-                    }),
+                getPlatformAuthDetails: jest.fn().mockResolvedValue({
+                    authMode: AuthMode.TOKEN,
+                    host: 'https://other.example.com',
+                }),
             };
 
-            const pat = await svc.getGithubAuthDetails(organizationAndTeamData);
-            const app = await svc.getGithubAuthDetails(organizationAndTeamData);
+            const details = await svc.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
 
-            expect(pat.host).toBeUndefined();
-            expect(app.host).toBe('https://other.example.com');
+            expect(details.host).toBe('https://other.example.com');
+        });
+
+        it('serves an App install from the App host when its stored host differs, and says so', async () => {
+            const svc = createService({
+                API_GITHUB_APP_HOST: 'https://ghe.example.com',
+            });
+            svc.integrationService = {
+                getPlatformAuthDetails: jest.fn().mockResolvedValue({
+                    authMode: AuthMode.OAUTH,
+                    installationId: '42',
+                    host: 'https://other.example.com',
+                }),
+            };
+
+            const details = await svc.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            expect(details.host).toBe('https://ghe.example.com');
+            expect(svc.logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        storedHost: 'https://other.example.com',
+                        appHost: 'https://ghe.example.com',
+                    }),
+                }),
+            );
+        });
+
+        it('drops a stored host when the App lives on github.com', async () => {
+            const svc = createService({});
+            svc.integrationService = {
+                getPlatformAuthDetails: jest.fn().mockResolvedValue({
+                    authMode: AuthMode.OAUTH,
+                    installationId: '42',
+                    host: 'https://other.example.com',
+                }),
+            };
+
+            const details = await svc.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            expect(details.host).toBeUndefined();
+            expect(details.installationId).toBe('42');
         });
     });
 
