@@ -74,7 +74,7 @@ describe('KodyIssuesTools organization scope', () => {
     );
 });
 
-describe('KodyIssuesTools listKodyIssues', () => {
+describe('KodyIssuesTools listKodyIssues without matches', () => {
     const issuesService = { findByFilters: jest.fn(async () => []) };
     const tools = new KodyIssuesTools(issuesService as any, {} as any);
 
@@ -97,6 +97,37 @@ describe('KodyIssuesTools listKodyIssues', () => {
 
         expect(issuesService.findByFilters).toHaveBeenCalledWith({
             organizationId: 'org-1',
+        });
+    });
+});
+
+describe('KodyIssuesTools listKodyIssues without matches', () => {
+    const list = (found: unknown) => {
+        const issuesService = {
+            // The repository mapper returns null for a list with no matches.
+            findByFilters: jest.fn(async () => found),
+        };
+        const tools = new KodyIssuesTools(issuesService as any, {} as any);
+        return tools.listKodyIssues().execute({ organizationId: 'org-1' });
+    };
+
+    it('returns an empty list when no issue matches', async () => {
+        const result: any = await list(null);
+
+        expect(result.structuredContent).toEqual({
+            success: true,
+            count: 0,
+            data: [],
+        });
+    });
+
+    it('returns the issues that match', async () => {
+        const result: any = await list([{ uuid: 'issue-1' }]);
+
+        expect(result.structuredContent).toEqual({
+            success: true,
+            count: 1,
+            data: [{ uuid: 'issue-1' }],
         });
     });
 });
