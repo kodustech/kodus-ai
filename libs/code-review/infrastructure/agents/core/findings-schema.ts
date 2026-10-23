@@ -217,6 +217,9 @@ export function inspectFindingsResult(
         !!normalized &&
         typeof normalized === 'object' &&
         !Array.isArray(normalized);
+    // Each property of the payload is read once, into this copy; every check
+    // below reads the copy.
+    if (isObject) normalized = { ...normalized };
     // One finding sent as the whole payload, without the array around it.
     if (
         isObject &&
