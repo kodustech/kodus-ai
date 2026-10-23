@@ -17,7 +17,8 @@
  *
  * Placement mirrors what production tool-use harnesses converge on: last tool +
  * system part + latest user message (3 of Anthropic's 4 breakpoints, one to
- * spare). `applyCacheBreakpoints` is the single entry point that decides the hint
+ * spare; a system prompt carrying `CACHE_PREFIX_BOUNDARY` spends it on the
+ * prefix it shares with other runs). `applyCacheBreakpoints` is the single entry point that decides the hint
  * and stamps all three; the individual stampers (`markLastToolForCache`,
  * `markLatestUserForCache`) stay exported for direct/unit use.
  *
@@ -25,10 +26,33 @@
  * it calls `applyCacheBreakpoints` as part of assembling the agent-loop invocation.
  */
 import type { ModelMessage } from 'ai';
+import { CACHE_PREFIX_BOUNDARY } from './prompt-cache-boundary';
 import { systemCacheControl } from './system-cache';
 
 /** Opaque per-vendor cache marker (e.g. `{ anthropic: { cacheControl: … } }`). */
 export type CacheHint = Readonly<Record<string, unknown>>;
+
+export { CACHE_PREFIX_BOUNDARY };
+
+/** The system prompt split at the first boundary marker, every marker
+ *  removed; `undefined` when there is no marker or one side is empty. */
+function splitAtPrefixBoundary(
+    system: string,
+): { prefix: string; rest: string } | undefined {
+    const at = system.indexOf(CACHE_PREFIX_BOUNDARY);
+    if (at === -1) return undefined;
+    const prefix = system.slice(0, at);
+    const rest = system
+        .slice(at + CACHE_PREFIX_BOUNDARY.length)
+        .split(CACHE_PREFIX_BOUNDARY)
+        .join('');
+    return prefix && rest ? { prefix, rest } : undefined;
+}
+
+/** The system prompt with every boundary marker removed. */
+export function withoutPrefixBoundary(system: string): string {
+    return system.split(CACHE_PREFIX_BOUNDARY).join('');
+}
 
 /** Shallow-merge `hint` into an existing `providerOptions`, hint winning. A
  *  manual placement the caller already made is preserved for other vendors. */
@@ -137,14 +161,27 @@ export function applyCacheBreakpoints<T extends Record<string, any>>(input: {
               })
             : undefined;
 
-    const systemArg =
+    const split =
         cacheHint && input.system
-            ? {
-                  role: 'system',
-                  content: input.system,
-                  providerOptions: cacheHint,
-              }
-            : input.system;
+            ? splitAtPrefixBoundary(input.system)
+            : undefined;
+    const system =
+        input.system === undefined
+            ? undefined
+            : withoutPrefixBoundary(input.system);
+    const systemArg = split
+        ? [split.prefix, split.rest].map((content) => ({
+              role: 'system',
+              content,
+              providerOptions: cacheHint,
+          }))
+        : cacheHint && system
+          ? {
+                role: 'system',
+                content: system,
+                providerOptions: cacheHint,
+            }
+          : system;
     const callMessages = cacheHint
         ? markLatestUserForCache(input.messages, cacheHint)
         : input.messages;

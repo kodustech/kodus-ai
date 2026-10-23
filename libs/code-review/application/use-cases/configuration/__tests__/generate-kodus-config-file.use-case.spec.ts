@@ -109,4 +109,36 @@ describe('GenerateKodusConfigFileUseCase', () => {
         expect(parsed.enableCommittableSuggestions).toBe(false);
         expect(parsed.path).toBeUndefined();
     });
+    it('never writes custom agent CLI secret ciphertext into the file', async () => {
+        const { useCase, parametersService } = makeUseCase();
+        parametersService.findByKey.mockResolvedValueOnce({
+            configValue: {
+                configs: {
+                    customAgents: [
+                        {
+                            id: 'ledger-agent',
+                            tools: {
+                                cli: [
+                                    {
+                                        name: 'ledgerctl',
+                                        secrets: [
+                                            {
+                                                env: 'LEDGER_TOKEN',
+                                                ciphertext: 'iv:stored',
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                },
+                repositories: [],
+            },
+        });
+
+        const result = await useCase.execute(teamId, 'global');
+
+        expect(result.yamlString).not.toContain('iv:stored');
+    });
 });

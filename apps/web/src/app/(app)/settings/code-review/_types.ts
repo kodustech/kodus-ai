@@ -1,4 +1,5 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
 import type { SeverityLevel } from "src/core/types";
@@ -100,6 +101,7 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyRulesAutoPauseEnabled?: boolean;
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: {
         enabled: boolean;
@@ -115,11 +117,13 @@ export type CodeReviewGlobalConfig = {
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
-    ideRulesSyncEnabled: boolean;
-    /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
-     *  Picks what happens to the rules previously imported from IDE files.
-     *  Default on the backend is `keep` (least destructive) when omitted. */
-    ideSyncDisableAction?: "keep" | "pause" | "delete";
+    /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
+     *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
+    repoInstructionsEnabled: boolean;
+    /** Team-defined review agents (beta, behind `custom-agents`). */
+    customAgents?: CustomAgent[];
+    /** Skills and docs in the repository, linked to the main review or agents. */
+    knowledge?: KnowledgeItem[];
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {
@@ -229,15 +233,25 @@ export type FormattedCodeReviewBaseConfig = Omit<
     configs: FormattedCodeReviewConfig;
 };
 
-export interface FormattedGlobalCodeReviewConfig extends Omit<
-    AutomationCodeReviewConfigType,
-    "configs" | "repositories"
-> {
+export interface FormattedGlobalCodeReviewConfig
+    extends
+        Omit<AutomationCodeReviewConfigType, "configs" | "repositories">,
+        CustomAgentsRevisions {
     configs: FormattedCodeReviewConfig & {
         showToggleCodeReviewVersion: boolean;
     }; // TODO: remove this flag when we launch v2
     repositories: FormattedRepositoryCodeReviewConfig[];
 }
+
+/**
+ * The revision of the custom agents and knowledge a level resolves to, as
+ * the server read them. Sent back with a save of either list, which the
+ * server refuses if the list changed since.
+ */
+export type CustomAgentsRevisions = {
+    customAgentsRevision?: string;
+    knowledgeRevision?: string;
+};
 
 /**
  * Health of the kodus-config.yml overlay for one scope. The file is read live
@@ -265,7 +279,7 @@ export type FormattedRepositoryCodeReviewConfig = Omit<
     configs: FormattedCodeReviewConfig;
     directories: FormattedDirectoryCodeReviewConfig[];
     kodusConfigFile?: KodusConfigFileOverlay;
-};
+} & CustomAgentsRevisions;
 
 export type FormattedDirectoryCodeReviewConfig = Omit<
     CodeReviewDirectoryConfig,
@@ -273,7 +287,7 @@ export type FormattedDirectoryCodeReviewConfig = Omit<
 > & {
     configs: FormattedCodeReviewConfig;
     kodusConfigFile?: KodusConfigFileOverlay;
-};
+} & CustomAgentsRevisions;
 
 export enum BehaviourForNewCommits {
     NONE = "none",

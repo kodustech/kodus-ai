@@ -1,6 +1,6 @@
 import {
     compareRules,
-    isOrphanAutoSyncRule,
+    isFrozenAgentFileRule,
     matchesOriginFilter,
     matchesSeverityFilter,
     matchesTextQuery,
@@ -15,40 +15,35 @@ const buildRule = (overrides: any = {}) => ({
     ...overrides,
 });
 
-describe("isOrphanAutoSyncRule", () => {
-    // .cursorrules is an IDE-rule source → inferRuleOrigin === "Auto-sync".
-    const autoSync = { sourcePath: ".cursorrules", origin: "user" };
-
-    it("flags a scope-local, non-pinned auto-synced rule", () => {
-        expect(isOrphanAutoSyncRule(autoSync)).toBe(true);
-    });
-
-    it("excludes pinnedSync rules (still synced via @kody-sync)", () => {
-        expect(isOrphanAutoSyncRule({ ...autoSync, pinnedSync: true })).toBe(
-            false,
-        );
-    });
-
-    it("INCLUDES inherited orphans (they affect this repo's reviews)", () => {
-        // Inherited global/parent orphans count toward this repo's chip — the
-        // count, the quick-filter, and the per-card "Orphan" badge must all
-        // agree (the "3 badges but chip says 2" regression came from the chip
-        // excluding inherited while the badge included them).
+describe("isFrozenAgentFileRule", () => {
+    it("flags a rule imported from a coding-agent file", () => {
         expect(
-            isOrphanAutoSyncRule({ ...autoSync, inherited: "repository" }),
+            isFrozenAgentFileRule({ sourcePath: ".cursorrules", origin: "user" }),
         ).toBe(true);
         expect(
-            isOrphanAutoSyncRule({ ...autoSync, inherited: "global" }),
+            isFrozenAgentFileRule({
+                sourcePath: "services/api/CLAUDE.md",
+                origin: "repo_file_sync",
+            }),
         ).toBe(true);
     });
 
-    it("excludes non auto-sync origins", () => {
-        expect(isOrphanAutoSyncRule({ origin: "user" })).toBe(false); // manual (no sourcePath)
-        expect(isOrphanAutoSyncRule({ origin: "library" })).toBe(false);
-        expect(isOrphanAutoSyncRule({ origin: "generated" })).toBe(false);
+    it("does not flag a rule synced from a Kody rule file", () => {
         expect(
-            isOrphanAutoSyncRule({ sourcePath: "package.json", origin: "user" }),
-        ).toBe(false); // onboard (non-IDE source)
+            isFrozenAgentFileRule({
+                sourcePath: ".kody/rules/no-console.md",
+                origin: "repo_file_sync",
+            }),
+        ).toBe(false);
+    });
+
+    it("excludes rules that did not come from a file", () => {
+        expect(isFrozenAgentFileRule({ origin: "user" })).toBe(false);
+        expect(isFrozenAgentFileRule({ origin: "library" })).toBe(false);
+        expect(isFrozenAgentFileRule({ origin: "generated" })).toBe(false);
+        expect(
+            isFrozenAgentFileRule({ sourcePath: "package.json", origin: "user" }),
+        ).toBe(false);
     });
 });
 
@@ -83,10 +78,16 @@ describe("matchesOriginFilter", () => {
         };
         expect(
             matchesOriginFilter(
-                buildRule({ sourcePath: ".cursorrules", origin: "user" }),
+                buildRule({ sourcePath: ".kody/rules/a.md", origin: "user" }),
                 filter,
             ),
         ).toBe(true);
+        expect(
+            matchesOriginFilter(
+                buildRule({ sourcePath: ".cursorrules", origin: "user" }),
+                filter,
+            ),
+        ).toBe(false);
         expect(
             matchesOriginFilter(
                 buildRule({ sourcePath: "esbuild.config.js", origin: "user" }),
@@ -110,7 +111,7 @@ describe("matchesOriginFilter", () => {
         };
         expect(
             matchesOriginFilter(
-                buildRule({ sourcePath: ".cursorrules" }),
+                buildRule({ sourcePath: ".kody/rules/a.md" }),
                 filter,
             ),
         ).toBe(true);

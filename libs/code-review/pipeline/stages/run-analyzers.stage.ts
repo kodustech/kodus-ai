@@ -18,6 +18,7 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { createLogger } from '@libs/core/log/logger';
 
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -50,6 +51,11 @@ export class RunAnalyzersStage extends BasePipelineStage<CodeReviewPipelineConte
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         if (!(await this.gate.isEnabled(context.organizationAndTeamData))) {
+            return context;
+        }
+
+        // Only custom agents review ignored files here (#2172).
+        if (reviewsOnlyIgnoredFiles(context)) {
             return context;
         }
 

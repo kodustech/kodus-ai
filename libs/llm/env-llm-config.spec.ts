@@ -34,6 +34,29 @@ describe('describeEnvLLMConfig', () => {
         });
     });
 
+    // gpt-6-sol on chat completions refuses an agent loop's tools together with
+    // reasoning_effort; on OpenAI's own endpoint it is built on the native SDK.
+    it('describes an OpenAI reasoning model on OpenAI itself as native openai', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
+                API_OPEN_AI_API_KEY: 'sk-test',
+            } as any),
+        ).toEqual({
+            configured: true,
+            model: 'gpt-6-sol',
+            providerId: 'openai',
+            baseUrl: 'https://api.openai.com/v1',
+        });
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
+                API_OPEN_AI_API_KEY: 'sk-test',
+                API_OPENAI_FORCE_BASE_URL: 'https://litellm.example.com/v1',
+            } as any),
+        ).toMatchObject({ providerId: 'openai_compatible', baseUrl: 'https://litellm.example.com/v1' });
+    });
+
     it('defaults the OpenAI-compatible baseURL when only the key is set', () => {
         expect(
             describeEnvLLMConfig({

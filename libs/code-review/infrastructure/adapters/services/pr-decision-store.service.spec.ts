@@ -97,6 +97,31 @@ describe('decision records read the full explanation', () => {
     });
 });
 
+describe('decision records name the custom agent that made them', () => {
+    const agent = { id: 'ag-1', name: 'Money', color: 'blue' };
+
+    it('carries the custom agent of a file-level suggestion', () => {
+        expect(
+            toRecord(makeSuggestion({ customAgent: agent } as any))
+                .customAgentId,
+        ).toBe('ag-1');
+        expect(toRecord(makeSuggestion()).customAgentId).toBeUndefined();
+    });
+
+    it('carries the custom agent of a PR-level suggestion', () => {
+        expect(
+            toRecordFromPrLevel({
+                id: 'p1',
+                suggestionContent: 'x',
+                oneSentenceSummary: 'x',
+                label: 'custom_agent',
+                deliveryStatus: DeliveryStatus.SENT,
+                customAgent: agent,
+            } as any).customAgentId,
+        ).toBe('ag-1');
+    });
+});
+
 describe('toRecord', () => {
     it('maps every field a consumer needs, deriving outcome from implementationStatus', () => {
         const record = toRecord(
@@ -115,6 +140,15 @@ describe('toRecord', () => {
             outcome: 'implemented',
             decidedAt: '2026-01-01T00:00:00.000Z',
         });
+    });
+
+    // #2097: the repeat check matches the same rule on the same code without
+    // a model call.
+    it('carries the code the suggestion pointed at', () => {
+        expect(
+            toRecord(makeSuggestion({ existingCode: 'let x = 1;' }))
+                .existingCode,
+        ).toBe('let x = 1;');
     });
 
     it('passes brokenKodyRulesIds through so the sharded judge can resolve the rule identity (PR #1895 review)', () => {
@@ -247,6 +281,24 @@ describe('PrDecisionStoreService.load', () => {
             MAX_PR_DECISIONS,
         );
         expect(result).toHaveLength(1);
+    });
+
+    // #2097: the repeat check reads past the prompts' cap.
+    it('reads up to the requested limit from both sources', async () => {
+        const { service, repo } = makeService({
+            findSuggestionsOnPR: jest.fn().mockResolvedValue([]),
+            findPrLevelSuggestionsByPR: jest.fn().mockResolvedValue([]),
+        });
+
+        await service.load({
+            organizationId: 'org-1',
+            prNumber: 42,
+            repositoryFullName: 'kodustech/kodus-ai',
+            limit: 500,
+        });
+
+        expect(repo.findSuggestionsOnPR.mock.calls[0][4]).toBe(500);
+        expect(repo.findPrLevelSuggestionsByPR.mock.calls[0][4]).toBe(500);
     });
 
     it('also queries PR-level suggestions scoped to org + PR + repo fullName (no file filter)', async () => {

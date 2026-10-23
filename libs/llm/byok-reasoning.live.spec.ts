@@ -52,7 +52,9 @@
  * each row naming an env var and the two drifting.
  *
  * The baseURLs written into the rows are the vendors' public endpoints, kept in
- * the file because reading a row should tell you which vendor it talks to. They
+ * the file because reading a row should tell you which vendor it talks to. The
+ * one exception is `OPENAI_PROXY`, a loopback forwarder to OpenAI for the rows
+ * that stand for a customer's OpenAI-protocol proxy (see its comment). They
  * are not configuration: changing where a row points is a code change, reviewed
  * like any other, now that there is no secret that can silently redirect it.
  */
@@ -64,12 +66,15 @@ jest.mock('@libs/common/utils/crypto', () => ({
 
 
 import { readFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 
+import { tool } from 'ai';
 import { z } from 'zod';
 
 import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
+import { resolveTaskSlot } from './resolve-task-model';
 import { KODUS_CATALOG } from './providers/kodus/catalog';
 
 /**
@@ -270,6 +275,66 @@ const onlyDrift = async <T>(brand: string, call: Promise<T>): Promise<T> => {
         );
     }
 };
+
+/**
+ * An OpenAI-protocol proxy on loopback that forwards to OpenAI. The
+ * `openai_compatible` OpenAI rows stand for customer proxies (production points
+ * them at gateways that are not ours to call). Since #2135 a credential on
+ * api.openai.com itself is served on the native SDK, so those rows reach OpenAI
+ * through this instead: the same body a proxy would forward, on the OpenAI-
+ * protocol transport they exist to check. Started only when an OpenAI key is
+ * present.
+ */
+const OPENAI_PROXY_PORT = 18787;
+const OPENAI_PROXY = `http://127.0.0.1:${OPENAI_PROXY_PORT}/v1`;
+const forwardFetch = globalThis.fetch;
+let openaiProxy: Server | undefined;
+
+beforeAll(async () => {
+    if (!key('openai')) return;
+    openaiProxy = createServer((req, res) => {
+        // Chat completions only: the one endpoint an OpenAI-compatible slot
+        // calls, so nothing else is forwarded.
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404);
+            res.end();
+            return;
+        }
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', async () => {
+            try {
+                const upstream = await forwardFetch(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        method: 'POST',
+                        headers: {
+                            authorization: String(req.headers.authorization ?? ''),
+                            'content-type': 'application/json',
+                        },
+                        body: chunks.length ? Buffer.concat(chunks) : undefined,
+                    },
+                );
+                res.writeHead(upstream.status, {
+                    'content-type': 'application/json',
+                });
+                res.end(Buffer.from(await upstream.arrayBuffer()));
+            } catch {
+                res.writeHead(502, { 'content-type': 'text/plain' });
+                res.end('the forwarder could not reach OpenAI');
+            }
+        });
+    });
+    await new Promise<void>((resolve) =>
+        openaiProxy!.listen(OPENAI_PROXY_PORT, '127.0.0.1', resolve),
+    );
+});
+
+afterAll(async () => {
+    await new Promise<void>((resolve) =>
+        openaiProxy ? openaiProxy.close(() => resolve()) : resolve(),
+    );
+});
 
 /** Does this row have SOMETHING to authenticate with? */
 const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
@@ -503,13 +568,14 @@ const LIVE = [
         // Production points these at FIVE distinct customer proxies (the corpus
         // holds them redacted). None of them is ours to call, and a row that
         // named one would be testing that customer's gateway rather than the
-        // request we build — so this points at the vendor's own endpoint, the
-        // same choice `openai_compatible_gpt5` makes one row down.
+        // request we build — so this reaches the vendor through `OPENAI_PROXY`,
+        // the same choice `openai_compatible_gpt5` makes one row down. (It
+        // pointed at api.openai.com until #2135 served that host natively.)
         why: 'sol is 5 production slots and every one of them rides an OpenAI-protocol proxy rather than the native API — a different transport for the newest reasoner id, and the majority store high',
         slot: {
             provider: 'openai_compatible',
             model: 'gpt-5.6-sol',
-            baseURL: 'https://api.openai.com/v1',
+            baseURL: OPENAI_PROXY,
             reasoningEffort: 'high', // prod: 3 de 5 slots do sol usam high; 1 medium, 1 ausente
         },
         // A KNOWN GAP, not a satisfied expectation. `reasons: false` is the
@@ -842,12 +908,13 @@ const LIVE = [
         slot: {
             provider: 'openai_compatible',
             model: 'gpt-5.4',
-            baseURL: 'https://api.openai.com/v1',
+            baseURL: OPENAI_PROXY,
             reasoningEffort: 'medium',
             temperature: 0.2,
         },
         // Same vendor, same key as the native `openai` row — what differs is the
-        // provider id we resolve through, which is the whole point.
+        // provider id we resolve through, which is the whole point. Through
+        // `OPENAI_PROXY`: on api.openai.com itself it is served natively (#2135).
         reasons: true,
     },
     {
@@ -1836,3 +1903,98 @@ describe('#1916 — the json_object keyword rule, live', () => {
         120_000,
     );
 });
+
+/**
+ * #2135 — an OpenAI reasoner with a tool, live.
+ *
+ * Every row above calls with `tools: {}`, so no request here carried a function
+ * tool. An agent loop sends one together with its effort, and on chat
+ * completions the gpt-5.6 / gpt-6 line refuses the pair ("Function tools with
+ * reasoning_effort are not supported … use /v1/responses"). Both routes a
+ * customer can be on are asked, with a tool the model has to call:
+ *
+ *  - an OpenAI-compatible credential on api.openai.com, through routing, which
+ *    serves it on the native SDK;
+ *  - the same model through `OPENAI_PROXY`, over chat completions, where
+ *    OpenAI's refusal is asked again with the effort set to 'none'.
+ */
+describe('#2135 — an OpenAI reasoner with a tool, live', () => {
+    const apiKey = key('openai');
+    const run = apiKey ? it : it.skip;
+    const called: string[] = [];
+    const tools = {
+        clock: tool({
+            description: 'Returns the current time as HH:MM.',
+            inputSchema: z.object({}),
+            execute: async () => {
+                called.push('clock');
+                return '14:35';
+            },
+        }),
+    };
+    const ask = (byokConfig: unknown) =>
+        onlyDrift(
+            'openai',
+            LLM.run({
+                byokConfig: byokConfig as NormalizedModel,
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            'Call the clock tool, then reply with the time it returned and nothing else.',
+                    },
+                ],
+                loop: { tools, maxSteps: 3 },
+                runName: 'byok-live-tools',
+                maxOutputTokens: 4_096,
+            }),
+        ) as Promise<{ text: string }>;
+
+    beforeEach(() => {
+        called.length = 0;
+    });
+
+    run(
+        'an OpenAI-compatible credential on api.openai.com is served on the native SDK and runs the tool',
+        async () => {
+            const { slot } = resolveTaskSlot(
+                {
+                    version: 2,
+                    credentials: [
+                        {
+                            id: 'c',
+                            provider: 'openai_compatible',
+                            apiKey,
+                            settings: { baseURL: 'https://api.openai.com/v1' },
+                        },
+                    ],
+                    models: [{ id: 'm', credentialId: 'c', model: 'gpt-6-sol' }],
+                    routing: { defaultModelId: 'm' },
+                } as any,
+                'codeReview',
+            );
+            expect(slot?.provider).toBe('openai');
+            const result = await ask(slot);
+            expect(called).toContain('clock');
+            expect(result.text).toContain('14:35');
+        },
+        120_000,
+    );
+
+    run(
+        'the same model behind a proxy is asked again with the effort off and runs the tool',
+        async () => {
+            const result = await ask({
+                provider: 'openai_compatible',
+                model: 'gpt-6-sol',
+                baseURL: OPENAI_PROXY,
+                apiKey,
+                reasoningEffort: 'medium',
+            });
+            expect(called).toContain('clock');
+            expect(result.text).toContain('14:35');
+        },
+        120_000,
+    );
+});
+

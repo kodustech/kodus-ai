@@ -11,6 +11,9 @@ describe('formatModelLabel', () => {
         ['gpt-5.4', 'GPT 5.4'], // acronym → all caps
         ['deepseek-v3', 'Deepseek V3'], // brand casing not derivable — override territory
         ['some-unknown-7b', 'Some Unknown 7b'],
+        // Fireworks spells a version with p, after a k or a v too.
+        ['glm-5p3-flash', 'GLM 5.3 Flash'],
+        ['deepseek-v4p1-flash', 'Deepseek V4.1 Flash'],
     ])('%s → %s', (id, expected) => {
         expect(formatModelLabel(id)).toBe(expected);
     });

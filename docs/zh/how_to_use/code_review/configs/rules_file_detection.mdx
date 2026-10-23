@@ -1,118 +1,72 @@
 ---
-title: "规则文件检测"
-description: "自动检测和导入您现有的流行 AI 编码工具的规则文件,以使用您团队已建立的编码标准增强 Kody 的代码审查功能。"
+title: "编码代理指令"
+description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AGENTS.md、.cursor/rules、Copilot 指令),并指出违反这些指令的更改,而不会把它们变成 Kody Rules。"
 ---
 
-Kodus 可以自动同步和导入您现有的 IDE 规则文件,以使用您团队已建立的编码标准和偏好增强 Kody 的代码审查。
+`CLAUDE.md`、`AGENTS.md`、`.cursor/rules` 和 `.github/copilot-instructions.md` 这类文件告诉编码代理您的团队如何工作。它们不是审查策略,因此 Kodus 从不把它们变成 Kody Rules。开启此设置后,Kody 会读取覆盖拉取请求所更改文件的那些指令文件,并指出违反其内容的更改。
 
-<Frame caption="Kody Rules 的 Configuration 面板（仓库范围）中的 Auto-sync rules from repo">
-  <img src="/images/sync-rules.png" />
-</Frame>
+要把某个约定变成强制执行的审查规则,请在 `.kody/rules` 中把它写成[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)。
 
-## 什么是规则文件检测?
+## 开启方式
 
-规则文件检测会自动检测和导入代码库中流行 AI 编码工具和助手的配置文件。这确保 Kody 理解并尊重您现有的编码标准,无需手动设置。
+- **在入门引导中**,**Teach Kody how your team builds software** 步骤会列出在每个所选代码库中找到的编码代理文件,并询问 Kody 是否应使用它们。除非您开启,否则它保持关闭。
+- **之后**,在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库,打开 **What to review**,并开启 **Coding-agent instructions**。全局值是所有未设置自身值的代码库的默认值。
 
-## 支持的规则文件
+该设置以 `repoInstructionsEnabled` 的形式存储在代码审查配置中(以及 `kodus-config.yml` 中)。旧的 `ideRulesSyncEnabled` 不再被读取,在其中设置的值不会开启此功能。
 
-Kodus 自动检测和导入以下规则文件模式:
+## Kody 读取的文件
 
 ### Cursor
-- `.cursorrules` - 主 Cursor 规则文件(旧版)
-- `.cursor/rules/**/*.mdc` - 子目录中的 Cursor 规则
+- `.cursorrules`
+- `.cursor/rules/**/*.mdc`
 
 ### GitHub Copilot
-- `.github/copilot-instructions.md` - Copilot 指令
-- `.github/instructions/**/*.instructions.md` - 详细指令文件
+- `.github/copilot-instructions.md`
+- `.github/instructions/**/*.instructions.md`
 
-### Agentic(agents.md 约定)
-- `AGENTS.md` - 事实上的标准代理指引文件
-- `.agents.md` / `.agent.md` - 点文件变体
+### 代理(agents.md 约定)
+- `AGENTS.md`、`.agents.md`、`.agent.md`
+- `.agents/rules/**`
 
 ### Claude
-- `CLAUDE.md` - Claude 特定规则
-- `.claude/settings.json` - Claude 配置设置
+- `CLAUDE.md`
 
 ### Windsurf
-- `.windsurfrules` - Windsurf IDE 规则
+- `.windsurfrules`
 
 ### Sourcegraph Cody
-- `.sourcegraph/**/*.rule.md` - Cody 规则文件
+- `.sourcegraph/**/*.rule.md`
 
-### OpenCode
-- `.opencode.json` - OpenCode 配置
+工具配置文件(`.claude/settings.json`、`.opencode.json`、`.aider.conf.yml`、`.aiderignore`)会被识别但从不读取,因为它们不包含可用来检查代码的指令。
 
-### Aider
-- `.aider.conf.yml` - Aider 配置
-- `.aiderignore` - Aider 忽略模式
+## 审查如何使用它们
 
-### 通用/内部规则
-- `.rules/**/*` - 通用规则目录
-- `.kody/rules/**` 和 `rules/**/*.md` - Kody 特定规则(参见[代码库规则](/zh/how_to_use/code_review/configs/repository_rules) —— 它们会被逐字导入,不经过 LLM 改写)
-- `docs/coding-standards/**/*` - 基于文档的编码标准
+- **只读取覆盖本次更改的文件。** 代码库根目录下的文件覆盖所有文件。嵌套文件(例如 `services/billing/CLAUDE.md`)覆盖 `services/billing/**`。带有 `globs:`(且没有 `alwaysApply: true`)的 Cursor 规则,或带有 `applyTo:` 的 Copilot 文件,只覆盖其声明的文件。两者都没有的 Cursor 规则只在 Cursor 的代理请求时才加载,因此不会被读取。
+- **从拉取请求的目标分支读取。** 拉取请求会按照目标分支上已合并的指令进行检查;拉取请求对指令所做的更改在合并后才会生效。
+- **会跟随引用。** 指向代码库中另一个文件的文件(只包含路径的一行,如 `AI-AGENTS.md`,或 Claude Code 的导入 `@docs/guide.md`)会在目标分支上被跟随:改为读取它所指向的文件,并受相同的上限约束。代码库之外的路径会被忽略。
+- **有上限。** 每次审查最多 8 个文件、64 KB,根目录文件优先;更长的文件会被截断。审查会记录被省略的内容。
+- **发现的问题标记为 Repo Instruction。** 只有当指令适用于被更改的文件,且违反它的那一行是由该拉取请求新增或修改的,Kody 才会报告。评论会引用该指令并注明所在文件。
+- **审查的过滤器同样适用。** Repo Instruction 发现与其他发现一样,要经过团队的严重性过滤器和建议数量上限;低于阈值的发现不会发布。该设置让 Kody 读取这些文件,而不是绕过这些上限发布评论。
+- **从不作为给 Kody 的指令。** 这些文件被视为用来检查 diff 的代码库文本。其中要求审查者做的任何事情都会被忽略,也从不改变对 bug、安全或性能问题的判断方式。
 
-### 检测细节
+<Note>
+深度审查模式运行独立的 bug、安全和性能审查器,不会读取编码代理指令。
+</Note>
 
-- **会发现嵌套文件。** 上述每个模式都会在代码库根目录**以及任意子目录**下进行匹配。`services/billing/CLAUDE.md` 会被导入并自动限定到 `services/billing/**` —— 按目录放置的指引文件(monorepo 的常见约定)开箱即用。
-- **匹配不区分大小写。** `claude.md` 和 `CLAUDE.md` 等价。
-- **会跟随 `@file` 引用。** 如果某个规则文件用标准的 `@` 约定引用了另一个文件(例如 `CLAUDE.md` 中的 `@AGENTS.md`),被引用文件的内容会在导入时被抓取并纳入(仅一层,每个文件最多 5 个引用,每个被引用文件 100KB)。
-- **单条规则支持多个 glob。** 形如 `app/**/*.rb,lib/**/*.rb` 的规则路径(或[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)frontmatter 中的 `path: []` 列表)会把规则应用到匹配**任意一个** glob 的文件。
+## 此变更之前导入的规则
 
-## 工作原理
+早期版本的 Kodus 会把这些文件转换为 Kody Rules。这些规则会被保留但**冻结**:文件更改时它们不再更新,并在 Kody Rules 页面上带有 **Agent file** 来源。**rules from coding-agent files** 筛选标签会把列表筛选到这些规则,方便您暂停或删除它们,或把想要强制执行的约定移到 `.kody/rules` 中。
 
-### 初始设置
-1. **启用自动同步**:在侧边栏 **Code review** 分组顶部的范围选择器中选择该代码库,打开 **Kody Rules**,点击 **Configuration**,并开启 **Auto-sync rules from repo**
-2. **首次同步对话框**:一个对话框(**Sync repository rules now?**)会询问您是否要首次同步。选择 **Sync now**,或选择 **Skip initial scan** 等待下一次同步
-3. **代码库扫描**:当您确认时,Kodus 会扫描整个代码库以查找支持的规则文件
-4. **规则生成**:LLM 处理找到的文件并自动创建相应的 Kody 规则。例外:`.kody/rules/**` 和 `rules/**/*.md` 模板文件会被**逐字**导入 —— 不经过 LLM 转换 —— 你写下的指令、示例和标识符会被原样保留。如果这类文件不符合模板(缺少或无效的 frontmatter,或没有 `title`),则回退到 LLM 路径
+入门引导在无人选择的情况下从编码代理文件导入的规则已被删除:每个仓库中同一文件的副本都各自变成了一条适用于所有仓库的规则。Kody Rules 页面会显示删除的数量,并指向 **What to review** 中的 **Coding-agent instructions**,开启后会在每个仓库的审查中读取这些文件。如需恢复已删除的规则,请联系支持团队。
 
-### 组织级默认值
-在 Kody Rules 的 **Global** 配置中设置一次"从代码库自动同步规则",所有未设置自身值的代码库都会沿用它。代码库自身的设置始终优先。在全局开启不会执行首次扫描:每个代码库会在合并的拉取请求中规则文件发生变更时导入它们。
+`@kody-sync` 不再有任何作用:Kody Rule 文件始终同步,而编码代理文件从不会变成规则。`@kody-ignore` 仍然可以将某个 Kody Rule 文件排除在同步之外。
 
-### 持续同步
-- **自动更新**:当拉取请求关闭时自动同步
-- **检测到文件更改**:
-  - **新规则文件** → 创建新 Kody 规则
-  - **修改的规则文件** → 更新现有 Kody 规则
-  - **删除的规则文件** → 删除相应的 Kody 规则
+## 在自托管环境中验证
 
-### 手动同步(切换禁用)
-
-您可以在不启用自动同步的情况下同步单个规则文件:
-
-1. 在规则文件中的任何位置添加 `@kody-sync`
-2. 提交更改
-3. Kody 将仅同步该特定文件
-
-这使您可以选择性地同步规则,而无需为所有文件启用自动同步。
-
-### 排除某个文件(`@kody-ignore`)
-
-如果你想把规则/指引文件保留在代码库中,但不让 Kody 把它变成 Kody Rules,在文件的任意位置加上 `@kody-ignore`:
-
-1. 在规则文件的任意位置添加 `@kody-ignore`(不区分大小写)
-2. 提交该更改
-
-下次同步时,Kody 会**跳过**该文件,**并移除此前由它创建的 Kody Rules**。如果之后你去掉 `@kody-ignore` 标记(或加上 `@kody-sync`),这些规则会自动回来。用它可以把 `CLAUDE.md`、`AGENTS.md` 这类内部风格文档留在代码库中,而不让它们成为审查中强制执行的规则。
-
-<Warning>
-如果您手动编辑从 IDE 规则文件创建的 Kody 规则,下次修改和同步相应文件时,您的更改将被覆盖。
-</Warning>
-
-## 验证同步与规则评估(自托管)
-
-在自托管部署中,API 日志会输出便于 grep 的标记:
-
-- `[kody-rules-sync]` —— 每次同步的汇总:哪些文件被导入、被跳过(含原因)或被移除。
-- `[kody-rules-eval]` —— 审查过程中按文件的评估轨迹:每个被审查文件究竟有哪些规则(uuid + 标题)被选入提示词。
+对于每一次读取编码代理指令的审查,worker 日志都会输出一个便于 grep 的标记:
 
 ```bash
-docker logs kodus_api 2>&1 | grep "kody-rules-sync"
-docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+docker logs kodus_worker 2>&1 | grep "\[repo-instructions\]"
 ```
 
-如果某条规则在 UI 中显示为启用,却从未在你预期文件的 `[kody-rules-eval]` 中出现,请检查它的 **Path** glob —— 规则只会在匹配其路径的文件上运行。
-
-## 规则数量上限
-
-使用云端 **Free** 套餐(或订阅已取消或过期)的组织,以及**没有有效许可证**运行的自托管实例(Community Edition),每次审查最多评估 **10 条启用的规则**(按最早创建优先)。超出上限的规则会以 **Locked** 状态保留在列表中,并在每个 PR 上被跳过;**Code review → Kody Rules** 上的横幅会显示有多少条被跳过。付费云端套餐和已授权的自托管实例没有此限制。如果第 10 条之后的规则不触发,原因就是这个上限。
+每一行会显示找到了多少个指令文件、读取了哪些、多少字节,以及是否有内容被省略。

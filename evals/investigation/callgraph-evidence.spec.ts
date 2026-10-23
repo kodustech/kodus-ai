@@ -69,6 +69,36 @@ describe('call graph evidence audit', () => {
         });
     });
 
+    it('reports a production caller that follows an interleaved test caller', () => {
+        const interleavedGraph = `
+<CallGraph>
+  <ChangedFunction name="saveBooking" file="src/booking/service.ts">
+    <Callers count="3">
+      <Caller name="firstProduction" file="src/booking/controller.ts" />
+      <Caller name="saveBooking" file="src/booking/service.spec.ts" />
+      <Caller name="laterProduction" file="src/booking/fallback.ts" />
+    </Callers>
+  </ChangedFunction>
+</CallGraph>`;
+
+        expect(auditCallGraphEvidence(interleavedGraph).orderingViolations).toEqual([
+            {
+                changedFunction: {
+                    name: 'saveBooking',
+                    file: 'src/booking/service.ts',
+                },
+                firstTestCaller: {
+                    name: 'saveBooking',
+                    file: 'src/booking/service.spec.ts',
+                },
+                firstProductionCaller: {
+                    name: 'laterProduction',
+                    file: 'src/booking/fallback.ts',
+                },
+            },
+        ]);
+    });
+
     it('measures exact required direct dependencies from a private expectation manifest', () => {
         expect(
             evaluateCallGraphExpectations(

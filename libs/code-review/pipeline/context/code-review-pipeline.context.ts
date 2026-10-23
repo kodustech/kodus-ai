@@ -21,6 +21,7 @@ import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-c
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
@@ -210,6 +211,12 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     businessLogicValidatedAt?: string;
 
     /**
+     * `@kody -v <agent-slug>`: run only that custom agent on this review
+     * (#2172). Unset on every other review.
+     */
+    onlyCustomAgent?: string;
+
+    /**
      * SHA-256 hash of the PR body at the time of the last successful business
      * logic validation. Written by ProcessFilesPrLevelReviewStage (legacy EE
      * path); superseded by businessLogicValidatedAt on the agent pipeline,
@@ -286,6 +293,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * is not reported as a review that lost its checkout.
      */
     sandboxSuperseded?: boolean;
+
+    /**
+     * Team CLIs installed and fenced in the E2B sandbox for the custom agents
+     * that will run (#2172), keyed by agent id, plus the CLI_INSTALL_FAILED
+     * warnings for the ones that could not be. Absent on the local sandbox,
+     * where team CLIs never run.
+     */
+    customAgentClis?: CustomAgentCliProvisioning;
 
     /** Parameters used to create the sandbox — kept for renewal if it expires */
     getFreshCloneParams?: () => Promise<CreateSandboxParams>;
@@ -369,6 +384,8 @@ export interface DedupTraceSummary {
     groupsCount: number;
     removedCount: number;
     errorMessage?: string;
+    /** The follow-up for left-out suggestions failed; the stage kept them as they were. */
+    followupError?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
 }

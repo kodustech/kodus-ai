@@ -15,13 +15,28 @@ import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.cont
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
-import { buildFinderAgentSpec, runFinderWithVerify } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import {
+    buildFinderAgentSpec,
+    runFinderWithVerify,
+} from '@libs/code-review/infrastructure/agents/core/finder.agent';
 
 const findings = {
     reasoning: 'two candidates',
     suggestions: [
-        { relevantFile: 'a.ts', suggestionContent: 'real bug', existingCode: 'x', improvedCode: 'y', severity: 'high' },
-        { relevantFile: 'b.ts', suggestionContent: 'false positive', existingCode: 'p', improvedCode: 'q', severity: 'low' },
+        {
+            relevantFile: 'a.ts',
+            suggestionContent: 'real bug',
+            existingCode: 'x',
+            improvedCode: 'y',
+            severity: 'high',
+        },
+        {
+            relevantFile: 'b.ts',
+            suggestionContent: 'false positive',
+            existingCode: 'p',
+            improvedCode: 'q',
+            severity: 'low',
+        },
     ],
 };
 
@@ -33,11 +48,21 @@ function model() {
     let finderDone = false;
     const doGenerate = (async (opts: any) => {
         const sys = JSON.stringify(opts?.prompt ?? opts ?? '');
-        const isVerifier = sys.includes('verifier') || sys.includes('REFUTE') || sys.includes('verdict');
+        const isVerifier =
+            sys.includes('verifier') ||
+            sys.includes('REFUTE') ||
+            sys.includes('verdict');
         let tc: any;
         if (isVerifier) {
             const refute = sys.includes('false positive');
-            tc = { id: 'v', name: 'submitVerdict', input: { keep: !refute, rationale: refute ? 'refuted' : 'confirmed' } };
+            tc = {
+                id: 'v',
+                name: 'submitVerdict',
+                input: {
+                    keep: !refute,
+                    rationale: refute ? 'refuted' : 'confirmed',
+                },
+            };
         } else if (!finderDone) {
             finderDone = true;
             tc = { id: 'f', name: 'submitResult', input: findings };
@@ -45,7 +70,14 @@ function model() {
             tc = { id: 'f2', name: 'submitResult', input: findings };
         }
         return {
-            content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: tc.id,
+                    toolName: tc.name,
+                    input: JSON.stringify(tc.input),
+                },
+            ],
             finishReason: 'tool-calls',
             usage: { inputTokens: 5, outputTokens: 5 },
             warnings: [],
@@ -68,7 +100,12 @@ beforeEach(() => {
 
 const noCriticalLedger: ProgressLedger = {
     markFromToolCall: () => undefined,
-    summary: () => ({ totalTargets: 0, pendingTargets: 0, criticalTotal: 0, criticalPending: 0 }),
+    summary: () => ({
+        totalTargets: 0,
+        pendingTargets: 0,
+        criticalTotal: 0,
+        criticalPending: 0,
+    }),
     debtNote: () => null,
 };
 
@@ -92,7 +129,190 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         );
 
         expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
-        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
+            'b.ts',
+        ]);
         expect(r.droppedByVerify[0].evidence).toBe('refuted');
+    });
+
+    it('runs the verify pass on its own runner when one is given', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const finderRun = jest.spyOn(runner, 'run');
+        const verifyRun = jest.spyOn(verifyRunner, 'run');
+
+        const r = await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+                verifyRunner,
+                verifyModelId: 'check-model',
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
+        expect(finderRun).toHaveBeenCalledTimes(1);
+        // Two candidates, then the evidence gate re-checks the kept one
+        // (its file was never read): every verify run is on the check runner.
+        expect(verifyRun).toHaveBeenCalledTimes(3);
+        expect(
+            verifyRun.mock.calls.every(([spec]) => spec.phase === 'verify'),
+        ).toBe(true);
+    });
+});
+
+describe('runFinderWithVerify — repo_instruction findings', () => {
+    it('hands the verifier the repository instructions', async () => {
+        const instructionFindings = {
+            reasoning: 'one convention break',
+            suggestions: [
+                {
+                    relevantFile: 'a.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Amounts are integer cents."',
+                    existingCode: 'x',
+                    improvedCode: 'y',
+                    severity: 'medium',
+                },
+            ],
+        };
+        const verifierPrompts: string[] = [];
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    const isVerifier = sys.includes('REFUTE');
+                    if (isVerifier) verifierPrompts.push(sys);
+                    const tc = isVerifier
+                        ? { id: 'v', name: 'submitVerdict', input: { keep: true, rationale: 'ok' } }
+                        : { id: 'f', name: 'submitResult', input: instructionFindings };
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                repoInstructions: {
+                    files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.', appliesTo: '**', truncated: false }],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifierPrompts.length).toBeGreaterThan(0);
+        expect(verifierPrompts.every((p) => p.includes('<RepositoryInstructions>'))).toBe(true);
+    });
+
+    // The verifier is told to drop a quote it cannot find, and did not always:
+    // a PR that adds an instruction to CLAUDE.md is not checked against it.
+    it('drops a kept finding whose quote is not in the target-branch instructions', async () => {
+        const findings = {
+            reasoning: 'two convention breaks',
+            suggestions: [
+                {
+                    relevantFile: 'a.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Amounts are integer cents."',
+                    existingCode: 'x',
+                    improvedCode: 'y',
+                    severity: 'medium',
+                },
+                {
+                    relevantFile: 'b.ts',
+                    label: 'repo_instruction',
+                    suggestionContent: 'CLAUDE.md says "Use isinstance() instead of getattr on unions."',
+                    existingCode: 'p',
+                    improvedCode: 'q',
+                    severity: 'medium',
+                },
+            ],
+        };
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    const tc = sys.includes('REFUTE')
+                        ? { id: 'v', name: 'submitVerdict', input: { keep: true, rationale: 'ok' } }
+                        : { id: 'f', name: 'submitResult', input: findings };
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                repoInstructions: {
+                    files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.', appliesTo: '**', truncated: false }],
+                    otherFiles: [],
+                    dropped: [],
+                    truncated: false,
+                    indexedCount: 1,
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
+        expect(r.droppedByVerify[0].evidence).toMatch(/not in the target-branch/);
     });
 });

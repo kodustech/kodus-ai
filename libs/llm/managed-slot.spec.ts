@@ -183,6 +183,26 @@ describe('resolveEnvProvider — the self-hosted prefix/key cascade', () => {
         });
     });
 
+    // gpt-6-sol on chat completions refuses an agent loop's tools together with
+    // reasoning_effort; on OpenAI's own endpoint it goes to the native SDK.
+    it('an OpenAI reasoning model on OpenAI itself → openai native, with or without the base URL', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gpt-6-sol';
+        process.env.API_OPEN_AI_API_KEY = 'sk-x';
+        expect(resolveEnvProvider()).toEqual({ kind: 'openai_native', name: 'openai', apiKey: 'sk-x' });
+        process.env.API_OPENAI_FORCE_BASE_URL = 'https://api.openai.com/v1';
+        expect(resolveEnvProvider()).toEqual({ kind: 'openai_native', name: 'openai', apiKey: 'sk-x' });
+    });
+
+    it('an OpenAI reasoning model behind a proxy, or a non-reasoning one, stays openai_compatible', () => {
+        process.env.API_OPEN_AI_API_KEY = 'sk-x';
+        process.env.API_LLM_PROVIDER_MODEL = 'gpt-6-sol';
+        process.env.API_OPENAI_FORCE_BASE_URL = 'https://litellm.example.com/v1';
+        expect(resolveEnvProvider()).toMatchObject({ kind: 'openai_compat', baseURL: 'https://litellm.example.com/v1' });
+        delete process.env.API_OPENAI_FORCE_BASE_URL;
+        process.env.API_LLM_PROVIDER_MODEL = 'gpt-4o';
+        expect(resolveEnvProvider()).toMatchObject({ kind: 'openai_compat', baseURL: 'https://api.openai.com/v1' });
+    });
+
     it('self-hosted mode with no usable key → null (falls through to cloud default)', () => {
         process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
         expect(resolveEnvProvider()).toBeNull();
@@ -246,6 +266,16 @@ describe('resolveManagedSlot — env → managed slot / inline exception', () =>
                 supportsStructuredOutputs: true,
             }),
         );
+    });
+
+    it('env openai_native → OPENAI slot with the plaintext env key and no base URL (native SDK, /v1/responses)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gpt-6-sol';
+        process.env.API_OPEN_AI_API_KEY = 'sk-x';
+        process.env.API_OPENAI_FORCE_BASE_URL = 'https://api.openai.com/v1';
+        const r = resolveManagedSlot('x', { structuredOutputs: true });
+        expect(r).toEqual({ kind: 'slot', slot: { provider: BYOKProvider.OPENAI, apiKey: 'sk-x', model: 'gpt-6-sol' } });
+        expect(createOpenAICompatible).not.toHaveBeenCalled();
+        expect(getModelName()).toBe('openai:gpt-6-sol');
     });
 
     it('env openai_compat pointed at OpenCode Go (opencode.ai/zen) → INLINE exception carries an x-opencode-session header (issue #1880)', () => {

@@ -155,6 +155,12 @@ export interface ISuggestion {
     prUrl?: string;
     repositoryId?: string;
     repositoryFullName?: string;
+    /** The custom agent that made this finding (#2172), as stored with it. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
 }
 
 export interface ISuggestionToEmbed {
@@ -233,6 +239,12 @@ export interface ISuggestionByPR {
     brokenKodyRulesIds?: string[];
     priorityStatus?: PriorityStatus;
     deliveryStatus: DeliveryStatus;
+    /** The custom agent whose findings this comment gathers (#2172); drives its tag. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
     comment?: {
         id: number;
         pullRequestReviewId: number;

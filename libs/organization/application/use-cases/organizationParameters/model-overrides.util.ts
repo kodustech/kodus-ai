@@ -99,6 +99,88 @@ export function collectModelOverrides(
     return out;
 }
 
+/** A custom agent (#2172) that pins its own model. */
+export interface CustomAgentModelOverride extends ModelOverrideLocation {
+    agentId: string;
+    agentName: string;
+    /** The customAgent task it overrides. */
+    step: 'run';
+    model: string;
+}
+
+type AgentLike = {
+    id?: unknown;
+    name?: unknown;
+    models?: { run?: unknown };
+};
+
+const trimmedString = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
+
+/**
+ * Enumerate every custom agent model pin (`customAgents[].models.run`)
+ * at the level the agent is stored on: global, repository or directory.
+ * Read-only: these are cleared from the agent's own page, never in bulk.
+ */
+export function collectCustomAgentModelOverrides(
+    configValue: unknown,
+): CustomAgentModelOverride[] {
+    const config = configValue as
+        | {
+              configs?: { customAgents?: unknown };
+              repositories?: Array<{
+                  id?: string;
+                  name?: string;
+                  configs?: { customAgents?: unknown };
+                  directories?: Array<{
+                      id?: string;
+                      name?: string;
+                      configs?: { customAgents?: unknown };
+                  }>;
+              }>;
+          }
+        | undefined;
+    if (!config) return [];
+
+    const out: CustomAgentModelOverride[] = [];
+    const collect = (
+        configs: { customAgents?: unknown } | undefined,
+        location: ModelOverrideLocation,
+    ) => {
+        if (!Array.isArray(configs?.customAgents)) return;
+        for (const agent of configs.customAgents as AgentLike[]) {
+            const agentId = trimmedString(agent?.id);
+            if (!agentId) continue;
+            const agentName = trimmedString(agent?.name) ?? agentId;
+            for (const step of ['run'] as const) {
+                const model = trimmedString(agent?.models?.[step]);
+                if (model) {
+                    out.push({ ...location, agentId, agentName, step, model });
+                }
+            }
+        }
+    };
+
+    collect(config.configs, { scope: 'global' });
+    for (const repo of config.repositories ?? []) {
+        const repoLocation = {
+            repositoryId: repo?.id,
+            repositoryName: repo?.name,
+        };
+        collect(repo?.configs, { scope: 'repository', ...repoLocation });
+        for (const dir of repo?.directories ?? []) {
+            collect(dir?.configs, {
+                scope: 'directory',
+                ...repoLocation,
+                directoryId: dir?.id,
+                directoryName: dir?.name,
+            });
+        }
+    }
+
+    return out;
+}
+
 /**
  * Return a deep-cloned config with `byokModel` set to '' (inherit) at each
  * targeted scope. Only the `byokModel` field is touched — everything else is

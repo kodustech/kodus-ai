@@ -7,7 +7,7 @@
  * model we need a FIXED set of real pairs to measure a candidate judge's
  * agreement with the incumbent Sonnet judge.
  *
- * This runs the live finder (deterministic tool replay, no droplet) across the
+ * This runs production's review (../agent-provider.js) across the
  * finder-recall case set for one or more models, then emits every
  * (golden, candidate-finding) pair — the same F×G pairs the recall assertion
  * actually judges. Reference match/no-match labels are added later by
@@ -23,7 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-// The finder's key routing (applyModelEnv) reads process.env only. Locally the
+// The finder's model route (evals/shared/model-route.js) reads process.env only. Locally the
 // keys live in ~/.kodus-dev/config (same file the judge reads) — load any simple
 // KEY=VALUE that isn't already set so `node build-pairs.js` just works.
 function loadDevConfigIntoEnv() {
@@ -52,7 +52,6 @@ loadDevConfigIntoEnv();
 
 const buildTests = require('../recall-tests');
 const { parseOutput } = require('../parse-output');
-const { applyModelEnv } = require('../../shared/tier0-models');
 
 const OUT = path.join(__dirname, 'pairs.json');
 
@@ -94,8 +93,6 @@ function parseArgs(argv) {
 }
 
 async function runFinderForModel(model, tests) {
-    applyModelEnv(model); // point env at the tier-0 model (finder routing)
-    // Require the provider AFTER applyModelEnv so it reads the right env.
     const InvestigationAgentProvider = require('../agent-provider');
     const provider = new InvestigationAgentProvider({
         config: { label: `${model}-agreement`, provider: 'tier0', model },

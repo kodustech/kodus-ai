@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Direct finder-recall runner.
 //
-// This intentionally bypasses promptfoo so local and CI use the same Node
-// entrypoint without npx/network dependency. It runs the live generalist finder
-// through deterministic tool replay, then scores findings against golden bugs
-// with the same recall-assertion judge.
+// Runs production's review on each case (agent-provider.js → shared/review-stage.js:
+// the PR's platform data, the repository at its head, production's sandbox and
+// model route), then scores what the review ships against the PR's known bugs
+// with recall-assertion.js. One Node entry point for local runs and CI.
 const fs = require('fs');
 const path = require('path');
 
 const buildTests = require('./recall-tests');
 const { TIER0, defaultMatrix } = require('../shared/tier0-models');
+const { readTeamConfig } = require('../shared/team-config');
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
@@ -26,6 +27,7 @@ const KNOWN_FLAGS = new Set([
     'listModels',
     'gate',
     'no-judge',
+    'team-config',
     'call-graph',
     'call-graph-expectations',
 ]);
@@ -47,6 +49,7 @@ function parseArgs(argv) {
         listModels: false,
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
+        teamConfig: '',
         callGraph: process.env.RECALL_CALL_GRAPH || 'captured',
         callGraphExpectations: process.env.RECALL_CALL_GRAPH_EXPECTATIONS || '',
     };
@@ -102,6 +105,9 @@ function parseArgs(argv) {
             out.listModels = true;
         } else if (key === 'gate') {
             out.gate = true;
+        } else if (key === 'team-config') {
+            out.teamConfig = value || '';
+            if (consumesNext) i += 1;
         } else if (key === 'call-graph') {
             out.callGraph = value || out.callGraph;
             if (consumesNext) i += 1;
@@ -189,13 +195,6 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
         trace: {
             finishReason: trace.finishReason ?? null,
             steps: typeof trace.steps === 'number' ? trace.steps : null,
-            replayCalls:
-                typeof trace.replayCalls === 'number'
-                    ? trace.replayCalls
-                    : null,
-            unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
-                ? trace.unexpectedToolCalls.length
-                : 0,
         },
     };
 }
@@ -203,6 +202,8 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
 function runMetaOf(args) {
     return {
         harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
+        // The team config saved over each case's (--team-config), by its hash.
+        teamConfig: args.team ? args.team.hash : null,
         model: {
             // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
             id:
@@ -212,20 +213,21 @@ function runMetaOf(args) {
                 args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription'
-                    ? 'subscription'
-                    : 'api',
+            // How the finder reached it (model-route.js resolveRoute): a BYOK
+            // config, or none for `kodus-managed`.
+            // A subscription model never runs (main exits 2 before it).
+            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
-        executionMode: 'replay',
+        // Production's tools over the repository at the PR's head.
+        executionMode: 'live',
         callGraphVariant: args.callGraph,
         callGraphExpectations: Boolean(args.callGraphExpectations),
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
-        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
-        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
-        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
+        // reasoningEffort (agent-provider.js resolveRoute), which production
+        // maps per provider; without it the BYOK slot sets none.
         reasoning: process.env.RECALL_REASONING_EFFORT
             ? {
                   config: 'explicit',
@@ -277,6 +279,25 @@ async function main() {
     if (args.listModels) {
         for (const model of defaultMatrix()) console.log(model);
         return;
+    }
+
+    if (args.teamConfig) {
+        try {
+            args.team = readTeamConfig(args.teamConfig);
+        } catch (error) {
+            console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+            process.exit(2);
+        }
+    }
+
+    // A subscription model has no production route: the finder would run
+    // another model under its name (agent-provider.js resolveRoute).
+    if (TIER0[args.model]?.provider === 'codex_subscription') {
+        console.error(
+            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
+                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
+        );
+        process.exit(2);
     }
 
     // --no-judge: run the finder and SAVE its findings, score nothing. The finder
@@ -332,8 +353,7 @@ async function main() {
     process.env.RECALL_MODEL = args.model;
 
     // The presence check above passed once while holding the FINDER's Fireworks
-    // key — applyModelEnv writes it over API_OPEN_AI_API_KEY — and the 401 only
-    // surfaced after 30 paid finder runs. Presence is not validity: spend one
+    // key, and the 401 only surfaced after 30 paid finder runs. Presence is not validity: spend one
     // judge call before spending the finder.
     if (!NO_JUDGE) {
         try {
@@ -353,7 +373,14 @@ async function main() {
         }
     }
 
-    const tests = await buildTests();
+    let tests;
+    try {
+        tests = await buildTests();
+    } catch (error) {
+        // An unknown set, or a set naming a case with no dataset: nothing to measure.
+        console.error(`finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+        process.exit(2);
+    }
     let selectedTests = Number.isFinite(args.limit)
         ? tests.slice(0, args.limit)
         : tests;
@@ -371,8 +398,7 @@ async function main() {
             const manifest = JSON.parse(
                 fs.readFileSync(args.callGraphExpectations, 'utf8'),
             );
-            // Audit the graph from the original finder trace before the `off`
-            // control arm removes it from the agent input.
+            // Audit the captured graph before the `off` control removes it.
             callGraphEvidence = auditCallGraphCases(selectedTests, manifest);
         } catch (error) {
             console.error(
@@ -400,8 +426,14 @@ async function main() {
 
     const InvestigationAgentProvider = require('./agent-provider');
     const recallAssertion = require('./recall-assertion');
+    // Tokens and time of every model call (finder loop, verify, recovery),
+    // read like billing: summary.usage (evals/shared/eval-kit.js tokensUsed).
+    // After agent-provider, so its TypeScript hook is the one loaded.
+    const { countTokens, tokensUsed } = require('../shared/eval-kit');
+    countTokens();
     const provider = new InvestigationAgentProvider({
         config: providerConfigFor(args.model),
+        teamConfig: args.team ? args.team.configs : null,
     });
 
     const rows = [];
@@ -544,12 +576,11 @@ async function main() {
         });
 
         console.log(
-            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'}`,
+            `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} loop-recall=${fmtPct(metadata.loopRecall)} findings=${metadata.findings ?? 'n/a'}`,
         );
     };
 
-    // Pool: casos são independentes (replay determinístico próprio), então
-    // sequencial era só desperdício de relógio.
+    // Cases share nothing (each review has its own sandbox), so they run in a pool.
     const concurrency = Math.max(
         1,
         Math.min(Number(args.concurrency) || 4, selectedTests.length),
@@ -606,31 +637,44 @@ async function main() {
     // whose output failed to parse is written as a 'fail' with empty metadata
     // and never counted as infra, so counting only infra rows would let a run
     // that scored a handful of PRs report itself as a full one.
+    // A control case (no known bug: recall-assertion.js) has no recall by design.
     const unmeasured = rows.filter(
-        (row) => !Number.isFinite(row.metadata?.recall),
+        (row) =>
+            !Number.isFinite(row.metadata?.recall) && !row.metadata?.control,
     ).length;
     const summary = {
         model: args.model,
         startedAt,
         finishedAt: new Date().toISOString(),
         tokens,
+        usage: tokensUsed(),
         callGraph: {
             variant: args.callGraph,
             capturedCases: capturedCallGraphCases,
             evidence: callGraphEvidence,
         },
         cases: rows.length,
+        // The model that scored every case: a number holds only under its judge.
+        judge: NO_JUDGE ? null : JUDGE_MODEL,
+        // What --team-config saved over each case's config, or null.
+        teamConfig: args.team
+            ? { hash: args.team.hash, configs: args.team.configs }
+            : null,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
         infraFailures,
         unmeasured,
         infraBudget,
+        // Which coding-agent instructions the cases carried (recall-tests.js);
+        // null = none, the nightly default.
+        repoInstructions: process.env.RECALL_REPO_INSTRUCTIONS || null,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
             f1_mean: avg(rows.map((row) => row.metadata?.f1)),
-            fair_recall_mean: avg(rows.map((row) => row.metadata?.fairRecall)),
-            fidelity_mean: avg(rows.map((row) => row.metadata?.hitRate)),
+            // What the finder's loops returned, before the steps that follow
+            // them: reported next to the gated (shipped) recall, never gated.
+            loop_recall_mean: avg(rows.map((row) => row.metadata?.loopRecall)),
         },
         rows,
     };
@@ -664,7 +708,7 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`fidelity_mean: ${fmtPct(summary.metrics.fidelity_mean)}`);
+    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
     if (NO_JUDGE) {
         // The percentages above are empty by construction, not a result. Say so

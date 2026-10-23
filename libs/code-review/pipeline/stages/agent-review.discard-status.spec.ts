@@ -57,16 +57,17 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // the new one before updating the count. 7: issue #1833's publication
         // gate no longer discards — it strips `improvedCode` and keeps the
         // suggestion, so it has no `allDiscarded.push` site to guard here.
-        expect(discardBlocks()).toHaveLength(7);
+        // 8: #2097's repeat check discards what an earlier comment raised.
+        // 9: #2171 keeps findings whose verify run failed apart.
+        // 10: #2172 keeps a custom agent's findings below its own floor apart.
+        expect(discardBlocks()).toHaveLength(10);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(
         'discard site %i stamps deliveryStatus, not only priorityStatus',
         (_i, block) => {
             expect(block).toContain('priorityStatus:');
-            expect(block).toContain(
-                'deliveryStatus: DeliveryStatus.NOT_SENT,',
-            );
+            expect(block).toContain('deliveryStatus: DeliveryStatus.NOT_SENT,');
         },
     );
 });

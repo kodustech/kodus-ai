@@ -173,6 +173,7 @@ export const ROUTING_TASKS: ReadonlySet<string> = new Set([
     'businessValidation',
     'prSummary',
     'conversation',
+    'customAgent',
 ]);
 
 export function routeFromArea(area: TokenUsageArea): string {
@@ -189,6 +190,30 @@ export function routeFromArea(area: TokenUsageArea): string {
         default: // 'system' | 'other'
             return '';
     }
+}
+
+/**
+ * Run-name prefix of a custom review agent's model calls (#2172):
+ * `code-review-custom-<slug>` for the finder (plus `-recovery`), and
+ * `…-verify` / `…-convention-verify` for its check. Mirrored in the backfill.
+ */
+export const CUSTOM_AGENT_RUN_PREFIX = 'code-review-custom-';
+
+/**
+ * The routing task a custom agent's call served, read from its run name, or
+ * '' for any other run. Needed because a custom agent on the managed model has
+ * no routed slot, so nothing stamps `route`, and its `code-review*` run name
+ * would otherwise land in `codeReview`. Its verify runs on the same model and
+ * counts in the same task.
+ */
+export function routeFromCustomAgentRun(runName: unknown): string {
+    if (
+        typeof runName !== 'string' ||
+        !runName.startsWith(CUSTOM_AGENT_RUN_PREFIX)
+    ) {
+        return '';
+    }
+    return 'customAgent';
 }
 
 /**
@@ -240,8 +265,11 @@ export function deriveTu(
         // resolveTaskSlot). A VALID task wins; otherwise (absent, or a stale
         // tier string from a pre-realignment span) fall back to the area→task
         // de-para — so old/garbage never shows as a bogus task bucket.
-        route: ROUTING_TASKS.has(attrs['route'])
-            ? attrs['route']
-            : routeFromArea(area),
+        // A custom agent's run name decides first (see routeFromCustomAgentRun).
+        route:
+            routeFromCustomAgentRun(runName) ||
+            (ROUTING_TASKS.has(attrs['route'])
+                ? attrs['route']
+                : routeFromArea(area)),
     };
 }

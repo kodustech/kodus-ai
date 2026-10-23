@@ -4,6 +4,7 @@ import {
     FileChange,
     KodusConfigFile,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 export const CODE_BASE_CONFIG_SERVICE_TOKEN = Symbol.for(
@@ -16,6 +17,14 @@ export interface ICodeBaseConfigService {
         repository: { name: string; id: string },
         preliminaryFiles: FileChange[],
     ): Promise<CodeReviewConfig>;
+
+    getMergedCodeReviewConfigs(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: string },
+        parameter: CodeReviewParameter,
+        defaultBranch: string,
+        preliminaryFiles?: FileChange[],
+    ): Promise<CodeReviewConfigWithoutLLMProvider>;
 
     getSimpleConfig(
         organizationAndTeamData: OrganizationAndTeamData,

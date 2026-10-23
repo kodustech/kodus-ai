@@ -91,13 +91,9 @@ function auditCallGraphEvidence(xml) {
             (caller) => caller.isTest,
         );
         const productionIndex = changedFunction.callers.findIndex(
-            (caller) => !caller.isTest,
+            (caller, index) => index > testIndex && !caller.isTest,
         );
-        if (
-            testIndex < 0 ||
-            productionIndex < 0 ||
-            testIndex > productionIndex
-        ) {
+        if (testIndex < 0 || productionIndex < 0) {
             continue;
         }
         orderingViolations.push({

@@ -1,0 +1,128 @@
+name: "Evals: experiment on a review step"
+
+# Is a change to a review step better than what main has? Dispatched on a
+# branch, this runs evals/experiment.js there: the branch's HEAD against where it
+# left main, the same cases, model and judge on both sides, each run more than
+# once, compared case by case (evals/README.md, "Experiments").
+#
+# The rows go to the quality panel's experiments API from any branch: a step's
+# page lists them beside its nightly, and they never replace a number main
+# measured. Code already measured is not run again (--if-new).
+
+on:
+    workflow_dispatch:
+        inputs:
+            step:
+                description: "The review step (evals/experiment.js STEP_EVALS), e.g. dedup"
+                required: true
+                type: string
+            phases:
+                description: "Did it break anything (regression, controlled set), and is it better (decision, extended set)"
+                required: false
+                default: "regression,decision"
+                type: choice
+                options: ["regression,decision", "regression"]
+            runs:
+                description: "Runs per side"
+                required: false
+                default: "2"
+                type: string
+            models:
+                description: "The models, comma-separated (evals/shared/tier0-models.js): each compared on its own, one decision over them"
+                required: false
+                default: "deepseek-v4-flash@fireworks"
+                type: string
+            set:
+                description: "The cases \"is it better?\" runs on: full, or a set of the step's own (evals/README.md, \"A set of its own\")"
+                required: false
+                default: "full"
+                type: string
+            team_config:
+                description: "A JSON file in the branch of the review config keys a team saves: one commit, the config off against on (empty: main against the branch)"
+                required: false
+                default: ""
+                type: string
+
+permissions:
+    contents: read
+
+concurrency:
+    group: evals-experiment-${{ github.ref }}-${{ inputs.step }}
+    cancel-in-progress: false
+
+jobs:
+    experiment:
+        name: "${{ inputs.step }} · ${{ github.ref_name }}"
+        runs-on: ubuntu-latest
+        timeout-minutes: 240
+        steps:
+            # The whole history: the base is where the branch left main.
+            - uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            # The steps run over real PRs, checked out of their mirrors (evals/shared/repo-mirror.js).
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            # Base-side runs another experiment on the same base code already paid for (evals/README.md).
+            - uses: actions/cache/restore@v4
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ inputs.step }}-${{ github.run_id }}
+                  restore-keys: experiment-base-${{ inputs.step }}-
+            - name: Run the experiment
+              env:
+                  STEP: ${{ inputs.step }}
+                  PHASES: ${{ inputs.phases }}
+                  RUNS: ${{ inputs.runs }}
+                  MODELS: ${{ inputs.models }}
+                  SET: ${{ inputs.set }}
+                  TEAM_CONFIG: ${{ inputs.team_config }}
+                  NAME: ${{ github.ref_name }}
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
+                  JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The panel's experiments API: the result goes there, and code it
+                  # already measured (from a laptop or an earlier push) is not run again.
+                  KODUS_QUALITY_INGEST_TOKEN: ${{ secrets.KODUS_QUALITY_INGEST_TOKEN }}
+              run: |
+                  args=(--step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --models="$MODELS" --set="$SET" --name="$NAME" --if-new --out=experiment)
+                  if [ -n "$TEAM_CONFIG" ]; then args+=(--team-config="$TEAM_CONFIG"); fi
+                  node evals/experiment.js "${args[@]}"
+            - uses: actions/cache/save@v4
+              if: always()
+              with:
+                  path: ~/.cache/kodus-evals/experiment-base
+                  key: experiment-base-${{ inputs.step }}-${{ github.run_id }}
+            - name: Job summary
+              if: always() && hashFiles('experiment/summary.md') != ''
+              run: cat experiment/summary.md >> "$GITHUB_STEP_SUMMARY"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: experiment-${{ inputs.step }}
+                  path: |
+                      experiment/
+                      !experiment/base-tree/
+                  if-no-files-found: ignore
+                  retention-days: 90

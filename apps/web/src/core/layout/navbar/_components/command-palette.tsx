@@ -220,7 +220,8 @@ const SETTINGS_TABS = [
         label: "What to review",
         href: "review-scope",
         icon: ScanSearchIcon,
-        keywords: "categories severity instructions",
+        keywords:
+            "categories severity instructions coding-agent claude.md agents.md cursor",
     },
     {
         label: "Kody Rules",
@@ -377,14 +378,7 @@ export const CommandPalette = ({
         staleTime: 60_000,
     });
 
-    const repositories = useMemo(
-        () =>
-            scopes.filter(
-                (scope) =>
-                    scope.isSelected || (scope.directories?.length ?? 0) > 0,
-            ),
-        [scopes],
-    );
+    const repositories = scopes;
 
     // Repository ids the settings shell can actually open, and their names.
     const scopeNames = useMemo(

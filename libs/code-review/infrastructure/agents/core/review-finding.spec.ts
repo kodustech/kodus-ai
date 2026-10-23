@@ -30,6 +30,8 @@ function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyRes
         keptEvidence: [],
         keptParseMode: [],
         droppedByVerify: [],
+        unverified: [],
+        droppedByQuoteCheck: [],
         finderState: { steps: [], usage: {} } as any,
         verifyUsage: {} as any,
         recallUsage: {} as any,

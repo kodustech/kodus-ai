@@ -113,9 +113,48 @@ describe('McpToolAuthorizer', () => {
                 { ruleId: 'r-1' },
                 teamKey(['kodyRules:manage']),
             ),
-        ).resolves.toEqual({ ruleId: 'r-1', organizationId: 'org-1' });
+        ).resolves.toEqual({
+            ruleId: 'r-1',
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        });
         await expect(
             authorizer.authorize(tool, { ruleId: 'r-1' }, service),
         ).resolves.toEqual({ ruleId: 'r-1', organizationId: 'org-1' });
+    });
+
+    it.each([
+        ['omitted', { foo: 'bar' }],
+        ['undefined', { foo: 'bar', teamId: undefined }],
+        ['null', { foo: 'bar', teamId: null }],
+        ['empty string', { foo: 'bar', teamId: '' }],
+    ])(
+        "fills a team key's teamId from the credential when it is %s",
+        async (_label, args) => {
+            // The tenant boundary has a single owner: the wrapper no longer
+            // rewrites tenant fields, so filling a missing teamId for a team key
+            // lives here. A supplied teamId is validated (above), never replaced.
+            await expect(
+                authorizer.authorize('KODUS_LIST_REPOSITORIES', args, teamKey()),
+            ).resolves.toMatchObject({
+                foo: 'bar',
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            });
+        },
+    );
+
+    it('does not add a teamId for a service call that omits it', async () => {
+        const result = await authorizer.authorize(
+            'KODUS_LIST_REPOSITORIES',
+            { foo: 'bar' },
+            service,
+        );
+        expect(result).toEqual({ foo: 'bar', organizationId: 'org-1' });
+        // The key must be absent, not present-and-undefined (toEqual ignores
+        // undefined, so assert ownership explicitly).
+        expect(
+            Object.prototype.hasOwnProperty.call(result, 'teamId'),
+        ).toBe(false);
     });
 });

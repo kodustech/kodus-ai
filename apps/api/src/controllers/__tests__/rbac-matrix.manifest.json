@@ -506,6 +506,50 @@
     }
   },
   {
+    "key": "customAgents.controller.ts#resolve",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/custom-agents/resolve",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#try",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/custom-agents/try",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#tryRun",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/try/:runId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "github.controller.ts#getOrganizationName",
     "httpMethod": "GET",
     "urlPath": "/github/organization-name",
@@ -880,20 +924,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#importFastIdeRules",
-    "httpMethod": "POST",
-    "urlPath": "/kody-rules/import-fast-ide-rules",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "kodyRules.controller.ts#listPastReviewers",
+    "key": "kodyRules.controller.ts#listAgentInstructionFiles",
     "httpMethod": "GET",
-    "urlPath": "/kody-rules/past-reviewers",
+    "urlPath": "/kody-rules/agent-instruction-files",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -902,9 +935,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#listPendingIdeRules",
+    "key": "kodyRules.controller.ts#listPastReviewers",
     "httpMethod": "GET",
-    "urlPath": "/kody-rules/pending-ide-rules",
+    "urlPath": "/kody-rules/past-reviewers",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -938,17 +971,6 @@
     "key": "kodyRules.controller.ts#resyncIdeRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/resync-ide-rules",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "kodyRules.controller.ts#reviewFastIdeRules",
-    "httpMethod": "POST",
-    "urlPath": "/kody-rules/review-fast-ide-rules",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -1526,6 +1548,17 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "deny"
+    }
+  },
+  {
+    "key": "pullRequestMessages.controller.ts#findAllOverrideCounts",
+    "httpMethod": "GET",
+    "urlPath": "/pull-request-messages/override-counts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
     }
   },
   {

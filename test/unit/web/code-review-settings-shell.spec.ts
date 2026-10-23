@@ -48,7 +48,7 @@ describe('code review settings shell helpers', () => {
                     createFormattedValue(false),
                 isRequestChangesActive: createFormattedValue(false),
                 runOnDraft: createFormattedValue(true),
-                ideRulesSyncEnabled: createFormattedValue(false),
+                repoInstructionsEnabled: createFormattedValue(false),
                 enableCommittableSuggestions: createFormattedValue(false),
                 codeReviewVersion: createFormattedValue('v2'),
                 showToggleCodeReviewVersion: true,

@@ -38,7 +38,10 @@ shows it grey.
 | `e2e.cloud_aws`, `e2e.health` | `e2e-cloud-aws.yml`, `e2e-health-report.yml` | status / history rows |
 | `evals.wiring` | `code-review-evals-pr.yml` | status only |
 | `evals.nightly.recall`, `evals.nightly.precision` | `code-review-evals-nightly.yml` (notify) | ratio; status from the nightly verdict |
-| `evals.tier0.<model>` | `code-review-evals-tier0.yml` (one row per matrix model) | review seconds (ms); red when review or PR summary is broken |
+| `tests.stage.<stage>` | `code-review-evals-nightly.yml`, one row per stage in `evals/stages.js` (`evals/stage-signals.js --tests`) | tests passing (count); `meta.does` what the stage does, `meta.tests` each test with its outcome (unit specs from `evals/stage-tests.js`, contract tests from the wiring smoke), `meta.eval` its eval or null; red when a test failed |
+| `evals.stage.<stage>` | `code-review-evals-nightly.yml`, one row per stage with an eval, on measured nights | its number (ratio) on the controlled set against `meta.floor`, `meta.baseline`; `meta.case_results` every case, `meta.usage` tokens, cache hits and call times; status from the nightly verdict |
+| `evals.weekly.<stage>.<set>.<model>` | `code-review-evals-weekly.yml` (`evals/weekly.js`) | the stage's number for `meta.model` on `meta.set` (controlled, or full for DeepSeek) against that model's floor; ungated (yellow) when the model has none yet |
+| `tests.weekly.<stage>.<model>` | `code-review-evals-weekly.yml` | a contract test the weekly run repeats on every tier-0 model (the PR summary) |
 | `evals.benchmark` | `code-review-model-benchmark.yml` | lowest F1 across models; `meta.models` has each model's precision/recall/f1 |
 | `prod.errors.<group>`, `.total`, `.noise`, `.new_signatures`, `.spikes` | kodus-insights `nightly-errors.yml` (CloudWatch) | counts |
 | `prod.betterstack.monitors_down` | kodus-quality `pull.yml` | count |
@@ -69,6 +72,10 @@ Reusable workflows (`e2e-self-hosted-matrix`, `e2e-cloud`, `code-review-model-be
 ```
 
 3. Run the workflow once and put the row in the PR description.
+
+Several rows from one step: write a JSON array of `{name, status, value, unit, meta}` and
+pass its path as `rows` instead of `name`/`status`/`value`/`unit`/`meta`. Each row is checked
+like a single one; a bad row is dropped with a warning and the rest are written.
 
 A new name needs no schema change. Add it to the list above.
 

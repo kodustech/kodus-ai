@@ -54,6 +54,10 @@ rss: true
                     <span>MCP</span>
                 </label>
                 <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-custom-agents" />
+                    <span>Custom Agents</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
                     <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-billing-licenses" />
                     <span>Billing &amp; Licenses</span>
                 </label>
@@ -62,6 +66,66 @@ rss: true
                     <span>CLI</span>
                 </label>
             </div>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">October 22, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-custom-agents filter-ai-engine filter-mcp">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom Review Agents (Beta)</div>
+                    <p className="kodus-changelog-copy">You can now add specialized reviewers that work alongside Kody, each focused on specific aspects of your code, such as architecture, test coverage, security, or duplicate code.</p>
+                    <p className="kodus-changelog-copy">Get started with one of the available templates (Architecture, E2E Coverage, Regression &amp; Hallucination, or Security Reviewer), or import an existing skill from your repository and turn it into a reviewer.</p>
+                    <p className="kodus-changelog-copy">Each agent can be configured to:</p>
+                    <ul className="kodus-changelog-list">
+                        <li><strong>Review specific files</strong>, following your repository's skills and documentation.</li>
+                        <li><strong>Use your team's tools</strong>, including plugins, up to three CLIs running in an isolated sandbox, and structural code searches with ast-grep.</li>
+                    </ul>
+                    <p className="kodus-changelog-copy">You can also run a specific agent on demand by mentioning <code className="kodus-changelog-code">@kody -v agent-name</code> in a comment.</p>
+                    <p className="kodus-changelog-copy"><strong>Before enabling an agent</strong>, you can test it on a real PR using Try it, without posting any comments. You'll see which suggestions it would keep or discard, understand why, and fine-tune its instructions.</p>
+                    <p className="kodus-changelog-copy">All agents start disabled and follow the same validation checks, severity criteria, limits, and deduplication rules as Kody to keep PR noise to a minimum.</p>
+                    <p className="kodus-changelog-copy">Learn more about <a className="kodus-changelog-link" href="https://docs.kodus.io/en/how_to_use/code_review/custom_agents">customizing review agents in our documentation</a>.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/10/custom-agents-2026-10-22-v4-40s.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Shorter, clearer suggestions</div>
+                    <p className="kodus-changelog-copy">Suggestion comments are now limited to two short sentences instead of trying to pack in every technical detail. They also no longer repeat line numbers already visible in the diff. Titles over 100 characters are automatically rewritten to stay readable in the PR view.</p>
+                    <p className="kodus-changelog-copy">Comments are now anchored to the exact line where the issue occurs, rather than occasionally landing on a nearby line.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Unverified findings are no longer published:</strong> when Kody's search process ran out of steps or was interrupted mid-response, the result could still be treated as a complete, verified suggestion. Reviews now recognize incomplete runs and withhold those findings instead of publishing them.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Suggestions are now automatically marked as implemented:</strong> when you push a commit during a review that fixes a reported issue, Kody automatically checks the change and marks the suggestion as implemented, rather than leaving it pending until someone checks manually.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-security filter-mcp filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Stronger authentication and organization isolation:</strong> we closed several sandbox escape vulnerabilities in Kody's local tooling, enforced JWT signature verification in the MCP manager (which previously only decoded tokens), tightened tenant scoping across several endpoints, and now encrypt GitHub App installation tokens at rest.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
         </div>
     </div>
 

@@ -2,11 +2,18 @@
  * Pure suggestion-format prompt + response parse — shared by production
  * (`format-suggestion-content.ts`) and the format eval so there is no prompt drift.
  */
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+
+/** Words in a suggestion body under the default guidelines, as the
+ *  formatter is asked for them. */
+export const BODY_WORD_BUDGET = 50;
 
 export interface SuggestionToFormat {
     /** Shown above the body in the comment; the body must not repeat it. */
     title?: string;
+    /** The title is over the ceiling: the model returns a new one. */
+    rewriteTitle?: boolean;
     suggestionContent: string;
     existingCode?: string;
     improvedCode?: string;
@@ -17,6 +24,8 @@ export interface SuggestionToFormat {
 export interface FormattedSuggestion {
     suggestionContent: string;
     improvedCode: string;
+    /** A new title, when the suggestion's was marked for rewriting. */
+    title?: string;
 }
 
 export function buildFormatPrompt(
@@ -29,31 +38,39 @@ export function buildFormatPrompt(
 ): string {
     const customGuidelines = options?.customWritingGuidelines?.trim() || '';
 
-    const langInstruction = options?.languageLabel
-        ? `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`
-        : '';
+    const langInstruction = !options?.languageLabel
+        ? ''
+        : `\nIMPORTANT: Write all output in ${options.languageLabel}. Do not fall back to English.`;
 
     const suggestionsText = suggestions
         .map(
             (s, i) =>
-                `[${i}]\nTitle: ${s.title || '(none)'}\nFile: ${s.relevantFile || 'unknown'}\nLanguage: ${s.language || 'unknown'}\nContent: ${s.suggestionContent}\nExisting code:\n\`\`\`\n${s.existingCode || '(none)'}\n\`\`\`\nImproved code:\n\`\`\`\n${s.improvedCode || '(none)'}\n\`\`\``,
+                `[${i}]\n${s.rewriteTitle ? 'Title (too long, return a new "title")' : 'Title'}: ${s.title || '(none)'}\nFile: ${s.relevantFile || 'unknown'}\nLanguage: ${s.language || 'unknown'}\nContent: ${s.suggestionContent}\nExisting code:\n\`\`\`\n${s.existingCode || '(none)'}\n\`\`\`\nImproved code:\n\`\`\`\n${s.improvedCode || '(none)'}\n\`\`\``,
         )
         .join('\n\n---\n\n');
 
     const shapeRules = `- Do not repeat the title: it already names the problem and is shown right above this text. Open with why it matters.
-- No code blocks: the fix is shown separately. Name identifiers in \`inline code\` only.`;
+- No code blocks: the fix is shown separately. Name identifiers in \`inline code\` only.
+- No line numbers: the comment already sits on the lines it is about.
+- The reader sees the diff and nothing else. When the problem rests on something outside it (another file, a table or column, a config), name the file or symbol to check in a few words instead of retelling it.`;
+
+    // Only when a title is over the ceiling, so every other batch gets the
+    // prompt it got before.
+    const titleRule = suggestions.some((s) => s.rewriteTitle)
+        ? `\n- A title marked "too long" gets a new one in a "title" field: ${TITLE_PROMPT_SPEC}. Keep its code names in \`inline code\`, in the language of the text. Leave out "title" for every other suggestion.`
+        : '';
 
     const lengthOrTeam = customGuidelines
         ? `\nThe team has provided custom writing guidelines. Follow them for tone and length — they take priority over the default rules above.\n${customGuidelines}\n\nThese rules apply regardless of the team's guidelines:\n${shapeRules}`
-        : `\n- Write at most 2 sentences: one on the impact, one on what to change.`;
+        : `\n- Write at most 2 short sentences and ${BODY_WORD_BUDGET} words in all: one on the impact, one on what to change.`;
 
     return `You are a code review comment editor. Each suggestion is shown in the pull request as a title followed by the text you write.
 
 Rules:
 - Remove labels like "WHAT:", "WHY:", "HOW:", "1.", "2.", "3." from the beginning of sentences and merge what they delimited into natural prose.
-- Keep every technical detail that matters: function names, file names, variable names, error types, line numbers.
+- Name the code at fault in \`inline code\` (the function, variable, type or error the suggestion cites): shorten the words around the names, never the names.
 ${shapeRules}
-- Do NOT touch existingCode or improvedCode — return them exactly as provided.${lengthOrTeam}${langInstruction}
+- Do NOT touch existingCode or improvedCode — return them exactly as provided.${titleRule}${lengthOrTeam}${langInstruction}
 
 Example:
 Title: "join() leaves flusher processes running after a timeout"
@@ -63,7 +80,7 @@ Output: "Every process after the deadline keeps running as an orphan. Remove the
 Respond with ONLY a JSON array:
 \`\`\`json
 [
-  {"index": 0, "suggestionContent": "cleaned text"}
+  {"index": 0, "suggestionContent": "cleaned text"${suggestions.some((s) => s.rewriteTitle) ? ', "title": "only when marked too long"' : ''}}
 ]
 \`\`\`
 
@@ -343,6 +360,9 @@ export function parseFormatResponse(text: string): {
             formatted.set(item.index, {
                 suggestionContent: item.suggestionContent,
                 improvedCode: item.improvedCode || '',
+                ...(typeof item.title === 'string'
+                    ? { title: item.title }
+                    : {}),
             });
         }
     }

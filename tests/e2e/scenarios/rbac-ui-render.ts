@@ -40,14 +40,16 @@ const SPEC = resolve(PLAYWRIGHT_DIR, "rbac-ui-render.mjs");
 // /user-logs is deliberately absent: the page is feature-gated (EE
 // activity-logs) and redirects to /settings when off, so its render is
 // environment-dependent, not role-dependent.
-const RENDER_ROUTES: Array<{
+export const RENDER_ROUTES: Array<{
     path: string;
     marker: string | null;
     notMarker?: string;
 }> = [
     { path: "/token-usage", marker: "token usage" },
     { path: "/pull-requests", marker: "pull requests" },
-    { path: "/settings/git", marker: "git settings" },
+    // The page heading is "Repositories", but the sidebar carries that word on
+    // every screen (including /forbidden), so match the page's own subtitle.
+    { path: "/settings/git", marker: "which repositories kody reviews" },
     { path: "/cockpit", marker: null, notMarker: "analytics not available" },
 ];
 

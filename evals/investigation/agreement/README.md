@@ -11,7 +11,7 @@ judge on a fixed, real set of pairs.
 
 ## Files
 
-- `build-pairs.js` — runs the live finder (tool replay) across the finder-recall
+- `build-pairs.js` — runs production's review (`../agent-provider.js`) across the finder-recall
   case set and emits every `(golden, candidate)` pair → `pairs.json` (committed).
   Needs finder keys only, no judge key.
 - `run-agreement.js` — labels every pair with the reference judge (Sonnet) and each
@@ -72,10 +72,6 @@ the new judge on the next intentional model-move anyway).
 −0.3 pp (≪ noise), **~1.6× faster** (1992 vs 3188 ms) and a fraction of Sonnet's
 cost on every pair, every model, every PR. `gpt-5.4-mini` is the cheapest+fastest
 alternative (κ=0.89, 1385 ms) one env-var away: `JUDGE_MODEL=gpt-5.4-mini`.
-
-The **dedup** eval pins its judge to `claude-haiku-4-5` (in `evals/dedup/run.js`)
-and forces off `gpt-5.4-mini`, so the judge always stays a different model than its
-`gpt-5.4-mini` dedup (non-circular).
 
 `kody-targets.json` is **not** affected: the kody-rules gate matches occurrences by
 line number (enumerated ground truth ±tolerance), not via this LLM judge.

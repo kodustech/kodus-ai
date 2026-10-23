@@ -2,13 +2,11 @@
  * The report decides what reaches Discord and whether the notification is red.
  * The old suite reported "infra" as a warning and passed, which is how the PR
  * finder gate stayed green for weeks while measuring nothing. These pin that a
- * night or a Friday that did not measure is never reported as healthy, and that
+ * night that did not measure is never reported as healthy, and that
  * the message says what moved and what to do.
  */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { nightlyReport, tier0Report } = require('./ci-report');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { classifyFailure } = require('./tier0-smoke');
+const { nightlyReport } = require('./ci-report');
 
 const row = (caseId: string, recall: number, found: string[] = [], missed: string[] = []) => ({
     caseId,
@@ -18,7 +16,7 @@ const row = (caseId: string, recall: number, found: string[] = [], missed: strin
         precision: 0.5,
         tpFindings: 1,
         fpFindings: 1,
-        totalCalls: 30,
+        toolCalls: 30,
         goldenResults: [...found.map((golden) => ({ golden, found: true })), ...missed.map((golden) => ({ golden, found: false }))],
     },
 });
@@ -39,7 +37,7 @@ function night(overrides: Record<string, unknown> = {}) {
 }
 
 const env = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'kodustech/kodus-ai', GITHUB_RUN_ID: '42' };
-const targets = { sets: { light: { models: { 'deepseek-v4-flash@fireworks': { observed: { sdPerPrRunDiff: 0.3, runs: [0.38, 0.35] } } } } } };
+const targets = { sets: { controlled: { models: { 'deepseek-v4-flash@fireworks': { observed: { sdPerPrRunDiff: 0.3, runs: [0.38, 0.35] } } } } } };
 
 describe('nightly report', () => {
     it('is green and short when quality holds', () => {
@@ -128,66 +126,14 @@ describe('Discord messages stay scannable', () => {
     });
 });
 
-describe('tier-0 report', () => {
-    const pass = (model: string) => ({ model, status: 'pass', toolCalls: 30, findings: 5, seconds: 100, prSummary: { status: 'pass' } });
-    const read = (results: Record<string, unknown>) => (model: string) => results[model] || null;
-
-    it('is green when every requested model reviews and summarises', () => {
-        const report = tier0Report(['a', 'b'], read({ a: pass('a'), b: pass('b') }));
-        expect(report.status).toBe('success');
-        expect(report.title).toBe('✅ Tier-0 · 2/2 models ok');
-        expect(report.description).toBe('✅ a · b');
-    });
-
-    it('names the model that no longer reviews, apart from one that left no result', () => {
-        const report = tier0Report(['a', 'b', 'c'], read({ a: pass('a'), b: { ...pass('b'), status: 'broken', reason: 'no finding parsed' } }));
-        expect(report.status).toBe('failure');
-        expect(report.title).toBe('❌ Tier-0 · 1/3 models ok');
-        expect(report.description).toContain('✅ a\n❌ **b** · review: no findings\n   `no finding parsed` → customers on this model are affected\n❓ **c** · no result, the job crashed');
-    });
-
-    it('treats a broken PR summary as a broken model', () => {
-        expect(tier0Report(['a'], read({ a: { ...pass('a'), prSummary: { status: 'broken', reason: 'GATE FAILED' } } })).status).toBe('failure');
-    });
-
-    it('tells key/quota problems apart and marks a failure that repeats last week', () => {
-        const refused = { ...pass('a'), status: 'infra', reason: 'insufficient balance' };
-        const report = tier0Report(['a'], read({ a: refused }), env, read({ a: refused }));
-        expect(report.title).toBe('⚠️ Tier-0 · 0/1 model ok');
-        expect(report.description).toContain('⚠️ **a** · review: no credit (same as last week)');
-        expect(report.markdown).toContain('_(same as last week)_');
-    });
-});
-
-describe('tier-0 failure classification', () => {
-    it.each([
-        'Incorrect API key provided: sk-...',
-        'agent loop finished with error: API key is invalid. (finishReason=error, steps=0, tokens=0)',
-        'no API key for claude-sonnet-4-6 — set one of API_ANTHROPIC_API_KEY/ANTHROPIC_API_KEY/BYOK_ANTHROPIC_API_KEY',
-        'Your account org-1 is suspended due to insufficient balance',
-        'AI_APICallError: Cannot connect to API: connect ECONNREFUSED',
-        '429 Too Many Requests',
-    ])('provider refusal is infra: %s', (reason) => {
-        expect(classifyFailure(reason)).toBe('infra');
-    });
-
-    it.each([
-        'FindingsOutput failed Zod validation',
-        "tool_choice 'required' is incompatible with thinking",
-        'agent loop produced zero steps and zero tokens',
-    ])('an engine failure on the model is broken: %s', (reason) => {
-        expect(classifyFailure(reason)).toBe('broken');
-    });
-});
-
 describe('nightly alerting without false positives', () => {
-    const targets = { sets: { light: { models: { 'deepseek-v4-flash@fireworks': { observed: { sdPerPrRunDiff: 0.318, runs: [0.384, 0.352] } } } } } };
+    const targets = { sets: { controlled: { models: { 'deepseek-v4-flash@fireworks': { observed: { sdPerPrRunDiff: 0.318, runs: [0.384, 0.352] } } } } } };
     const measured = (recall: number, gate: Record<string, unknown>) => ({
         model: 'deepseek-v4-flash@fireworks',
         cases: 1,
         infraFailures: 0,
         metrics: { recall_mean: recall, precision_mean: 0.5 },
-        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } }],
+        rows: [{ caseId: 'a', status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, toolCalls: 20 } }],
         gate,
     });
     const confirmedFail = (recall: number) => ({ status: 'fail', checks: [{ name: 'recall_mean', actual: recall, floor: 0.26, pass: false }], confirmation: { runs: [recall, recall] } });
@@ -240,7 +186,7 @@ describe('nightly alerting without false positives', () => {
     });
 
     it('counts a PR whose output did not parse as unmeasured, not as a score', () => {
-        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, totalCalls: 20 } });
+        const scored = (caseId: string, recall: number) => ({ caseId, status: 'pass', metadata: { recall, precision: 0.5, tpFindings: 1, fpFindings: 0, toolCalls: 20 } });
         const night = {
             model: 'deepseek-v4-flash@fireworks',
             cases: 3,

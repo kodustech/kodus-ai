@@ -186,16 +186,17 @@ export const useCustomMessagesOverrideCountsByRepository = (
     repositoryId: string,
     enabled = true,
 ) => {
-    return useFetch<PullRequestMessagesOverrideCountsByRepository>(
-        pathToApiUrl("/pull-request-messages/override-counts-by-repository"),
-        {
-            params: {
-                repositoryId,
-            },
-        },
+    // Every scope badge shares one query, independent of the repository count.
+    const result = useFetch<PullRequestMessagesOverrideCountsByRepository[]>(
+        pathToApiUrl("/pull-request-messages/override-counts"),
+        undefined,
         enabled,
         {
             staleTime: 60_000,
         },
     );
+    return {
+        ...result,
+        data: result.data?.find((entry) => entry.repositoryId === repositoryId),
+    };
 };

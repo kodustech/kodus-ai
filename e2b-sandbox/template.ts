@@ -17,6 +17,11 @@ const betterleaksUrl = `https://github.com/betterleaks/betterleaks/releases/down
 const osvScannerVersion = '2.6.0';
 const osvScannerUrl = `https://github.com/google/osv-scanner/releases/download/v${osvScannerVersion}/osv-scanner_linux_amd64`;
 
+// Structural search for custom review agents (the `astGrep` tool). Only the
+// `ast-grep` binary is installed: on Linux `sg` is util-linux's setgroups.
+const astGrepVersion = '0.45.3';
+const astGrepUrl = `https://github.com/ast-grep/ast-grep/releases/download/${astGrepVersion}/app-x86_64-unknown-linux-gnu.zip`;
+
 // osv-scanner queries the OSV.dev API at run time, so it needs egress from the
 // sandbox — through the Shadowsocks proxy on the production template below.
 const installSecurityTools = [
@@ -26,13 +31,17 @@ const installSecurityTools = [
     `wget -O osv-scanner ${osvScannerUrl}`,
     'chmod +x osv-scanner',
     'sudo mv osv-scanner /usr/local/bin/',
+    `wget -O ast-grep.zip ${astGrepUrl}`,
+    'unzip -o ast-grep.zip ast-grep',
+    'chmod +x ast-grep',
+    'sudo mv ast-grep /usr/local/bin/',
 ];
 
 // Transparent proxy: all outbound TCP traffic is routed through the Shadowsocks server
 // so git fetch, curl, etc. automatically use the proxy without any extra configuration.
 export const kodusTemplate = Template()
     .fromBaseImage()
-    .aptInstall(['iptables', 'git', 'ripgrep'])
+    .aptInstall(['ca-certificates', 'iptables', 'git', 'ripgrep', 'unzip'])
     .runCmd([
         `wget ${downloadUrl}`,
         'tar -xf shadowsocks-*.tar.xz',
@@ -59,5 +68,5 @@ export const kodusTemplate = Template()
  */
 export const kodusBenchmarkTemplate = Template()
     .fromBaseImage()
-    .aptInstall(['git', 'ripgrep'])
+    .aptInstall(['ca-certificates', 'git', 'ripgrep', 'unzip'])
     .runCmd([...installSecurityTools]);

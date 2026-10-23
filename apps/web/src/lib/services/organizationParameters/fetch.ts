@@ -152,10 +152,25 @@ export type ModelOverrideEntry = {
     inCurrentProviderCatalog: boolean | null;
 };
 
+/** A custom agent that pins its own BYOK model for one step (#2172). */
+export type CustomAgentModelOverrideEntry = {
+    scope: 'global' | 'repository' | 'directory';
+    repositoryId?: string;
+    repositoryName?: string;
+    directoryId?: string;
+    directoryName?: string;
+    agentId: string;
+    agentName: string;
+    step: 'run';
+    model: string;
+};
+
 export type ListModelOverridesResult = {
     provider?: string;
     overrides: ModelOverrideEntry[];
     mismatchedCount: number;
+    /** Optional: an older API does not send it. */
+    customAgentOverrides?: CustomAgentModelOverrideEntry[];
 };
 
 export type ClearOverrideTarget = {

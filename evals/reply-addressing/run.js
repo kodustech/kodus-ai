@@ -2,23 +2,29 @@
  * REPLY-ADDRESSING eval: is an unmentioned reply in a Kody thread directed at
  * Kody? (#1946)
  *
- * Drives the production classifier (`classifyReplyAddressedToKody`, the one
- * `LLM.run` call ChatWithKodyFromGitUseCase makes) on `cases.json`: the 64
- * boundary conversations from the TypeSafe experiment plus threads where two
- * people talk and one of them addresses Kody. The model is routed like the
- * self-hosted managed slot (`applyModelEnv`), the same path an org without
- * BYOK takes.
+ * Runs what ChatWithKodyFromGitUseCase runs on an unmentioned reply
+ * (reply-thread.ts): the reply's thread rebuilt from the PR's comments as
+ * GitHub returns them, the free gate (`implicitReplyGate`), then the classifier
+ * on the model the org routes the conversation task to (production's
+ * PermissionValidationService over the org's stored model config,
+ * evals/shared/model-route.js: a BYOK config holding the model). Cases: `cases.json`, the 64 boundary
+ * conversations from the TypeSafe experiment plus threads where two people talk
+ * and one of them addresses Kody. A reply the gate silences counts as not
+ * answered, as in production.
  *
  *   node evals/reply-addressing/run.js --model=gpt-5.4-mini [--repeats=3]
  *                                      [--dataset=cases|repo-cases]
- *                                      [--concurrency=6] [--output=<file>]
+ *                                      [--concurrency=6] [--output=<file>] [--gate]
  *
  * Reports precision (answered replies that were for Kody), recall, and the
- * same two numbers on multi-human threads alone. No floor yet: the issue
- * leaves the ship bar to be set from the first runs.
+ * same two numbers on multi-human threads alone. The headline metric is the
+ * share of replies handled right (answered when meant for Kody, quiet when
+ * not), gated with --gate on the model's floor in targets.json. --output writes
+ * the shared result (evals/shared/eval-result.js), one case per conversation.
  *
- * EXIT CODES: 0 = measured, 2 = infra (unroutable model, or more than 5% of
- *   calls failed; those are listed with their reason).
+ * EXIT CODES: 0 = measured, 1 = below the floor (--gate), 2 = infra
+ *   (unroutable model, or more than 5% of calls failed; those are listed with
+ *   their reason).
  */
 const fs = require('fs');
 const path = require('path');
@@ -72,16 +78,27 @@ function infra(msg) {
     process.exit(2);
 }
 
-const { applyModelEnv } = require('../shared/tier0-models');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+const { evalQuestion } = require('../shared/eval-result');
+// Floors per dataset and model: `models` holds cases.json's (the nightly and every
+// model's weekly run), `datasets.<name>.models` any other's (repo-cases: DeepSeek's
+// weekly full set).
+const TARGETS = require('./targets.json');
+const TARGET = ((DATASET === 'cases' ? TARGETS.models : TARGETS.datasets?.[DATASET]?.models) || {})[MODEL] || {};
+const { resolveRoute, EVAL_ORG, evalPermissionService } = require('../shared/model-route');
+let ROUTE;
 try {
-    applyModelEnv(MODEL);
+    ROUTE = resolveRoute({ provider: 'tier0', model: MODEL });
 } catch (e) {
     infra(`cannot route model '${MODEL}': ${e.message}`);
 }
 
-const {
-    classifyReplyAddressedToKody,
-} = require('../../libs/platform/application/use-cases/codeManagement/implicit-reply.ts');
+const { implicitReplyGate } = require('../../libs/platform/application/use-cases/codeManagement/implicit-reply.ts');
+const { buildReplyThread, classifyImplicitReply } = require('../../libs/platform/application/use-cases/codeManagement/reply-thread.ts');
+const { PlatformType } = require('../../libs/core/domain/enums/platform-type.enum.ts');
+// The org's stored model config: production's routing sends the conversation
+// task to its model.
+const permissionValidationService = evalPermissionService(ROUTE.storedConfig);
 
 // cases: boundary conversations. repo-cases: real replies in Kody threads on
 // kodustech/kodus-ai, labeled by hand (see README).
@@ -96,14 +113,39 @@ const isMultiHuman = (c) =>
             .map((m) => m.author),
     ).size > 1;
 
-function toThread(c) {
-    return c.messages.map((m, i) => ({
-        id: i + 1,
-        author: m.author,
-        isKody: m.author === 'Kody',
-        isBot: !!m.bot,
-        body: m.text,
-    }));
+// The thread as GitHub returns it: Kody's comments from its app (its bot login
+// and the marker every Kody comment carries), other bots by their [bot] login,
+// every reply pointing at the thread's first comment. The case's last message
+// is the reply being routed. Production reads it from here
+// (chatWithKodyFromGit.use-case.ts → reply-thread.ts).
+const KODY_LOGIN = 'kody-ai[bot]';
+function asGitHubComments(c) {
+    return c.messages.map((m, i) => {
+        const kody = m.author === 'Kody';
+        const login = kody ? KODY_LOGIN : m.bot ? `${m.author}[bot]` : m.author;
+        return {
+            id: i + 1,
+            body: kody ? `${m.text}\n\n<!-- kody-codereview -->` : m.text,
+            user: { login, type: kody || m.bot ? 'Bot' : 'User' },
+            ...(i > 0 ? { in_reply_to_id: 1 } : {}),
+            created_at: new Date(Date.UTC(2026, 9, 16, 10, i)).toISOString(),
+        };
+    });
+}
+
+// What production does with an unmentioned reply: rebuild its thread, the free
+// gate, then the classifier on the org's conversation route.
+async function answers(c) {
+    const comments = asGitHubComments(c);
+    const thread = buildReplyThread(comments[comments.length - 1], comments, PlatformType.GITHUB);
+    if (implicitReplyGate(thread)) return false;
+    return classifyImplicitReply({
+        thread,
+        permissionValidationService,
+        organizationAndTeamData: EVAL_ORG,
+        prNumber: 1,
+        platformType: PlatformType.GITHUB,
+    });
 }
 
 async function mapLimit(items, limit, fn) {
@@ -146,7 +188,20 @@ function score(rows) {
     };
 }
 
+// One conversation in the shared result: what it checks, and the repeats it
+// got right out of those that measured.
+function caseResults(rows) {
+    return cases.map((c) => {
+        const mine = rows.filter((r) => r.id === c.id && !r.error);
+        const right = mine.filter((r) => r.answered === (r.expected === 'respond')).length;
+        const who = isMultiHuman(c) ? ', two people talking' : '';
+        const checks = `${c.expected === 'respond' ? 'Answers' : 'Stays quiet on'} the reply in "${c.id}" (${c.category}${who})`;
+        return { id: c.id, checks: checks.length > 160 ? `${checks.slice(0, 159)}…` : checks, hits: right, total: mine.length, ...(mine.length ? {} : { unmeasured: true }) };
+    });
+}
+
 async function main() {
+    countTokens();
     const jobs = cases.flatMap((c) =>
         Array.from({ length: REPEATS }, (_, repeat) => ({ c, repeat })),
     );
@@ -163,13 +218,7 @@ async function main() {
             multiHuman: isMultiHuman(c),
         };
         try {
-            row.answered = await classifyReplyAddressedToKody({
-                thread: toThread(c),
-                organizationAndTeamData: {
-                    organizationId: 'eval',
-                    teamId: 'eval',
-                },
-            });
+            row.answered = await answers(c);
         } catch (e) {
             row.error = String(e?.message || e).slice(0, 200);
         }
@@ -177,7 +226,21 @@ async function main() {
     });
 
     const failed = rows.filter((r) => r.error);
+    const perCase = caseResults(rows);
+    const hits = perCase.reduce((n, c) => n + c.hits, 0);
+    const total = perCase.reduce((n, c) => n + c.total, 0);
     const result = {
+        eval: 'reply-addressing',
+        question: evalQuestion('evals/reply-addressing'),
+        metric: {
+            name: 'of replies handled right',
+            value: total ? hits / total : null,
+            floor: TARGET.floor ?? null,
+            baseline: TARGET.observed ?? null,
+        },
+        runs: REPEATS,
+        tokens: tokensUsed(),
+        infra: { errored: failed.length, total: rows.length },
         model: MODEL,
         dataset: DATASET,
         repeats: REPEATS,
@@ -194,12 +257,13 @@ async function main() {
             )
             .map((r) => `${r.id}#${r.repeat} expected ${r.expected}`),
         rows,
+        cases: perCase,
     };
 
     const output = args.output ? String(args.output) : null;
     if (output) fs.writeFileSync(output, JSON.stringify(result, null, 2));
 
-    console.log(JSON.stringify({ ...result, rows: undefined }, null, 2));
+    console.log(JSON.stringify({ ...result, rows: undefined, cases: undefined }, null, 2));
 
     if (failed.length > result.infraBudget.allowed) {
         for (const r of failed.slice(0, 5))
@@ -207,6 +271,14 @@ async function main() {
         infra(
             `${failed.length}/${rows.length} calls failed (budget ${result.infraBudget.allowed})`,
         );
+    }
+    if (args.gate && result.metric.floor === null) {
+        console.error(`\n⚠️ GATE NOT EVALUATED: no floor for ${MODEL} in evals/reply-addressing/targets.json`);
+        process.exit(2);
+    }
+    if (args.gate && result.metric.value < result.metric.floor) {
+        console.error(`\n❌ GATE FAILED: ${(result.metric.value * 100).toFixed(1)}% of replies handled right < floor ${(result.metric.floor * 100).toFixed(1)}%`);
+        process.exit(1);
     }
     process.exit(0);
 }

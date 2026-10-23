@@ -66,6 +66,7 @@ import {
     FindMemoriesResult,
     IKodyRule,
     IKodyRuleContextNeed,
+    KodyRuleSourceFileIssue,
     IKodyRuleFileScope,
     IKodyRuleCompileAttempt,
     IKodyRuleDetector,
@@ -529,6 +530,20 @@ export class KodyRulesService implements IKodyRulesService {
         return this.kodyRulesRepository.addRule(uuid, newRule);
     }
 
+    async markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean> {
+        return this.kodyRulesRepository.markAutoPausesDigested(
+            organizationId,
+            ruleId,
+            pausedAts,
+            digestedAt,
+        );
+    }
+
     async updateRule(
         uuid: string,
         ruleId: string,
@@ -759,7 +774,14 @@ export class KodyRulesService implements IKodyRulesService {
         // pausing and creating new rules — if the org is still over quota,
         // the rule stays PAUSED (lockedByPlan) instead of reactivating.
         let statusOverride: Partial<
-            Pick<IKodyRule, 'status' | 'lockedByPlan'>
+            Pick<
+                IKodyRule,
+                | 'status'
+                | 'lockedByPlan'
+                | 'autoPause'
+                | 'lastAutoPause'
+                | 'resumedAt'
+            >
         > = {};
 
         if (
@@ -769,11 +791,25 @@ export class KodyRulesService implements IKodyRulesService {
             const activeRulesCount = (existing.rules ?? []).filter(
                 (r) => r.status === KodyRulesStatus.ACTIVE,
             ).length;
-            statusOverride = await this.resolveStatusWithinPlanLimit(
+            const resolved = await this.resolveStatusWithinPlanLimit(
                 organizationAndTeamData,
                 KodyRulesStatus.ACTIVE,
                 activeRulesCount + 1,
             );
+            // A resume the plan limit refused leaves the rule paused, so the
+            // auto-pause and its reason stay.
+            statusOverride =
+                resolved.status === KodyRulesStatus.ACTIVE
+                    ? {
+                          ...resolved,
+                          resumedAt: new Date(),
+                          // `null`, not delete: updateRule only $sets defined fields.
+                          autoPause: null,
+                          lastAutoPause:
+                              existingRule.autoPause ??
+                              existingRule.lastAutoPause,
+                      }
+                    : resolved;
         } else if (
             kodyRule.status !== undefined &&
             kodyRule.status !== KodyRulesStatus.ACTIVE
@@ -1080,6 +1116,44 @@ export class KodyRulesService implements IKodyRulesService {
 
         const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
         return updated ? (updated as IKodyRule) : null;
+    }
+
+    /**
+     * Flag a rule whose `.kody/rules` file stopped parsing as a template, or
+     * clear the flag with `null`. Only the flag changes: the rule keeps its
+     * text and status, so a broken edit never turns off what the team wrote.
+     */
+    async updateRuleSourceFileIssue(
+        organizationId: string,
+        ruleId: string,
+        issue: KodyRuleSourceFileIssue | null,
+    ): Promise<IKodyRule | null> {
+        const existing = await this.findByOrganizationId(organizationId);
+        const existingRule = existing?.rules?.find((r) => r.uuid === ruleId);
+        if (!existing || !existingRule) {
+            throw new NotFoundException('Rule not found');
+        }
+
+        const updatedKodyRules = await this.updateRule(existing.uuid, ruleId, {
+            ...existingRule,
+            // `null` passes through: updateRule skips only `undefined`.
+            sourceFileIssue: issue,
+        } as IKodyRule);
+
+        if (!updatedKodyRules) {
+            this.logger.error({
+                message: 'Could not update rule source file issue',
+                error: new Error('Could not update rule source file issue'),
+                context: KodyRulesService.name,
+                metadata: { organizationId, ruleId, issue },
+            });
+            return null;
+        }
+
+        return (
+            (updatedKodyRules.rules.find((r) => r.uuid === ruleId) as
+                IKodyRule | undefined) ?? null
+        );
     }
 
     /**

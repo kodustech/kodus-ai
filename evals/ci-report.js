@@ -5,7 +5,6 @@
 //   node evals/ci-report.js nightly <result.json> [--last-green=<result.json>]
 //        [--commits=<tsv: sha, subject, author>] [--investigation=<json>]
 //        [--previous-state=<json>] [--state-out=<json>]
-//   node evals/ci-report.js tier0 <dir> [--previous=<dir>]
 //
 // Writes markdown to $GITHUB_STEP_SUMMARY and `status`, `verdict`, `mention`,
 // `title`, `description` to $GITHUB_OUTPUT when those are set; prints them
@@ -198,7 +197,7 @@ function nightlyReport(result, env = {}, extras = {}) {
     const compareUrl = base && head && base !== head ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${base.slice(0, 12)}...${head.slice(0, 12)}` : null;
 
     const comparison = result && lastGreen && !result.error ? compareNights(result, lastGreen) : null;
-    const noise = targets && result ? nightNoise(targets, 'light', result.model) : null;
+    const noise = targets && result ? nightNoise(targets, 'controlled', result.model) : null;
     const { verdict, title: headline } = nightlyVerdict(result, comparison, noise, previousState);
     const title = `${ICON[verdict]} Nightly evals: ${headline}`;
     const status = ['pass', 'improved', 'oscillation'].includes(verdict) ? 'success' : 'failure';
@@ -283,10 +282,10 @@ function nightlyReport(result, env = {}, extras = {}) {
         }
 
         const next = {
-            regression: 'run `pnpm eval:nightly` on the parent commit and on the suspect. If the drop is intentional, recalibrate `sets.light` in `evals/investigation/targets.json` in the same PR.',
-            'still-red': 'the same drop is still unfixed. Whoever owns it: fix it, or recalibrate `sets.light` if it was intentional.',
+            regression: 'run `pnpm eval:nightly` on the parent commit and on the suspect. If the drop is intentional, recalibrate `sets.controlled` in `evals/investigation/targets.json` in the same PR.',
+            'still-red': 'the same drop is still unfixed. Whoever owns it: fix it, or recalibrate `sets.controlled` if it was intentional.',
             oscillation: 'nothing. One run below the floor is noise when the repeat passes.',
-            improved: 'if the gain repeats tomorrow night, raise the floor (the rule is in `__doc` of `sets.light`).',
+            improved: 'if the gain repeats tomorrow night, raise the floor (the rule is in `__doc` of `sets.controlled`).',
             infra: 'fix the key or quota named above. The next night measures again.',
             ungated: 'the run did not match the calibration (different model or judge). See `evals/investigation/targets.json`.',
         }[verdict];
@@ -428,108 +427,6 @@ function nightlyCompact({ result, verdict, comparison, commits, investigation, p
     return { title, description: lines.join('\n') };
 }
 
-// ── tier-0 ───────────────────────────────────────────────────────────────────
-
-const T0_ICON = { pass: '✅', broken: '❌', infra: '⚠️', skipped: '➖', missing: '❓' };
-
-function sameFailure(now, before) {
-    if (!before) return false;
-    const key = (r) => `${r.status}|${clip(r.reason, 120)}|${r.prSummary?.status}|${clip(r.prSummary?.reason, 120)}`;
-    return now.status !== 'pass' && key(now) === key(before);
-}
-
-function tier0Line(r, previous) {
-    const review = {
-        pass: `review ok (${r.toolCalls} tool calls, ${r.findings} findings, ${r.seconds}s)`,
-        broken: `review broken: ${clip(r.reason, 160)}`,
-        infra: `not reached: ${clip(r.reason, 160)}`,
-        missing: 'no result (the job crashed or timed out)',
-    }[r.status] || r.status;
-    const summaryStatus = r.prSummary?.status;
-    const summary =
-        summaryStatus === 'pass'
-            ? 'summary ok'
-            : summaryStatus && summaryStatus !== 'skipped' && r.status !== 'missing'
-              ? `summary ${summaryStatus === 'infra' ? 'not reached' : summaryStatus === 'missing' ? 'missing' : 'broken'}`
-              : null;
-    const repeat = sameFailure(r, previous) ? ' _(same as last week)_' : '';
-    return `${T0_ICON[r.status] || '❓'} **${r.model}**: ${[review, summary].filter(Boolean).join(' · ')}${repeat}`;
-}
-
-function tier0Report(models, readResult, env = {}, readPrevious = () => null) {
-    const url = runUrl(env);
-    const results = models.map(
-        (model) => readResult(model) || { model, status: 'missing', reason: 'no result', prSummary: { status: 'missing' } },
-    );
-
-    const outcomes = (r) => [r.status, r.prSummary?.status];
-    const missing = results.filter((r) => r.status === 'missing');
-    const broken = results.filter((r) => !missing.includes(r) && outcomes(r).includes('broken'));
-    const unreachable = results.filter((r) => !missing.includes(r) && !broken.includes(r) && outcomes(r).includes('infra'));
-    const ok = results.length - missing.length - broken.length - unreachable.length;
-    const names = (list) => list.map((r) => r.model).join(', ');
-
-    let status = 'success';
-    let verdict = 'pass';
-    const parts = [];
-    if (broken.length) parts.push(`${names(broken)} ${broken.length === 1 ? 'no longer reviews' : 'no longer review'}`);
-    if (missing.length) parts.push(`${names(missing)} left no result`);
-    if (unreachable.length) parts.push(`could not reach ${names(unreachable)}`);
-    if (broken.length || missing.length) {
-        status = 'failure';
-        verdict = 'regression';
-    } else if (unreachable.length) {
-        status = 'failure';
-        verdict = 'infra';
-    }
-    const headline = parts.length
-        ? `${ok}/${results.length} ok · ${parts.join(' · ')}`
-        : results.length === 1
-          ? `${results[0].model} reviews`
-          : `all ${results.length} models review`;
-    const title = `${verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌'} Tier-0: ${headline}`;
-
-    const detailedLines = results.map((r) => tier0Line(r, readPrevious(r.model)));
-    const lines = detailedLines;
-    const next = [];
-    if (broken.length) next.push('• A broken model affects whoever runs on it today: decide per model (hold it, change the default, or tell those customers).');
-    if (missing.length) next.push('• No result: the job crashed or timed out; the log is in the run.');
-    if (unreachable.length) next.push('• Not reached: fix the provider key or quota (the reason is on the line).');
-    if (next.length) lines.push('', '**Next step:**', ...next);
-    if (url) lines.push(`Run: ${url}`);
-
-    const markdown = [`## ${title}`, '', ...lines.map((line) => (line ? `${line}  ` : line))].join('\n');
-
-    // Discord: the healthy models in one line, then each problem with its short
-    // cause, the raw error and what to do.
-    const okModels = results.filter((r) => !missing.includes(r) && !broken.includes(r) && !unreachable.includes(r));
-    const icon = verdict === 'pass' ? '✅' : verdict === 'infra' ? '⚠️' : '❌';
-    const secretFor = (model) =>
-        /^claude/.test(model) ? 'BYOK_ANTHROPIC_API_KEY' : /^gpt/.test(model) ? 'BYOK_OPENAI_API_KEY' : /^gemini/.test(model) ? 'BYOK_GOOGLE_API_KEY' : /^kimi/.test(model) ? 'BYOK_MOONSHOT_API_KEY' : /^glm/.test(model) ? 'BYOK_ZHIPU_API_KEY' : null;
-    const compactLines = [];
-    if (okModels.length) compactLines.push(`✅ ${okModels.map((r) => r.model).join(' · ')}`);
-    for (const r of [...broken, ...missing, ...unreachable]) {
-        const reviewBroken = r.status !== 'pass';
-        const raw = r.status === 'missing' ? null : reviewBroken ? r.reason : r.prSummary?.reason;
-        const why = r.status === 'missing' ? 'no result, the job crashed' : `${reviewBroken ? 'review' : 'summary'}: ${shortReason(raw)}`;
-        const repeat = sameFailure(r, readPrevious(r.model)) ? ' (same as last week)' : '';
-        compactLines.push(`${r.status === 'missing' ? '❓' : broken.includes(r) ? '❌' : '⚠️'} **${r.model}** · ${why}${repeat}`);
-        const detail = [];
-        if (raw) detail.push(`\`${clip(raw, 90)}\``);
-        if (unreachable.includes(r) && secretFor(r.model)) detail.push(`fix \`${secretFor(r.model)}\``);
-        if (broken.includes(r)) detail.push('customers on this model are affected');
-        if (detail.length) compactLines.push(`   ${detail.join(' → ')}`);
-    }
-    if (url) compactLines.push('', md('run', url));
-    return {
-        status,
-        verdict,
-        title: `${icon} Tier-0 · ${ok}/${results.length} ${results.length === 1 ? 'model ok' : 'models ok'}`,
-        description: compactLines.join('\n'),
-        markdown,
-    };
-}
-
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
 function flag(name) {
@@ -553,7 +450,7 @@ function readCommits(file) {
     }
 }
 
-module.exports = { nightlyReport, tier0Report };
+module.exports = { nightlyReport };
 
 if (require.main === module) {
     const [mode, target] = process.argv.slice(2);
@@ -568,21 +465,8 @@ if (require.main === module) {
             }),
             flag('state-out'),
         );
-    } else if (mode === 'tier0' && target) {
-        // EVAL_MODELS: the models this run was asked for (a dispatch can pin one).
-        const models = process.env.EVAL_MODELS ? JSON.parse(process.env.EVAL_MODELS) : require('./shared/tier0-models').tier0();
-        const fileFor = (dir, model) => path.join(dir, `tier0-smoke-${model.replace(/[^\w.-]+/g, '-')}.json`);
-        const previous = flag('previous');
-        emit(
-            tier0Report(
-                models,
-                (model) => readJson(fileFor(target, model)),
-                process.env,
-                (model) => (previous ? readJson(fileFor(previous, model)) : null),
-            ),
-        );
     } else {
-        console.error('usage: node evals/ci-report.js nightly <result.json> [--last-green=… --commits=… --investigation=…] | tier0 <dir> [--previous=<dir>]');
+        console.error('usage: node evals/ci-report.js nightly <result.json> [--last-green=… --commits=… --investigation=…]');
         process.exit(2);
     }
 }

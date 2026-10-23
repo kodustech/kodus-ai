@@ -2,8 +2,8 @@
 //
 // Why a server and not a mocked LanguageModel: the engine builds its own model
 // from the slot (LLM.run → buildModelFromSlot → openai_compatible executor), so
-// an in-process mock would have to replace production code. Pointing the SAME
-// self-hosted route at 127.0.0.1 keeps every Kodus line real — slot resolution,
+// an in-process mock would have to replace production code. Pointing an org's
+// BYOK route at 127.0.0.1 keeps every Kodus line real — slot resolution,
 // provider options, tool registry, structured-output parsing — and swaps only
 // the vendor at the network edge. No key, no cost, deterministic.
 //
@@ -18,12 +18,20 @@
 //   4. otherwise                 → final answer: a schema instance of the
 //                                  requested json_schema, or "{}" as text
 //
+// When the prompt carries the coding-agent instructions block, the finding is
+// labeled repo_instruction, so the instructions reach the verifier; when
+// readRepoInstruction is offered it is the exploration call. Every verdict
+// request's prompt is kept in `stats.verdictPrompts`, and every tool result a
+// finder request carries in `stats.finderToolResults`, for checks.
+//
 // It does not try to review anything. It proves the harness can drive the real
 // engine end-to-end; quality is the nightly's job.
 const http = require('http');
 
-const EXPLORATION_PREFERENCE = [/read/i, /grep|search/i, /list|find/i];
+const EXPLORATION_PREFERENCE = [/^readRepoInstruction$/, /read/i, /grep|search/i, /list|find/i];
 const DONE_TOOL = /^(submit|done|final|finish|report)/i;
+const VERDICT_TOOL = 'submitVerdict';
+const INSTRUCTIONS_BLOCK = /label "repo_instruction"/;
 
 function resolveRef(ref, root) {
     const parts = String(ref).replace(/^#\//, '').split('/');
@@ -35,19 +43,20 @@ function resolveRef(ref, root) {
 // A value that satisfies the common JSON-schema shapes the engine sends. Every
 // declared property is filled and arrays get one item (not zero), so the output
 // carries something for the downstream stages to process.
-function instanceOf(schema, root = schema, depth = 0) {
+// `prefer` lists enum values to pick over the first one when offered.
+function instanceOf(schema, root = schema, depth = 0, prefer = []) {
     if (!schema || typeof schema !== 'object' || depth > 12) return null;
-    if (schema.$ref) return instanceOf(resolveRef(schema.$ref, root), root, depth + 1);
+    if (schema.$ref) return instanceOf(resolveRef(schema.$ref, root), root, depth + 1, prefer);
     if ('const' in schema) return schema.const;
-    if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
+    if (Array.isArray(schema.enum) && schema.enum.length) return prefer.find((v) => schema.enum.includes(v)) ?? schema.enum[0];
     for (const key of ['anyOf', 'oneOf']) {
         if (Array.isArray(schema[key]) && schema[key].length) {
             const nonNull = schema[key].find((s) => s?.type !== 'null') || schema[key][0];
-            return instanceOf(nonNull, root, depth + 1);
+            return instanceOf(nonNull, root, depth + 1, prefer);
         }
     }
     if (Array.isArray(schema.allOf) && schema.allOf.length) {
-        return Object.assign({}, ...schema.allOf.map((s) => instanceOf(s, root, depth + 1) || {}));
+        return Object.assign({}, ...schema.allOf.map((s) => instanceOf(s, root, depth + 1, prefer) || {}));
     }
     const type = Array.isArray(schema.type)
         ? schema.type.find((t) => t !== 'null') || schema.type[0]
@@ -57,14 +66,14 @@ function instanceOf(schema, root = schema, depth = 0) {
             const out = {};
             const props = schema.properties || {};
             for (const name of Object.keys(props)) {
-                out[name] = instanceOf(props[name] || {}, root, depth + 1);
+                out[name] = instanceOf(props[name] || {}, root, depth + 1, prefer);
             }
             return out;
         }
         case 'array': {
             const max = typeof schema.maxItems === 'number' ? schema.maxItems : Infinity;
             const length = Math.min(Math.max(Number(schema.minItems || 0), 1), max);
-            return Array.from({ length }, () => instanceOf(schema.items || {}, root, depth + 1));
+            return Array.from({ length }, () => instanceOf(schema.items || {}, root, depth + 1, prefer));
         }
         case 'string':
             return 'fake'.padEnd(Number(schema.minLength || 0), 'e');
@@ -117,6 +126,18 @@ function decide(body) {
     return { text: '{}' };
 }
 
+function promptText(body) {
+    return (Array.isArray(body.messages) ? body.messages : [])
+        .map((m) => (Array.isArray(m.content) ? m.content.map((p) => p?.text ?? '').join('\n') : String(m.content ?? '')))
+        .join('\n');
+}
+
+function toolResultTexts(body) {
+    return (Array.isArray(body.messages) ? body.messages : [])
+        .filter((m) => m.role === 'tool')
+        .map((m) => (Array.isArray(m.content) ? m.content.map((p) => p?.text ?? '').join('\n') : String(m.content ?? '')));
+}
+
 function completionFor(body, decision, seq) {
     const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 };
     const message = { role: 'assistant', content: decision.text ?? null };
@@ -129,7 +150,7 @@ function completionFor(body, decision, seq) {
                 type: 'function',
                 function: {
                     name: decision.tool.function.name,
-                    arguments: JSON.stringify(instanceOf(params) || {}),
+                    arguments: JSON.stringify(instanceOf(params, params, 0, INSTRUCTIONS_BLOCK.test(promptText(body)) ? ['repo_instruction'] : []) || {}),
                 },
             },
         ];
@@ -162,7 +183,8 @@ function writeStream(res, completion) {
 }
 
 function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
-    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {} };
+    // byModel: requests per model id asked for, so a step can prove which model its route reached.
+    const stats = { requests: 0, toolCalls: 0, finals: 0, byPath: {}, byModel: {}, verdictPrompts: [], finderToolResults: [] };
     let seq = 0;
     const server = http.createServer((req, res) => {
         let raw = '';
@@ -185,7 +207,10 @@ function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
                 return;
             }
             stats.requests += 1;
+            stats.byModel[body.model || ''] = (stats.byModel[body.model || ''] || 0) + 1;
             seq += 1;
+            if ((body.tools || []).some((t) => t?.function?.name === VERDICT_TOOL)) stats.verdictPrompts.push(promptText(body));
+            else stats.finderToolResults.push(...toolResultTexts(body).filter((t) => !stats.finderToolResults.includes(t)));
             const decision = decide(body);
             if (decision.tool) stats.toolCalls += 1;
             else stats.finals += 1;
@@ -211,7 +236,7 @@ function startFakeLlmServer({ port = 0, host = '127.0.0.1' } = {}) {
     });
 }
 
-module.exports = { startFakeLlmServer, instanceOf, decide };
+module.exports = { startFakeLlmServer, instanceOf, decide, completionFor };
 
 if (require.main === module) {
     const port = Number(process.env.PORT || 48123);

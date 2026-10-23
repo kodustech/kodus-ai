@@ -261,6 +261,12 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
         // upstream issue invalidated it. Without this the bypass in
         // validateCommits() lets the pipeline run, but newCommits ends up
         // empty and the agent has nothing to analyze.
+        // `@kody -v <agent>` asks one custom agent to review the whole PR,
+        // not only what changed since the last review.
+        if (context.onlyCustomAgent) {
+            return true;
+        }
+
         if (context.origin === 'command-force') {
             this.logger.log({
                 message: `Forcing full re-review for PR#${context.pullRequest.number} via --force flag`,

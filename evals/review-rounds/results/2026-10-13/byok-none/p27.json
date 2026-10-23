@@ -1,0 +1,721 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:33:31.698Z",
+  "updatedAt": "2026-10-13T22:06:10.438Z",
+  "complete": true,
+  "selectedCases": [
+    "P27-poller-first-page-only",
+    "P27-poller-first-page-only-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P27-poller-first-page-only · poller-one-page-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P27-poller-first-page-only-control · poller-one-page-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 299504,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 220913,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page (limit PAGE_SIZE=500) and then unconditionally advances the cursor to pollStartedAt, and the new comment claiming page.hasMore is never true is false. WHY: EventsClient.listEvents documents that the provider caps the limit at 100 (events-client.ts:16), so any window containing more than 100 events returns hasMore=true and a non-null nextCursor; those events are never read and the stored cursor jumps past them, silently dropping invoice.paid/voided/payment_failed events for good (this revises the earlier round-a-P27-poller-first-page-only suggestion, whose claimed pagination fix is not present — the applied change only bumped the page size and added the incorrect comment). HOW: loop following nextCursor until hasMore is false, e.g.: let cursor: string | undefined; do { const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) { await handleEvent(invoices, event); } cursor = page.nextCursor ?? undefined; } while (cursor); await cursors.set(CURSOR_KEY, pollStartedAt);",
+          "keep": false,
+          "rationale": "The technical claim is accurate (events-client.ts:16 caps limit at 100, so PAGE_SIZE=500 cannot hold all events; the poller.ts comment is false and events past the first page are dropped). BUT this is the exact problem the earlier decision round-a-P27-poller-first-page-only already raised on this PR: pollOnce reads a single page and advances the cursor to pollStartedAt, so events beyond the page are lost for good, with the identical remedy (follow nextCursor until hasMore is false). The finding itself states it revises that entry. Judged by the failure — same data loss, same operation (pollOnce cursor advance) — this is a repeat, not a distinct problem; the provider-cap/false-comment framing is just \"the applied fix is incomplete,\" which the repeat rule explicitly drops even though the Outcome was 'implemented'. The proposed fix is identical to the earlier suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 429002,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 31,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 259092,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 215685,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P27-poller-first-page-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 94034,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce advances the cursor to pollStartedAt after reading only one page, ignoring page.hasMore/nextCursor, based on the false claim that PAGE_SIZE=500 means 'page.hasMore is never true'. WHY: events-client.ts documents that the provider caps limit at 100 ('a larger limit still returns at most 100 events'), so whenever more than 100 events match the window the remaining events are never fetched yet the cursor jumps past them — those invoice.paid/voided/payment_failed events are permanently lost and the corresponding invoices are never updated. HOW: loop on hasMore, passing nextCursor as cursor until the page is exhausted (or until an empty page), and only then set the cursor to pollStartedAt.",
+          "keep": true,
+          "rationale": "Confirmed by src/billing/events-client.ts:16, which documents that the provider caps limit at 100 ('a larger limit still returns at most 100 events'), so PAGE_SIZE=500 does NOT guarantee page.hasMore is never true. pollOnce (poller.ts:11-17) reads a single page and then unconditionally advances the cursor to pollStartedAt without looping on hasMore/nextCursor, so any events beyond the first 100 in the window are never fetched yet are permanently skipped by the cursor jump — real, unrecoverable data loss for invoice.paid/voided/payment_failed. This is a different issue from the PreviousReviewDecisions entry (CSV formula escaping in reports/export.ts) and is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "events-client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "hasMore|nextCursor|limit|at most 100|PAGE_SIZE",
+                "glob": "*.ts",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "events-client*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/events-client.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `pollOnce` advances the cursor to `pollStartedAt` after reading only one page, it ignores `page.hasMore`/`nextCursor` based on the false claim that `PAGE_SIZE=500` means `page.hasMore` is never true; because `events-client.ts` caps `limit` at 100, windows with more than 100 matching events lose the remaining `invoice.paid`/`voided`/`payment_failed` events and their invoices are never updated. Loop on `hasMore`, passing `nextCursor` as `cursor` until the page is exhausted or empty, and only then set the cursor to `pollStartedAt`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P27-poller-first-page-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 160484,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce fetches a single page with limit=PAGE_SIZE(500) and then unconditionally sets the cursor to pollStartedAt, but the EventsClient contract caps a page at 100 events (events-client.ts:16) and exposes hasMore/nextCursor, so page.hasMore can be true. WHY: when more than 100 events match the window, only the first 100 are handled and the cursor jumps to pollStartedAt, permanently skipping the remaining events — invoices are silently never marked paid/voided/past-due. HOW: page through all results using page.nextCursor while page.hasMore is true, and only advance the cursor to pollStartedAt after the final page is processed. Note: the provider cap means the false comment on lines 15-16 cannot be trusted as an invariant.",
+          "keep": true,
+          "rationale": "Confirmed: events-client.ts:16 documents the provider caps limit at 100, and EventPage exposes hasMore/nextCursor (lines 8-13). pollOnce requests PAGE_SIZE=500, processes only page.data in a single loop, then unconditionally sets the cursor to pollStartedAt. When >100 events match the window, hasMore is true and the unprocessed events are permanently skipped, so invoices are silently never marked paid/voided/past-due. The inline comment's invariant is contradicted by the client contract. The prior review decision (CSV escaping in src/reports/export.ts) is unrelated, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `EventsClient` caps a page at 100 events (`events-client.ts:16`) while `pollOnce` requests `PAGE_SIZE` 500 and then unconditionally sets the cursor to `pollStartedAt`, any window with more than 100 matching events handles only the first page and permanently skips the rest, so invoices are silently never marked paid/voided/past-due. Page through all results using `page.nextCursor` while `page.hasMore` is true, and only advance the cursor to `pollStartedAt` after the final page; the provider cap means the comment on lines 15-16 cannot be trusted as an invariant."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P27-poller-first-page-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 93859,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce advances the cursor to pollStartedAt after reading only a single page, but the EventsClient contract (src/billing/events-client.ts:16) states the provider caps limit at 100 regardless of the requested PAGE_SIZE of 500, so `page.hasMore` can be true and the added comment claiming it is \"never true\" is false. WHY: when more than 100 events exist since the last cursor, the remaining events are never fetched and the cursor is moved past them, permanently dropping invoice.paid/voided/payment_failed events so those invoices are never updated. HOW: loop on page.hasMore, passing page.nextCursor, and only advance the cursor to pollStartedAt once all pages are drained.",
+          "keep": true,
+          "rationale": "Confirmed: events-client.ts:16 explicitly states the provider caps limit at 100 regardless of the requested limit. pollOnce requests PAGE_SIZE=500 but receives at most 100 events, so page.hasMore can be true. The code ignores hasMore/nextCursor and unconditionally sets the cursor to pollStartedAt, permanently dropping events beyond the first 100 (invoice.paid/voided/payment_failed never applied). The in-code comment claiming hasMore is \"never true\" is factually false. The unrelated prior decision about CSV export does not address this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `EventsClient` caps `limit` at 100 regardless of the requested `PAGE_SIZE` of 500 (src/billing/events-client.ts:16), `page.hasMore` can be true, so whenever more than 100 events exist since the last cursor the unfetched ones are skipped and the cursor advances past them, permanently dropping `invoice.paid`/`invoice.voided`/`invoice.payment_failed` events and leaving those invoices unupdated. Loop on `page.hasMore`, passing `page.nextCursor`, and only move the cursor to `pollStartedAt` once all pages are drained; the comment claiming `page.hasMore` is never true is incorrect."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P27-poller-first-page-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 105361,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce fetches a single page and then advances the cursor to pollStartedAt regardless of page.hasMore/nextCursor, so events beyond the first page are silently skipped. WHY: the client contract (events-client.ts) caps any limit at 100 events, so PAGE_SIZE=500 does NOT guarantee one page holds everything; when more than 100 events exist since `since`, the unprocessed remainder is never fetched again and its invoice.paid/voided/payment_failed side effects are lost permanently, leaving invoices in the wrong billing state. HOW: loop while page.hasMore, passing page.nextCursor back as `cursor`, and only advance the cursor to pollStartedAt once the final page has been processed.",
+          "keep": true,
+          "rationale": "Confirmed. events-client.ts line 16 explicitly states the provider caps limit at 100 regardless of a larger limit value, so PAGE_SIZE=500 does NOT guarantee one page holds everything. pollOnce fetches exactly one page, iterates page.data, and unconditionally sets the cursor to pollStartedAt without checking page.hasMore/nextCursor. When more than 100 matching events exist since `since`, the remainder is never fetched and its invoice.paid/voided/payment_failed side effects are permanently lost. The inline comment's premise ('page.hasMore is never true') is factually contradicted by the client contract. The previous review decision concerns CSV escaping in src/reports/export.ts, an unrelated issue, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "events-client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|hasMore|nextCursor|limit",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`pollOnce` fetches a single page and then advances the cursor to `pollStartedAt` regardless of `page.hasMore`/`page.nextCursor`, so when more than 100 events exist since `since`, events beyond the first page are silently skipped because `events-client.ts` caps any limit at 100 and `PAGE_SIZE=500` does not guarantee one page holds everything, and the unprocessed remainder's `invoice.paid`/`voided`/`payment_failed` side effects are lost permanently, leaving invoices in the wrong billing state. Loop while `page.hasMore`, pass `page.nextCursor` back as `cursor`, and only advance the cursor to `pollStartedAt` once the final page has been processed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P27-poller-first-page-only-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 79866,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The poller advances the cursor to pollStartedAt after processing only one page, but EventsClient.listEvents is documented to cap results at 100 events regardless of the requested limit (events-client.ts:16), and page.hasMore/nextCursor are ignored. WHY: When more than 100 events fall in the [since, pollStartedAt) window, the events after the first 100 are never passed to handleEvent, yet the cursor is moved past them, so those invoices are permanently never marked paid/voided/past-due — silent billing-state data loss that is never retried. HOW: Page through the result using hasMore/nextCursor before advancing the cursor, e.g.: let cursor: string | undefined; do { const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) { await handleEvent(invoices, event); } cursor = page.hasMore ? page.nextCursor ?? undefined : undefined; } while (cursor); and only then await cursors.set(CURSOR_KEY, pollStartedAt).",
+          "keep": true,
+          "rationale": "The claim is confirmed by the code. events-client.ts:16 documents that the provider caps results at 100 regardless of the requested limit, yet poller.ts passes limit: PAGE_SIZE (500) and ignores page.hasMore/nextCursor. It then unconditionally advances the cursor to pollStartedAt (poller.ts:17). When more than 100 events fall in [since, pollStartedAt), the events after the first 100 are never passed to handleEvent but the cursor moves past them, so those invoices are permanently never marked paid/voided/past-due — silent, unrecoverable billing-state data loss. The inline comment's premise that hasMore is never true contradicts the documented provider cap. This is unrelated to the prior decision (CSV escaping in reports/export.ts), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|pollOnce|hasMore|nextCursor",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `EventsClient.listEvents` caps results at 100 events regardless of the requested `limit` (`events-client.ts:16`) and `page.hasMore`/`nextCursor` are ignored, any events beyond the first 100 in the `[since, pollStartedAt)` window never reach `handleEvent` even though the cursor still advances past them, silently leaving those invoices unmarked paid, voided, or past-due with no retry. Page through the result using `hasMore`/`nextCursor` before calling `cursors.set(CURSOR_KEY, pollStartedAt)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

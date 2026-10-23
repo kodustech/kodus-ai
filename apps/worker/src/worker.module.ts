@@ -33,6 +33,8 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
 
 import { AnalyticsClassifierCron } from './cron/analytics-classifier.cron';
 import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
+import { KodyRulesAutoPauseCron } from './cron/kody-rules-auto-pause.cron';
+import { KodyRulesAutoPauseDigestCron } from './cron/kody-rules-auto-pause-digest.cron';
 import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
 import { OrgReportCron } from './cron/org-report.cron';
 import { RepoReportCron } from './cron/repo-report.cron';
@@ -137,6 +139,8 @@ export class WorkerModule {
                 AnalyticsClassifierCron,
                 OrgReportCron,
                 RepoReportCron,
+                KodyRulesAutoPauseCron,
+                KodyRulesAutoPauseDigestCron,
                 LangfuseShutdownProvider,
             ] satisfies Provider[],
         };

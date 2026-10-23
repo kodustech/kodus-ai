@@ -232,6 +232,10 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                 triggerCommentId: sanitizedPayload?.triggerCommentId,
                 reviewDirective: sanitizedPayload?.reviewDirective,
                 heavy: sanitizedPayload?.heavy,
+                onlyCustomAgent:
+                    typeof sanitizedPayload?.onlyCustomAgent === 'string'
+                        ? sanitizedPayload.onlyCustomAgent
+                        : undefined,
                 userGitId,
                 workflowJobId,
                 correlationId,

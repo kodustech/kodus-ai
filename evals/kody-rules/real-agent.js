@@ -1,34 +1,20 @@
-// Kody-rules adherence eval — REAL ENGINE (not a prototype).
+// Kody-rules adherence eval: production's review, scored against every line
+// that breaks a rule.
 //
-// Runs the production `KodyRulesAgentProvider.execute()` end-to-end: the same
-// system/category/user prompts, the same agent loop (runAgentLoop), the same
-// verify / coverage-recovery / second-chance passes, the same ruleUuid
-// reconciliation and @@PATH_MISMATCH@@ drop. Tools are served from a
-// deterministic replay (no sandbox / GitHub), exactly like the finder eval.
+// Each case is one merged GitHub PR and the rule it breaks (github-cases.json,
+// materialized by materialize-cases.js). production-review.js runs the review
+// with production's own code: the rule saved through the save-time compile and
+// loaded for review, the PR checked out by the self-hosted sandbox (exec
+// included), the changed files through FetchChangedFilesStage, and
+// AgentReviewStage with the Kody Rules agent (the team's generalist categories
+// off). What the stage keeps is what is scored.
 //
-//   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini]
+//   node evals/kody-rules/real-agent.js [--runs=3] [--model=<tier-0 id>] [--cases=<caseId,...>] [--limit=N] [--gate] [--output=<result.json>]
 //
-// The model is driven through the real `buildModelFromSlot` self-hosted path:
-// API_LLM_PROVIDER_MODEL + API_OPEN_AI_API_KEY (+ optional API_OPENAI_FORCE_BASE_URL).
-// esbuild require-hook for .ts (NOT ts-node): agent-loop.ts places value
-// imports mid-file (line 296), which ts-node/transpile-only leaves un-hoisted →
-// "Cannot access 'llm_1' before initialization". esbuild hoists imports
-// correctly, so the real provider graph loads.
+// The model is the org's, routed as production routes it (evals/shared/
+// model-route.js). Each run clones the PR's head, so it needs network to GitHub.
 const fs = require('fs');
-const esbuild = require('esbuild');
-require.extensions['.ts'] = function (module, filename) {
-    const { code } = esbuild.transformSync(fs.readFileSync(filename, 'utf8'), {
-        loader: 'ts', format: 'cjs', target: 'es2021', sourcefile: filename,
-        tsconfigRaw: { compilerOptions: { experimentalDecorators: true, useDefineForClassFields: false } },
-    });
-    module._compile(code, filename);
-};
-require('tsconfig-paths/register');
-
 const path = require('path');
-const dotenv = require('dotenv');
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
 
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 
@@ -36,7 +22,7 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)(?:=(.*))?$/); return m ? [m[1], m[2] ?? true] : [a, true];
 }));
 const RUNS = +(args.runs || 3);
-const MODELKEY = args.model || 'gpt-5.4-mini';
+const MODELKEY = args.model || 'deepseek-v4-flash@fireworks';
 const DATASET = args.dataset || 'github-cases';
 // CI gate: with --gate, exit non-zero if metrics fall below the model's floor.
 // occurrence-recall varies a lot by model, so floors are PER-MODEL in
@@ -54,137 +40,36 @@ const KODY_TARGETS = (() => {
         throw err;
     }
 })();
-// Use MODELKEY (not args.model) so the default invocation resolves the floor of
-// the model it actually runs (gpt-5.4-mini), instead of an undefined lookup.
 const MODEL_TARGET = KODY_TARGETS[MODELKEY] || {};
 const OCC_MIN = +(args['occ-min'] ?? MODEL_TARGET.occMin ?? 0);
 const SPEC_MIN = +(args['spec-min'] ?? MODEL_TARGET.specMin ?? 95);
-
-// Model presets → drive the real self-hosted buildModelFromSlot path via env.
-const MODELS = {
-    'gpt-5.4-mini': { model: 'gpt-5.4-mini', keyEnv: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
-    'gpt-5.4': { model: 'gpt-5.4', keyEnv: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
-    'deepseek-v4-pro': { model: 'deepseek-v4-pro', keyEnv: ['DO_MODEL_ACCESS_KEY'], baseURL: 'https://inference.do-ai.run/v1' },
-    'sonnet-4.6': { model: 'anthropic-claude-4.6-sonnet', keyEnv: ['DO_MODEL_ACCESS_KEY'], baseURL: 'https://inference.do-ai.run/v1' },
-};
+// A model with no calibrated floor writes none (ungated), never the 0 above.
+const CALIBRATED = args['occ-min'] !== undefined || MODEL_TARGET.occMin !== undefined;
 
 const allCases = require('./' + DATASET);
-// --limit=N caps how many cases run (CI scopes to a small PR set).
-const cases = args.limit ? allCases.slice(0, +args.limit) : allCases;
+const { evalQuestion } = require('../shared/eval-result');
+const { countTokens, tokensUsed } = require('../shared/eval-kit');
+// --cases picks cases by id; --limit=N caps how many run (CI scopes to a few).
+const picked = args.cases ? allCases.filter((c) => String(args.cases).split(',').includes(c.caseId)) : allCases;
+const cases = args.limit ? picked.slice(0, +args.limit) : picked;
 
-// --- replay (same shape/semantics as evals/investigation/agent-provider.js) ---
 function normalizePath(v) { return String(v || '').replace(/^\/+/, '').replace(/\\/g, '/').replace(/\/+/g, '/'); }
-function fixtureMatches(match, actual) {
-    return Object.entries(match || {}).every(([k, exp]) => {
-        if (exp == null) return true;
-        const a = actual[k];
-        if (k.toLowerCase().includes('path')) return normalizePath(exp) === normalizePath(a);
-        return exp === a;
+
+// Every place a shipped comment points at: its own file and line, and the
+// other places the stage folded into it (mergeKodyRuleFindings keeps them in
+// kodyRuleOtherLocations as "file:start-end"; the posted comment lists them).
+function locationsOf(s) {
+    const own = { file: normalizePath(s.relevantFile), line: s.relevantLinesStart };
+    const others = (s.kodyRuleOtherLocations || []).map((loc) => {
+        const m = String(loc).match(/^(.*):(\d+|\?)-(\d+|\?)$/);
+        return m ? { file: normalizePath(m[1]), line: m[2] === '?' ? NaN : Number(m[2]) } : null;
     });
-}
-class ReplayRemoteCommands {
-    constructor(replay) {
-        this.replay = replay || {};
-        this.calls = [];
-        this.unexpectedCalls = [];
-        this.corpus = (this.replay.readFile || [])
-            .map((e) => ({ path: normalizePath(e?.match?.path), content: String(e?.result || '') }))
-            .filter((e) => e.path && e.content);
-    }
-    _find(kind, actual) { return (this.replay[kind] || []).find((e) => fixtureMatches(e.match || {}, actual)) || null; }
-    _searchCorpus(actual) {
-        let rx; try { rx = new RegExp(String(actual.pattern || '')); } catch { rx = new RegExp(String(actual.pattern || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); }
-        const out = [];
-        for (const e of this.corpus) {
-            if (actual.path && actual.path !== '.' && e.path !== actual.path && !e.path.startsWith(actual.path + '/')) continue;
-            const lines = e.content.split('\n');
-            for (let i = 0; i < lines.length; i++) { rx.lastIndex = 0; if (rx.test(lines[i])) { out.push(`${e.path}:${i + 1}:${lines[i]}`); if (out.length >= 40) return out.join('\n'); } }
-        }
-        return out.length ? out.join('\n') : null;
-    }
-    async grep(pattern, searchPath, glob) {
-        const actual = { pattern: pattern || '', path: normalizePath(searchPath || '.'), glob: glob || '' };
-        const f = this._find('grep', actual);
-        if (f) { this.calls.push({ kind: 'grep', actual, matched: true }); return f.result || ''; }
-        const s = this._searchCorpus(actual);
-        if (s !== null) { this.calls.push({ kind: 'grep', actual, matched: 'synthetic' }); return s; }
-        this.calls.push({ kind: 'grep', actual, matched: false }); this.unexpectedCalls.push({ kind: 'grep', actual }); return 'No matches found.';
-    }
-    async read(filePath, start, end) {
-        const actual = { path: normalizePath(filePath), startLine: start || 0, endLine: end || 0 };
-        const f = this._find('readFile', actual);
-        this.calls.push({ kind: 'readFile', actual, matched: !!f }); if (!f) this.unexpectedCalls.push({ kind: 'readFile', actual });
-        return f ? (f.result || '') : `No replay fixture matched readFile(${actual.path}).`;
-    }
-    async listDir(dirPath) {
-        const actual = { path: normalizePath(dirPath || '.') };
-        const f = this._find('listDir', actual);
-        this.calls.push({ kind: 'listDir', actual, matched: !!f }); return f ? (f.result || '') : '';
-    }
+    return [own, ...others].filter((x) => x && x.file);
 }
 
-function buildProvider() {
-    const { KodyRulesAgentProvider } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts'));
-    // The provider routes its model through `permissionService.resolveTaskSlot`
-    // (the single task->slot entry point, model-factory.ts:76). This stub used
-    // to expose only `getBYOKConfig`, which the BYOK refactor replaced — so
-    // every case died with "resolveTaskSlot is not a function" and the eval
-    // reported 0/0 sites. It did NOT silently pass (the INFRA guard caught it),
-    // but the gate had been un-runnable since that refactor.
-    //
-    // Returning `null` is the honest stub: it is exactly the "no BYOK / managed
-    // verdict" answer the real service gives, which degrades to the env default
-    // — which is how the eval is meant to drive the model (API_LLM_PROVIDER_MODEL
-    // + API_OPEN_AI_API_KEY, see the header).
-    const permissionValidationService = {
-        resolveTaskSlot: async () => null,
-        getBYOKConfig: async () => null,
-    };
-    const observabilityService = {
-        runInSpan: async (_n, fn) => (typeof fn === 'function' ? fn() : undefined),
-        runLLMInSpan: async ({ exec }) => exec([]),
-        startSpan: () => ({ end() {}, update() {} }),
-        // The refactored provider emits a post-hoc usage span; evals don't ship
-        // telemetry. Instead of a no-op, accumulate token usage so the run can
-        // report total cost (for the agentic-vs-sharded cost comparison, #1449).
-        recordAgentRunUsage: async (p) => {
-            const u = (p && p.usage) || {};
-            global.__EVAL_TOK = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
-            global.__EVAL_TOK.in += u.inputTokens ?? 0;
-            global.__EVAL_TOK.out += u.outputTokens ?? 0;
-            global.__EVAL_TOK.cacheRead += u.cacheReadTokens ?? 0;
-            global.__EVAL_TOK.cacheWrite += u.cacheWriteTokens ?? 0;
-        },
-    };
-    // Positional, and the positions moved: the constructor is
-    // (permissionValidationService, observabilityService, ...). This call passed
-    // a leading `{}` from an older signature, so the permission service landed
-    // in the observability slot and `permissionService.resolveTaskSlot` was
-    // called on `{}` — every case threw and the run reported 0/0 sites.
-    return new KodyRulesAgentProvider(
-        permissionValidationService,
-        observabilityService,
-    );
-}
-
-// Normalize a real-diff case into the pieces the runner needs: the changedFiles
-// to review, the tool replay, and the violating/clean file ground truth. Cases
-// come from build-bench-cases.js (benchmark diffs) or harvest-github-cases.js
-// (live GitHub PRs) — both carry real `realChangedFiles` + `toolReplay`.
-function normalizeCase(c) {
-    return {
-        changedFiles: c.realChangedFiles.map((f) => ({ filename: f.filename, patchWithLinesStr: f.patchWithLinesStr || f.patch || '', patch: f.patch || f.patchWithLinesStr || '' })),
-        replay: c.toolReplay || {},
-        violFiles: (c.violatingFiles || []).map(normalizePath),
-        okFiles: (c.cleanFiles || []).map(normalizePath),
-        fileCount: c.realChangedFiles.length,
-    };
-}
-
-// --all-rules: inject ALL unique dataset rules into every session (matches
-// PRODUCTION, where formatKodyRules puts every applicable rule in ONE agentic
-// session). Scoring then filters suggestions to the case's target ruleUuid,
-// mirroring the sharded-v2 batched scoring, so the comparison is fair.
+// --all-rules: every rule of the dataset is the team's, in every review, as in
+// production where all of a team's rules reach one review. Scoring then reads
+// only the case's own rule (the others have no ground truth on it).
 const ALL_RULES = !!args['all-rules'];
 const UNIQUE_RULES = Object.values(Object.fromEntries(allCases.filter((c) => c.rule).map((c) => [c.rule.uuid, c.rule])));
 
@@ -193,7 +78,7 @@ const UNIQUE_RULES = Object.values(Object.fromEntries(allCases.filter((c) => c.r
 // targets [{uuid, sites, violFiles, okFiles}] — one per rule.
 function caseTargets(c) {
     if (!c.groundTruthAll) return null;
-    const changed = c.realChangedFiles.map((f) => normalizePath(f.filename));
+    const changed = c.pr.files.map((f) => normalizePath(f.filename));
     return (c.rules || []).map((r) => {
         const gt = c.groundTruthAll[r.uuid] || {};
         const violFiles = Object.keys(gt).map(normalizePath);
@@ -202,106 +87,62 @@ function caseTargets(c) {
     });
 }
 
-async function runCase(provider, c, changedFiles, replay) {
-    const remoteCommands = new ReplayRemoteCommands(replay);
-    // Issue #1826 step 1 loads each changed file whole, and it does that ONLY
-    // when `repoLookup.available`. Handing the provider `remoteCommands` alone
-    // leaves the lookup at its fail-closed default, so the eval would measure a
-    // pipeline with step 1 switched off — and report a number for a feature it
-    // never exercised, which is worse than not measuring it.
-    //
-    // The replay already carries the real file bodies at the PR head (the
-    // `readFile` fixtures the harvester fetched), so this is the same content
-    // production would read from the sandbox, not a stand-in. Any `type` other
-    // than 'null' means available; the lookup only ever touches remoteCommands.
-    const { buildRepoLookup } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/collaborators/repo-lookup.ts'));
-    const repoLookup = buildRepoLookup({ type: 'eval-replay', remoteCommands });
-    // v2 cases carry their full rule set; v1 keeps the single-rule (or
-    // --all-rules) behavior.
-    const rulesForRun = c.rules ? c.rules : (ALL_RULES ? UNIQUE_RULES : [c.rule]);
-    const out = await provider.execute({
-        organizationAndTeamData: { organizationId: 'eval-org', teamId: 'eval-team' },
-        changedFiles,
-        remoteCommands,
-        repoLookup,
-        prNumber: 1,
-        repositoryId: 'eval-repo',
-        repositoryFullName: 'eval/repo',
-        baseBranch: 'main',
-        reviewMode: 'normal',
-        maxSteps: c.maxSteps || 20,
-        prTitle: c.title || 'eval PR',
-        prBody: c.body || '',
-        kodyRules: rulesForRun.map((r) => ({ ...r, type: 'standard', status: 'active', scope: r.scope || 'file' })),
-    });
-    // turnsUsed = agent steps executed. 0 means the agent never ran a step —
-    // it failed before starting (e.g. a swallowed quota/rate-limit error that
-    // surfaces as finishReason=error/steps=0 rather than a throw). A legitimate
-    // "investigated and found nothing" run has turnsUsed > 0.
+// A rule as the team saved it: active, reaching every repository.
+const asSaved = (r) => ({ ...r, type: 'standard', status: 'active', scope: r.scope || 'file', repositoryId: 'global' });
+
+// One case in the shape every eval writes (evals/shared/eval-result.js): what
+// it checks, the violation sites it caught over the runs that measured, and
+// each site, ok only when caught in every one of them.
+function caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns) {
+    const allSites = targets ? targets.flatMap((t) => t.sites) : sites;
+    const where = String(c.caseId || '').split('::')[0];
+    const rule = targets ? `${targets.length} rules` : `"${c.rule?.title || caseLabel}"`;
+    const measuredRuns = perRun.filter((p) => !p.errored);
+    if (!allSites.length) {
+        return {
+            id: caseLabel,
+            checks: `Flags every file that breaks ${rule}${where ? ` in ${where}` : ''}`,
+            hits: measuredRuns.reduce((a, p) => a + p.hit, 0),
+            total: violFiles.length * okRuns,
+            detail: [],
+        };
+    }
     return {
-        suggestions: publishedSuggestions(out.suggestions || [], changedFiles, rulesForRun),
-        turnsUsed: out.turnsUsed ?? 0,
+        id: caseLabel,
+        checks: `Flags every line that breaks ${rule}${where ? ` in ${where}` : ''}`,
+        hits: measuredRuns.reduce((a, p) => a + p.coveredSites, 0),
+        total: allSites.length * okRuns,
+        detail: allSites.map((g, i) => ({ what: `${g.file}:${g.line}`, ok: measuredRuns.length > 0 && measuredRuns.every((p) => p.siteOk?.[i]) })),
+        falseAlarms: measuredRuns.reduce((a, p) => a + p.falseOnClean, 0),
     };
 }
 
-// Score what the review publishes, not the agent's raw output. The agent-review
-// stage snaps every finding onto the diff and drops one that cites no changed
-// line, unless its rule declared it needs more than the diff. Both steps are
-// the stage's own exported functions, so this follows the code if it changes.
-function publishedSuggestions(suggestions, changedFiles, rules) {
-    const {
-        extractValidDiffLines,
-        snapLinesToDiff,
-        fileAnchoredFindingPredicate,
-    } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/agent-review.stage.ts'));
-    const isFileAnchored = fileAnchoredFindingPredicate(rules);
-    const byName = new Map(changedFiles.map((f) => [normalizePath(f.filename), f]));
-    return suggestions
-        .map((s) => {
-            const file = byName.get(normalizePath(s.relevantFile));
-            if (!file) return s;
-            const snapped = snapLinesToDiff(s, extractValidDiffLines(unifiedPatch(file.patchWithLinesStr)));
-            if (snapped === null) return isFileAnchored(s) ? s : null;
-            return snapped;
-        })
-        .filter(Boolean);
-}
-
-// The dataset stores diffs in the review's numbered form (libs/common/utils/
-// patch.ts): `@@` headers, then `__new hunk__` with "<line> <+| ><code>" and
-// optionally `__old hunk__` with the removed lines. Rebuild the unified diff
-// the stage parses from `file.patch`: headers plus the new side.
-function unifiedPatch(numbered) {
-    const out = [];
-    let side = null;
-    for (const line of String(numbered || '').split('\n')) {
-        if (line.startsWith('@@')) { out.push(line); side = null; continue; }
-        if (line === '__new hunk__') { side = 'new'; continue; }
-        if (line === '__old hunk__') { side = 'old'; continue; }
-        if (side !== 'new') continue;
-        const m = line.match(/^\d+ (.*)$/);
-        if (m) out.push(m[1]);
-    }
-    return out.join('\n');
-}
-
 async function main() {
-    // tier-0 model ids route through the shared seam (any supported provider);
-    // legacy local presets (DO models) keep working via the registry below.
-    const { TIER0, applyModelEnv } = require('../shared/tier0-models');
-    if (TIER0[MODELKEY]) {
-        applyModelEnv(MODELKEY);
-    } else {
-        const spec = MODELS[MODELKEY];
-        if (!spec) throw new Error(`unknown model ${MODELKEY}`);
-        const key = spec.keyEnv.map((e) => process.env[e]).find(Boolean);
-        if (!key) throw new Error(`no key (${spec.keyEnv.join('/')})`);
-        process.env.API_LLM_PROVIDER_MODEL = spec.model;
-        process.env.API_OPEN_AI_API_KEY = key;
-        if (spec.baseURL) process.env.API_OPENAI_FORCE_BASE_URL = spec.baseURL;
+    // The org's model, routed as production routes it (evals/shared/model-route.js).
+    const ROUTE = require('../shared/model-route').orgRouteOrExit(MODELKEY);
+    const unmaterialized = cases.filter((c) => !c.pr);
+    if (unmaterialized.length) {
+        console.error(`not measured: ${unmaterialized.length} case(s) carry no recorded PR; run node evals/kody-rules/materialize-cases.js --dataset=${DATASET}`);
+        process.exit(2);
     }
 
-    const provider = buildProvider();
+    const review = require('./production-review');
+    // Production's ObservabilityService registers itself as the LLM port when
+    // built; the eval's count registers after it so every call is counted.
+    review.observabilityService();
+    countTokens();
+
+    // Each rule is compiled once, as production compiles it once at save.
+    const compiled = new Map();
+    const compileOnce = async (rule) => {
+        if (!compiled.has(rule.uuid)) {
+            const saved = await review.compileRules([asSaved(rule)], review.permissionService(ROUTE.storedConfig));
+            compiled.set(rule.uuid, { rule: saved.rules[0], outcome: saved.outcomes[0] });
+            const o = saved.outcomes[0];
+            console.log(`compiled ${rule.uuid}: ${o.compiled ? 'detector' : `no detector (${o.declineReason || 'declined'})`}, scope ${JSON.stringify(o.fileScope || null)}, need ${o.contextNeed || 'none'}`);
+        }
+        return compiled.get(rule.uuid);
+    };
 
     const LINE_TOL = 2; // a flag "lands" on a real site if within ±2 lines
     let multiTotalSites = 0, multiCaughtSites = 0, caughtAllRuns = 0, totalMultiRuns = 0;
@@ -312,26 +153,41 @@ async function main() {
     // runs — NOT real misses. Track them so a broken environment warns (infra)
     // instead of deflating recall into a false quality-gate failure.
     let erroredRuns = 0, totalRuns = 0;
+    const caseResults = [];
     const haveGT = cases.some((c) => c.groundTruth || c.groundTruthAll);
     // flatten groundTruth → [{file, line}]
     const gtSites = (c) => Object.entries(c.groundTruth || {})
         .flatMap(([fn, hits]) => hits.map((h) => ({ file: normalizePath(fn), line: h.line })));
     for (const c of cases) {
-        const { changedFiles, replay, violFiles, okFiles, fileCount } = normalizeCase(c);
+        const violFiles = (c.violatingFiles || []).map(normalizePath);
+        const okFiles = (c.cleanFiles || []).map(normalizePath);
         const targets = caseTargets(c); // non-null on the v2 dataset
         const sites = gtSites(c);
         const caseLabel = c.caseId || c.rule.uuid;
+        const caseRules = c.rules ? c.rules : (ALL_RULES ? UNIQUE_RULES : [c.rule]);
+        const saved = [];
+        for (const rule of caseRules) saved.push((await compileOnce(rule)).rule);
         const perRun = [];
+        let fileCount = c.pr.files.length;
         for (let r = 0; r < RUNS; r++) {
-            let sugg = [], turnsUsed = 0, errored = false;
+            let sugg = [], errored = false;
             totalRuns++;
-            try { const res = await runCase(provider, c, changedFiles, replay); sugg = res.suggestions; turnsUsed = res.turnsUsed; }
-            catch (e) { errored = true; console.error(`  [case ${caseLabel} run ${r}] ${String(e.message).slice(0, 140)}`); }
-            // Infra run = it threw, OR the agent returned without executing a
-            // single step and produced nothing (failed before running, e.g.
-            // swallowed quota). A real "found nothing" run has turnsUsed > 0 and
-            // still counts as a genuine miss against the quality gate.
-            if (!errored && sugg.length === 0 && turnsUsed === 0) errored = true;
+            try {
+                const res = await review.reviewCase(c, { compiled: { rules: saved }, storedConfig: ROUTE.storedConfig });
+                fileCount = res.files.length;
+                // A review whose agent failed (key, quota, provider) is not a
+                // measurement: production records it as the review's error.
+                if (res.lastReviewError) {
+                    errored = true;
+                    console.error(`  [case ${caseLabel} run ${r}] review failed: ${res.lastReviewError.category} ${String(res.lastReviewError.providerMessage || res.lastReviewError.friendlyMessage || '').slice(0, 140)}`);
+                }
+                sugg = res.suggestions.filter((s) => s.label === 'kody_rules' || (s.brokenKodyRulesIds || []).length);
+            } catch (e) {
+                errored = true;
+                // A failed clone carries git's own reason on stderr, not in the message.
+                const why = String(e.stderr || '').trim().split('\n').pop() || String(e.message);
+                console.error(`  [case ${caseLabel} run ${r}] ${why.slice(0, 200)}`);
+            }
             if (errored) erroredRuns++;
 
             if (targets) {
@@ -339,18 +195,22 @@ async function main() {
                 // rules via brokenKodyRulesIds (mapAgentFindings re-homes the
                 // LLM's ruleUuid there — finding-mapper.ts).
                 let hit = 0, falseOnClean = 0, coveredSites = 0, flagsN = 0, lineNoise = 0;
+                const siteOk = [];
                 for (const t of targets) {
                     const tSugg = sugg.filter((s) =>
                         (s.brokenKodyRulesIds || []).includes(t.uuid) || s.ruleUuid === t.uuid);
-                    const flags = tSugg.map((s) => ({ file: normalizePath(s.relevantFile), line: s.relevantLinesStart })).filter((x) => x.file && Number.isFinite(x.line));
-                    const flaggedFiles = new Set(flags.map((x) => x.file));
+                    const located = tSugg.flatMap(locationsOf);
+                    const flags = located.filter((x) => Number.isFinite(x.line));
+                    const flaggedFiles = new Set(located.map((x) => x.file));
                     hit += t.violFiles.filter((f) => flaggedFiles.has(f)).length;
                     falseOnClean += t.okFiles.filter((f) => flaggedFiles.has(f)).length;
-                    coveredSites += t.sites.filter((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
+                    const tOk = t.sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
+                    siteOk.push(...tOk);
+                    coveredSites += tOk.filter(Boolean).length;
                     const onTarget = flags.filter((x) => t.sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
                     flagsN += flags.length; lineNoise += flags.length - onTarget;
                 }
-                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0 });
+                perRun.push({ hit, falseOnClean, coveredSites, flags: flagsN, lineNoise, errored, otherRuleFlags: 0, siteOk });
                 continue;
             }
 
@@ -364,14 +224,16 @@ async function main() {
                     s.ruleUuid === c.rule.uuid);
                 otherRuleFlags = total - sugg.length;
             }
-            const flaggedFiles = new Set(sugg.map((s) => normalizePath(s.relevantFile)).filter(Boolean));
+            const located = sugg.flatMap(locationsOf);
+            const flaggedFiles = new Set(located.map((x) => x.file));
             const hit = violFiles.filter((f) => flaggedFiles.has(f)).length;
             const falseOnClean = okFiles.filter((f) => flaggedFiles.has(f)).length;
             // occurrence-level: distinct real sites covered by some flag (±tol)
-            const flags = sugg.map((s) => ({ file: normalizePath(s.relevantFile), line: s.relevantLinesStart })).filter((x) => x.file && Number.isFinite(x.line));
-            const coveredSites = sites.filter((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
+            const flags = located.filter((x) => Number.isFinite(x.line));
+            const siteOk = sites.map((g) => flags.some((x) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL));
+            const coveredSites = siteOk.filter(Boolean).length;
             const onTargetFlags = flags.filter((x) => sites.some((g) => x.file === g.file && Math.abs(x.line - g.line) <= LINE_TOL)).length;
-            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags });
+            perRun.push({ hit, falseOnClean, coveredSites, flags: flags.length, lineNoise: flags.length - onTargetFlags, errored, otherRuleFlags, siteOk });
         }
         // v2 denominators span all (file,rule) pairs; v1 keeps the single rule.
         const N = targets ? targets.reduce((a, t) => a + t.violFiles.length, 0) : violFiles.length;
@@ -380,6 +242,7 @@ async function main() {
         // Count only runs that actually executed — an errored (infra) run must
         // not add its sites to any denominator as if they were real misses.
         const okRuns = perRun.filter((p) => !p.errored).length;
+        caseResults.push(caseResult(c, caseLabel, targets, sites, violFiles, perRun, okRuns));
         const allRuns = perRun.filter((p) => !p.errored && p.hit >= N).length;
         multiTotalSites += N * okRuns; multiCaughtSites += perRun.reduce((a, b) => a + (b.errored ? 0 : b.hit), 0);
         caughtAllRuns += allRuns; totalMultiRuns += okRuns;
@@ -401,26 +264,56 @@ async function main() {
         console.log(`line precision:       ${pct(flaggedTotal - lineNoiseTotal, flaggedTotal)}%  (${lineNoiseTotal}/${flaggedTotal} flags landed off any real site)`);
     }
     console.log(`specificity (files):  ${pct(cleanFiles - falseAlarmFiles, cleanFiles)}%  (${falseAlarmFiles}/${cleanFiles} clean files false-alarmed)`);
-    const tok = global.__EVAL_TOK || { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
+    const tok = tokensUsed();
     console.log(`TOKENS: input=${tok.in}  output=${tok.out}  cacheRead=${tok.cacheRead}  cacheWrite=${tok.cacheWrite}  over ${totalRuns} agentic sessions`);
 
+    // --output: the result in the shape every eval writes
+    // (evals/shared/eval-result.js), plus the counts behind each rate so a
+    // confirming run can be pooled with the first (nightly-verdict.js).
+    if (args.output) {
+        const ratio = (a, b) => (b ? a / b : null);
+        const observed = MODEL_TARGET.observed || null;
+        const result = {
+            eval: 'kody-rules',
+            question: evalQuestion('evals/kody-rules'),
+            model: MODELKEY,
+            dataset: DATASET,
+            runs: RUNS,
+            metric: {
+                name: 'occurrence recall',
+                value: ratio(occCaught, occTotal),
+                floor: CALIBRATED ? OCC_MIN / 100 : null,
+                baseline: observed ? observed.occ / 100 : null,
+            },
+            specificity: {
+                value: cleanFiles ? (cleanFiles - falseAlarmFiles) / cleanFiles : null,
+                floor: CALIBRATED ? SPEC_MIN / 100 : null,
+                baseline: observed ? observed.spec / 100 : null,
+            },
+            linePrecision: ratio(flaggedTotal - lineNoiseTotal, flaggedTotal),
+            counts: { sites: occTotal, caught: occCaught, flagged: flaggedTotal, offSite: lineNoiseTotal, cleanFiles, falseAlarmFiles },
+            cases: caseResults,
+            tokens: tok,
+            infra: { errored: erroredRuns, total: totalRuns },
+        };
+        fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+        fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
+    }
+
     if (GATE) {
-        // Infra guard: if the environment (quota/rate-limit/key) broke enough
-        // runs that the measurement is unreliable, exit 2 (infra) so CI warns
-        // instead of red-flagging quality on a bogus low recall.
-        // erroredRuns now counts thrown runs AND ran-zero-steps runs (the
-        // concrete "agent never executed" signal — not a pure 0-output guess, so
-        // a real engine regression that DOES run but finds nothing still fails
-        // the quality gate below).
-        const erroredFrac = totalRuns ? erroredRuns / totalRuns : 0;
-        if (occTotal === 0 || erroredFrac >= 0.5) {
-            console.error(`\n⚠️ INFRA: ${erroredRuns}/${totalRuns} runs never executed (quota/rate-limit/key — steps=0 or threw) — measurement unreliable, not gating.`);
+        // Not measured (evals/README.md): a run that threw (a clone, the
+        // provider) or whose review recorded an error counts in no
+        // denominator. Up to 5% of runs may be lost that way; beyond, exit 2.
+        const budget = Math.floor(totalRuns * 0.05);
+        if (totalRuns === erroredRuns || erroredRuns > budget) {
+            console.error(`\nnot measured: ${erroredRuns} of ${totalRuns} runs did not measure (budget ${budget}; see above).`);
             process.exit(2);
         }
         const occ = occTotal ? (100 * occCaught / occTotal) : 0;
         const spec = cleanFiles ? (100 * (cleanFiles - falseAlarmFiles) / cleanFiles) : 100;
         const fails = [];
-        if (haveGT && occ < OCC_MIN) fails.push(`occurrence-recall ${occ.toFixed(0)}% < ${OCC_MIN}%`);
+        // A negative control (polyglot-cases) has no sites: specificity only.
+        if (haveGT && occTotal > 0 && occ < OCC_MIN) fails.push(`occurrence-recall ${occ.toFixed(0)}% < ${OCC_MIN}%`);
         if (spec < SPEC_MIN) fails.push(`specificity ${spec.toFixed(0)}% < ${SPEC_MIN}%`);
         if (fails.length) { console.error(`\n❌ GATE FAILED: ${fails.join('; ')}`); process.exit(1); }
         console.log(`\n✅ GATE PASSED (occurrence-recall ≥ ${OCC_MIN}%, specificity ≥ ${SPEC_MIN}%)`);

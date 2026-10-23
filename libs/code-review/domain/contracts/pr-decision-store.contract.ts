@@ -55,6 +55,15 @@ export interface PrDecisionRecord {
      *  (the generic finder/verifier) can ignore this field — `label` alone
      *  is enough context there. */
     readonly brokenKodyRulesIds?: readonly string[];
+    /** The custom agent (#2172) whose finding this was. A custom agent weighs
+     *  only its own earlier decisions: another reviewer's verdicts are not
+     *  about what its instructions ask, and read as "already decided" they
+     *  silenced it. */
+    readonly customAgentId?: string;
+    /** The code the suggestion pointed at, as stored. Lets the repeat check
+     *  (`engine/repeat-check.ts`) recognize the same occurrence without a
+     *  model call. Absent on PR-level records. */
+    readonly existingCode?: string;
     readonly outcome: PrDecisionOutcome;
     /** `createdAt` of the original suggestion. */
     readonly decidedAt: string;
@@ -64,6 +73,8 @@ export interface LoadPrDecisionsParams {
     readonly organizationId: string;
     readonly prNumber: number;
     readonly repositoryFullName: string;
+    /** Most recent entries to return. Defaults to {@link MAX_PR_DECISIONS}. */
+    readonly limit?: number;
 }
 
 /**
@@ -74,6 +85,13 @@ export interface LoadPrDecisionsParams {
  * cap for the whole history keeps every prompt that renders it bounded.
  */
 export const MAX_PR_DECISIONS = 40;
+
+/**
+ * How many earlier suggestions the repeat check reads (#2097). It is not
+ * rendered into any prompt, so it is the whole PR in practice; the bound only
+ * keeps one runaway PR from loading an unbounded array.
+ */
+export const MAX_REPEAT_CHECK_DECISIONS = 500;
 
 /**
  * Read port for prior-round decisions on a PR. Implementations are infra

@@ -172,10 +172,13 @@ export class CodeReviewConfigDataDto {
     summary: ReviewSummaryDto;
 
     @ApiProperty()
-    ideRulesSyncEnabled: boolean;
+    repoInstructionsEnabled: boolean;
 
     @ApiProperty()
     kodyRulesGeneratorEnabled: boolean;
+
+    @ApiProperty({ required: false })
+    kodyRulesAutoPauseEnabled?: boolean;
 
     @ApiProperty({ type: [String], required: false })
     kodyLearningExcludedReviewers?: string[];

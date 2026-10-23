@@ -387,6 +387,10 @@ services:
             - API_MCP_MANAGER_DATABASE_ENV=${API_MCP_MANAGER_DATABASE_ENV:-development}
             - API_MCP_MANAGER_CORS_ORIGINS=${API_MCP_MANAGER_CORS_ORIGINS:-*}
             - API_MCP_MANAGER_JWT_SECRET=${API_MCP_MANAGER_JWT_SECRET:-}
+            # Secret used to VERIFY the orchestrator access tokens the web app
+            # forwards here. Must match the API's
+            # API_JWT_SECRET or MCP requests fail auth.
+            - API_JWT_SECRET=${API_JWT_SECRET:-}
             - API_MCP_MANAGER_ENCRYPTION_SECRET=${API_MCP_MANAGER_ENCRYPTION_SECRET:-}
             - API_MCP_MANAGER_PG_DB_SCHEMA=${API_MCP_MANAGER_PG_DB_SCHEMA:-mcp-manager}
             - API_MCP_MANAGER_MCP_PROVIDERS=${API_MCP_MANAGER_MCP_PROVIDERS:-kodusmcp,custom}

@@ -1,0 +1,643 @@
+/**
+ * Read-only MCP tools for custom agents — no network. The MCP adapter is a
+ * fake, so the tests pin which tools are offered, that a tool outside the
+ * allowed set is refused even when called by name, and that failures come back
+ * as tool output instead of being thrown.
+ */
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
+import type {
+    MCPAdapter,
+    MCPAdapterConfig,
+    MCPTool,
+} from '@libs/mcp-server/mcp-adapter';
+
+import {
+    buildCustomAgentMcpTools,
+    isReadOnlyMcpTool,
+    mcpToolExposedName,
+    type CustomAgentMcpServer,
+} from '@libs/code-review/infrastructure/agents/adapters/custom-agent-mcp.tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
+
+const ctx = { runId: 'r' } as any;
+
+function tool(name: string, annotations?: Record<string, unknown>): MCPTool {
+    return {
+        name,
+        description: `${name} description`,
+        inputSchema: { type: 'object', properties: { id: { type: 'string' } } },
+        annotations,
+        execute: jest.fn(),
+    };
+}
+
+function fakeAdapter(
+    tools: MCPTool[],
+    executeTool: jest.Mock = jest.fn(async (name: string) => ({
+        content: [{ type: 'text', text: `${name} ok` }],
+    })),
+) {
+    const adapter = {
+        connect: jest.fn(async () => {}),
+        disconnect: jest.fn(async () => {}),
+        getTools: jest.fn(async () => tools),
+        executeTool,
+    } as unknown as MCPAdapter & {
+        executeTool: jest.Mock;
+        disconnect: jest.Mock;
+        connect: jest.Mock;
+    };
+    return adapter;
+}
+
+const TRACKER: CustomAgentMcpServer = {
+    name: 'Tracker',
+    type: 'http',
+    url: 'https://mcp.tracker.example/mcp',
+    integrationId: 'int-tracker',
+};
+
+const WIKI: CustomAgentMcpServer = {
+    name: 'Wiki',
+    type: 'http',
+    url: 'https://mcp.wiki.example/mcp',
+    integrationId: 'int-wiki',
+};
+
+describe('isReadOnlyMcpTool', () => {
+    it('trusts readOnlyHint when the server marks its tools', () => {
+        expect(
+            isReadOnlyMcpTool(tool('get_ticket', { readOnlyHint: true }), true),
+        ).toBe(true);
+        expect(
+            isReadOnlyMcpTool(
+                tool('get_ticket', { readOnlyHint: false }),
+                true,
+            ),
+        ).toBe(false);
+        // A marking server leaves an unmarked tool out.
+        expect(isReadOnlyMcpTool(tool('get_ticket'), true)).toBe(false);
+    });
+
+    it.each([
+        'create_ticket',
+        'updateIssue',
+        'deletePage',
+        'write-file',
+        'post_comment',
+        'sendMessage',
+        'add_label',
+        'removeWatcher',
+        'set_status',
+        'editPage',
+        'close_issue',
+        'mergePullRequest',
+        'issues.create',
+        // Not a read verb: a blocklist would let these through.
+        'archive_project',
+        'transition_issue',
+        'run_pipeline',
+        'assignTicket',
+        'jira_comment',
+        // A read verb next to a write verb is still a write.
+        'get_or_create_ticket',
+        'list_and_delete_pages',
+        // `read` here is the state the tool writes, not what it does.
+        'mark_all_notifications_read',
+        'markThreadAsRead',
+        'find_and_replace_text',
+        'read_and_dismiss_alert',
+        'get_and_unlock_record',
+        // `check in` / `check out` change state; `check` alone reads.
+        'check_in_ticket',
+        'checkOutBranch',
+    ])(
+        'falls back to the name when the server marks nothing: %s is a write',
+        (name) => {
+            expect(isReadOnlyMcpTool(tool(name), false)).toBe(false);
+        },
+    );
+
+    it.each([
+        'get_ticket',
+        'searchIssues',
+        'list_pages',
+        'fetch-document',
+        'getSettings',
+        'read_file',
+        'find_users',
+        'query_metrics',
+        'describeTable',
+        'view_dashboard',
+        'show_config',
+        'lookupAccount',
+        'tracker_get_issue',
+        // Nouns that are also verbs do not make a read tool a write.
+        'list_labels',
+        'get_comments',
+        'list_runs',
+        'search_posts',
+        'list_commits',
+        'list_bookmarks',
+        'get_notifications',
+        // Docs and policy servers name their reads this way.
+        'ask_question',
+        'check_policy',
+        'checkCompliance',
+        'inspect_schema',
+        'validate_config',
+        'verify_signature',
+        'explain_rule',
+        'compare_versions',
+        'count_open_incidents',
+    ])(
+        'falls back to the name when the server marks nothing: %s is a read',
+        (name) => {
+            expect(isReadOnlyMcpTool(tool(name), false)).toBe(true);
+        },
+    );
+});
+
+describe('buildCustomAgentMcpTools', () => {
+    it('offers only the selected tools that are read-only, named Server__tool', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+            tool('search_tickets', { readOnlyHint: true }),
+            tool('create_ticket', { readOnlyHint: false }),
+            tool('get_attachment'), // unmarked on a marking server
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                {
+                    integrationId: 'int-tracker',
+                    tools: ['get_ticket', 'create_ticket', 'get_attachment'],
+                },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        expect(set.tools.map((t) => t.name)).toEqual(['Tracker__get_ticket']);
+        expect(set.tools[0].description).toContain('Tracker:get_ticket');
+        expect(set.tools[0].inputSchema).toEqual({
+            type: 'object',
+            properties: { id: { type: 'string' } },
+        });
+    });
+
+    it('"*" offers every read-only tool of the plugin, including ones added later', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+            tool('search_tickets', { readOnlyHint: true }),
+            tool('create_ticket', { readOnlyHint: false }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-tracker', tools: ['*'] }],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        expect(set.tools.map((t) => t.name)).toEqual([
+            'Tracker__get_ticket',
+            'Tracker__search_tickets',
+        ]);
+    });
+
+    it('never offers a write tool even when the agent selected it and the server marks nothing', async () => {
+        const adapter = fakeAdapter([tool('get_page'), tool('update_page')]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                {
+                    integrationId: 'int-wiki',
+                    tools: ['get_page', 'update_page'],
+                },
+            ],
+            servers: [WIKI],
+            createAdapter: () => adapter,
+        });
+        expect(set.tools.map((t) => t.name)).toEqual(['Wiki__get_page']);
+    });
+
+    it('on a server that marks nothing, offers only selected read-named tools', async () => {
+        const adapter = fakeAdapter([
+            tool('get_page'),
+            tool('search_pages'),
+            tool('archive_page'),
+            tool('page_history'),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                {
+                    integrationId: 'int-wiki',
+                    // search_pages is read-named but not selected.
+                    tools: ['get_page', 'archive_page', 'page_history'],
+                },
+            ],
+            servers: [WIKI],
+            createAdapter: () => adapter,
+        });
+        expect(set.tools.map((t) => t.name)).toEqual(['Wiki__get_page']);
+
+        const refused = await set.call('Wiki__archive_page', {});
+        expect(refused.isError).toBe(true);
+        expect(adapter.executeTool).not.toHaveBeenCalled();
+    });
+
+    it('fills bound arguments on the server side and hides them from the model', async () => {
+        const getIssue: MCPTool = {
+            name: 'KODUS_GET_ISSUE',
+            description: 'Get an issue',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    organizationId: { type: 'string' },
+                    teamId: { type: 'string' },
+                    repository: { type: 'object' },
+                    issueNumber: { type: 'number' },
+                },
+                required: [
+                    'organizationId',
+                    'teamId',
+                    'repository',
+                    'issueNumber',
+                ],
+            },
+            annotations: { readOnlyHint: true },
+            execute: jest.fn(),
+        };
+        const adapter = fakeAdapter([getIssue]);
+        const bound = {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            repository: { owner: 'acme', name: 'billing' },
+        };
+        const set = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-tracker', tools: ['*'] }],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+            boundArgs: { 'int-tracker': bound },
+        });
+
+        expect(set.tools[0].inputSchema).toEqual({
+            type: 'object',
+            properties: { issueNumber: { type: 'number' } },
+            required: ['issueNumber'],
+        });
+
+        // The model cannot point the call at another tenant or repository.
+        await set.call(
+            'Tracker__KODUS_GET_ISSUE',
+            { issueNumber: 7, organizationId: 'default', teamId: 'x' },
+            ctx,
+        );
+        expect(adapter.executeTool).toHaveBeenCalledWith('KODUS_GET_ISSUE', {
+            issueNumber: 7,
+            ...bound,
+        });
+    });
+
+    it('refuses to execute a tool outside the allowed set when called by name', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+            tool('create_ticket', { readOnlyHint: false }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                {
+                    integrationId: 'int-tracker',
+                    tools: ['get_ticket', 'create_ticket'],
+                },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        for (const name of [
+            'Tracker__create_ticket',
+            'create_ticket',
+            'Tracker:create_ticket',
+        ]) {
+            const r = await set.call(name, { id: '1' }, ctx);
+            expect(r.isError).toBe(true);
+            expect(r.output).toMatch(/not allowed/i);
+        }
+        expect(adapter.executeTool).not.toHaveBeenCalled();
+
+        const ok = await set.call('Tracker__get_ticket', { id: '1' }, ctx);
+        expect(ok.isError).toBeFalsy();
+        expect(ok.output).toContain('get_ticket ok');
+        expect(adapter.executeTool).toHaveBeenCalledWith('get_ticket', {
+            id: '1',
+        });
+    });
+
+    it('ignores servers the agent did not select and selections without a connection', async () => {
+        const created: string[] = [];
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-wiki', tools: ['get_page'] },
+                { integrationId: 'int-missing', tools: ['get_x'] },
+            ],
+            servers: [TRACKER, WIKI],
+            createAdapter: (config: MCPAdapterConfig) => {
+                created.push(config.servers[0].name);
+                return fakeAdapter([tool('get_page'), tool('get_ticket')]);
+            },
+        });
+        expect(created).toEqual(['Wiki']);
+        expect(set.tools.map((t) => t.name)).toEqual(['Wiki__get_page']);
+    });
+
+    it('returns a timeout as error output instead of throwing', async () => {
+        const executeTool = jest.fn(
+            () => new Promise(() => {}), // never settles
+        );
+        const adapter = fakeAdapter(
+            [tool('get_ticket', { readOnlyHint: true })],
+            executeTool,
+        );
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+            callTimeoutMs: 20,
+        });
+
+        const r = await set.tools[0].execute({ id: '1' }, ctx);
+        expect(r.isError).toBe(true);
+        expect(r.output).toMatch(/timed out/i);
+    });
+
+    it('returns a thrown tool error as error output', async () => {
+        const executeTool = jest.fn(async () => {
+            throw new Error('upstream 500');
+        });
+        const adapter = fakeAdapter(
+            [tool('get_ticket', { readOnlyHint: true })],
+            executeTool,
+        );
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+        const r = await set.tools[0].execute({}, ctx);
+        expect(r.isError).toBe(true);
+        expect(r.output).toContain('upstream 500');
+    });
+
+    it('drops a server that fails to connect and keeps the rest', async () => {
+        const broken = fakeAdapter([tool('get_ticket')]);
+        broken.connect.mockRejectedValueOnce(new Error('401'));
+        const wiki = fakeAdapter([tool('get_page')]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+                { integrationId: 'int-wiki', tools: ['get_page'] },
+            ],
+            servers: [TRACKER, WIKI],
+            createAdapter: (config) =>
+                config.servers[0].name === 'Tracker' ? broken : wiki,
+        });
+        expect(set.tools.map((t) => t.name)).toEqual(['Wiki__get_page']);
+        expect(set.unavailable).toEqual(['Tracker']);
+    });
+
+    it('logs a missing connection and an unreachable server with the review ids', async () => {
+        mockWarn.mockClear();
+        const broken = fakeAdapter([tool('get_ticket')]);
+        broken.connect.mockRejectedValueOnce(new Error('401'));
+        const ids = { organizationId: 'org-1', prNumber: 7, agentId: 'agent-1' };
+        await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+                { integrationId: 'int-gone', tools: ['get_page'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => broken,
+            logContext: ids,
+        });
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    ...ids,
+                    integrationId: 'int-tracker',
+                }),
+            }),
+        );
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('connection not found'),
+                metadata: expect.objectContaining({
+                    ...ids,
+                    integrationId: 'int-gone',
+                }),
+            }),
+        );
+    });
+
+    it('disconnects every adapter on close', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+        await set.close();
+        expect(adapter.disconnect).toHaveBeenCalled();
+    });
+
+    it('stops waiting for a disconnect that never settles', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        adapter.disconnect.mockImplementation(() => new Promise(() => {}));
+        const set = await buildCustomAgentMcpTools({
+            selections: [
+                { integrationId: 'int-tracker', tools: ['get_ticket'] },
+            ],
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+            connectTimeoutMs: 20,
+        });
+
+        const closed = await Promise.race([
+            set.close().then(() => 'closed'),
+            new Promise((resolve) => setTimeout(() => resolve('hung'), 500)),
+        ]);
+        expect(closed).toBe('closed');
+    });
+
+    it('builds provider-safe names', () => {
+        expect(mcpToolExposedName('My Tracker!', 'get.ticket')).toBe(
+            'My_Tracker__get_ticket',
+        );
+        expect(
+            mcpToolExposedName('A'.repeat(80), 'b'.repeat(80)).length,
+        ).toBeLessThanOrEqual(64);
+    });
+});
+
+describe('buildCustomAgentMcpTools — repeated calls in one review run (#2172)', () => {
+    const selections = [
+        { integrationId: 'int-tracker', tools: ['get_ticket'] },
+    ];
+
+    it('runs an identical call once across passes, whatever the key order', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        const first = await set.tools[0].execute({ id: '1', depth: 2 }, ctx);
+        // The recall pass and a verifier ask again with a fresh history.
+        const second = await set.tools[0].execute({ depth: 2, id: '1' }, ctx);
+        await set.call('Tracker__get_ticket', { id: '1', depth: 2 }, ctx);
+
+        expect(adapter.executeTool).toHaveBeenCalledTimes(1);
+        expect(second.output).toBe(first.output);
+        expect(second.isError).toBe(false);
+    });
+
+    it('runs different arguments separately', async () => {
+        const adapter = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        await set.tools[0].execute({ id: '1' }, ctx);
+        await set.tools[0].execute({ id: '2' }, ctx);
+
+        expect(adapter.executeTool).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not keep a failed call: the next identical call runs again', async () => {
+        const executeTool = jest
+            .fn()
+            .mockRejectedValueOnce(new Error('upstream 500'))
+            .mockResolvedValueOnce({ isError: true, content: [] })
+            .mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+        const adapter = fakeAdapter(
+            [tool('get_ticket', { readOnlyHint: true })],
+            executeTool,
+        );
+        const set = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => adapter,
+        });
+
+        expect((await set.tools[0].execute({ id: '1' }, ctx)).isError).toBe(
+            true,
+        );
+        expect((await set.tools[0].execute({ id: '1' }, ctx)).isError).toBe(
+            true,
+        );
+        const ok = await set.tools[0].execute({ id: '1' }, ctx);
+        await set.tools[0].execute({ id: '1' }, ctx);
+
+        expect(ok.output).toBe('ok');
+        expect(executeTool).toHaveBeenCalledTimes(3);
+    });
+
+    it('shares the review run cache it is given across toolsets of the same run', async () => {
+        const cache = new RunToolCache();
+        const first = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const second = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        // Two batches of one chunked review build two toolsets.
+        const a = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => first,
+            cache,
+        });
+        const b = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => second,
+            cache,
+        });
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(first.executeTool).toHaveBeenCalledTimes(1);
+        expect(second.executeTool).not.toHaveBeenCalled();
+    });
+
+    it('never serves one connection the answer of another', async () => {
+        const cache = new RunToolCache();
+        const tracker = fakeAdapter([
+            tool('get_ticket', { readOnlyHint: true }),
+        ]);
+        const other = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const a = await buildCustomAgentMcpTools({
+            selections,
+            servers: [TRACKER],
+            createAdapter: () => tracker,
+            cache,
+        });
+        // Same server name and tool, another connection (another tenant's).
+        const b = await buildCustomAgentMcpTools({
+            selections: [{ integrationId: 'int-other', tools: ['get_ticket'] }],
+            servers: [{ ...TRACKER, integrationId: 'int-other' }],
+            createAdapter: () => other,
+            cache,
+        });
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(tracker.executeTool).toHaveBeenCalledTimes(1);
+        expect(other.executeTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('keys on the bound arguments too', async () => {
+        const cache = new RunToolCache();
+        const one = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const two = fakeAdapter([tool('get_ticket', { readOnlyHint: true })]);
+        const build = (adapter: ReturnType<typeof fakeAdapter>, org: string) =>
+            buildCustomAgentMcpTools({
+                selections,
+                servers: [TRACKER],
+                createAdapter: () => adapter,
+                cache,
+                boundArgs: { 'int-tracker': { organizationId: org } },
+            });
+        const a = await build(one, 'org-a');
+        const b = await build(two, 'org-b');
+
+        await a.tools[0].execute({ id: '1' }, ctx);
+        await b.tools[0].execute({ id: '1' }, ctx);
+
+        expect(one.executeTool).toHaveBeenCalledTimes(1);
+        expect(two.executeTool).toHaveBeenCalledTimes(1);
+    });
+});

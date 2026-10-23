@@ -78,6 +78,8 @@ const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     businessValidation: TOOL_CALLING_REQUIREMENT,
     prSummary: null,
     conversation: TOOL_CALLING_REQUIREMENT,
+    // A custom agent investigates with tools (grep, ast-grep, MCP, CLIs).
+    customAgent: TOOL_CALLING_REQUIREMENT,
 };
 
 

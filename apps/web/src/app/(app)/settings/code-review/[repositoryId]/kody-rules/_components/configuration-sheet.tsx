@@ -11,6 +11,7 @@ import {
 import { Skeleton } from "@components/ui/skeleton";
 
 import { GenerateRulesOptions } from "../../../_components/generate-rules-options";
+import { KodyRulesAutoPauseSetting } from "./auto-pause-setting";
 import { GlobalRulesSourceSetting } from "./global-rules-source-setting";
 import { KodyKnowledgeApprovalSetting } from "./knowledge-approval";
 
@@ -43,6 +44,8 @@ export const KodyRulesConfigurationSheet = ({
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                 <div className="flex flex-col gap-3 px-6 py-5">
                     <KodyKnowledgeApprovalSetting />
+
+                    <KodyRulesAutoPauseSetting />
 
                     {/* Repository-scoped behaviors: set org-wide at global,
                         overridable per repository, absent per directory. */}

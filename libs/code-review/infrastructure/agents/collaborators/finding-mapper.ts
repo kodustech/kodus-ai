@@ -16,6 +16,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { normalizeRepoPath } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import type { ReviewFindingLabel } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
 // ── Bounded Levenshtein + UUID recovery ──────────────────────────────────────
 
@@ -80,7 +81,7 @@ export interface LabelPolicy {
     /** The agent's fixed category (bug/security/performance/kody_rules/generalist). */
     categoryLabel: string;
     /** Labels this run may emit (for mixed/generalist reviewers). */
-    allowedLabels: Array<'bug' | 'security' | 'performance'>;
+    allowedLabels: ReviewFindingLabel[];
     /** Whether the agent emits per-finding labels (generalist) vs a fixed one. */
     supportsMixed: boolean;
 }
@@ -95,17 +96,12 @@ export function resolveSuggestionLabel(
     if (!policy.supportsMixed) {
         return policy.categoryLabel;
     }
-    const allowed = new Set(policy.allowedLabels);
+    const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
             ? suggestion.label.toLowerCase()
             : '';
-    if (
-        (rawLabel === 'bug' ||
-            rawLabel === 'security' ||
-            rawLabel === 'performance') &&
-        allowed.has(rawLabel as 'bug' | 'security' | 'performance')
-    ) {
+    if (allowed.has(rawLabel)) {
         return rawLabel;
     }
     return policy.allowedLabels[0] || 'bug';
@@ -127,12 +123,19 @@ export interface RawFinding {
     relevantLinesEnd?: number;
     severity?: string;
     label?: string;
+    /** Custom agents: whether the finding applies a team rule, and which. */
+    kind?: CodeSuggestion['kind'];
+    source?: CodeSuggestion['source'];
+    /** On a discarded finding: why the check set it aside. */
+    discardReason?: string;
 }
 
 export interface MappableAgentResult {
     findings?: { suggestions?: RawFinding[] };
     discardedBySeverity?: RawFinding[];
     droppedByVerify?: RawFinding[];
+    unverifiedByVerify?: RawFinding[];
+    droppedByQuoteCheck?: RawFinding[];
 }
 
 export interface FindingMapperContext {
@@ -152,6 +155,8 @@ export interface MappedFindings {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity: Partial<CodeSuggestion>[];
     discardedByVerify: Partial<CodeSuggestion>[];
+    /** Findings whose verify run failed (#2171). */
+    discardedByVerifyError: Partial<CodeSuggestion>[];
     /** Findings dropped because the file they named is not in the PR. */
     droppedForPath: number;
 }
@@ -329,6 +334,9 @@ export function mapAgentFindings(
             ...(s.revisesSuggestionId && {
                 revisesSuggestionId: s.revisesSuggestionId,
             }),
+            // Lane credit in dedup and the rule citation read these.
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
         } as Partial<CodeSuggestion>;
     });
 
@@ -339,12 +347,24 @@ export function mapAgentFindings(
             severity: (s.severity || 'medium') as CodeSuggestion['severity'],
             label: resolveSuggestionLabel(s, ctx.labelPolicy),
             oneSentenceSummary: s.oneSentenceSummary || '',
+            relevantLinesStart: s.relevantLinesStart,
+            relevantLinesEnd: s.relevantLinesEnd,
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
+            ...(s.discardReason && { discardReason: s.discardReason }),
         }));
 
     return {
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
-        discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        // A convention finding whose quoted rule is not in the guide was
+        // checked and refuted like a verify drop; counted apart it vanished
+        // from the agent's "dropped by verification" figure.
+        discardedByVerify: mapDiscarded([
+            ...(agentResult.droppedByVerify ?? []),
+            ...(agentResult.droppedByQuoteCheck ?? []),
+        ]),
+        discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
         droppedForPath,
     };
 }

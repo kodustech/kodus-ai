@@ -71,7 +71,7 @@ function compareNights(tonight, lastGreen) {
     };
 }
 
-// Noise of one night's 30-PR mean against a baseline, from the calibration the
+// Noise of one night's mean over the set against a baseline, from the calibration the
 // floor uses (evals/investigation/targets.json → sets.<set>.models.<model>).
 function nightNoise(targets, set, model) {
     const observed = targets?.sets?.[set]?.models?.[model]?.observed;

@@ -1,0 +1,652 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:38:42.856Z",
+  "updatedAt": "2026-10-13T21:54:44.117Z",
+  "complete": true,
+  "selectedCases": [
+    "P32-install-failure-only-logged",
+    "P32-install-failure-only-logged-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P32-install-failure-only-logged · install-failure-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P32-install-failure-only-logged-control · install-failure-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 104752,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 189507,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The failure branch added to `run!` only logs `\"...aborting the release\"` but never aborts, so after a failed `bundle install` execution still proceeds to `migrate`, `precompile_assets`, and `activate`. WHY: `install_gems` returns the boolean from `system(...)`; when it is false/nil the guard logs and falls through, so `activate` runs `ln -sfn @release_dir CURRENT` and promotes a release whose gems are missing, and the app crashes at boot after the switch — the exact failure the earlier install-failure suggestion (round-a-P32-install-failure-only-logged, partially_implemented) described, now re-created as a log-only guard. HOW: make the failure raise (or return early) so the release stops before migrate/activate, e.g. `raise \"bundle install failed in #{@release_dir}\"` in the branch, or run the install through `sh!` so a non-zero status raises automatically.",
+          "keep": false,
+          "rationale": "The finding describes the identical failure already raised by PreviousReviewDecision round-a-P32-install-failure-only-logged (Outcome: partially_implemented): a failed `bundle install` lets `run!` proceed to migrate/activate a release whose gems are missing, crashing the app at boot after the switch. The finding even names this prior entry and admits it re-creates \"the exact failure\" it described. Per the repeat rule, this must be dropped even though the developer's applied fix is only a log-only guard and the finding blames that incomplete fix — judge by the failure, not the cause named; same crash, same operation (release deploy). The technical observation is accurate, but it is the same problem already on the PR, not a distinct new bug or a consequence of the applied change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 109418,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 117155,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 148718,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P32-install-failure-only-logged-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 56689,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: the `unless install_gems` block logs \"aborting the release\" but never aborts — it only logs, then execution continues to migrate, precompile_assets and activate. WHY: install_gems returns the boolean from `system(\"bundle\", \"install\", ...)`, which is false/nil when bundle install fails, so on a failed gem install the release still proceeds and activates a directory with missing/stale gems, and the log falsely reports an abort. HOW: stop the release on failure, e.g. `unless install_gems; @logger.error(...); return; end` (or `raise`).",
+          "keep": true,
+          "rationale": "Confirmed: lib/deploy/release.rb:14-16 logs 'aborting the release' but has no return/raise, so execution continues to migrate/precompile_assets/activate even when install_gems returns false/nil from a failed `system(\"bundle\", \"install\")`. The failure path is real and reachable. No previous review decision concerns this file, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `install_gems` returns false or nil because `bundle install` failed, the release still runs `migrate`, `precompile_assets`, and `activate`, activating a directory with missing or stale gems while the log falsely reports an abort. Add a `return` (or `raise`) after the `@logger.error` call inside the `unless install_gems` block so the release stops before those steps."
+        }
+      ],
+      "claims": [
+        {
+          "id": "install-failure-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P32-install-failure-only-logged-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 59521,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: run! logs 'aborting the release' when install_gems fails but does not actually abort — there is no return/raise, so migrate, precompile_assets and activate still run. WHY: a failed bundle install leaves the release without its gems, yet activate still runs `ln -sfn @release_dir CURRENT`, pointing the live app at a broken release (or migrating the DB against missing gems), i.e. the exact failure the message claims to prevent. HOW: abort the release on install failure, e.g. `raise \"bundle install failed in #{@release_dir}\" unless install_gems` (or `return` from run! after logging) so no further steps or symlink swap occur.",
+          "keep": true,
+          "rationale": "Confirmed by reading lib/deploy/release.rb. `run!` (lines 13-20) calls `unless install_gems` which only logs an error on failure; there is no return or raise, so control falls through to `migrate`, `precompile_assets`, and `activate` unconditionally. `install_gems` (line 24-26) uses `system(...)`, which returns false (or nil) on failure, so the failure branch is reachable and the claimed behavior is real: a failed bundle install still proceeds to migrate the DB and `ln -sfn @release_dir CURRENT`, pointing the live app at a broken release. `sh!` raises on command failure, but install_gems does not, so nothing stops the pipeline. None of the PreviousReviewDecisions (all in src/reports/*) raise this problem, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 40,
+                "endLine": 55
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `run!` only logs the error without returning or raising, `migrate`, `precompile_assets` and `activate` still run after `install_gems` fails, pointing the live app at a broken release through `ln -sfn @release_dir CURRENT` (or migrating against missing gems). Add a `return` after the log, or raise, so no further steps or symlink swap occur."
+        }
+      ],
+      "claims": [
+        {
+          "id": "install-failure-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P32-install-failure-only-logged-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 48417,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: `run!` logs \"aborting the release\" when `install_gems` returns false but does not return or raise, so execution falls through to `migrate`, `precompile_assets`, and `activate`. WHY: a failed bundle install still runs db:migrate, asset precompile, and the `ln -sfn` symlink swap, deploying a release with missing/broken gems; the log message falsely reports that the release was aborted. HOW: return early (or raise) after logging, e.g. `unless install_gems; @logger.error(...); return; end`.",
+          "keep": true,
+          "rationale": "Confirmed in lib/deploy/release.rb:13-20: when install_gems returns false (system(...) failure), run! only logs 'aborting the release' and falls through to migrate, precompile_assets, and activate (the ln -sfn symlink swap) with no return/raise. The described failure path is real and matches the code; no upstream guard prevents it and no previous decision addresses this file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def install_gems|def run!|def migrate|def precompile_assets|def activate",
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `install_gems` returns false, `run!` logs that the release is aborted but continues into `migrate`, `precompile_assets`, and `activate`, so a release with missing or broken gems can still be deployed and the log falsely reports an abort. Return early (or raise) after the `@logger.error` call so the release stops before those steps."
+        }
+      ],
+      "claims": [
+        {
+          "id": "install-failure-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P32-install-failure-only-logged-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 58221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: the added `unless install_gems` block only logs \"aborting the release\" but never returns or raises, so run! continues into migrate, precompile_assets and activate after a failed bundle install. WHY: a release whose gems failed to install is still migrated, precompiled and symlinked live via `activate`, contradicting the logged intent and deploying a broken release. HOW: abort the release explicitly, e.g. `raise \"bundle install failed in #{@release_dir}\"` (or `return`/`exit`) inside the branch.",
+          "keep": true,
+          "rationale": "The code confirms the claim: `install_gems` uses `system(...)`, which returns false (does not raise) on failure, so `unless install_gems` enters the branch, logs the error, and then execution falls through to `migrate`, `precompile_assets`, and `activate` (which symlinks the release live). There is no return/raise/exit in the branch, so a release with failed bundle install is still migrated, precompiled and activated, deploying a broken release. No previous review decision covers this file or this failure, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the added `unless install_gems` block only logs and never returns or raises, `run!` continues into `migrate`, `precompile_assets`, and `activate` after a failed `bundle install`, so the release is migrated, precompiled, and symlinked live despite the logged intent, deploying a broken release. Abort the release explicitly inside the branch, for example with `raise \"bundle install failed in #{@release_dir}\"` (or `return`/`exit`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "install-failure-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P32-install-failure-only-logged-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 67703,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The failure branch logs \"aborting the release\" but never aborts — there is no return or raise, so execution continues to migrate, precompile_assets, and activate after a failed bundle install. WHY: When `bundle install` fails (system returns false/nil), the release still proceeds and activate symlinks the release to CURRENT, publishing a broken release whose dependencies are missing, while the log misleadingly reports the release was aborted. HOW: Abort the run in the failure branch, e.g. `return false unless install_gems` or `raise \"bundle install failed in #{@release_dir}\"`.",
+          "keep": true,
+          "rationale": "release.rb:13-20 confirms the failure branch only logs and does not abort. install_gems (line 24-26) returns system(...) which is false on failure, and run! proceeds unconditionally to migrate, precompile_assets, and activate, symlinking CURRENT to a release with failed bundle install. No previous review decision addresses this file or failure, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def (install_gems|run!|migrate|precompile_assets|activate)",
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "lib/deploy/release.rb",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `bundle install` fails (system returns false/nil), execution continues to `migrate`, `precompile_assets`, and `activate`, so `activate` can symlink a broken release to `CURRENT` while the log misleadingly reports it was aborted. Abort the run in the failure branch with `return false unless install_gems` or `raise \"bundle install failed in #{@release_dir}\"`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "install-failure-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

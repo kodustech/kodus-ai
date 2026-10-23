@@ -28,6 +28,7 @@ const IDS: string[] = Array.from(
             .concat([
                 'gpt-5.4',
                 'kimi-k2.6',
+                'deepseek-v4p1-flash',
                 'deepseek/deepseek-v4-pro',
                 'accounts/fireworks/models/deepseek-v4-flash-0731',
                 'glm-5.3',

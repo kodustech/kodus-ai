@@ -41,7 +41,35 @@ export type ReviewWarningKind =
     /** Findings were dropped because the file they named is not in the PR. */
     | 'SUGGESTIONS_DROPPED_PATH_MISMATCH'
     /** Some Kody Rules checks failed to run; the others still posted. */
-    | 'KODY_RULES_PARTIAL';
+    | 'KODY_RULES_PARTIAL'
+    /** A finding's verify run failed, so it was not published (#2171). */
+    | 'VERIFY_UNAVAILABLE'
+    /** A linked skill has no SKILL.md on the PR's target branch. */
+    | 'SKILL_NOT_FOUND'
+    /** A linked skill breaks the skill format, so it was not loaded. */
+    | 'SKILL_INVALID'
+    /** The PR edits a linked skill or doc; the target-branch version was used. */
+    | 'SKILL_CHANGED_IN_PR'
+    /** A linked doc is absent on the PR's target branch. */
+    | 'DOC_NOT_FOUND'
+    /** A skill body or the linked docs were cut to fit their budget. */
+    | 'KNOWLEDGE_TRUNCATED'
+    /** No linked skill or doc could be read; the review ran without them. */
+    | 'KNOWLEDGE_UNAVAILABLE'
+    /** A skill declares requirements the reviewer may not meet. */
+    | 'SKILL_COMPATIBILITY'
+    /** A custom agent's CLI could not be installed or fenced in the sandbox,
+     *  so the agent ran without that tool. */
+    | 'CLI_INSTALL_FAILED'
+    /** Linked repositories were armed for this PR but there was no checkout
+     *  to read them from, so the review stayed single-repo. */
+    | 'CROSS_REPO_UNAVAILABLE'
+    /** A custom agent would have had astGrep, but the sandbox has no ast-grep
+     *  binary, so the agent ran without structural search. */
+    | 'AST_GREP_UNAVAILABLE'
+    /** kodus-config.yml has a key that is configured only in the app
+     *  (customAgents, knowledge); the review ignored it. */
+    | 'CONFIG_FILE_KEY_IGNORED';
 
 export type ReviewWarningReason =
     | 'small_context_window'
@@ -61,7 +89,17 @@ export type ReviewWarningReason =
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
     /** The prompt did not fit the single-batch budget on a large PR. */
-    | 'large_pr';
+    | 'large_pr'
+    /** The verifier's model call failed (provider error, 429, abort). */
+    | 'verify_failed'
+    /** A linked skill or doc could not be used as configured. */
+    | 'knowledge'
+    /** A custom agent CLI failed its install or network fence. */
+    | 'cli_install_failed'
+    /** A review tool the agent is configured for is missing from the sandbox. */
+    | 'tool_unavailable'
+    /** The repository's kodus-config.yml holds a key the review does not read. */
+    | 'config_file';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -142,6 +180,32 @@ export function buildSandboxUnavailableWarning(params: {
     };
 }
 
+/** Only when the boundary gate armed the linked repositories and the review
+ *  had no checkout to read them: a gate that did not arm is not a loss. */
+export function crossRepoUnavailableWarning(params: {
+    configured: number;
+    gateActive: boolean;
+    hasAccess: boolean;
+    hasCheckout: boolean;
+    modelName: string;
+}): ReviewWarning | undefined {
+    if (
+        params.configured === 0 ||
+        !params.gateActive ||
+        params.hasAccess ||
+        params.hasCheckout
+    ) {
+        return undefined;
+    }
+    return {
+        kind: 'CROSS_REPO_UNAVAILABLE',
+        reason: 'sandbox_unavailable',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.configured} linked repositories were not read: the review had no repository checkout`,
+    };
+}
+
 export function buildCallGraphFailedWarning(params: {
     modelName: string;
 }): ReviewWarning {
@@ -167,6 +231,97 @@ export function buildPathMismatchWarning(params: {
         detail: `${params.agentName}: ${params.count} finding(s) dropped because the file they named is not in the pull request`,
         agentName: params.agentName,
     };
+}
+
+export function buildVerifyUnavailableWarning(params: {
+    count: number;
+    modelName: string;
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'VERIFY_UNAVAILABLE',
+        reason: 'verify_failed',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${params.agentName}: ${params.count} finding(s) not posted because their verification failed to run`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildCliInstallFailedWarning(params: {
+    agentName: string;
+    cliName: string;
+    reason: string;
+}): ReviewWarning {
+    return {
+        kind: 'CLI_INSTALL_FAILED',
+        reason: 'cli_install_failed',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: CLI "${params.cliName}" unavailable (${params.reason}); the agent ran without it`,
+        agentName: params.agentName,
+    };
+}
+
+export function buildAstGrepUnavailableWarning(params: {
+    agentName: string;
+}): ReviewWarning {
+    return {
+        kind: 'AST_GREP_UNAVAILABLE',
+        reason: 'tool_unavailable',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.agentName}: ast-grep is not installed in the sandbox; the agent ran without astGrep (structural search and its rules)`,
+        agentName: params.agentName,
+    };
+}
+
+/**
+ * Keys a team may write in kodus-config.yml that the review does not read
+ * there: custom agents and their skills and docs are configured in the app
+ * only. The file loader drops every unknown key; these two are named back to
+ * the team, because an agent written in the file and never run reads exactly
+ * like an agent that found nothing.
+ */
+const CONFIG_FILE_KEYS_SET_IN_APP: Record<string, string> = {
+    customAgents:
+        'kodus-config.yml: customAgents is not read from this file; configure custom agents in the app.',
+    knowledge:
+        'kodus-config.yml: knowledge is not read from this file; link skills and docs to a custom agent in the app.',
+};
+
+/** The warning for the app-only keys among `fileKeys`; undefined when the
+ *  file has none of them. */
+export function buildConfigFileKeysIgnoredWarning(
+    fileKeys: readonly string[] | undefined,
+): ReviewWarning | undefined {
+    const inFile = new Set(fileKeys ?? []);
+    const lines = Object.keys(CONFIG_FILE_KEYS_SET_IN_APP)
+        .filter((key) => inFile.has(key))
+        .map((key) => CONFIG_FILE_KEYS_SET_IN_APP[key]);
+    if (!lines.length) return undefined;
+    return {
+        kind: 'CONFIG_FILE_KEY_IGNORED',
+        reason: 'config_file',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: lines.join(' '),
+    };
+}
+
+/**
+ * The end-review comment's line for an ignored kodus-config.yml key. Unlike
+ * the fidelity warnings it goes on the pull request: whoever edits the file
+ * reads the review there, not in the dashboard.
+ */
+export function formatConfigFileNotice(
+    warnings: readonly ReviewWarning[] | undefined,
+): string {
+    const details = (warnings ?? [])
+        .filter((w) => w?.kind === 'CONFIG_FILE_KEY_IGNORED' && w.detail)
+        .map((w) => w.detail!);
+    if (!details.length) return '';
+    return `\n\n> ⚠️ ${details.join(' ')}`;
 }
 
 export function buildKodyRulesPartialWarning(params: {
