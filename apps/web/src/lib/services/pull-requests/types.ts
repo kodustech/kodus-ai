@@ -172,8 +172,6 @@ export interface PullRequestExecution {
     title: string;
     status: "open" | "closed" | "merged";
     merged: boolean;
-    /** Whether the last review ran in HEAVY mode. */
-    heavy?: boolean;
     url: string;
     baseBranchRef: string;
     headBranchRef: string;

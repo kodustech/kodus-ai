@@ -73,10 +73,8 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/user.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],

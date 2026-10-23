@@ -37,7 +37,6 @@ import {
     ReviewModeResponse,
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
-import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
@@ -96,9 +95,7 @@ export type AnalysisContext<TPullRequest = any> = {
     baseDir?: string;
     correlationId?: string;
     reviewModeResponse?: ReviewModeResponse;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
     fileChangeContext?: FileChangeContext;
-    clusterizedSuggestions?: IClusterizedSuggestion[];
     validCrossFileSuggestions?: CodeSuggestion[];
     /** External file content and metadata loaded by PromptContextLoader. */
     externalPromptContext?: any;
@@ -696,9 +693,6 @@ export type BusinessLogicConfig = {
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
-    /** HEAVY mode — extra critic pass in the finder for more recall. Opt-in per
-     *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
-    heavy?: boolean;
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */
@@ -746,7 +740,6 @@ export type CodeReviewConfig = {
     // Reviews read the repo's coding-agent instructions (CLAUDE.md, AGENTS.md,
     // .cursor/rules, ...). It never imports those files as Kody Rules.
     repoInstructionsEnabled?: boolean;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
     configLevel?: ConfigLevel;
     directoryId?: string;
     directoryPath?: string;
@@ -897,10 +890,6 @@ export type KodusConfigFile = DeepPartial<
         | 'errorReviewMessage'
         | 'globalSettings'
     >;
-};
-
-export type KodyFineTuningConfig = {
-    enabled: boolean;
 };
 
 export type ReviewCadence = {

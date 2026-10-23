@@ -62,7 +62,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import { FeatureGateService } from '@libs/feature-gate';
 import {
     ORGANIZATION_SERVICE_TOKEN,
     IOrganizationService,
@@ -686,54 +686,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         });
     }
 
-    /**
-     * Resolve whether HEAVY mode actually runs: the per-review opt-in (CLI
-     * `--heavy` / `@kody review --heavy`) AND the `heavy-review` feature gate,
-     * which is an ALPHA feature — cloud gates it by the org's release track +
-     * PostHog allowlist, self-hosted keeps it off until it's promoted to beta.
-     * A denied request degrades silently to a normal review.
-     */
-    private async resolveHeavy(
-        context: CodeReviewPipelineContext,
-    ): Promise<boolean> {
-        const requested =
-            context.heavy || context.codeReviewConfig?.heavy || false;
-        if (!requested) {
-            return false;
-        }
-        const org = context.organizationAndTeamData;
-        try {
-            const releaseTrack = await this.organizationService.getReleaseTrack(
-                org.organizationId,
-            );
-            const enabled = await this.featureGate.isEnabled(
-                FEATURE_KEYS.heavyReview,
-                {
-                    identifier: org.organizationId,
-                    organizationAndTeamData: org,
-                    releaseTrack,
-                },
-            );
-            if (!enabled) {
-                this.logger.log({
-                    message: `[AGENT] Heavy review requested but not enabled for org (alpha feature) — running normal review`,
-                    context: this.stageName,
-                    metadata: { organizationId: org.organizationId },
-                });
-            }
-            return enabled;
-        } catch (err) {
-            // Fail safe: if the gate can't be evaluated, do NOT silently run the
-            // alpha path — degrade to normal.
-            this.logger.warn({
-                message: `[AGENT] Heavy feature-gate check failed; running normal review`,
-                context: this.stageName,
-                error: err,
-            });
-            return false;
-        }
-    }
-
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
@@ -967,20 +919,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // dropped — is unit-testable and can't drift from a second inline
             // copy. A committed merge conflict once kept an inline builder that
             // silently dropped reviewDirective; this is the single source now.
-            // Resolve HEAVY once (opt-in AND the alpha feature gate) and write it
-            // back onto the context so the SAME gated value flows to both the
-            // finder and the persisted PR record (create-file-comments stage).
-            const resolvedHeavy = await this.resolveHeavy(context);
-            // The pipeline context is Immer-frozen (auto-freeze) once it has
-            // passed through an earlier stage's produce(), so a direct
-            // `context.heavy = …` throws "Cannot assign to read only property".
-            // Write it back through updateContext so the gated value both flows
-            // into buildOrchestratorInput below AND persists to the downstream
-            // create-file-comments stage.
-            context = this.updateContext(context, (draft) => {
-                draft.heavy = resolvedHeavy;
-            });
-
             // Deterministic boundary gate (#1576): only arm linked-repo tools
             // + prompt when the diff touches boundary surface. Config alone is
             // not enough — pure internal refactors stay single-repo.
@@ -1025,7 +963,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     gitHubToken: await this.resolveGitHubToken(context),
                     callGraph,
                     adaptiveProfile,
-                    heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
                     repoInstructions,
