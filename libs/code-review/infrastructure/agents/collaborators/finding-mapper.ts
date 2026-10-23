@@ -91,6 +91,8 @@ export interface LabelPolicy {
  *  the stage would exempt the finding from the parse schema and the sanitizer
  *  and treat it as a rule violation with no rule behind it. */
 const KNOWN_FINDING_LABELS = new Set<string>([
+    // The generalist agent's own category, never a finding label.
+    'generalist',
     'bug',
     'security',
     'performance',

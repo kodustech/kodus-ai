@@ -128,12 +128,15 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
         expect(resolve('generalist')).not.toBe('generalist');
     });
 
-    it('falls back to the first allowed category when the label is unknown', () => {
+    it('falls back to the first allowed category when the label is missing', () => {
         // GeneralistAgentProvider.getAllowedSuggestionLabels returns
         // ['bug', 'security', 'performance'] by default — so fallback is 'bug'.
-        expect(resolve('random-label')).toBe('bug');
         expect(resolve(undefined)).toBe('bug');
         expect(resolve(null)).toBe('bug');
+    });
+
+    it('passes an unknown label through for the label step after anchoring (#1821)', () => {
+        expect(resolve('Random-Label')).toBe('random-label');
     });
 
     it('respects requestedCategories when narrowing the allowed set', () => {
