@@ -266,6 +266,23 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
+    it('does not attempt GitHub review dismissal on another provider', async () => {
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITLAB,
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Sensitive path changed.',
+                },
+            }),
+        );
+
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).not.toHaveBeenCalled();
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
     it('records a failed dismissal so an old GitHub approval is not silent', async () => {
         codeManagement.dismissOwnPullRequestApprovals.mockRejectedValueOnce(
             new Error('GitHub denied dismissal'),
