@@ -305,8 +305,40 @@ const SENSITIVE_KEYS = new Set([
 const KEY_SENSITIVITY_CACHE = new Map<string, boolean>();
 const KEY_SENSITIVITY_CACHE_MAX = 512;
 
+/**
+ * Credential names are open-ended (`authToken`, `basicPassword`,
+ * `webhookSecret`, `API_GITHUB_PRIVATE_KEY`, ...), so an exact list always
+ * lags behind the code. A name is also sensitive when it ENDS with one of
+ * these stems. Plurals (`inputTokens`, `maxTokens`) do not end with a stem and
+ * stay visible.
+ */
+const SENSITIVE_SUFFIXES = [
+    'token',
+    'secret',
+    'password',
+    'passwd',
+    'privatekey',
+    'apikey',
+];
+
+/** Names that end with a stem but carry no credential. */
+const NON_SECRET_SUFFIX_NAMES = new Set([
+    'cancellationtoken',
+    'hastoken',
+    'pertoken',
+    'missingtoken',
+    'keywordtoken',
+    'colontoken',
+    'equalsgreaterthantoken',
+    'redactiontoken',
+    'tstoken',
+]);
+
 function isSensitiveName(name: string): boolean {
-    return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (SENSITIVE_KEYS.has(normalized)) return true;
+    if (NON_SECRET_SUFFIX_NAMES.has(normalized)) return false;
+    return SENSITIVE_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 }
 
 /**
@@ -429,7 +461,29 @@ function isAuthorityTerminator(char: string | undefined): boolean {
  * Returns the original reference when nothing was redacted.
  */
 function sanitizeString(value: string): string {
-    return redactEmbeddedSecrets(redactUrlUserinfo(value));
+    return redactKnownTokenFormats(
+        redactEmbeddedSecrets(redactUrlUserinfo(value)),
+    );
+}
+
+// Tokens with a recognizable format are secrets wherever they appear, even in
+// free text where no key name points at them (an error message, a stack, a
+// git or HTTP library message). Linear patterns, no nested quantifiers.
+const KNOWN_TOKEN_HINT = /gh[pousr]_|github_pat_|glpat-|bearer\s/i;
+const KNOWN_TOKEN_PATTERN =
+    /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,})/g;
+const BEARER_VALUE_PATTERN = /\b(Bearer)[ \t]+[A-Za-z0-9._~+/-]{8,}=*/gi;
+
+function redactKnownTokenFormats(value: string): string {
+    if (!KNOWN_TOKEN_HINT.test(value)) {
+        return value;
+    }
+
+    const result = value
+        .replace(KNOWN_TOKEN_PATTERN, '[REDACTED]')
+        .replace(BEARER_VALUE_PATTERN, '$1 [REDACTED]');
+
+    return result === value ? value : result;
 }
 
 function stringifyUnknownError(value: unknown): string {
