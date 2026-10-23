@@ -61,13 +61,52 @@ const SHAPES = {
         apply: (p) => ({ ...p, suggestions: `${JSON.stringify(p.suggestions)}}` }),
         expect: keep,
     },
+    'payload-broken-json': {
+        checks: () => 'Keeps the findings before an unescaped quote breaks the whole payload, sent as a string (45 reviews in 8 days, #2112)',
+        apply: (p) => `{"reasoning":${JSON.stringify(p.reasoning || '')},"suggestions":${brokenAtSecond(p.suggestions)}}`,
+        expect: (s, i) => (i === 0 ? 'keep' : 'either'),
+    },
+    'bare-array': {
+        checks: () => 'Keeps the findings when the payload is the suggestions array alone, with no envelope (#2112)',
+        apply: (p) => p.suggestions,
+        expect: keep,
+    },
+    'tool-call-wrapper': {
+        checks: () => 'Keeps the findings when the payload comes wrapped as {name, parameters} (#2112)',
+        apply: (p) => ({ name: 'submitResult', parameters: p }),
+        expect: keep,
+    },
+    'reason-alias': {
+        checks: () => 'Keeps the findings when the payload names reasoning "reason" (#2112)',
+        apply: ({ reasoning, ...p }) => ({ reason: reasoning || 'Review of the changed code.', ...p }),
+        expect: keep,
+    },
+    'single-finding-flat': {
+        checks: () => 'Keeps a finding sent alone as the whole payload, with no suggestions array (#2112)',
+        apply: (p) => p.suggestions[0],
+        expect: (s, i) => (i === 0 ? 'keep' : 'either'),
+    },
+    'lines-as-strings': {
+        checks: () => 'Keeps a finding whose line numbers arrive as numeric strings (#2112)',
+        apply: each((s) => ({
+            ...s,
+            ...(s.relevantLinesStart != null ? { relevantLinesStart: String(s.relevantLinesStart) } : {}),
+            ...(s.relevantLinesEnd != null ? { relevantLinesEnd: String(s.relevantLinesEnd) } : {}),
+        })),
+        expect: keep,
+    },
+    'enum-unknown': {
+        checks: () => 'Keeps a finding whose label and severity are outside the enum, the fields cleared (#2112)',
+        apply: each((s) => ({ ...s, label: 'style', severity: 'urgent' })),
+        expect: keep,
+    },
     'string-items-mixed-in': {
         checks: () => 'Keeps the object findings when the array also holds plain-string items (22 reviews, #2112)',
         apply: (p) => ({ ...p, suggestions: [...p.suggestions, 'see the comment above', 'also check the tests'] }),
         expect: keep,
     },
     'text-node-split': {
-        checks: () => 'Keeps the postable part of a finding split into {"$text"} items, as MiniMax-M3 sends them (#2112)',
+        checks: () => 'Drops a finding MiniMax-M3 split into {"$text"} items: its lines and code went to the text nodes (#2112)',
         apply: (p) => ({
             ...p,
             suggestions: p.suggestions.flatMap((s, i) =>
@@ -80,7 +119,7 @@ const SHAPES = {
                     : [s],
             ),
         }),
-        expect: keep,
+        expect: firstDropped,
     },
     'improved-code-missing': {
         checks: () => 'Keeps a finding with no improvedCode (122 findings in 8 days, #2112)',
@@ -88,9 +127,11 @@ const SHAPES = {
         expect: keep,
     },
     'existing-code-missing': {
-        checks: () => 'Keeps a finding with no existingCode (49 findings in 8 days, #2112)',
+        checks: () => 'Keeps a finding with no existingCode, its fix dropped (49 findings in 8 days, #2112)',
         apply: each(({ existingCode, ...s }) => s),
         expect: keep,
+        // Nothing for the fix to replace that checkFix can see.
+        fixDropped: true,
     },
     'improved-code-null': {
         checks: () => 'Keeps a finding whose improvedCode is null (#2112)',

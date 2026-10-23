@@ -330,7 +330,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
 function earlierSubmittedFindings(
     state: RunState,
     latest: RunState['artifacts'][number],
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): FinderSuggestion[] {
     return state.artifacts
         .filter((a) => a.type === FINDER_DONE_TOOL && a !== latest)
@@ -346,7 +346,7 @@ export function extractFindings(
     // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
     // that function's own doc comment for why this is an untyped inline
     // shape rather than LangfuseTelemetryMetadata.
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): {
     reasoning: string;
     suggestions: FinderSuggestion[];
@@ -359,16 +359,16 @@ export function extractFindings(
     // era registrada — artefato valido com lista vazia, artefato inutilizavel
     // (submitResult({}) vazio ou prosa), e artefato ausente. Sem isto, o numero
     // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
+    // Validated ONCE: a second pass logged every failure twice (#2112).
+    const clean = artifact
+        ? sanitizeFindingsResult(artifact.payload, telemetryMetadata)
+        : null;
     (state as any).__findingsOutcome = !artifact
         ? 'no-artifact'
-        : sanitizeFindingsResult(artifact.payload as any, telemetryMetadata)
+        : clean
           ? 'structured'
           : 'artifact-unusable';
     if (artifact) {
-        const clean = sanitizeFindingsResult(
-            artifact.payload as any,
-            telemetryMetadata,
-        );
         if (clean) {
             const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
             // A model that submits its findings and then submits again with
@@ -392,11 +392,21 @@ export function extractFindings(
         // PROSE in `reasoning` and omitted `suggestions`. Preserve that prose so
         // a downstream fallback-LLM can re-structure it into findings; otherwise
         // those (real) findings are silently lost.
-        const proseReasoning =
-            typeof (artifact.payload as { reasoning?: unknown })?.reasoning ===
-            'string'
-                ? ((artifact.payload as { reasoning: string }).reasoning ?? '')
-                : '';
+        // When the findings came as JSON text that could not be parsed, that
+        // text goes to the recoverer too: the findings are in it, not in
+        // `reasoning` (#2112).
+        const payload = artifact.payload as Record<string, unknown> | string;
+        const proseReasoning = [
+            typeof payload === 'object' &&
+            typeof payload?.reasoning === 'string'
+                ? payload.reasoning
+                : '',
+            typeof payload === 'string'
+                ? payload
+                : unparsedFindingsText(payload),
+        ]
+            .filter((t) => t.trim() !== '')
+            .join('\n\n');
         return (
             findingsFromText(state, telemetryMetadata) ?? {
                 reasoning: proseReasoning,
@@ -414,11 +424,39 @@ export function extractFindings(
     );
 }
 
+/** The findings a payload holds as text, under the key, an alias, or the
+ *  arguments of a tool-call wrapper — '' when there is none. */
+function unparsedFindingsText(
+    payload: Record<string, unknown> | undefined,
+    depth = 0,
+): string {
+    if (!payload || typeof payload !== 'object' || depth > 3) return '';
+    for (const k of [
+        'suggestions',
+        'findings',
+        'codeSuggestions',
+        'arguments',
+    ]) {
+        if (typeof payload[k] === 'string') return payload[k] as string;
+    }
+    for (const k of ['parameters', 'arguments', 'result', 'data', 'output']) {
+        const inner = payload[k];
+        if (inner && typeof inner === 'object') {
+            const t = unparsedFindingsText(
+                inner as Record<string, unknown>,
+                depth + 1,
+            );
+            if (t) return t;
+        }
+    }
+    return '';
+}
+
 /** Recover findings from the model's final text — covers "answered in prose/JSON
  *  instead of calling submitResult" and empty-arg submitResult. */
 function findingsFromText(
     state: RunState,
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): {
     reasoning: string;
     suggestions: FinderSuggestion[];
@@ -516,11 +554,28 @@ export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 export async function extractFindingsWithRecovery(
     state: RunState,
     recover?: ProseRecoverer,
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): Promise<FinderFindings> {
     const found = extractFindings(state, telemetryMetadata);
     if (found.suggestions.length > 0 || !recover) return found;
     const recovered = await recover(found.reasoning);
+    // Logged when there was something to recover: an unusable or missing
+    // result, or prose the recoverer turned into findings.
+    if (
+        (state as any).__findingsOutcome !== 'structured' ||
+        recovered.length > 0
+    ) {
+        finderLogger.log({
+            message: `[DONE-TOOL] prose recovery returned ${recovered.length} finding(s)`,
+            context: 'finder',
+            metadata: {
+                recovered: recovered.length,
+                outcome: (state as any).__findingsOutcome,
+                organizationId: telemetryMetadata?.organizationId,
+                modelId: telemetryMetadata?.modelId,
+            },
+        });
+    }
     return recovered.length > 0
         ? { reasoning: found.reasoning, suggestions: recovered }
         : found;
@@ -770,7 +825,7 @@ export async function runFinderWithVerify(
     const base = await extractFindingsWithRecovery(
         finderState,
         params.recoverProse,
-        params.telemetryMetadata,
+        { ...params.telemetryMetadata, modelId: params.modelId },
     );
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
@@ -788,6 +843,7 @@ export async function runFinderWithVerify(
             skipHeavyPasses: params.skipHeavyPasses,
             skipSynthesisRescue: params.skipSynthesisRescue,
             telemetryMetadata: params.telemetryMetadata,
+            modelId: params.modelId,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
             conventionGuides: params.conventionCheck?.guideFiles,
@@ -1133,7 +1189,11 @@ async function routeByKind(
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
-        ...toolSourced.map((s) => ({ ...s, kind: 'bug' as const, source: undefined })),
+        ...toolSourced.map((s) => ({
+            ...s,
+            kind: 'bug' as const,
+            source: undefined,
+        })),
     ];
     const candidates = suggestions.filter(
         (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
@@ -1284,6 +1344,8 @@ interface RecallPassesParams {
     skipHeavyPasses?: boolean;
     skipSynthesisRescue?: boolean;
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    /** The finder's model id, for the findings parse logs (#2112). */
+    modelId?: string;
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
@@ -1338,7 +1400,7 @@ export async function runRecallPasses(
         const extracted = await extractFindingsWithRecovery(
             state,
             params.recoverProse,
-            params.telemetryMetadata,
+            { ...params.telemetryMetadata, modelId: params.modelId },
         );
         usage = sumVerifyUsage(usage, usageOf(state.usage));
         toolCalls.push(...collectToolCalls(state));
