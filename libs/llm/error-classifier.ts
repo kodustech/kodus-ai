@@ -316,6 +316,13 @@ function matchByHttpStatus(
  * One list, both callers.
  */
 function looksLikeQuota(lower: string): boolean {
+    // A per-minute quota is a rate limit that clears on its own, not a spent
+    // balance. Google words both as "You exceeded your current quota"; only the
+    // quota id in the error body ("...InputTokensPerModelPerMinute...") tells a
+    // per-minute token limit from a daily or billing one.
+    if (looksLikePerMinuteLimit(lower)) {
+        return false;
+    }
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
@@ -333,6 +340,15 @@ function looksLikeQuota(lower: string): boolean {
         lower.includes('past invoices') ||
         lower.includes('past due')
     );
+}
+
+/**
+ * True for a quota the provider resets every minute (Google's
+ * "...PerModelPerMinute..." quota ids, "per minute" prose). A daily quota in
+ * the same text is not a per-minute limit.
+ */
+function looksLikePerMinuteLimit(lower: string): boolean {
+    return /per[\s_-]?minute/.test(lower) && !/per[\s_-]?day/.test(lower);
 }
 
 /**
@@ -368,7 +384,8 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('rate_limit') ||
         lower.includes('rate limit') ||
-        lower.includes('too many requests')
+        lower.includes('too many requests') ||
+        looksLikePerMinuteLimit(lower)
     ) {
         return LlmErrorCategory.RATE_LIMIT;
     }
