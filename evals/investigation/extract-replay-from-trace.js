@@ -15,26 +15,21 @@
  */
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { extractCallGraph } = require('./callgraph-context');
+const { loadLangfuseConfig } = require('./langfuse-config');
 
 const ROOT = path.resolve(__dirname, '../..');
 const BENCHMARK = path.join(ROOT, 'scripts/benchmark/prs-benchmark.json');
-const LF_URL = 'https://us.cloud.langfuse.com';
-
-function cfg(key) {
-    let v = process.env[key];
-    if (v) return v;
-    try {
-        for (const line of fs.readFileSync(path.join(os.homedir(), '.kodus-dev', 'config'), 'utf8').split('\n')) {
-            const m = line.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*)`));
-            if (m) return m[1].replace(/\s+#.*$/, '').trim().replace(/^["']|["']$/g, '');
-        }
-    } catch {}
-    return null;
+const langfuse = loadLangfuseConfig({ root: ROOT });
+const LF_URL = langfuse.baseUrl;
+const PK = langfuse.publicKey;
+const SK = langfuse.secretKey;
+if (!PK || !SK) {
+    console.error(
+        'INFRA: missing LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY (env, ~/.kodus-dev/config, or .env)',
+    );
+    process.exit(2);
 }
-
-const PK = cfg('LANGFUSE_PUBLIC_KEY');
-const SK = cfg('LANGFUSE_SECRET_KEY');
 const AUTH = 'Basic ' + Buffer.from(`${PK}:${SK}`).toString('base64');
 
 function arg(name, def) {
@@ -44,7 +39,9 @@ function arg(name, def) {
 const FLAG = (name) => process.argv.includes(`--${name}`);
 
 async function lf(pathname) {
-    const r = await fetch(`${LF_URL}${pathname}`, { headers: { Authorization: AUTH } });
+    const r = await fetch(`${LF_URL}${pathname}`, {
+        headers: { Authorization: AUTH },
+    });
     if (!r.ok) throw new Error(`langfuse ${r.status} on ${pathname}`);
     return r.json();
 }
@@ -55,7 +52,10 @@ const { execFileSync } = require('child_process');
 // Pull file basenames from the trace's diff blob and from each PR (via gh), then
 // match by overlap.
 function fileBasenames(text) {
-    const paths = String(text || '').match(/[\w./-]+\.(?:java|py|go|ts|tsx|js|jsx|rb|properties|sql|yaml|yml|json|prisma|erb)/g) || [];
+    const paths =
+        String(text || '').match(
+            /[\w./-]+\.(?:java|py|go|ts|tsx|js|jsx|rb|properties|sql|yaml|yml|json|prisma|erb)/g,
+        ) || [];
     return new Set(paths.map((p) => p.split('/').pop().toLowerCase()));
 }
 
@@ -68,8 +68,17 @@ function traceFiles(trace) {
 const prFilesCache = {};
 function ghFiles(apiPath, jq) {
     try {
-        const out = execFileSync('gh', ['api', apiPath, '--paginate', '--jq', jq], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-        return new Set(out.split('\n').filter(Boolean).map((f) => f.split('/').pop().toLowerCase()));
+        const out = execFileSync(
+            'gh',
+            ['api', apiPath, '--paginate', '--jq', jq],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        );
+        return new Set(
+            out
+                .split('\n')
+                .filter(Boolean)
+                .map((f) => f.split('/').pop().toLowerCase()),
+        );
     } catch {
         return new Set();
     }
@@ -79,9 +88,19 @@ function prFiles(pr) {
     if (prFilesCache[url]) return prFilesCache[url];
     let names = new Set();
     const pull = url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-    const commit = url.match(/github\.com\/([^/]+)\/([^/]+)\/commit\/([0-9a-f]+)/);
-    if (pull) names = ghFiles(`repos/${pull[1]}/${pull[2]}/pulls/${pull[3]}/files`, '.[].filename');
-    else if (commit) names = ghFiles(`repos/${commit[1]}/${commit[2]}/commits/${commit[3]}`, '.files[].filename');
+    const commit = url.match(
+        /github\.com\/([^/]+)\/([^/]+)\/commit\/([0-9a-f]+)/,
+    );
+    if (pull)
+        names = ghFiles(
+            `repos/${pull[1]}/${pull[2]}/pulls/${pull[3]}/files`,
+            '.[].filename',
+        );
+    else if (commit)
+        names = ghFiles(
+            `repos/${commit[1]}/${commit[2]}/commits/${commit[3]}`,
+            '.files[].filename',
+        );
     prFilesCache[url] = names;
     return names;
 }
@@ -102,8 +121,19 @@ function ghContent(owner, repo, filePath, ref) {
     if (key in contentCache) return contentCache[key];
     let content = null;
     try {
-        const b64 = execFileSync('gh', ['api', `repos/${owner}/${repo}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}?ref=${ref}`, '--jq', '.content'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-        content = Buffer.from(b64.replace(/\s/g, ''), 'base64').toString('utf8');
+        const b64 = execFileSync(
+            'gh',
+            [
+                'api',
+                `repos/${owner}/${repo}/contents/${encodeURIComponent(filePath).replace(/%2F/g, '/')}?ref=${ref}`,
+                '--jq',
+                '.content',
+            ],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        );
+        content = Buffer.from(b64.replace(/\s/g, ''), 'base64').toString(
+            'utf8',
+        );
     } catch {
         content = null;
     }
@@ -114,14 +144,21 @@ function ghContent(owner, repo, filePath, ref) {
 // Inject the trace's real cross-file exploration (read files) into a base
 // dataset's readFile corpus, with FULL content fetched from the repo. Returns
 // { added, total } or null if the base dataset can't be found.
-function injectExecutionReplay(pr, readPaths) {
-    const files = fs.readdirSync(DATASETS_DIR).filter((f) => f.endsWith('.json') && f !== 'smoke.json');
+function injectExecutionReplay(pr, readPaths, callGraph) {
+    const files = fs
+        .readdirSync(DATASETS_DIR)
+        .filter((f) => f.endsWith('.json') && f !== 'smoke.json');
     let target = null;
     for (const f of files) {
         try {
-            const raw = JSON.parse(fs.readFileSync(path.join(DATASETS_DIR, f), 'utf8'));
+            const raw = JSON.parse(
+                fs.readFileSync(path.join(DATASETS_DIR, f), 'utf8'),
+            );
             const c = Array.isArray(raw) ? raw[0] : raw;
-            if (c.vars && c.vars.benchmarkSourceUrl === pr.source_url) { target = { f, raw, c }; break; }
+            if (c.vars && c.vars.benchmarkSourceUrl === pr.source_url) {
+                target = { f, raw, c };
+                break;
+            }
         } catch {}
     }
     if (!target) return null;
@@ -129,20 +166,37 @@ function injectExecutionReplay(pr, readPaths) {
     const replay = JSON.parse(c.vars.toolReplay || '{}');
     const corpus = Array.isArray(replay.readFile) ? replay.readFile : [];
     const have = new Set(corpus.map((e) => e.match && e.match.path));
-    const m = String(pr.source_url || '').match(/github\.com\/([^/]+)\/([^/]+)\//);
+    const m = String(pr.source_url || '').match(
+        /github\.com\/([^/]+)\/([^/]+)\//,
+    );
     const ref = c.vars.benchmarkHeadRef;
     let added = 0;
     if (m && ref) {
         for (const p of readPaths) {
             if (have.has(p)) continue;
             const content = ghContent(m[1], m[2], p, ref);
-            if (content != null) { corpus.push({ match: { path: p }, result: content }); have.add(p); added++; }
+            if (content != null) {
+                corpus.push({ match: { path: p }, result: content });
+                have.add(p);
+                added++;
+            }
         }
     }
     replay.readFile = corpus;
     c.vars.toolReplay = JSON.stringify(replay);
-    fs.writeFileSync(path.join(DATASETS_DIR, target.f), JSON.stringify(target.raw, null, 2));
-    return { added, total: corpus.length, file: target.f };
+    if (callGraph) {
+        c.vars.callGraph = callGraph;
+    }
+    fs.writeFileSync(
+        path.join(DATASETS_DIR, target.f),
+        JSON.stringify(target.raw, null, 2),
+    );
+    return {
+        added,
+        total: corpus.length,
+        file: target.f,
+        callGraph: Boolean(callGraph),
+    };
 }
 
 function toolCalls(trace) {
@@ -161,14 +215,18 @@ async function main() {
     const list = await lf(
         `/api/public/traces?environment=${env}&name=kodus-generalist-review-agent&limit=100&fromTimestamp=${from}&toTimestamp=${to}`,
     );
-    console.log(`benchmark PRs: ${prs.length} · finder traces (${env}): ${list.meta.totalItems}`);
+    console.log(
+        `benchmark PRs: ${prs.length} · finder traces (${env}): ${list.meta.totalItems}`,
+    );
 
     // Pull every trace once (with observations).
     const traces = [];
     for (const t of list.data) {
         const full = await lf(`/api/public/traces/${t.id}`);
         traces.push(full);
-        process.stderr.write(`\rpulled ${traces.length}/${list.data.length} traces`);
+        process.stderr.write(
+            `\rpulled ${traces.length}/${list.data.length} traces`,
+        );
     }
     process.stderr.write('\n');
 
@@ -187,15 +245,34 @@ async function main() {
         for (const { tr, files } of traceFileSets) {
             if (usedTrace.has(tr.id)) continue;
             const s = jaccard(want, files);
-            if (s > bestScore) { bestScore = s; best = tr; }
+            if (s > bestScore) {
+                bestScore = s;
+                best = tr;
+            }
         }
         process.stderr.write(`\rmatching ${rows.length + 1}/${prs.length}`);
         const tr = bestScore >= 0.15 ? best : null;
-        if (!tr) { rows.push({ head: pr.head, repo, matched: false, score: bestScore }); continue; }
+        if (!tr) {
+            rows.push({
+                head: pr.head,
+                repo,
+                matched: false,
+                score: bestScore,
+            });
+            continue;
+        }
         usedTrace.add(tr.id);
 
         const calls = toolCalls(tr);
-        const readPaths = [...new Set(calls.filter((c) => c.name === 'readFile').map((c) => (c.input || {}).path).filter(Boolean))];
+        const callGraph = extractCallGraph(tr.input);
+        const readPaths = [
+            ...new Set(
+                calls
+                    .filter((c) => c.name === 'readFile')
+                    .map((c) => (c.input || {}).path)
+                    .filter(Boolean),
+            ),
+        ];
         const greps = calls.filter((c) => c.name === 'grep').length;
         // fairness: do the golden-relevant files show up in what was read?
         const goldenFiles = (pr.golden_comments || [])
@@ -203,12 +280,14 @@ async function main() {
             .filter(Boolean);
         const readBlob = readPaths.join('\n').toLowerCase();
         const goldenCovered = goldenFiles.length
-            ? goldenFiles.filter((f) => readBlob.includes(String(f).toLowerCase().split('/').pop())).length
+            ? goldenFiles.filter((f) =>
+                  readBlob.includes(String(f).toLowerCase().split('/').pop()),
+              ).length
             : null;
 
         let inject = null;
         if (FLAG('write')) {
-            inject = injectExecutionReplay(pr, readPaths);
+            inject = injectExecutionReplay(pr, readPaths, callGraph);
             process.stderr.write(`\rwriting ${rows.length + 1}/${prs.length}`);
         }
 
@@ -223,6 +302,7 @@ async function main() {
             goldens: (pr.golden_comments || []).length,
             goldenFiles: goldenFiles.length,
             goldenCovered,
+            callGraph: Boolean(callGraph),
             inject,
         });
     }
@@ -230,12 +310,26 @@ async function main() {
 
     console.log('\n=== per-PR extraction audit ===');
     for (const r of rows) {
-        if (!r.matched) { console.log(`  ✗ ${r.head} (${r.repo}) — NO TRACE MATCH (best overlap ${(r.score || 0).toFixed(2)})`); continue; }
-        const inj = r.inject ? `→ corpus +${r.inject.added} (=${r.inject.total})` : (r.inject === null && FLAG('write') ? '→ NO BASE DATASET' : '');
-        console.log(`  ✓ ${r.head.slice(0, 40).padEnd(40)} readFiles=${String(r.readFiles).padStart(2)} grep=${String(r.greps).padStart(2)} goldens=${r.goldens} ${inj}`);
+        if (!r.matched) {
+            console.log(
+                `  ✗ ${r.head} (${r.repo}) — NO TRACE MATCH (best overlap ${(r.score || 0).toFixed(2)})`,
+            );
+            continue;
+        }
+        const inj = r.inject
+            ? `→ corpus +${r.inject.added} (=${r.inject.total})`
+            : r.inject === null && FLAG('write')
+              ? '→ NO BASE DATASET'
+              : '';
+        console.log(
+            `  ✓ ${r.head.slice(0, 40).padEnd(40)} readFiles=${String(r.readFiles).padStart(2)} grep=${String(r.greps).padStart(2)} graph=${r.callGraph ? 'yes' : 'no'} goldens=${r.goldens} ${inj}`,
+        );
     }
     const matched = rows.filter((r) => r.matched).length;
     console.log(`\nmatched ${matched}/${rows.length} PRs to a trace`);
 }
 
-main().catch((e) => { console.error(String(e.stack || e)); process.exit(1); });
+main().catch((e) => {
+    console.error(String(e.stack || e));
+    process.exit(1);
+});

@@ -96,6 +96,80 @@ What belongs here next:
 - `fixtures/`: replayed `readFile`, `grep`, `checkTypes`, and later `searchDocs` outputs
 - `results/`: promptfoo outputs
 
+### Call-graph evidence audit
+
+The customer misses behind the call-graph work remain outside this public
+repository. Do not add their code, paths, XML, or expected dependencies here.
+Instead, retain a private expectation manifest alongside the private corpus and
+measure it against `<CallGraph>` captured from a real finder trace:
+
+```json
+{
+    "version": 1,
+    "cases": {
+        "private-case-id": {
+            "required": [
+                {
+                    "source": {
+                        "name": "changedFunction",
+                        "file": "src/service.ts"
+                    },
+                    "relation": "callee",
+                    "target": { "name": "client.call", "file": "src/client.ts" }
+                }
+            ]
+        }
+    }
+}
+```
+
+`relation` is `caller` or `callee`; all matches are exact direct relations from
+the captured XML. This deliberately does not infer a dependency from a symbol
+name. The audit also counts any changed function where a test caller appears
+before a production caller.
+
+Run a treatment or control arm with the same private manifest:
+
+```bash
+node evals/investigation/run-recall.js --set=pr --call-graph=required --call-graph-expectations /secure/customer-callgraph-expectations.json
+```
+
+The result records `callGraph.evidence`: captured/unavailable cases, required
+relations, matches, misses, and ordering violations. The audit always inspects
+the originally captured graph before the `off` control arm removes it from the
+agent input. An absent or invalid manifest exits `2` before a model call;
+missing captured graph is reported as unavailable evidence, never as a passing
+treatment case.
+
+### Capturing private traces
+
+The public benchmark extractor maps public PRs to traces. For the private
+customer corpus, use explicit trace IDs instead of guessing from customer code.
+The private manifest adds `traceId` to each case, while retaining the same
+`required` relations used by the audit:
+
+```json
+{
+    "version": 1,
+    "cases": {
+        "private-case-id": {
+            "traceId": "Langfuse trace UUID",
+            "required": []
+        }
+    }
+}
+```
+
+Capture only the `<CallGraph>` blocks into a file outside the repository:
+
+```bash
+node evals/investigation/capture-private-callgraphs.js --manifest /secure/private-cases.json --out /private/tmp/private-callgraphs.json
+```
+
+The command rejects output paths inside the repository, writes its result with
+mode `0600`, and prints only counts. It does not copy diffs, source files, or
+other trace input into the output.
+
 Recommended phases:
 
 1. `planner`

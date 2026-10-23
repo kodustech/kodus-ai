@@ -26,6 +26,8 @@ const KNOWN_FLAGS = new Set([
     'listModels',
     'gate',
     'no-judge',
+    'call-graph',
+    'call-graph-expectations',
 ]);
 
 function parseArgs(argv) {
@@ -45,6 +47,8 @@ function parseArgs(argv) {
         listModels: false,
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
+        callGraph: process.env.RECALL_CALL_GRAPH || 'captured',
+        callGraphExpectations: process.env.RECALL_CALL_GRAPH_EXPECTATIONS || '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -98,6 +102,12 @@ function parseArgs(argv) {
             out.listModels = true;
         } else if (key === 'gate') {
             out.gate = true;
+        } else if (key === 'call-graph') {
+            out.callGraph = value || out.callGraph;
+            if (consumesNext) i += 1;
+        } else if (key === 'call-graph-expectations') {
+            out.callGraphExpectations = value || '';
+            if (consumesNext) i += 1;
         }
     }
 
@@ -208,6 +218,8 @@ function runMetaOf(args) {
                     : 'api',
         },
         executionMode: 'replay',
+        callGraphVariant: args.callGraph,
+        callGraphExpectations: Boolean(args.callGraphExpectations),
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
@@ -346,6 +358,41 @@ async function main() {
         ? tests.slice(0, args.limit)
         : tests;
 
+    const { applyCallGraphVariant } = require('./callgraph-context');
+    const { auditCallGraphCases } = require('./callgraph-evidence');
+    const capturedCallGraphCases = selectedTests.filter(
+        (test) =>
+            typeof test.vars?.callGraph === 'string' &&
+            test.vars.callGraph.includes('<CallGraph>'),
+    ).length;
+    let callGraphEvidence = null;
+    if (args.callGraphExpectations) {
+        try {
+            const manifest = JSON.parse(
+                fs.readFileSync(args.callGraphExpectations, 'utf8'),
+            );
+            // Audit the graph from the original finder trace before the `off`
+            // control arm removes it from the agent input.
+            callGraphEvidence = auditCallGraphCases(selectedTests, manifest);
+        } catch (error) {
+            console.error(
+                `call graph expectations cannot be measured: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            process.exit(2);
+        }
+    }
+    try {
+        selectedTests = selectedTests.map((test) => ({
+            ...test,
+            vars: applyCallGraphVariant(test.vars || {}, args.callGraph),
+        }));
+    } catch (error) {
+        console.error(
+            `call graph variant ${args.callGraph} cannot be measured: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        process.exit(2);
+    }
+
     if (!selectedTests.length) {
         console.error('No finder-recall cases selected.');
         process.exit(2);
@@ -364,7 +411,7 @@ async function main() {
     const startedAt = new Date().toISOString();
 
     console.log(
-        `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
+        `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · call-graph=${args.callGraph} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
     );
 
     const submissionResults = [];
@@ -567,6 +614,11 @@ async function main() {
         startedAt,
         finishedAt: new Date().toISOString(),
         tokens,
+        callGraph: {
+            variant: args.callGraph,
+            capturedCases: capturedCallGraphCases,
+            evidence: callGraphEvidence,
+        },
         cases: rows.length,
         passed: rows.filter((row) => row.status === 'pass').length,
         failed: qualityFailures,
