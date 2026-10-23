@@ -145,9 +145,9 @@ export interface LangfuseTraceAttributes {
     sessionId?: string;
     /** Whom the trace belongs to — we scope by organization, not end user. */
     userId?: string;
-    /** Langfuse keeps string values only (≤200 chars) and warns on anything
-     *  else, so absent identifiers are dropped rather than sent as "undefined"
-     *  — see `withLangfuseTrace`. */
+    /** Propagated values are capped at 200 chars after the SDK JSON-encodes
+     *  them (a string keeps 198), so absent identifiers are dropped rather than
+     *  sent as "undefined" — see `withLangfuseTrace`. */
     metadata?: Record<string, string | undefined>;
     tags?: string[];
 }
@@ -172,9 +172,20 @@ export function pullRequestSessionId(meta: {
     return `${meta.organizationId || 'unknown_org'}:${meta.repositoryId ?? 'repo'}:${meta.pullRequestId}`;
 }
 
+/** What the root observation records as the unit of work's input/output.
+ *  Langfuse v4 reads trace input/output from the root observation only, so
+ *  this is the trace I/O the UI shows and evaluators read. */
+export interface LangfuseTraceIO<T> {
+    input?: unknown;
+    /** Maps the result to what is recorded — keep it small, not the whole run state. */
+    output?: (result: T) => unknown;
+}
+
 /**
- * Run `fn` with Langfuse trace-level attributes propagated to every span it
- * opens — including the AI SDK spans the agent runner produces downstream.
+ * Run `fn` inside one root Langfuse observation named `traceName`, with the
+ * trace-level attributes propagated to every span it opens — including the AI
+ * SDK spans the agent runner produces downstream. One unit of work is one
+ * trace, and its input/output sit on the root observation.
  *
  * Pass-through no-op when tracing is disabled, so callers wrap unconditionally
  * and pay nothing when Langfuse is off.
@@ -182,6 +193,7 @@ export function pullRequestSessionId(meta: {
 export function withLangfuseTrace<T>(
     attrs: LangfuseTraceAttributes,
     fn: () => Promise<T>,
+    io?: LangfuseTraceIO<T>,
 ): Promise<T> {
     if (!shouldTrace()) {
         return fn();
@@ -201,7 +213,17 @@ export function withLangfuseTrace<T>(
                   }
                 : {}),
         },
-        fn,
+        () =>
+            startActiveObservation(attrs.traceName, async (root) => {
+                if (io?.input !== undefined) {
+                    root.update({ input: io.input });
+                }
+                const result = await fn();
+                if (io?.output) {
+                    root.update({ output: io.output(result) });
+                }
+                return result;
+            }),
     );
 }
 

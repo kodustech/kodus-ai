@@ -10,6 +10,8 @@ jest.mock('@langfuse/tracing', () => ({
         propagated.params.push(params);
         return fn();
     },
+    startActiveObservation: (_name: string, fn: (o: unknown) => unknown) =>
+        fn({ update: () => undefined }),
 }));
 
 import {

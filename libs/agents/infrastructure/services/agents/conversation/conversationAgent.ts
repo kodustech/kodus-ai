@@ -306,6 +306,8 @@ export class ConversationAgentProvider {
                         },
                         ctx,
                     ),
+                // The raw user turn and Kody's answer, as the trace I/O.
+                { input: prompt, output: finalText },
             );
 
             // Cost is recorded by LLM.run's span (inside the runner) — ONE place,
