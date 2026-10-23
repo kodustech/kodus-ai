@@ -9,6 +9,9 @@ import { kodusTemplate } from './template';
  */
 async function main() {
     const template = await Template.build(kodusTemplate, {
+        // Cached layers keep the CA bundle they were built with; a stale
+        // bundle trusted the revoked eMudhra intermediates. Builds are rare.
+        skipCache: true,
         alias: 'kodus-sandbox',
         cpuCount: 2,
         memoryMB: 1536,

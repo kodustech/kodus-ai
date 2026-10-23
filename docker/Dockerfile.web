@@ -10,7 +10,7 @@
 # standalone output uses repo-relative paths.
 
 # 1) Builder stage: install all deps and build
-FROM docker.io/library/node:22.22.2-slim AS builder
+FROM docker.io/library/node:22.23.4-slim AS builder
 WORKDIR /usr/src/app
 
 ARG RELEASE_VERSION=local
@@ -73,7 +73,7 @@ RUN --mount=type=cache,target=/usr/src/app/apps/web/.next/cache,sharing=private 
     pnpm build
 
 # 2) Production stage: only the final artifacts
-FROM docker.io/library/node:22.22.2-slim AS production
+FROM docker.io/library/node:22.23.4-slim AS production
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
     --mount=type=cache,target=/var/lib/apt,sharing=private \

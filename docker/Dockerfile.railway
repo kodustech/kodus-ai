@@ -9,7 +9,7 @@
 #   SERVICE_TYPE=api | worker | webhooks
 # =============================================================================
 
-FROM docker.io/library/node:22.22.2-slim AS base
+FROM docker.io/library/node:22.23.4-slim AS base
 WORKDIR /usr/src/app
 
 ARG API_CLOUD_MODE=false
@@ -64,7 +64,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile --prod
 
 # Runtime stage — single stage, service selected via SERVICE_TYPE
-FROM docker.io/library/node:22.22.2-slim
+FROM docker.io/library/node:22.23.4-slim
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 

@@ -41,7 +41,7 @@ const installSecurityTools = [
 // so git fetch, curl, etc. automatically use the proxy without any extra configuration.
 export const kodusTemplate = Template()
     .fromBaseImage()
-    .aptInstall(['iptables', 'git', 'ripgrep', 'unzip'])
+    .aptInstall(['ca-certificates', 'iptables', 'git', 'ripgrep', 'unzip'])
     .runCmd([
         `wget ${downloadUrl}`,
         'tar -xf shadowsocks-*.tar.xz',
@@ -68,5 +68,5 @@ export const kodusTemplate = Template()
  */
 export const kodusBenchmarkTemplate = Template()
     .fromBaseImage()
-    .aptInstall(['git', 'ripgrep', 'unzip'])
+    .aptInstall(['ca-certificates', 'git', 'ripgrep', 'unzip'])
     .runCmd([...installSecurityTools]);
