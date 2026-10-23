@@ -242,16 +242,6 @@ export class GithubService
         return `${normalizedHost}/api/v3`;
     }
 
-    private getGithubGraphqlBaseUrl(host?: string): string | undefined {
-        const normalizedHost = this.normalizeGithubHost(host);
-
-        if (!normalizedHost) {
-            return undefined;
-        }
-
-        return `${normalizedHost}/api/graphql`;
-    }
-
     private getGithubWebBaseUrl(host?: string): string {
         const normalizedHost = this.normalizeGithubHost(host);
 
@@ -3444,7 +3434,11 @@ export class GithubService
             ) {
                 // Decrypt the PAT before using it
                 const decryptedPAT = decrypt(githubAuthDetail?.authToken);
-                const graphQlBaseUrl = this.getGithubGraphqlBaseUrl(
+                // @octokit/graphql turns a GHES REST base (`<host>/api/v3`)
+                // into `<host>/api/graphql` itself. Any other base gets
+                // `/graphql` appended, so `<host>/api/graphql` became
+                // `<host>/api/graphql/graphql` and every GraphQL call 404ed.
+                const graphQlBaseUrl = this.getGithubApiBaseUrl(
                     githubAuthDetail.host,
                 );
 
