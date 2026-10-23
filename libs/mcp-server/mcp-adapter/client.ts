@@ -1015,10 +1015,11 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
         let lastErrorMessage: string | undefined;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            let timeoutId: ReturnType<typeof setTimeout> | undefined;
             try {
                 // Create timeout promise
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                    setTimeout(() => {
+                    timeoutId = setTimeout(() => {
                         reject(
                             new Error(
                                 `MCP tool execution timeout after ${timeout}ms`,
@@ -1084,6 +1085,8 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
                 } else {
                     break;
                 }
+            } finally {
+                clearTimeout(timeoutId);
             }
         }
 
@@ -1757,6 +1760,10 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             this.metricsIntervalId = undefined;
         }
         this.sessionManager.destroy();
+
+        // The session manager runs its own cleanup interval; without this the
+        // timer outlives the client and keeps the process alive.
+        this.sessionManager?.destroy();
 
         // Clear caches
         this.resourcesCache = null;
