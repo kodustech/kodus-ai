@@ -284,6 +284,34 @@ export class CreateRepositoriesUseCase implements IUseCase {
             (await this.codeManagementService.getTypeIntegration(orgTeam)) ||
             'github';
 
+        // Resolve the REPOSITORIES integration_config row for this org/team.
+        // `repositories.integration_config_id` must reference this config's
+        // uuid so an inbound webhook can walk
+        //   repositories -> integration_configs -> integrations
+        // to reach the Git provider token. Passing `orgTeam.teamId` here
+        // wrote the team's uuid into a column that holds an
+        // integration_config uuid; the (platform, externalId) lookup in
+        // findOrCreate still succeeded, but the foreign key pointed at a
+        // teams row, so the join returned nothing and every webhook for the
+        // repo was silently dropped (HTTP 204, no review enqueued).
+        const integrationConfig =
+            await this.integrationConfigService.findOneIntegrationConfigWithIntegrations(
+                IntegrationConfigKey.REPOSITORIES,
+                orgTeam,
+            );
+
+        if (!integrationConfig?.uuid) {
+            this.logger.error({
+                message: `[AST-GRAPH] No REPOSITORIES integration config found for org=${orgTeam.organizationId} team=${orgTeam.teamId}; skipping repository findOrCreate to avoid writing an invalid integrationConfigId.`,
+                context: CreateRepositoriesUseCase.name,
+                metadata: {
+                    organizationId: orgTeam.organizationId,
+                    teamId: orgTeam.teamId,
+                },
+            });
+            return;
+        }
+
         this.logger.log({
             message: `[AST-GRAPH] Processing ${repositories.length} repos for AST graph build (platform=${platformType})`,
             context: CreateRepositoriesUseCase.name,
@@ -306,7 +334,7 @@ export class CreateRepositoriesUseCase implements IUseCase {
                         : `${repo.organizationName || ''}/${repo.name}`);
 
                 const repoRecord = await this.repositoryService.findOrCreate({
-                    integrationConfigId: orgTeam.teamId,
+                    integrationConfigId: integrationConfig.uuid,
                     externalId: String(repo.id),
                     name: repo.name,
                     fullName,

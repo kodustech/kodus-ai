@@ -16,6 +16,18 @@ export class RepositoryRepository implements IRepositoryRepository {
     /**
      * Find or create a repository record.
      * Looks up by (platform, externalId). If not found, creates with status PENDING.
+     * If found but the integrationConfigId differs from the passed value, heals
+     * the stale FK so previously-mislinked rows (e.g. created with a team id
+     * instead of an integration_config id) self-repair on the next onboarding
+     * save rather than requiring a manual data backfill.
+     *
+     * The heal is gated on the stored value being dangling: `repositories` is
+     * globally unique on (platform, externalId) with no org/team filter in
+     * this lookup, and the owning team is derived solely from this FK. A row
+     * still linked to a live `integration_configs` row may belong to another
+     * team — overwriting it would steal the repo row and break that team's
+     * webhook join. We therefore only overwrite when the stored value no
+     * longer resolves to any `integration_configs` row.
      */
     async findOrCreate(params: {
         integrationConfigId: string;
@@ -33,6 +45,31 @@ export class RepositoryRepository implements IRepositoryRepository {
         });
 
         if (existing) {
+            if (
+                existing.integrationConfigId &&
+                existing.integrationConfigId !== params.integrationConfigId
+            ) {
+                // Heal only a dangling FK (e.g. a stale team id written by
+                // the old call sites). A row still linked to a live
+                // integration_configs row may belong to another team, and
+                // (platform, externalId) is globally unique — overwriting
+                // it would steal the repo row and break that team's
+                // repositories -> integration_configs webhook join.
+                const [stale] = await this.repo.query(
+                    `SELECT NOT EXISTS (
+                         SELECT 1 FROM integration_configs ic
+                          WHERE ic.uuid = $1
+                     ) AS stale`,
+                    [existing.integrationConfigId],
+                );
+                if (stale?.stale) {
+                    await this.repo.update(
+                        { uuid: existing.uuid },
+                        { integrationConfigId: params.integrationConfigId },
+                    );
+                    existing.integrationConfigId = params.integrationConfigId;
+                }
+            }
             return existing;
         }
 
