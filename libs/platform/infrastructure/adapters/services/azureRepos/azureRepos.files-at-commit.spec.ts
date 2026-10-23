@@ -99,6 +99,15 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
         ]);
     });
 
+    it('lets a rate limit through, so the review is not rerun in full', async () => {
+        const { service, helper } = makeService(iterations, []);
+        helper.getIterations.mockRejectedValue(
+            Object.assign(new Error('Too Many Requests'), { status: 429 }),
+        );
+
+        await expect(read(service)).rejects.toMatchObject({ status: 429 });
+    });
+
     it('returns null when no iteration had that head', async () => {
         const { service, logger } = makeService(iterations, []);
 

@@ -172,6 +172,20 @@ describe('BitbucketDataCenterService — PR diffs', () => {
             );
         });
 
+        it('lets a rate limit through, so the review is not rerun in full', async () => {
+            const { service } = makeService(
+                jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('Too Many Requests'), {
+                            status: 429,
+                        }),
+                    ),
+            );
+
+            await expect(read(service)).rejects.toMatchObject({ status: 429 });
+        });
+
         it('returns null and warns when the earlier head cannot be read', async () => {
             const { service, logger } = makeService(
                 jest.fn().mockRejectedValue(new Error('404')),

@@ -486,6 +486,28 @@ describe('ValidateNewCommitsStage', () => {
                 );
             });
 
+            it('skips as rate-limited, not a full review, when the host throttles the earlier diff', async () => {
+                orphan();
+                mockPullRequestManagerService.getRebaseInterdiff.mockRejectedValue(
+                    Object.assign(new Error('Too Many Requests'), {
+                        status: 429,
+                    }),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.statusInfo?.message).toBe(
+                    StageMessageHelper.skippedWithReason(
+                        PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                        'Provider rate-limited the diff fetch (HTTP 429)',
+                    ),
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).not.toBe(true);
+            });
+
             it('records the fallback on orphanedBaseCommit when the earlier diff is unreadable', async () => {
                 orphan();
 

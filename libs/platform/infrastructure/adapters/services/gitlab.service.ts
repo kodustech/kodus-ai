@@ -5,6 +5,7 @@ import {
     MergeRequestSchemaWithBasicLabels,
     RepositoryTreeSchema,
 } from '@gitbeaker/rest';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -2390,6 +2391,9 @@ export class GitlabService implements Omit<
                 } as FileChange;
             });
         } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
             this.logger.warn({
                 message: `Could not read the diff of MR!${prNumber} at ${headSha}`,
                 context: GitlabService.name,

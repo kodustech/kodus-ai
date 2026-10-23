@@ -1568,6 +1568,9 @@ export class AzureReposService implements Omit<
 
             return files as FileChange[];
         } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
             this.logger.warn({
                 message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
                 context: AzureReposService.name,

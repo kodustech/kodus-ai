@@ -179,14 +179,44 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 });
 
                 // `--force` and `-v <agent>` ask for the whole PR.
-                const interdiff = forceFullRerun
-                    ? null
-                    : await this.pullRequestHandlerService.getRebaseInterdiff(
-                          context.organizationAndTeamData,
-                          context.repository,
-                          context.pullRequest,
-                          lastCommitSha,
-                      );
+                let interdiff: Awaited<
+                    ReturnType<IPullRequestManagerService['getRebaseInterdiff']>
+                > = null;
+                try {
+                    interdiff = forceFullRerun
+                        ? null
+                        : await this.pullRequestHandlerService.getRebaseInterdiff(
+                              context.organizationAndTeamData,
+                              context.repository,
+                              context.pullRequest,
+                              lastCommitSha,
+                          );
+                } catch (error) {
+                    // A full review would hit the throttled host harder; skip
+                    // like a rate-limited commit fetch does.
+                    if (!is429Error(error)) throw error;
+                    this.logger.warn({
+                        message: `Skipping code review for PR#${context.pullRequest.number} — provider rate-limited the diff fetch (HTTP 429)`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationAndTeamData:
+                                context.organizationAndTeamData,
+                            repository: context.repository.name,
+                            pullRequestNumber: context.pullRequest.number,
+                            orphanedSha: lastCommitSha,
+                            reason: 'provider_rate_limited',
+                        },
+                    });
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: StageMessageHelper.skippedWithReason(
+                                PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                                'Provider rate-limited the diff fetch (HTTP 429)',
+                            ),
+                        };
+                    });
+                }
 
                 if (forceFullRerun) {
                     orphanedBaseCommit.interdiff = {
