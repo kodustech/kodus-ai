@@ -108,6 +108,20 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
         await expect(read(service)).rejects.toMatchObject({ status: 429 });
     });
 
+    it('asks the file diffs to let a rate limit through', async () => {
+        const { service, generate } = makeService(iterations, [
+            { item: { path: '/src/a.ts' }, changeType: 'edit' },
+        ]);
+        generate.mockRejectedValueOnce(
+            Object.assign(new Error('Too Many Requests'), { status: 429 }),
+        );
+
+        await expect(read(service)).rejects.toMatchObject({ status: 429 });
+        expect(generate).toHaveBeenCalledWith(
+            expect.objectContaining({ rethrowRateLimit: true }),
+        );
+    });
+
     it('returns null when no iteration had that head', async () => {
         const { service, logger } = makeService(iterations, []);
 
@@ -130,5 +144,72 @@ describe('AzureReposService.getPullRequestFilesAtCommit', () => {
         generate.mockResolvedValueOnce(null);
 
         await expect(read(service)).resolves.toBeNull();
+    });
+
+    describe('_generateFileDiffForAzure', () => {
+        const build = (getFileContent: jest.Mock) => {
+            const service = new AzureReposService(
+                {} as any,
+                {} as any,
+                {} as any,
+                {
+                    getFileContent,
+                    mapAzureStatusToFileChangeStatus: () => 'modified',
+                } as any,
+                {} as any,
+                undefined,
+            );
+            (service as any).logger = {
+                log: jest.fn(),
+                warn: jest.fn(),
+                error: jest.fn(),
+            };
+            return service;
+        };
+        const generate = (
+            service: AzureReposService,
+            rethrowRateLimit?: boolean,
+        ) =>
+            (service as any)._generateFileDiffForAzure({
+                orgName: 'o',
+                token: 't',
+                projectId: 'p',
+                repositoryId: 'r',
+                filePath: '/src/a.ts',
+                baseCommitId: 'base',
+                targetCommitId: 'head',
+                changeType: 'edit',
+                rethrowRateLimit,
+            });
+
+        it('rethrows a rate limit when asked to', async () => {
+            const service = build(
+                jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('Too Many Requests'), {
+                            status: 429,
+                        }),
+                    ),
+            );
+
+            await expect(generate(service, true)).rejects.toMatchObject({
+                status: 429,
+            });
+        });
+
+        it('still answers null for its other callers', async () => {
+            const service = build(
+                jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('Too Many Requests'), {
+                            status: 429,
+                        }),
+                    ),
+            );
+
+            await expect(generate(service)).resolves.toBeNull();
+        });
     });
 });

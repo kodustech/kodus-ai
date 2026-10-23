@@ -1558,6 +1558,7 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
+                            rethrowRateLimit: true,
                         }),
                     ),
                 ),
@@ -4033,6 +4034,8 @@ export class AzureReposService implements Omit<
         baseCommitId: string | null; // Can be null for new files
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
+        /** Let a rate limit through instead of answering null. */
+        rethrowRateLimit?: boolean;
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4180,6 +4183,7 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
+            if (params.rethrowRateLimit && is429Error(error)) throw error;
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,
