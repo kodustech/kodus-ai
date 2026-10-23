@@ -84,6 +84,14 @@ export const TaskSource = ({
             name: "businessLogic.taskIdPattern.value" as never,
         }) as string | undefined) ?? "";
     const [sample, setSample] = useState("");
+    // A long list of custom plugins buried the rest of the page: they stay
+    // folded until asked for, or while one of them is the picked source.
+    const [showCustom, setShowCustom] = useState(false);
+    const shown =
+        showCustom || isCustom
+            ? (sources ?? [])
+            : (sources ?? []).filter((s) => s.kind !== "custom");
+    const hiddenCustom = (sources?.length ?? 0) - shown.length;
     const preview = previewIds(pattern, sample);
     const { data: tools, isLoading: toolsLoading } = useReadTools(
         teamId,
@@ -99,8 +107,9 @@ export const TaskSource = ({
                 <OverrideIndicatorForm fieldName="businessLogic.taskSource" />
             </div>
             <p className="text-text-secondary text-sm">
-                Where Kody reads the task a pull request references. A
-                repository can pick a different source than the global default.
+                Which tracker Kody asks for the task a pull request names. Each
+                repository or directory can pick its own; unset, it follows the
+                level above.
             </p>
 
             {isLoading ? (
@@ -144,14 +153,19 @@ export const TaskSource = ({
                                         Every connected tracker
                                     </span>
                                     <span className="text-text-secondary text-xs">
-                                        {autoNames.join(", ") ||
-                                            "None recognized yet"}
-                                        {pickOnly.length > 0 &&
-                                            ` · ${pickOnly.join(", ")} only when picked below`}
+                                        {autoNames.length
+                                            ? `Reads ${autoNames.join(", ")}.`
+                                            : "No tracker Kody reads on its own yet."}
                                     </span>
+                                    {pickOnly.length > 0 && (
+                                        <span className="text-text-tertiary text-xs">
+                                            Other custom plugins are read only
+                                            when picked below.
+                                        </span>
+                                    )}
                                 </span>
                             </Label>
-                            {sources.map((source) => (
+                            {shown.map((source) => (
                                 <Label
                                     key={source.integrationId}
                                     className="bg-card-lv1 flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3">
@@ -174,6 +188,15 @@ export const TaskSource = ({
                                     </span>
                                 </Label>
                             ))}
+                            {hiddenCustom > 0 && (
+                                <button
+                                    type="button"
+                                    className="text-text-secondary hover:text-text-primary self-start px-1 text-xs"
+                                    onClick={() => setShowCustom(true)}>
+                                    Show {hiddenCustom} custom{" "}
+                                    {hiddenCustom === 1 ? "plugin" : "plugins"}
+                                </button>
+                            )}
                         </RadioGroup.Root>
                     )}
                 />
@@ -262,16 +285,16 @@ export const TaskSource = ({
                 <CollapsibleContent>
                     <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
                         <p className="text-text-secondary text-xs">
-                            Kody already finds keys like SAA-96, AB#8, #12,
-                            CU-86a1b2c3d and tracker links, and a lower-case key
-                            like sc-123 in a branch name. In a title or
-                            description a lower-case key counts only when Linear
-                            or Jira has that team or project; for another
-                            tracker, or another shape, write a regular
-                            expression; its first group,
-                            when it has one, is the id Kody looks up. For
-                            example <code>{"T(\\d{4})"}</code> reads 1234 from
-                            the branch <code>nina/T1234-gift-cards</code>.
+                            Kody already finds SAA-96, AB#8, #12, CU-86a1b2c3d
+                            and tracker links. For another shape, write a
+                            regular expression; its first group is the id. For
+                            example <code>{"T(\\d{4})"}</code> reads 1234 from{" "}
+                            <code>nina/T1234-gift-cards</code>.
+                        </p>
+                        <p className="text-text-tertiary text-xs">
+                            A lower-case key (sc-123) counts in a branch name;
+                            in a title or description, only when Linear or Jira
+                            has that team or project.
                         </p>
                         <Controller
                             name={"businessLogic.taskIdPattern.value" as never}

@@ -51,10 +51,9 @@ export const StatusStrip = ({
     const idle = status.state === "idle";
     const { pullRequestsChecked, couldntRead, couldntReadByReason } =
         status.stats;
-    const why = Object.entries(couldntReadByReason)
+    const reasons = Object.entries(couldntReadByReason)
         .sort((a, b) => b[1] - a[1])
-        .map(([reason, count]) => `${count} ${REASONS[reason] ?? reason}`)
-        .join(" · ");
+        .map(([reason, count]) => `${REASONS[reason] ?? reason} (${count})`);
 
     return (
         <Card
@@ -104,10 +103,26 @@ export const StatusStrip = ({
                 </p>
             )}
             {couldntRead > 0 && (
-                <p className="text-text-secondary pl-6 text-xs">
-                    {couldntRead} couldn&apos;t be read
-                    {why ? `: ${why}` : ""}
-                </p>
+                // The commonest reason is the one to act on; the rest fold.
+                <details className="group pl-6 text-xs">
+                    <summary className="text-text-secondary cursor-pointer list-none">
+                        {couldntRead} couldn&apos;t be read
+                        {reasons[0] ? ` · most often: ${reasons[0]}` : ""}
+                        {reasons.length > 1 && (
+                            <span className="text-text-tertiary group-open:hidden">
+                                {" "}
+                                · see all
+                            </span>
+                        )}
+                    </summary>
+                    {reasons.length > 1 && (
+                        <ul className="text-text-secondary mt-1 flex flex-col gap-0.5">
+                            {reasons.map((line) => (
+                                <li key={line}>{line}</li>
+                            ))}
+                        </ul>
+                    )}
+                </details>
             )}
         </Card>
     );

@@ -16,12 +16,12 @@ const SWITCHES = [
     {
         name: "commentWhenMet",
         label: "Comment when every requirement is met",
-        hint: "A PR that meets its task gets a short comment, so the author knows Kody checked it. Off, it gets none.",
+        hint: "Posts a short note when every requirement is met. Off, a passing PR gets no comment.",
     },
     {
         name: "requireTask",
         label: "Ask for a task when the PR references none",
-        hint: "Kody comments asking which task the PR is for; bot PRs (Dependabot, Renovate) are left alone. Off, the PR is skipped.",
+        hint: "Kody asks which task the PR is for. Bot PRs (Dependabot, Renovate) are left alone. Off, a PR without a task is skipped quietly.",
     },
 ] as const;
 
@@ -29,17 +29,17 @@ const RECHECK = [
     {
         value: "request",
         label: "Only on request",
-        hint: "Kody checks the first review; after that, anyone re-checks with @kody -v business-logic.",
+        hint: "Kody checks on the first review. After that, anyone re-checks with @kody -v business-logic.",
     },
     {
         value: "failing",
         label: "While something is missing",
-        hint: "A push re-checks a PR that still misses something or names no task, so a fix updates the comment without anyone asking. One validation per push until it passes.",
+        hint: "Each push re-checks until every requirement is met or a task is named, then stops.",
     },
     {
         value: "push",
         label: "On every push",
-        hint: "Also re-checks a PR that already passes. One validation per push.",
+        hint: "Every push re-checks, even a PR that already passes.",
     },
 ] as const;
 
@@ -54,9 +54,8 @@ export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
                 {/* The review stops before Business Logic on these PRs: the
                     same settings decide both, set once in General. */}
                 <p className="text-text-secondary text-sm">
-                    Kody skips the pull requests code review skips: titles with
-                    an ignored keyword (like WIP) and, when reviews don&apos;t
-                    run on drafts, drafts. Set them in{" "}
+                    Skips the PRs code review skips (WIP titles, and drafts when
+                    reviews don&apos;t run on them). Set those in{" "}
                     <Link
                         href={addSearchParamsToUrl(
                             `/settings/code-review/${repositoryId}/general`,
@@ -64,8 +63,7 @@ export const PrOptions = ({ canEdit }: { canEdit: boolean }) => {
                         )}>
                         General
                     </Link>
-                    . A comment with <code>@kody -v business-logic</code> always
-                    runs.
+                    .
                 </p>
             </div>
             <div className="bg-card-lv1 divide-card-lv3/60 flex flex-col divide-y rounded-xl">

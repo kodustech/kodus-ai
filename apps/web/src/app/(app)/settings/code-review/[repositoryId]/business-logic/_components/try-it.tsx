@@ -72,13 +72,14 @@ export const TryIt = ({
                     Try it
                 </span>
                 <span className="text-text-secondary text-xs">
-                    A task alone shows what Kody reads from it. Add a pull
-                    request to run the full check. Uses the settings on this
-                    page, saved or not; nothing is posted until you choose to.
+                    Paste a task to see what Kody reads from it, or a pull
+                    request to run the whole check. Runs with the settings on
+                    this page, saved or not; nothing is posted until you choose
+                    to.
                 </span>
             </span>
-            <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-[3]">
+            <div className="flex flex-col gap-2">
+                <div className="min-w-0">
                     <Input
                         size="md"
                         placeholder="Pull request link (optional)"
@@ -87,7 +88,7 @@ export const TryIt = ({
                         onKeyDown={runOnEnter}
                     />
                 </div>
-                <div className="min-w-0 flex-[2]">
+                <div className="min-w-0">
                     <Input
                         size="md"
                         placeholder={
@@ -103,6 +104,7 @@ export const TryIt = ({
                 <Button
                     size="md"
                     variant="secondary"
+                    className="self-end"
                     disabled={!canRun}
                     loading={tryRead.isPending || test.isPending}
                     onClick={run}>

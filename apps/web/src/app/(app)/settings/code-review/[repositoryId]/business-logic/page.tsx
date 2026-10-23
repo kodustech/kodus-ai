@@ -25,6 +25,7 @@ import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-sett
 import { type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { useCodeReviewRouteParams } from "../../../_hooks";
+import { HowItWorks } from "./_components/how-it-works";
 import { PrOptions } from "./_components/pr-options";
 import { StatusStrip } from "./_components/status-strip";
 import { TaskSource } from "./_components/task-source";
@@ -143,20 +144,32 @@ function BusinessLogicContent() {
                 />
             </Page.Header>
 
-            <Page.Content className="gap-8">
+            <Page.Content className="gap-6">
                 <CentralizedConfigReadOnlyAlert />
                 <StatusStrip
                     status={status.data}
                     isLoading={status.isLoading}
                 />
-                <TaskSource teamId={teamId} canEdit={canEdit} />
-                <PrOptions canEdit={canEdit} />
-                <Tune canEdit={canEdit} />
-                <TryIt
-                    teamId={teamId}
-                    repositoryId={repositoryId}
-                    canEdit={canEdit}
-                />
+                {/* As on a custom agent's page: settings on the left; what
+                    they add up to and Try it pinned on the right from lg up,
+                    one column below. */}
+                <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] lg:items-start">
+                    <div className="flex flex-col gap-8">
+                        <TaskSource teamId={teamId} canEdit={canEdit} />
+                        <PrOptions canEdit={canEdit} />
+                        <Tune canEdit={canEdit} />
+                    </div>
+                    <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+                        <HowItWorks teamId={teamId} />
+                        <div id="try-it" className="scroll-mt-24">
+                            <TryIt
+                                teamId={teamId}
+                                repositoryId={repositoryId}
+                                canEdit={canEdit}
+                            />
+                        </div>
+                    </aside>
+                </div>
             </Page.Content>
         </Page.Root>
     );

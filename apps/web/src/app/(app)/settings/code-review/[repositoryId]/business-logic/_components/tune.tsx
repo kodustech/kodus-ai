@@ -42,10 +42,11 @@ export const Tune = ({ canEdit }: { canEdit: boolean }) => {
                     className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
                     <span className="flex flex-col">
                         <span className="text-text-primary text-sm font-medium">
-                            Tune to your team
+                            Requirements
                         </span>
                         <span className="text-text-secondary text-xs">
-                            Where criteria live · team guidance
+                            Where Kody finds the acceptance criteria, and how
+                            your team counts one as done
                         </span>
                     </span>
                     <CollapsibleIndicator />

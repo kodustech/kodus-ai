@@ -1,12 +1,20 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@components/ui/button";
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@components/ui/dropdown-menu";
 import { Link } from "@components/ui/link";
 import { Switch } from "@components/ui/switch";
 import {
@@ -16,6 +24,7 @@ import {
 import type { BusinessLogicStatus } from "@services/business-logic/types";
 import { KODUS_ISSUES_INTEGRATION_ID } from "@services/mcp-manager/types";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
+import { EllipsisIcon, FlaskConicalIcon, PencilIcon } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
     useCodeReviewRouteParams,
@@ -90,7 +99,6 @@ const BusinessLogicSummary = ({
     hasTaskMcp,
     gitIssuesConnected,
     lookupFailed,
-    configureHref,
 }: {
     status?: BusinessLogicStatus;
     hasTaskMcp: boolean;
@@ -98,13 +106,11 @@ const BusinessLogicSummary = ({
     gitIssuesConnected?: boolean;
     /** The plugin lookup failed: we can't say whether a tracker is connected. */
     lookupFailed?: boolean;
-    configureHref: string;
 }) => {
     if (lookupFailed) {
         return (
             <p className="text-text-secondary text-xs">
-                Couldn&apos;t check your plugins right now.{" "}
-                <Link href={configureHref}>Configure</Link>
+                Couldn&apos;t check your plugins right now.
             </p>
         );
     }
@@ -124,8 +130,7 @@ const BusinessLogicSummary = ({
                 {status.paused.uncheckedPullRequests} PRs weren&apos;t checked.{" "}
                 <Link href="/settings/plugins">
                     Reconnect {status.paused.tracker}
-                </Link>{" "}
-                · <Link href={configureHref}>Configure</Link>
+                </Link>
             </p>
         );
     }
@@ -142,8 +147,7 @@ const BusinessLogicSummary = ({
                     were skipped without a comment.{" "}
                     <Link href="/settings/plugins">Connect Git Issues</Link>
                 </>
-            )}{" "}
-            · <Link href={configureHref}>Configure</Link>
+            )}
         </p>
     );
 };
@@ -159,6 +163,7 @@ const CategoryRow = ({
     promptDefault,
     canEdit,
     summary,
+    href,
 }: {
     type: string;
     name: string;
@@ -170,7 +175,11 @@ const CategoryRow = ({
     promptDefault?: string;
     canEdit: boolean;
     summary?: ReactNode;
+    /** A category with a page of its own: the name opens it, and a menu
+     *  edits or tries it, as a custom agent's row does. */
+    href?: string;
 }) => {
+    const router = useRouter();
     const promptKey = promptCategoryOf(type);
     const fieldName = promptKey
         ? `v2PromptOverrides.categories.descriptions.${promptKey}`
@@ -191,11 +200,19 @@ const CategoryRow = ({
                 />
                 <div className="flex min-w-[10rem] flex-1 flex-col gap-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                        <label
-                            htmlFor={switchId}
-                            className="text-text-primary cursor-pointer text-sm font-medium">
-                            {name}
-                        </label>
+                        {href ? (
+                            <Link
+                                href={href}
+                                className="text-text-primary text-sm font-medium hover:underline">
+                                {name}
+                            </Link>
+                        ) : (
+                            <label
+                                htmlFor={switchId}
+                                className="text-text-primary cursor-pointer text-sm font-medium">
+                                {name}
+                            </label>
+                        )}
                         <OverrideIndicatorForm
                             fieldName={`reviewOptions.${type}`}
                         />
@@ -208,6 +225,36 @@ const CategoryRow = ({
                     <p className="text-text-secondary text-xs">{description}</p>
                     {enabled && summary}
                 </div>
+
+                {href && (
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                size="icon-xs"
+                                variant="cancel"
+                                className="ml-auto shrink-0 self-center"
+                                aria-label={`More actions for ${name}`}
+                                title="More actions">
+                                <EllipsisIcon aria-hidden />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onSelect={() => router.push(href)}>
+                                <PencilIcon className="size-4" aria-hidden />
+                                {canEdit ? "Edit" : "View"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => router.push(`${href}#try-it`)}>
+                                <FlaskConicalIcon
+                                    className="size-4"
+                                    aria-hidden
+                                />
+                                Try it
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
 
                 {/* Instructions live on the row they belong to. Hidden while
                     the category is off: nothing to instruct. */}
@@ -386,7 +433,6 @@ export const CategoryList = ({
                                                     )
                                                 }
                                                 lookupFailed={taskSourcesFailed}
-                                                configureHref={configureHref}
                                             />
                                         ) : undefined
                                     }
@@ -401,6 +447,11 @@ export const CategoryList = ({
                                             : undefined
                                     }
                                     canEdit={canEdit}
+                                    href={
+                                        label.type === "business_logic"
+                                            ? configureHref
+                                            : undefined
+                                    }
                                 />
                             );
                         })}
