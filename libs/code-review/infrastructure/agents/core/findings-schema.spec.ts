@@ -295,6 +295,17 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
                         existingCode: undefined,
                         relevantLinesStart: 12,
                     }),
+                    // Line 0 reads as no line to the diff snap (snapLinesToDiff).
+                    finding({
+                        existingCode: undefined,
+                        relevantLinesStart: 0,
+                        relevantLinesEnd: 0,
+                    }),
+                    finding({
+                        existingCode: undefined,
+                        relevantLinesStart: '0',
+                        relevantLinesEnd: '0',
+                    }),
                     finding({
                         existingCode: null,
                         relevantLinesStart: 12,
@@ -305,6 +316,8 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
             expect(r!.suggestions).toHaveLength(1);
             const { drops } = mockLogger.warn.mock.calls[0][0].metadata;
             expect(drops.map((d: any) => d.reason)).toEqual([
+                'missing-location',
+                'missing-location',
                 'missing-location',
                 'missing-location',
             ]);

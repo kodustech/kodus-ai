@@ -297,10 +297,8 @@ export function inspectFindingsResult(
         // see (is-usable-fix.ts), so it goes out as a plain comment. An
         // explicit `existingCode: ""` (an insertion) reads as main read it.
         if (typeof prepared.value.existingCode !== 'string') {
-            if (
-                s.data.relevantLinesStart === undefined ||
-                s.data.relevantLinesEnd === undefined
-            ) {
+            // Same test as the snap: line 0 is no line.
+            if (!s.data.relevantLinesStart || !s.data.relevantLinesEnd) {
                 drops.push({
                     ...describeDrop(prepared.value, item as object, [
                         { path: ['relevantLinesStart'] },
