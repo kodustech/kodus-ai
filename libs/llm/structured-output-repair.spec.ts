@@ -80,6 +80,27 @@ describe('salvageJsonText (#2112 broken finder payloads)', () => {
         });
     });
 
+    it('keeps commas before } or ] inside recovered string values', () => {
+        const kept = {
+            relevantFile: 'src/cart.ts',
+            improvedCode: 'const o = { a, };\nlist([1, 2, ]);',
+        };
+        const leading = `[${JSON.stringify(kept)}]}`;
+        expect(salvageJsonText(leading)?.value).toEqual([kept]);
+        const items = `[${JSON.stringify(kept)},{"relevantFile":"x","existingCode":"say "hi""}]`;
+        expect(salvageJsonText(items)).toEqual({
+            value: [kept],
+            reason: 'salvaged-items',
+        });
+    });
+
+    it('still drops a trailing comma outside string values', () => {
+        const text = `[{"relevantFile":"src/cart.ts","improvedCode":"f(a, )",},{"existingCode":"say "hi""}]`;
+        expect(salvageJsonText(text)?.value).toEqual([
+            { relevantFile: 'src/cart.ts', improvedCode: 'f(a, )' },
+        ]);
+    });
+
     it('returns undefined when the first item is already broken', () => {
         expect(
             salvageJsonText('[{"relevantFile":"x","existingCode":"say "hi""}]'),

@@ -319,6 +319,37 @@ function tryParse(s: string): { ok: true; value: unknown } | { ok: false } {
 }
 
 /**
+ * {@link tryParse}, then once more without the commas that sit before a `}` or
+ * `]` outside string literals. A comma inside a string (code such as
+ * `f(a, )`) is the value itself and stays.
+ */
+function tryParseLenient(
+    s: string,
+): { ok: true; value: unknown } | { ok: false } {
+    const exact = tryParse(s);
+    if (exact.ok) return exact;
+    let out = '';
+    let inStr = false;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (ch === '\\') {
+                out += ch + (s[i + 1] ?? '');
+                i++;
+                continue;
+            }
+            if (ch === '"') inStr = false;
+        } else if (ch === '"') {
+            inStr = true;
+        } else if (ch === ',' && /^\s*[}\]]/.test(s.slice(i + 1))) {
+            continue;
+        }
+        out += ch;
+    }
+    return out === s ? exact : tryParse(out);
+}
+
+/**
  * Model-free salvage of a payload `JSON.parse` rejected (#2112). Non-strict
  * models send findings as JSON text with unescaped characters inside code, a
  * stray `}` after the array, or a break halfway through. Tried in order:
@@ -348,7 +379,7 @@ export function salvageJsonText(
 
     const leading = sliceBalancedJson(s);
     if (leading && leading !== s) {
-        const head = tryParse(leading.replace(/,(\s*[}\]])/g, '$1'));
+        const head = tryParseLenient(leading);
         if (head.ok) {
             return { value: head.value, reason: 'salvaged-leading-value' };
         }
@@ -369,7 +400,7 @@ export function salvageJsonText(
         if (s[i] !== '{') break;
         const slice = sliceBalancedJson(s.slice(i));
         if (!slice) break;
-        const item = tryParse(slice.replace(/,(\s*[}\]])/g, '$1'));
+        const item = tryParseLenient(slice);
         if (!item.ok) break;
         items.push(item.value);
         i += slice.length;
