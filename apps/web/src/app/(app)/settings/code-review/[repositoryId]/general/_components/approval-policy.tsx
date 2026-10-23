@@ -88,9 +88,12 @@ export function ApprovalPolicySettings() {
     return (
         <div>
             <div className="border-card-lv3/60 border-b px-5 py-4 sm:px-6">
-                <h3 className="text-text-primary flex items-center gap-2 text-sm font-semibold">
-                    Conditional approval <Badge>Beta</Badge>
-                </h3>
+                <div className="flex items-center gap-2">
+                    <h3 className="text-text-primary text-sm font-semibold">
+                        Conditional approval
+                    </h3>
+                    <Badge>Beta</Badge>
+                </div>
                 <p className="text-text-secondary mt-1 text-xs leading-5">
                     Available on Teams and Enterprise.
                 </p>
