@@ -19,11 +19,12 @@ export const COMMENT_MANAGER_SERVICE_TOKEN = Symbol.for(
 );
 
 export interface ICommentManagerService {
-    postApprovalHoldReason(
+    postApprovalReason(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         repository: { name: string; id: string },
         reason: string,
+        kind: 'approve' | 'hold',
     ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,

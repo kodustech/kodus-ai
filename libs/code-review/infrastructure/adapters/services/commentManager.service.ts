@@ -116,18 +116,19 @@ export class CommentManagerService implements ICommentManagerService {
         this.llmResponseProcessor = new LLMResponseProcessor();
     }
 
-    async postApprovalHoldReason(
+    async postApprovalReason(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         repository: { name: string; id: string },
         reason: string,
+        kind: 'approve' | 'hold',
     ): Promise<void> {
         const request = {
             organizationAndTeamData,
             prNumber,
             repository,
         };
-        const body = formatApprovalReasonComment('hold', reason);
+        const body = formatApprovalReasonComment(kind, reason);
         const comments = await runWithBoundedTimeout(
             this.codeManagementService.getAllCommentsInPullRequest(request),
             10_000,

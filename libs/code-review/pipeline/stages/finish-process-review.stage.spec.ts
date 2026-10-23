@@ -8,6 +8,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
@@ -37,6 +38,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
     let prAuthorResolver: jest.Mocked<
         Pick<PrAuthorRecipientResolver, 'resolve'>
     >;
+    let commentManager: { postApprovalReason: jest.Mock };
 
     // Frozen by DEFAULT — production hands every stage after the first
     // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
@@ -74,11 +76,18 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         };
         notificationService = { emit: jest.fn().mockResolvedValue(undefined) };
         prAuthorResolver = { resolve: jest.fn() };
+        commentManager = {
+            postApprovalReason: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 RequestChangesOrApproveStage,
                 { provide: CodeManagementService, useValue: codeManagement },
+                {
+                    provide: COMMENT_MANAGER_SERVICE_TOKEN,
+                    useValue: commentManager,
+                },
                 { provide: NotificationService, useValue: notificationService },
                 {
                     provide: PrAuthorRecipientResolver,
@@ -163,16 +172,21 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             }),
         );
 
-        expect(codeManagement.createIssueComment).toHaveBeenCalledWith(
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
             expect.objectContaining({
-                body: "**Automatic approval**\n\nKody's assessment:\n> Clean review.\n> Please deploy now.",
+                organizationId: 'org-1',
+                teamId: 'team-1',
             }),
+            42,
+            expect.objectContaining({ id: 'repo-1' }),
+            'Clean review.\nPlease deploy now.',
+            'approve',
         );
     });
 
     it('records a partial failure with review identifiers when the approval reason cannot be posted', async () => {
         const publicationError = new Error('comment write failed');
-        codeManagement.createIssueComment.mockRejectedValueOnce(
+        commentManager.postApprovalReason.mockRejectedValueOnce(
             publicationError,
         );
 

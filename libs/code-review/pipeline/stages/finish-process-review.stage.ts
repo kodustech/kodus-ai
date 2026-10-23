@@ -17,8 +17,12 @@ import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
 } from '@libs/code-review/domain/approval/approval-decision';
-import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    COMMENT_MANAGER_SERVICE_TOKEN,
+    ICommentManagerService,
+} from '@libs/code-review/domain/contracts/CommentManagerService.contract';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -33,6 +37,8 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         private readonly codeManagementService: CodeManagementService,
         private readonly notificationService: NotificationService,
         private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
+        @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
+        private readonly commentManagerService: ICommentManagerService,
     ) {
         super();
     }
@@ -149,18 +155,9 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         );
 
         if (approved) {
-            const endMessage =
-                context.pullRequestMessagesConfig?.endReviewMessage;
-            const endMessageSuppressed =
-                endMessage?.status === PullRequestMessageStatus.OFF ||
-                endMessage?.status === PullRequestMessageStatus.INACTIVE ||
-                (endMessage?.status ===
-                    PullRequestMessageStatus.ONLY_WHEN_OPENED &&
-                    !!context.lastExecution);
             if (
                 requiresConditionalDecision &&
-                context.approvalDecision?.kind === 'approve' &&
-                endMessageSuppressed
+                context.approvalDecision?.kind === 'approve'
             ) {
                 const publicationMetadata = {
                     organizationId: organizationAndTeamData.organizationId,
@@ -169,16 +166,13 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                     prNumber: pullRequest.number,
                 };
                 try {
-                    const quotedReason = context.approvalDecision.reason
-                        .split(/\r?\n/)
-                        .map((line) => `> ${line}`)
-                        .join('\n');
-                    await this.codeManagementService.createIssueComment({
+                    await this.commentManagerService.postApprovalReason(
                         organizationAndTeamData,
-                        prNumber: pullRequest.number,
+                        pullRequest.number,
                         repository,
-                        body: `**Automatic approval**\n\nKody's assessment:\n${quotedReason}`,
-                    });
+                        context.approvalDecision.reason,
+                        'approve',
+                    );
                 } catch (error) {
                     this.logger.warn({
                         message: 'Could not post automatic approval reason',

@@ -76,11 +76,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         ) {
             return;
         }
-        await this.commentManagerService.postApprovalHoldReason(
+        await this.commentManagerService.postApprovalReason(
             context.organizationAndTeamData,
             context.pullRequest.number,
             context.repository,
             context.approvalDecision.reason,
+            'hold',
         );
     }
 

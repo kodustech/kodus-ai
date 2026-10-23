@@ -17,7 +17,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
                 .mockResolvedValue('rendered body'),
             updateOverallComment: jest.fn().mockResolvedValue(undefined),
             createComment: jest.fn().mockResolvedValue(undefined),
-            postApprovalHoldReason: jest.fn().mockResolvedValue(undefined),
+            postApprovalReason: jest.fn().mockResolvedValue(undefined),
         } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
@@ -221,13 +221,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         });
         await (stage as any).executeStage(context);
 
-        expect(
-            commentManagerService.postApprovalHoldReason,
-        ).toHaveBeenCalledWith(
+        expect(commentManagerService.postApprovalReason).toHaveBeenCalledWith(
             context.organizationAndTeamData,
             7,
             context.repository,
             'Authentication changes need a person.',
+            'hold',
         );
     });
 
@@ -250,13 +249,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         await (stage as any).executeStage(context);
 
-        expect(
-            commentManagerService.postApprovalHoldReason,
-        ).toHaveBeenCalledWith(
+        expect(commentManagerService.postApprovalReason).toHaveBeenCalledWith(
             context.organizationAndTeamData,
             7,
             context.repository,
             'Authentication changes need a person.',
+            'hold',
         );
         expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
         expect(
