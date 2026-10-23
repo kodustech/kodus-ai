@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
+import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -16,7 +17,7 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { Settings2Icon } from "lucide-react";
+import { ArrowRightIcon, LockIcon, Settings2Icon } from "lucide-react";
 import {
     FormProvider,
     useFormContext,
@@ -29,6 +30,11 @@ import {
     usePlatformConfig,
 } from "src/app/(app)/settings/_components/context";
 import { AsyncBoundary } from "src/core/components/async-boundary";
+import { useCanFollowGateLink } from "src/core/components/system/gate-cta-link";
+import {
+    availabilityLine,
+    planCtaTarget,
+} from "src/core/components/system/plan-cta-target";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 import { isTeamsOrEnterprisePlan } from "src/features/ee/byok/_utils";
@@ -90,9 +96,13 @@ export default function General() {
     const { byokModels } = useCodeReviewModelData();
     const form = useFormContext<CodeReviewFormType>();
     const { license } = useSubscriptionContext();
+    const conditionalApprovalBetaEnabled =
+        useFeatureFlags().conditionalPrApproval === true;
+    const conditionalApprovalPlanAllowed = isTeamsOrEnterprisePlan(license);
     const conditionalApprovalEnabled =
-        useFeatureFlags().conditionalPrApproval === true &&
-        isTeamsOrEnterprisePlan(license);
+        conditionalApprovalBetaEnabled && conditionalApprovalPlanAllowed;
+    const planCta = planCtaTarget();
+    const canOpenPlanCta = useCanFollowGateLink(planCta.href);
     const approvalPolicyValues = useWatch({
         control: form.control,
         name: [
@@ -307,26 +317,68 @@ export default function General() {
                             <ApprovalPolicySettings />
                         </AsyncBoundary>
                     ) : (
-                        <div className="border-card-lv3/60 border-t px-5 py-4 sm:px-6">
-                            <p className="text-text-primary flex items-center gap-2 text-sm font-medium">
-                                Conditional approval <Badge>Beta</Badge>
-                            </p>
-                            <p className="text-text-secondary mt-1 text-xs leading-5">
-                                PR conditions and risk assessment are available
-                                on Teams and Enterprise when beta access is
-                                enabled. Automatic approval without conditions
-                                remains available.
-                            </p>
+                        <div className="border-card-lv3/60 border-t px-5 py-5 sm:px-6">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <div className="bg-card-lv2 text-text-secondary flex size-9 shrink-0 items-center justify-center rounded-lg">
+                                        <LockIcon
+                                            aria-hidden
+                                            className="size-4"
+                                        />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-text-primary flex items-center gap-2 text-sm font-semibold">
+                                            Conditional approval{" "}
+                                            <Badge>Beta</Badge>
+                                        </p>
+                                        <p className="text-text-secondary mt-1 max-w-2xl text-sm leading-5">
+                                            {conditionalApprovalPlanAllowed
+                                                ? "Beta access is not enabled for this workspace yet. Automatic approval without conditions remains available."
+                                                : "Choose which PRs Kody may approve using labels and authors. Require a person for sensitive paths or higher-risk changes."}
+                                        </p>
+                                        {!conditionalApprovalPlanAllowed && (
+                                            <p className="text-text-tertiary mt-1.5 text-xs leading-5">
+                                                {availabilityLine()} Beta access
+                                                is also required.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                                {!conditionalApprovalPlanAllowed &&
+                                    (canOpenPlanCta ? (
+                                        <Link
+                                            href={planCta.href}
+                                            className="shrink-0 self-start sm:self-center">
+                                            <Button
+                                                decorative
+                                                size="sm"
+                                                variant="primary"
+                                                rightIcon={<ArrowRightIcon />}>
+                                                {planCta.label}
+                                            </Button>
+                                        </Link>
+                                    ) : (
+                                        <p className="text-text-secondary shrink-0 text-xs leading-5 sm:max-w-44">
+                                            Ask an organization admin to upgrade
+                                            the plan.
+                                        </p>
+                                    ))}
+                            </div>
                             {hasApprovalPolicy && (
-                                <div className="mt-3">
-                                    <p className="text-text-secondary text-xs leading-5">
+                                <div className="border-card-lv3/60 mt-5 border-t pt-4">
+                                    <p className="text-text-primary text-sm font-medium">
                                         Saved conditions are holding automatic
-                                        approval while access is unavailable.
+                                        approval.
+                                    </p>
+                                    <p className="text-text-secondary mt-1 text-xs leading-5">
+                                        Clear them to use automatic approval
+                                        without conditions.
                                     </p>
                                     <Button
                                         size="sm"
                                         variant="helper"
                                         className="mt-2"
+                                        disabled={!canEdit}
                                         onClick={() => {
                                             form.setValue(
                                                 "approvalLabels.value",
