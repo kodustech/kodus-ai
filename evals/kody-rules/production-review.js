@@ -168,8 +168,8 @@ function agentReviewStage(permission, log) {
     // graph from the checkout (GraphContextService.generateContextLegacy).
     const repositories = { findByExternalId: async () => null, findById: async () => null };
     const graph = new GraphContextService({ exportSubgraphJsonString: async () => null }, repositories, new KodusGraphCli());
-    return (rulesRepo) =>
-        new AgentReviewStage(
+    return (rulesRepo) => {
+        const stage = new AgentReviewStage(
             log,
             repositories,
             orchestrator,
@@ -180,6 +180,10 @@ function agentReviewStage(permission, log) {
             undefined, // code management: read only for linked repositories, off without a license
             new KodyRuleSummaryService(permission, rulesRepo, obs),
         );
+        // TEMP_LOG_NEW_FINDER: the eval runs the whole stage.
+        stage.tempStopAfterNewFinder = false;
+        return stage;
+    };
 }
 
 /** The changed files production reviews, through FetchChangedFilesStage. */

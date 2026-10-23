@@ -40,6 +40,24 @@ describe('sanitizeFindingsResult', () => {
         expect(result?.suggestions[0]?.label).toBe('repo_instruction');
     });
 
+    it('keeps a finding whose label is off the list, for the label step to fix', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                {
+                    relevantFile: 'src/a.ts',
+                    label: 'criticism',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 2,
+                    suggestionContent: 'The total ignores refunds.',
+                },
+            ],
+        } as unknown as FindingsOutput);
+
+        expect(result?.suggestions).toHaveLength(1);
+        expect(result?.suggestions[0]?.label).toBe('criticism');
+    });
+
     it('returns null when given null', () => {
         expect(sanitizeFindingsResult(null)).toBeNull();
     });

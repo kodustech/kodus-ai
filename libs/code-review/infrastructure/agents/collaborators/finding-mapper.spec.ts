@@ -33,10 +33,25 @@ describe('resolveSuggestionLabel', () => {
             'security',
         );
     });
-    it('mixed agent falls back to first allowed for an invalid label', () => {
-        expect(resolveSuggestionLabel({ label: 'style' }, mixedPolicy)).toBe(
-            'bug',
+    it('mixed agent passes a label off the list through and fills a missing one', () => {
+        expect(resolveSuggestionLabel({ label: 'Style' }, mixedPolicy)).toBe(
+            'style',
         );
+        expect(resolveSuggestionLabel({}, mixedPolicy)).toBe('bug');
+        expect(resolveSuggestionLabel({ label: null } as any, mixedPolicy)).toBe('bug');
+    });
+    it('mixed agent moves a known label this run does not allow to the first allowed', () => {
+        expect(
+            resolveSuggestionLabel(
+                { label: 'security' },
+                { ...mixedPolicy, allowedLabels: ['performance'] },
+            ),
+        ).toBe('performance');
+    });
+    it('mixed agent cannot claim kody_rules', () => {
+        expect(
+            resolveSuggestionLabel({ label: 'kody_rules' }, mixedPolicy),
+        ).toBe('bug');
     });
     it('keeps repo_instruction only when the run allows it', () => {
         expect(

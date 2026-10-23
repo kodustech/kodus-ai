@@ -61,7 +61,8 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // 9: the suggestion sanitizer (#1821) discards no-problem suggestions.
         // 10: #2171 keeps findings whose verify run failed apart.
         // 11: #2172 keeps a custom agent's findings below its own floor apart.
-        expect(discardBlocks()).toHaveLength(11);
+        // 12: anchoring drops a finding on a file the PR does not change (#1821).
+        expect(discardBlocks()).toHaveLength(12);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

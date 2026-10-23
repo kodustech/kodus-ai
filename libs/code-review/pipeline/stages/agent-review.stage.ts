@@ -5,6 +5,7 @@ import { jsonSchema, type EmbeddingModel } from 'ai';
 import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
+import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import {
     buildSanitizerPrompt,
     SANITIZER_SCHEMA,
@@ -248,6 +249,8 @@ export function extractValidDiffLines(patch?: string): Array<[number, number]> {
     return ranges;
 }
 
+
+
 /**
  * Which out-of-hunk findings survive the snap as file-anchored PR comments.
  *
@@ -359,6 +362,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     readonly visibility = StageVisibility.PRIMARY;
 
     private readonly logger = createLogger(AgentReviewStage.name);
+
+    /** TEMP_LOG_NEW_FINDER: stops the review after the finder's deterministic
+     *  steps (parse schema, anchoring, label normalization) while the new
+     *  finder is validated on its own. Off under jest; the evals that drive
+     *  this stage turn it off (evals/shared/review-stage.js). Remove with every
+     *  TEMP_LOG_NEW_FINDER log. */
+    tempStopAfterNewFinder = process.env.NODE_ENV !== 'test';
 
     private summarizeDedupSuggestion(
         suggestion?: Partial<CodeSuggestion>,
@@ -1374,8 +1384,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
-            // Parse schema (#1821), check half: a finder suggestion without the
-            // five lean fields is discarded here, before anchoring, so every
+            // After the finder, in order: parse schema, anchoring, label
+            // normalization (#1821). Then the sanitizer, the dedup and the rest.
+            //
+            // Parse schema, check half: a finder suggestion without the five
+            // lean fields is discarded here, before anchoring, so every
             // suggestion anchored has a file and lines. The fields it does not
             // carry are removed later (leanFinderSuggestions), after the repeat
             // check, which matches an earlier comment by its existingCode.
@@ -1401,10 +1414,86 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 });
             }
+            const anchoringInput: Partial<CodeSuggestion>[] = [
+                ...finderSuggestions.filter((_, i) => !parseDiscarded.has(i)),
+                ...result.suggestions.filter((s) => s.label === 'kody_rules'),
+            ];
+
+            const changedFilesByName = new Map(
+                changedFiles.map((f) => [f.filename, f]),
+            );
+            // A custom agent's findings on an ignored file it names are held
+            // to that file's hunks like any other.
+            const anchoredSuggestions = this.anchorSuggestionsToDiff(
+                anchoringInput,
+                [...changedFiles, ...ignoredChangedFiles],
+                context.codeReviewConfig?.kodyRules ?? [],
+                allDiscarded,
+            );
+
+            // Label normalization: a label off the list becomes `bug`.
+            const labeled = normalizeFinderLabels(anchoredSuggestions);
+            if (Object.keys(labeled.replaced).length > 0) {
+                this.logger.warn({
+                    message: `[LABEL-NORMALIZE] PR#${prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        prNumber,
+                        replaced: labeled.replaced,
+                    },
+                });
+            }
+
+            // TEMP_LOG_NEW_FINDER: what the finder delivered and what each
+            // deterministic step kept. Remove with the stop below.
+            this.logger.log({
+                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: finder=${finderSuggestions.length} kodyRules=${anchoringInput.length - (finderSuggestions.length - parsed.discarded.length)} parseDiscarded=${parsed.discarded.length} anchored=${anchoredSuggestions.length} labelReplaced=${JSON.stringify(labeled.replaced)}`,
+                context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber,
+                    removedFields: parsed.removedFields,
+                    finderRaw: finderSuggestions,
+                    afterLabel: labeled.suggestions,
+                    discarded: allDiscarded.map((s) => ({
+                        relevantFile: s.relevantFile,
+                        relevantLinesStart: s.relevantLinesStart,
+                        relevantLinesEnd: s.relevantLinesEnd,
+                        priorityStatus: s.priorityStatus,
+                    })),
+                },
+            });
+            // TEMP_LOG_NEW_FINDER: the review stops after the finder until the
+            // steps after it take the lean output. Remove with the log above.
+            if (this.tempStopAfterNewFinder) {
+                this.logger.warn({
+                    message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: stopping the review after the finder`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        prNumber,
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message:
+                            'TEMP_LOG_NEW_FINDER: review stopped after the finder',
+                    };
+                });
+            }
+
             // Sanitizer (#1821): drops the finder suggestions that report no
             // problem ("no sensitive data exposed") before anything else reads them.
             const sanitized = await this.sanitizeSuggestions(
-                finderSuggestions.filter((_, i) => !parseDiscarded.has(i)),
+                labeled.suggestions.filter((s) => s.label !== 'kody_rules'),
                 prNumber,
                 context.codeReviewConfig?.resolvedModelSlot,
                 telemetryMeta,
@@ -1416,21 +1505,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     deliveryStatus: DeliveryStatus.NOT_SENT,
                 });
             }
-            const anchoringInput: Partial<CodeSuggestion>[] = [
-                ...sanitized.kept,
-                ...result.suggestions.filter((s) => s.label === 'kody_rules'),
-            ];
-
-            const changedFilesByName = new Map(
-                changedFiles.map((f) => [f.filename, f]),
-            );
-            // A custom agent's findings on an ignored file it names are held
-            // to that file's hunks like any other.
-            const validatedSuggestions = this.anchorSuggestionsToDiff(
-                anchoringInput,
-                [...changedFiles, ...ignoredChangedFiles],
-                context.codeReviewConfig?.kodyRules ?? [],
-                allDiscarded,
+            const sanitizedOut = new Set(sanitized.discarded);
+            const validatedSuggestions = labeled.suggestions.filter(
+                (s) => !sanitizedOut.has(s),
             );
 
             // Verify/Discover removed — was hurting recall across all models.
@@ -2160,6 +2237,22 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const validatedSuggestions = suggestions
             .map((s) => {
                 const file = changedFilesByName.get(s.relevantFile);
+                // A finding on a file this PR does not change has no hunk to
+                // overlap; the delivery guard would drop it after the dedup and
+                // the severity calls, so it goes now. Kody Rules keep their own
+                // routing (PR-level and file-anchored comments).
+                if (!file && s.label !== 'kody_rules') {
+                    this.logger.log({
+                        message: `[AGENT] Dropped suggestion for ${s.relevantFile}: the file is not changed by this PR`,
+                        context: this.stageName,
+                    });
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                    return null;
+                }
                 if (!file) return s;
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);

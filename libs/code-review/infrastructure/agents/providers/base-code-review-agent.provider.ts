@@ -183,6 +183,19 @@ export abstract class BaseCodeReviewAgentProvider {
     }
 
     /**
+     * Run settings that depend on the resolved model, applied once it is
+     * known. Unchanged for every agent but the generalist. Must be idempotent:
+     * a chunked review runs execute again on each batch.
+     */
+    protected applyModelSettings(
+        input: ReviewAgentInput,
+        _modelName: string,
+        _byokConfig?: NormalizedModel,
+    ): ReviewAgentInput {
+        return input;
+    }
+
+    /**
      * Team guides whose findings take the convention second pass (#2172).
      * Unset for every built-in agent; a custom agent returns its linked
      * skills and docs (possibly none).
@@ -314,6 +327,8 @@ export abstract class BaseCodeReviewAgentProvider {
             message: `[AGENT] ${identity.name} using model: ${modelName}`,
             context: identity.name,
         });
+
+        input = this.applyModelSettings(input, modelName, byokConfig);
 
         // Check if the estimated prompt exceeds the context window budget
         // and needs chunking. The measurement accounts for diff + callGraph

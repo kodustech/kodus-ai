@@ -86,9 +86,24 @@ export interface LabelPolicy {
     supportsMixed: boolean;
 }
 
+/** Labels the pipeline routes on; one this run does not allow falls back to
+ *  the first allowed. `kody_rules` is here so a generalist cannot claim it:
+ *  the stage would exempt the finding from the parse schema and the sanitizer
+ *  and treat it as a rule violation with no rule behind it. */
+const KNOWN_FINDING_LABELS = new Set<string>([
+    'bug',
+    'security',
+    'performance',
+    'repo_instruction',
+    'kody_rules',
+]);
+
 /** Resolve the final label of a suggestion under the agent's label policy.
- *  Single-category agents always return their category; mixed reviewers honor
- *  the LLM-emitted label when it's allowed, else fall back to the first allowed. */
+ *  Single-category agents always return their category. Mixed reviewers honor
+ *  an allowed label, give a missing or known-but-disallowed one the first
+ *  allowed (prose recovery returns findings with no label), and pass an
+ *  unknown label through as written: normalizeFinderLabels turns it into
+ *  `bug` after anchoring. */
 export function resolveSuggestionLabel(
     suggestion: { label?: string },
     policy: LabelPolicy,
@@ -99,12 +114,15 @@ export function resolveSuggestionLabel(
     const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
-            ? suggestion.label.toLowerCase()
+            ? suggestion.label.trim().toLowerCase()
             : '';
     if (allowed.has(rawLabel)) {
         return rawLabel;
     }
-    return policy.allowedLabels[0] || 'bug';
+    if (!rawLabel || KNOWN_FINDING_LABELS.has(rawLabel)) {
+        return policy.allowedLabels[0] || 'bug';
+    }
+    return rawLabel;
 }
 
 // ── Finding mapping ──────────────────────────────────────────────────────────

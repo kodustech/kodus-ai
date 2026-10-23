@@ -486,6 +486,19 @@ export function extractFindings(
           ? 'structured'
           : 'artifact-unusable';
     if (artifact) {
+        // TEMP_LOG_NEW_FINDER: the fields the model itself sent per finding,
+        // before any mapping fills defaults.
+        const submits = state.artifacts
+            .filter((a) => a.type === FINDER_DONE_TOOL)
+            .map((a) => (a.payload as { suggestions?: unknown })?.suggestions);
+        finderLogger.log({
+            message: `TEMP_LOG_NEW_FINDER raw submitResult: ${submits.length} submits, ${submits.map((s) => (Array.isArray(s) ? s.length : typeof s)).join('/')} suggestions`,
+            context: 'finder',
+            metadata: {
+                organizationId: telemetryMetadata?.organizationId,
+                submits,
+            },
+        });
         const clean = sanitizeFindingsResult(
             artifact.payload as any,
             telemetryMetadata,

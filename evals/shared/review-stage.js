@@ -325,7 +325,7 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
     // No repository record with a ready AST graph: the stage builds the call
     // graph from the checkout (GraphContextService.generateContextLegacy).
     const repositoryService = { findByExternalId: async () => null };
-    return new AgentReviewStage(
+    const stage = new AgentReviewStage(
         sinks.automationExecutionService,
         repositoryService,
         orchestrator,
@@ -339,6 +339,9 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
         undefined, // licenseService: no linked repositories
         previousDecisionsUseCase,
     );
+    // TEMP_LOG_NEW_FINDER: the evals run the whole stage.
+    stage.tempStopAfterNewFinder = false;
+    return stage;
 }
 
 /**

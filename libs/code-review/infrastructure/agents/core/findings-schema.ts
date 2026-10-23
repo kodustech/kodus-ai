@@ -31,9 +31,12 @@ const suggestionSchema = z.object({
     revisesSuggestionId: z.string().optional(),
     relevantFile: z.string(),
     language: z.string().optional(),
-    label: z
-        .enum(['bug', 'security', 'performance', 'repo_instruction'])
-        .optional(),
+    // Any string: a label off the list is replaced by `bug` after anchoring
+    // (normalizeFinderLabels), never a reason to drop the finding here.
+    label: z.preprocess(
+        (v) => (typeof v === 'string' ? v : undefined),
+        z.string().optional(),
+    ),
     suggestionContent: z.string(),
     existingCode: optionalSnippet,
     improvedCode: optionalSnippet,
