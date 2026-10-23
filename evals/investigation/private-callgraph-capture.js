@@ -2,6 +2,10 @@ const { extractCallGraph } = require('./callgraph-context');
 
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 15_000;
+const MAX_ATTEMPT_TIMEOUT_MS = 30_000;
+const DEFAULT_OVERALL_TIMEOUT_MS = 60_000;
+const MAX_OVERALL_TIMEOUT_MS = 60_000;
+const MAX_RETRY_DELAY_MS = 5_000;
 
 function traceRequests(manifest) {
     if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
@@ -41,79 +45,156 @@ function delay(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function boundedMaxAttempts(maxAttempts) {
-    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-        return DEFAULT_MAX_ATTEMPTS;
+function boundedOption(name, value, defaultValue, maximum, warn) {
+    if (value === undefined) {
+        return defaultValue;
     }
 
-    return Math.min(maxAttempts, DEFAULT_MAX_ATTEMPTS);
-}
-
-function boundedAttemptTimeout(attemptTimeoutMs) {
-    if (!Number.isFinite(attemptTimeoutMs) || attemptTimeoutMs <= 0) {
-        return DEFAULT_ATTEMPT_TIMEOUT_MS;
+    if (!Number.isInteger(value) || value < 1 || value > maximum) {
+        warn(
+            `[capture] invalid ${name}=${String(value)}; using default ${defaultValue} (maximum ${maximum})`,
+        );
+        return defaultValue;
     }
 
-    return attemptTimeoutMs;
+    return value;
 }
 
 async function fetchTraceWithRetry(fetchTrace, url, options = {}) {
-    const {
-        headers,
-        maxAttempts,
-        sleep = delay,
-        attemptTimeoutMs,
-        onTimeout = (timeout) => {
-            console.warn(
-                `[capture] Langfuse trace request timed out after ${timeout}ms`,
+    const { headers, sleep = delay } = options;
+    const warn = options.warn || console.warn;
+    const attempts = boundedOption(
+        'maxAttempts',
+        options.maxAttempts,
+        DEFAULT_MAX_ATTEMPTS,
+        DEFAULT_MAX_ATTEMPTS,
+        warn,
+    );
+    const attemptTimeoutMs = boundedOption(
+        'attemptTimeoutMs',
+        options.attemptTimeoutMs,
+        DEFAULT_ATTEMPT_TIMEOUT_MS,
+        MAX_ATTEMPT_TIMEOUT_MS,
+        warn,
+    );
+    const overallTimeoutMs = boundedOption(
+        'overallTimeoutMs',
+        options.overallTimeoutMs,
+        DEFAULT_OVERALL_TIMEOUT_MS,
+        MAX_OVERALL_TIMEOUT_MS,
+        warn,
+    );
+    const traceLabel =
+        typeof options.traceLabel === 'string' && options.traceLabel.trim()
+            ? options.traceLabel.trim()
+            : 'unknown-trace';
+    const onTimeout =
+        options.onTimeout ||
+        ((details) => {
+            warn(
+                `[capture] ${details.scope} timeout for ${details.traceLabel} on attempt ${details.attempt} after ${details.timeoutMs}ms`,
             );
-        },
-    } = options;
-    const attempts = boundedMaxAttempts(maxAttempts);
-    const timeout = boundedAttemptTimeout(attemptTimeoutMs);
+        });
+    let activeController = null;
+    let activeAttempt = 0;
+    let clearAttemptTimer = () => {};
+    let didOverallTimeout = false;
+    let rejectOverallTimeout;
+    const overallDeadline = new Promise((_, reject) => {
+        rejectOverallTimeout = reject;
+    });
+    const overallTimer = setTimeout(() => {
+        didOverallTimeout = true;
+        activeController?.abort();
+        clearAttemptTimer();
+        rejectOverallTimeout(new Error('Langfuse trace capture timed out'));
+    }, overallTimeoutMs);
 
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-        const controller = new AbortController();
-        let didTimeout = false;
-        const timer = setTimeout(() => {
-            didTimeout = true;
-            controller.abort();
-        }, timeout);
-        let response;
+    try {
+        return await Promise.race([
+            (async () => {
+                for (let attempt = 0; attempt < attempts; attempt += 1) {
+                    activeAttempt = attempt + 1;
+                    const controller = new AbortController();
+                    activeController = controller;
+                    let didAttemptTimeout = false;
+                    const attemptTimer = setTimeout(() => {
+                        didAttemptTimeout = true;
+                        controller.abort();
+                    }, attemptTimeoutMs);
+                    clearAttemptTimer = () => clearTimeout(attemptTimer);
+                    let response;
 
-        try {
-            response = await fetchTrace(url, {
-                headers,
-                signal: controller.signal,
+                    try {
+                        response = await fetchTrace(url, {
+                            headers,
+                            signal: controller.signal,
+                        });
+                        if (response.ok) {
+                            return await response.json();
+                        }
+                    } catch (error) {
+                        if (didAttemptTimeout) {
+                            onTimeout({
+                                attempt: activeAttempt,
+                                scope: 'attempt',
+                                timeoutMs: attemptTimeoutMs,
+                                traceLabel,
+                            });
+                            throw new Error('Langfuse trace request timed out');
+                        }
+
+                        throw error;
+                    } finally {
+                        clearAttemptTimer();
+                        clearAttemptTimer = () => {};
+                        if (activeController === controller) {
+                            activeController = null;
+                        }
+                    }
+
+                    if (response.status !== 429 || attempt === attempts - 1) {
+                        throw new Error(
+                            `Langfuse ${response.status} while capturing a trace`,
+                        );
+                    }
+
+                    const retryAfter = Number(
+                        response.headers?.get('retry-after'),
+                    );
+                    const retryMilliseconds = Number.isFinite(retryAfter)
+                        ? Math.max(0, retryAfter * 1000)
+                        : (attempt + 1) * 1000;
+                    const waitMilliseconds = Math.min(
+                        retryMilliseconds,
+                        MAX_RETRY_DELAY_MS,
+                    );
+                    await Promise.race([
+                        sleep(waitMilliseconds),
+                        overallDeadline,
+                    ]);
+                }
+
+                throw new Error('Langfuse trace capture exhausted retries');
+            })(),
+            overallDeadline,
+        ]);
+    } catch (error) {
+        if (didOverallTimeout) {
+            onTimeout({
+                attempt: activeAttempt,
+                scope: 'overall',
+                timeoutMs: overallTimeoutMs,
+                traceLabel,
             });
-            if (response.ok) {
-                return await response.json();
-            }
-        } catch (error) {
-            if (didTimeout) {
-                onTimeout(timeout);
-                throw new Error('Langfuse trace request timed out');
-            }
-
-            throw error;
-        } finally {
-            clearTimeout(timer);
+            throw new Error('Langfuse trace capture timed out');
         }
 
-        if (response.status !== 429 || attempt === attempts - 1) {
-            throw new Error(
-                `Langfuse ${response.status} while capturing a trace`,
-            );
-        }
-
-        const retryAfter = Number(response.headers?.get('retry-after'));
-        const waitMilliseconds = Number.isFinite(retryAfter)
-            ? Math.max(0, retryAfter * 1000)
-            : (attempt + 1) * 1000;
-        await sleep(waitMilliseconds);
+        throw error;
+    } finally {
+        clearTimeout(overallTimer);
+        clearAttemptTimer();
     }
-
-    throw new Error('Langfuse trace capture exhausted retries');
 }
 
 function pendingTraceRequests(requests, cases = {}) {

@@ -87,7 +87,10 @@ async function main() {
         const trace = await fetchTraceWithRetry(
             fetch,
             `${langfuse.baseUrl}/api/public/traces/${encodeURIComponent(request.traceId)}`,
-            { headers: { Authorization: authorization } },
+            {
+                headers: { Authorization: authorization },
+                traceLabel: request.caseId,
+            },
         );
         cases[request.caseId] = capturedCallGraph(request, trace);
         writePrivateJson(path.resolve(outputPath), {

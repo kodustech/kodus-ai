@@ -216,7 +216,10 @@ function runMetaOf(args) {
             // How the finder reached it (model-route.js resolveRoute): a BYOK
             // config, or none for `kodus-managed`.
             // A subscription model never runs (main exits 2 before it).
-            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
+            accessPath:
+                TIER0[args.model] && TIER0[args.model].managed
+                    ? 'managed'
+                    : 'byok',
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
@@ -285,7 +288,9 @@ async function main() {
         try {
             args.team = readTeamConfig(args.teamConfig);
         } catch (error) {
-            console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(
+                `finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`,
+            );
             process.exit(2);
         }
     }
@@ -378,7 +383,9 @@ async function main() {
         tests = await buildTests();
     } catch (error) {
         // An unknown set, or a set naming a case with no dataset: nothing to measure.
-        console.error(`finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+            `finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`,
+        );
         process.exit(2);
     }
     let selectedTests = Number.isFinite(args.limit)
@@ -708,7 +715,9 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
+    console.log(
+        `loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`,
+    );
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
     if (NO_JUDGE) {
         // The percentages above are empty by construction, not a result. Say so

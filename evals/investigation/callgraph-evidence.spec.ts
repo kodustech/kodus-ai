@@ -81,7 +81,9 @@ describe('call graph evidence audit', () => {
   </ChangedFunction>
 </CallGraph>`;
 
-        expect(auditCallGraphEvidence(interleavedGraph).orderingViolations).toEqual([
+        expect(
+            auditCallGraphEvidence(interleavedGraph).orderingViolations,
+        ).toEqual([
             {
                 changedFunction: {
                     name: 'saveBooking',
