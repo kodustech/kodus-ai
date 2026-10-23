@@ -2482,7 +2482,9 @@ export class GitlabService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 
@@ -3155,7 +3157,8 @@ export class GitlabService implements Omit<
         const isExecutable = (hook) =>
             (hook?.alert_status ?? 'executable') === 'executable';
         const hasEvents = (hook) =>
-            hook?.note_events !== false && hook?.merge_requests_events !== false;
+            hook?.note_events !== false &&
+            hook?.merge_requests_events !== false;
 
         // Executable first: GitLab never calls a disabled hook, while missing
         // events on an executable one are fixed by the edit below.
@@ -3168,10 +3171,15 @@ export class GitlabService implements Omit<
 
         if (!hasEvents(kept)) {
             try {
-                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
-                    noteEvents: true,
-                    mergeRequestsEvents: true,
-                });
+                await gitlabAPI.ProjectHooks.edit(
+                    projectId,
+                    kept.id,
+                    webhookUrl,
+                    {
+                        noteEvents: true,
+                        mergeRequestsEvents: true,
+                    },
+                );
             } catch (error) {
                 this.logger.warn({
                     message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
@@ -4830,6 +4838,31 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    /** Developer (30) or above, on the project or inherited from its group. */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        userId: string | number;
+    }): Promise<boolean | undefined> {
+        const authDetails = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetails) {
+            return undefined;
+        }
+        try {
+            const member = await this.instanceGitlabApi(
+                authDetails,
+            ).ProjectMembers.show(params.repository.id, Number(params.userId), {
+                includeInherited: true,
+            });
+            return (member?.access_level ?? 0) >= 30;
+        } catch (error) {
+            // Not a member answers 404; a credential that can't look, 401/403.
+            return isDeniedStatus(error) ? false : undefined;
         }
     }
 

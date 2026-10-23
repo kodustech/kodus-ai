@@ -1,0 +1,10 @@
+diff --git a/src/reminders/scheduleReminder.ts b/src/reminders/scheduleReminder.ts
+new file mode 100644
+--- /dev/null
++++ b/src/reminders/scheduleReminder.ts
+@@ -0,0 +1,5 @@
++import { queue } from '../queue';
++export async function scheduleReminder(appointment: { id: string; startsAt: Date; phone: string }) {
++  const at = new Date(appointment.startsAt.getTime() - 24 * 3_600_000);
++  await queue.add('sms', { to: appointment.phone, appointmentId: appointment.id }, { at });
++}

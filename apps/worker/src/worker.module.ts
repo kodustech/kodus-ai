@@ -2,7 +2,6 @@ import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
-
 import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
@@ -36,6 +35,7 @@ import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
 import { KodyRulesAutoPauseCron } from './cron/kody-rules-auto-pause.cron';
 import { KodyRulesAutoPauseDigestCron } from './cron/kody-rules-auto-pause-digest.cron';
 import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
+import { BusinessLogicRecheckCron } from './cron/business-logic-recheck.cron';
 import { OrgReportCron } from './cron/org-report.cron';
 import { RepoReportCron } from './cron/repo-report.cron';
 import { resolveWorkerRole, type WorkerRole } from './worker-role';
@@ -96,6 +96,7 @@ export class WorkerModule {
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
                     SelfHostedBeaconCron,
+                    BusinessLogicRecheckCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],
             };

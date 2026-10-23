@@ -417,10 +417,11 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         expect(state.__findingsOutcome).toBe('artifact-unusable');
     });
 
-    it('[A15] empty array [] payload → typed-empty + observable outcome', () => {
+    // #2112 FPARSE-05: `[]` is the model saying it found nothing.
+    it('[A15] empty array [] payload → zero findings, outcome structured', () => {
         const state = artifactState([]);
         expect(extractFindings(state).suggestions).toEqual([]);
-        expect(state.__findingsOutcome).toBe('artifact-unusable');
+        expect(state.__findingsOutcome).toBe('structured');
     });
 
     it('[A16] empty/whitespace string payload → typed-empty, no throw', () => {
@@ -487,7 +488,8 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
 
 // ─── B. Semantic-but-wrong (valid JSON, wrong value encoding) ────────────────
 describe('matrix B — semantic-but-wrong value encodings', () => {
-    it('[B24] enum out of allowed set (severity/label) → invalid item dropped, valid kept', () => {
+    // #2112 FPARSE-13: an out-of-set enum clears the field; the finding stays.
+    it('[B24] enum out of allowed set (severity/label) → field cleared, finding kept', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
@@ -498,12 +500,13 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
                 ],
             }),
         );
-        // Partial recovery: the out-of-set items are validated out (logged),
-        // the clean one survives — no silent keep-all of the bad encoding.
-        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions).toHaveLength(3);
+        expect(out.suggestions[1].severity).toBeUndefined();
+        expect(out.suggestions[2].label).toBeUndefined();
     });
 
-    it('[B24b] wrong-type field (confidence as string) → item validated out', () => {
+    // #2112 FPARSE-14: a numeric string is read as the number.
+    it('[B24b] wrong-type field (confidence as numeric string) → coerced, item kept', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
@@ -513,7 +516,8 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
                 ],
             }),
         );
-        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions).toHaveLength(2);
+        expect(out.suggestions[1].confidence).toBe(8);
     });
 
     it('[B26] duplicate keys in JSON text → last-wins, still parses', () => {

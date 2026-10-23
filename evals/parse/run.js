@@ -176,7 +176,7 @@ const LABELS = require('./labels.json');
 // came out right. A finding the model wrote with a description and a file of
 // the PR must come out; any other must not. A run end whose findings list is
 // empty (the model said it had nothing to add) is right when nothing comes out.
-async function replay(input, answer, items, { expect }, pr, slot, wroteNone = false) {
+async function replay(input, answer, items, { expect, fixDropped }, pr, slot, wroteNone = false) {
     const state = runState(answer, input);
     const found = await extractFindingsWithRecovery(state, (reasoning) => recover(reasoning, slot), { organizationId: EVAL_ORG.organizationId });
     const { suggestions } = generalist.mapFindings({ findings: found }, { changedFiles: pr.files, kodyRules: [], prNumber: pr.number });
@@ -209,6 +209,14 @@ async function replay(input, answer, items, { expect }, pr, slot, wroteNone = fa
         const what = `${text(s.relevantFile) || '(no file)'}: ${text(s.oneSentenceSummary) || text(s.suggestionContent).slice(0, 60) || '(no description)'}`;
         return want === 'keep' ? { what, ok: kept } : { what: `dropped: ${what}`, ok: !kept };
     });
+    // A shape that takes existingCode away: the fix it leaves cannot be
+    // checked before it ships (checkFix, is-usable-fix.ts), so it must come
+    // out as a plain comment (#2112).
+    for (const k of fixDropped ? suggestions : []) {
+        if (text(k.improvedCode)) {
+            out.push({ what: `unchecked fix shipped: ${text(k.relevantFile)}: ${text(k.oneSentenceSummary) || text(k.suggestionContent).slice(0, 60)}`, ok: false });
+        }
+    }
     if (wroteNone) {
         const added = suggestions.map((k) => `${text(k.relevantFile)}: ${text(k.oneSentenceSummary) || text(k.suggestionContent).slice(0, 60)}`);
         out.push({ what: added.length ? `added to a run that wrote no finding: ${added.slice(0, 2).join('; ')}` : 'added nothing to a run that wrote no finding', ok: !added.length });

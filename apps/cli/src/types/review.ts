@@ -113,8 +113,6 @@ export interface ReviewConfig {
     fast?: boolean;
     /** Free-text steering directive (`--focus`); sanitized + capped server-side. */
     focus?: string;
-    /** Heavy mode (`--heavy`) — extra critic pass in the finder for more recall. */
-    heavy?: boolean;
     files?: FileContent[];
 }
 

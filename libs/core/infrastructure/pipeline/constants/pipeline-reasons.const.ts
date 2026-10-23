@@ -103,14 +103,4 @@ export const PipelineReasons = {
             description: 'Validation filtered out all suggestions',
         } as PipelineReason,
     },
-    FINE_TUNING: {
-        DISABLED: {
-            message: 'Fine-Tuning Disabled',
-            description: 'Context skipped as per configuration',
-        } as PipelineReason,
-        NO_MATCHES: {
-            message: 'No Matching Examples',
-            description: 'No relevant fine-tuning examples found',
-        } as PipelineReason,
-    },
 };

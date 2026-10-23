@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-10-17T16:28:20.970Z",
+    "generated_at": "2026-10-22T20:30:54.673Z",
     "source": "manual",
     "features": {
         "custom-agents": {
@@ -30,15 +30,6 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "name": "GitHub Enterprise Server (PAT auth)",
             "stage": "beta",
             "description": "Connect a GitHub Enterprise Server installation using a personal access token, for environments where the GitHub App flow isn't available.",
-            "audience": [
-                "cloud",
-                "self-hosted"
-            ]
-        },
-        "heavy-review": {
-            "name": "Heavy review (deeper pass)",
-            "stage": "alpha",
-            "description": "An opt-in deeper review that re-runs the finder multiple times to surface more real bugs, for the changes where catching everything matters more than speed.",
             "audience": [
                 "cloud",
                 "self-hosted"

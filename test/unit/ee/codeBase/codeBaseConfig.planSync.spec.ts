@@ -71,9 +71,6 @@ describe('CodeBaseConfigService.getConfig — plan-limit reconciliation', () => 
             .spyOn(service as any, 'getReviewModeConfigParameter')
             .mockResolvedValue({});
         jest
-            .spyOn(service as any, 'getKodyFineTuningConfigParameter')
-            .mockResolvedValue({});
-        jest
             .spyOn(service as any, 'getMergedCodeReviewConfigs')
             .mockResolvedValue({
                 directoryId: undefined,

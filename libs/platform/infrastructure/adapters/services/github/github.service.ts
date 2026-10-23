@@ -3110,13 +3110,84 @@ export class GithubService
                 return null;
             }
 
-            return this.mapGithubIssue(response.data);
+            return {
+                ...this.mapGithubIssue(response.data),
+                ...(await this.issueHierarchy(
+                    octokit,
+                    repository,
+                    issueNumber,
+                    response.data as {
+                        parent_issue_url?: string | null;
+                        sub_issues_summary?: { total?: number };
+                    },
+                )),
+            };
         } catch (error) {
             if ((error as { status?: number })?.status === 404) {
                 return null;
             }
             throw error;
         }
+    }
+
+    /**
+     * The parent and sub-issues GitHub links an issue to. The issue names
+     * its parent by URL and only counts its sub-issues, so they are listed
+     * only when there are some. Best effort: a failure leaves them out.
+     */
+    private async issueHierarchy(
+        octokit: Awaited<ReturnType<typeof this.getAuthenticatedOctokit>>,
+        repository: { owner: string; name: string },
+        issueNumber: number,
+        data: {
+            parent_issue_url?: string | null;
+            sub_issues_summary?: { total?: number };
+        },
+    ): Promise<Pick<CodeManagementIssue, 'parent' | 'subIssues'>> {
+        const parent = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(
+            data.parent_issue_url ?? '',
+        );
+        let subIssues: CodeManagementIssue['subIssues'];
+        if ((data.sub_issues_summary?.total ?? 0) > 0) {
+            subIssues = await octokit
+                .request(
+                    'GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues',
+                    {
+                        owner: repository.owner,
+                        repo: repository.name,
+                        issue_number: issueNumber,
+                        per_page: 25,
+                    },
+                )
+                .then(({ data: items }) =>
+                    (
+                        items as Array<{
+                            number: number;
+                            title: string;
+                            state: string;
+                        }>
+                    ).map((item) => ({
+                        number: item.number,
+                        title: item.title,
+                        state:
+                            item.state === 'closed'
+                                ? ('closed' as const)
+                                : ('open' as const),
+                    })),
+                )
+                .catch(() => undefined);
+        }
+        return {
+            ...(parent
+                ? {
+                      parent: {
+                          number: Number(parent[2]),
+                          repository: parent[1],
+                      },
+                  }
+                : {}),
+            ...(subIssues?.length ? { subIssues } : {}),
+        };
     }
 
     private mapGithubIssue(item: {
@@ -4354,9 +4425,10 @@ export class GithubService
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
-            language:
-                lineComment?.suggestion?.language || repository?.language,
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
+            language: lineComment?.suggestion?.language || repository?.language,
         });
 
         const experimentalWarning = isCommittableSuggestion

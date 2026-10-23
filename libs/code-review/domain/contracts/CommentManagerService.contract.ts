@@ -54,6 +54,8 @@ export interface ICommentManagerService {
         platformType?: PlatformType,
         lineComments?: CommentResult[],
         prLevelCommentResults?: CommentResult[],
+        /** The team's own task id format, so its ids survive a replaced description. */
+        taskIdPattern?: string,
     ): Promise<string>;
 
     updateOverallComment(

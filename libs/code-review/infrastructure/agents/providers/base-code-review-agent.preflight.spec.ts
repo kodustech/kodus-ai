@@ -93,14 +93,12 @@ describe('assertContextWindowFitsOverhead', () => {
             ).not.toThrow();
         });
 
-        it('compact profile reduces 12K overhead to JUST under the window — preflight passes, the prompt-size preflight downstream is the real gate', () => {
+        it('compact profile reduces 12K overhead to JUST under the window — preflight passes', () => {
             // After the compact path drops 14K chars from the static
             // overhead, a 12K window has ~288 tokens of headroom over
             // the overhead estimate. The overhead preflight (this one)
-            // passes. The downstream prompt-size preflight in
-            // assertPromptFitsInContext then evaluates against the
-            // actual systemPrompt + userPrompt and decides whether
-            // there's room for the diffs + output reserve.
+            // passes; whether the diffs + output reserve fit is left to
+            // the agent loop's compressor.
             //
             // This locks in the structural change: 12K is no longer
             // blocked by the OVERHEAD preflight. Whether 12K is

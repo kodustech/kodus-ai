@@ -225,7 +225,7 @@ export interface MCPServerConfig {
     /** Canonical capability category from the mcp-manager registry (e.g.
      *  'task-management'). Lets consumers match by capability, not display name. */
     category?: string | null;
-    /** The connection's integration id, a stable key where names can repeat. */
+    /** Catalog id of the integration this server comes from (`linear-default`), or the custom integration's id. */
     integrationId?: string;
 }
 

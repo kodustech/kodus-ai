@@ -399,11 +399,11 @@ describe('AgentReviewStage', () => {
         it('should not throw when the context is Immer-frozen (regression)', async () => {
             // In production the pipeline context is Immer-frozen (auto-freeze)
             // once it has passed through an earlier stage's produce(). A direct
-            // `context.heavy = …` assignment threw "Cannot assign to read only
-            // property 'heavy'", which the stage caught and swallowed as an
-            // empty-results agent failure — the whole review finished in
-            // seconds with zero suggestions. Freeze the context the same way
-            // here so a regression to direct mutation is caught by the suite.
+            // write to it (once `context.heavy = …`, #1522) threw, and the
+            // stage swallowed it as an empty-results agent failure — the whole
+            // review finished in seconds with zero suggestions. Freeze the
+            // context the same way here so a regression to direct mutation is
+            // caught by the suite.
             const frozenContext = produce(
                 createBaseContext({
                     changedFiles: [
@@ -417,11 +417,9 @@ describe('AgentReviewStage', () => {
             const result = await (stage as any).executeStage(frozenContext);
 
             // The orchestrator must actually run (not be short-circuited by a
-            // thrown TypeError) and heavy must persist onto the returned
-            // context for the downstream create-file-comments stage.
+            // thrown TypeError).
             expect(mockOrchestrator.execute).toHaveBeenCalledTimes(1);
             expect(result.fileAnalysisResults).toBeDefined();
-            expect(result.heavy).toBe(false);
         });
     });
 

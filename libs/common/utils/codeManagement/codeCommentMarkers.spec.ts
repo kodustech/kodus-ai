@@ -9,7 +9,6 @@ import {
     normalizeReviewDirective,
     isReviewCommand,
     isForceReviewCommand,
-    isHeavyReviewCommand,
     isKodyMentionNonReview,
 } from './codeCommentMarkers';
 
@@ -194,20 +193,6 @@ describe('custom bot username support', () => {
 
         it('preserves @kody as fallback when custom bot username is set', () => {
             expect(isForceReviewCommand('@kody review --force', 'mybot')).toBe(
-                true,
-            );
-        });
-    });
-
-    describe('isHeavyReviewCommand', () => {
-        it('matches custom bot username with --heavy flag', () => {
-            expect(isHeavyReviewCommand('@mybot review --heavy', 'mybot')).toBe(
-                true,
-            );
-        });
-
-        it('preserves @kody as fallback when custom bot username is set', () => {
-            expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
                 true,
             );
         });

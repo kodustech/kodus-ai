@@ -72,19 +72,6 @@ export const KODY_FORCE_REVIEW_COMMAND_PATTERN =
     /^\s*@kody\s+(start-review|review)\s+--?force\b/i;
 
 /**
- * Heavy-mode flag. Customers append `--heavy` to a review command to run EXTRA
- * resample passes in the finder — higher recall (finds more), at the cost of
- * more candidates/noise. Opt-in per review. Can be combined with a focus
- * directive and/or `--force` in any order (`@kody review --heavy --force`).
- *
- * A dash is required (like `--force`): a bare `heavy` is treated as directive
- * text, not the flag, to avoid mis-firing on focus phrases (e.g.
- * `@kody review heavy checkout path`).
- */
-export const KODY_HEAVY_REVIEW_COMMAND_PATTERN =
-    /^\s*@kody\s+(?:start-review|review)\b[ \t]+(?:[^\n]*\s)?--?heavy\b/i;
-
-/**
  * Build a review command regex for a given bot username.
  * Falls back to DEFAULT_BOT_USERNAME when botUsername is empty/undefined.
  */
@@ -107,19 +94,6 @@ function buildForceReviewCommandPattern(
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
         `^\\s*@${name}\\s+(start-review|review)\\s+--?force\\b`,
-        'i',
-    );
-}
-
-/**
- * Build a heavy-review command regex for a given bot username.
- */
-function buildHeavyReviewCommandPattern(
-    botUsername?: string | null,
-): RegExp {
-    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
-    return new RegExp(
-        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]+(?:[^\\n]*\\s)?--?heavy\\b`,
         'i',
     );
 }
@@ -149,22 +123,6 @@ function buildMentionNonReviewPattern(
         'i',
     );
 }
-
-/**
- * Check if the review command carries the heavy flag (`@kody review --heavy`).
- * Subset of isReviewCommand. Callers set `heavy: true` on the review context so
- * the finder runs the extra critic pass.
- */
-export const isHeavyReviewCommand = (
-    text: string | undefined | null,
-    botUsername?: string | null,
-): boolean => {
-    if (!text) return false;
-    if (KODY_HEAVY_REVIEW_COMMAND_PATTERN.test(text)) return true;
-    if (botUsername && buildHeavyReviewCommandPattern(botUsername).test(text))
-        return true;
-    return false;
-};
 
 /**
  * Check if comment is a review command (@kody start-review or @kody review).
@@ -286,6 +244,8 @@ export const parseReviewDirective = (
             // otherwise pollute the <ReviewFocus> hint. `\b` keeps focus words
             // like "forced"/"heavyweight" intact; the global flag handles
             // multiple flags in any order. Whitespace is collapsed downstream.
+            // `--heavy` no longer selects a mode; it is still dropped so an
+            // old `@kody review --heavy` runs a normal review.
             .replace(/\s*--?(?:heavy|force)\b/gi, ''),
     );
 };

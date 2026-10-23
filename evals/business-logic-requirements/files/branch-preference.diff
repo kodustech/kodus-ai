@@ -1,0 +1,19 @@
+diff --git a/src/header/BranchPicker.tsx b/src/header/BranchPicker.tsx
+--- a/src/header/BranchPicker.tsx
++++ b/src/header/BranchPicker.tsx
+@@ -1,5 +1,6 @@
+ export function BranchPicker({ branches, api }: Props) {
+   const onPick = async (branchId: string) => {
+     setBranch(branchId);
++    await api.patch('/me/preferences', { defaultBranchId: branchId });
+   };
+ }
+diff --git a/src/session/bootstrap.ts b/src/session/bootstrap.ts
+--- a/src/session/bootstrap.ts
++++ b/src/session/bootstrap.ts
+@@ -1,4 +1,5 @@
+ export async function bootstrapSession(api: Api) {
+   const me = await api.get('/me');
++  if (me.preferences?.defaultBranchId) setBranch(me.preferences.defaultBranchId);
+   return me;
+ }

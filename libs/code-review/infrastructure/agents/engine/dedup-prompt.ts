@@ -104,56 +104,6 @@ type DedupSuggestionLike = {
 };
 
 /**
- * CHEAP (no-LLM) sibling of the LLM dedup: greedily collapse near-duplicate
- * findings by CONTENT similarity, keeping the most detailed representative per
- * cluster. Same `contentSimilarity` + `DEDUP_CONTENT_THRESHOLD` primitives the
- * LLM path is calibrated against, so there's a single source of truth for "how
- * similar is a duplicate". Content-based (not location): two DIFFERENT bugs on
- * the same line have distinct text and stay separate. Used by the heavy finder
- * to drop resample paraphrases BEFORE the per-candidate verify (the expensive
- * stage); the LLM dedup still runs later for the final cross-agent grouping.
- */
-export function collapseNearDuplicates<T extends DedupSuggestionLike>(
-    suggestions: T[],
-    threshold: number = DEDUP_CONTENT_THRESHOLD,
-): T[] {
-    const detail = (s: T) =>
-        (s.suggestionContent?.length ?? 0) + (s.improvedCode?.length ?? 0);
-    // Bucket representatives BY FILE so the similarity scan only compares
-    // same-file candidates (a keyed Map lookup instead of a linear scan of every
-    // representative per item). Two findings only collapse within the same file
-    // anyway, so this is behavior-preserving.
-    const byFile = new Map<string, T[]>();
-    for (const s of suggestions) {
-        const file = s.relevantFile ?? '';
-        let bucket = byFile.get(file);
-        if (!bucket) {
-            bucket = [];
-            byFile.set(file, bucket);
-        }
-        const match = bucket.find((r) => contentSimilarity(r, s) >= threshold);
-        if (!match) {
-            bucket.push(s);
-        } else if (detail(s) > detail(match)) {
-            // Promote the more detailed suggestion to representative, then fold
-            // any OTHER bucket members the new (richer) text now covers but the
-            // old representative didn't — otherwise the same cluster stays split
-            // and redundant resample paraphrases reach the per-finding verify.
-            bucket[bucket.indexOf(match)] = s;
-            for (let i = bucket.length - 1; i >= 0; i--) {
-                if (
-                    bucket[i] !== s &&
-                    contentSimilarity(bucket[i], s) >= threshold
-                ) {
-                    bucket.splice(i, 1);
-                }
-            }
-        }
-    }
-    return [...byFile.values()].flat();
-}
-
-/**
  * Build the per-suggestion block the dedup model sees. No severity: the
  * finder's self-declared severity is unreliable, and severity is assigned
  * later, at enrichment. The whole suggestionContent goes in: the finder no

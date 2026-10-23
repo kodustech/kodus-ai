@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
@@ -39,13 +39,14 @@ export default function MCPOauthPage() {
     const [installationStatus, setInstallationStatus] = useState<
         "success" | "error" | "loading"
     >("loading");
+    const started = useRef(false);
 
     const standardPlugin = (status: string, integrationId: string) => {
         if (status !== "success") {
             return setInstallationStatus("error");
         }
 
-        const timeout = setTimeout(() => {
+        setTimeout(() => {
             finishOauthMCPPluginInstallation({
                 id: integrationId,
             })
@@ -57,10 +58,6 @@ export default function MCPOauthPage() {
                     setInstallationStatus("error");
                 });
         }, 1000);
-
-        return () => {
-            clearTimeout(timeout);
-        };
     };
 
     const customPlugin = (code: string, state: string) => {
@@ -78,7 +75,7 @@ export default function MCPOauthPage() {
             return setInstallationStatus("error");
         }
 
-        const timeout = setTimeout(() => {
+        setTimeout(() => {
             finishOauthCustomMCPPluginInstallation({
                 provider,
                 id: integrationId,
@@ -94,10 +91,6 @@ export default function MCPOauthPage() {
                     setInstallationStatus("error");
                 });
         }, 1000);
-
-        return () => {
-            clearTimeout(timeout);
-        };
     };
 
     useEffectOnce(() => {
@@ -119,13 +112,21 @@ export default function MCPOauthPage() {
             }
         }
 
+        // Exactly one finalize per mount, and never cancelled: React runs
+        // this effect twice in development and an authorization code redeems
+        // only once, while leaving the page right after landing must not
+        // abort the install.
+        if (started.current) return;
+        started.current = true;
         if (status && integrationId) {
             standardPlugin(status, integrationId);
-        } else if (code && state) {
-            customPlugin(code, state);
-        } else {
-            setInstallationStatus("error");
+            return;
         }
+        if (code && state) {
+            customPlugin(code, state);
+            return;
+        }
+        setInstallationStatus("error");
     });
 
     const Component = componentsMap[installationStatus];
