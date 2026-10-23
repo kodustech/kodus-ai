@@ -17,6 +17,7 @@ const args = Object.fromEntries(
 const model = args.model || 'deepseek-v4-flash@fireworks';
 const set = args.set || 'controlled';
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
+process.env.API_CLOUD_MODE = 'true';
 registerTs();
 const route = orgRouteOrExit(model);
 const {
@@ -25,6 +26,12 @@ const {
 const {
     DecidePrApprovalStage,
 } = require('../../libs/code-review/pipeline/stages/decide-pr-approval.stage.ts');
+const {
+    ConditionalApprovalAccessService,
+} = require('../../libs/code-review/infrastructure/approval/conditional-approval-access.service.ts');
+const {
+    FeatureGateService,
+} = require('../../libs/feature-gate/application/feature-gate.service.ts');
 const {
     CodeManagementService,
 } = require('../../libs/platform/infrastructure/adapters/services/codeManagement.service.ts');
@@ -121,9 +128,21 @@ async function runCase(item, slot, withMap = true) {
     );
     const host = new CodeManagementService(integrations, providers);
     const maps = { read: async () => (withMap ? item.areaMap || null : null) };
-    const stage = new DecidePrApprovalStage(host, maps, {
-        isEnabled: async () => true,
-    });
+    // Supply persisted organization state at its boundaries while running the
+    // same beta and paid-plan access decision that production uses.
+    const featureGate = new FeatureGateService({});
+    const access = new ConditionalApprovalAccessService(
+        featureGate,
+        { getReleaseTrack: async () => 'beta' },
+        {
+            validateOrganizationLicense: async () => ({
+                valid: true,
+                subscriptionStatus: 'active',
+                planType: 'teams_monthly',
+            }),
+        },
+    );
+    const stage = new DecidePrApprovalStage(host, maps, access);
     const context = {
         organizationAndTeamData: {
             organizationId,

@@ -297,7 +297,8 @@ export function CodeAreasTab({
         prominent = false,
     ) => {
         const items = classified[id];
-        const visible = expandedGroups.includes(id) ? items : items.slice(0, 4);
+        const expanded = expandedGroups.includes(id);
+        const visible = items.slice(0, expanded ? 100 : 4);
         return (
             <div className="border-card-lv3 bg-card-lv2/50 min-h-36 rounded-lg border p-3">
                 <div
@@ -336,10 +337,15 @@ export function CodeAreasTab({
                             )
                         }
                         className="text-primary-light mt-3 text-xs font-medium hover:underline">
-                        {expandedGroups.includes(id)
+                        {expanded
                             ? "Show fewer"
-                            : "Show " + (items.length - 4) + " more"}
+                            : "Show up to " + Math.min(items.length - 4, 96) + " more"}
                     </button>
+                )}
+                {expanded && items.length > visible.length && (
+                    <p className="text-text-tertiary mt-2 text-xs">
+                        Showing the first 100 of {items.length} areas.
+                    </p>
                 )}
             </div>
         );

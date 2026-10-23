@@ -1,4 +1,8 @@
 export { FeatureGateService } from './application/feature-gate.service';
+export {
+    FEATURE_GATE_SERVICE_TOKEN,
+    type IFeatureGateService,
+} from './application/feature-gate.service';
 export type { FeatureCheckContext } from './application/feature-gate.service';
 export { FeatureGateModule } from './modules/feature-gate.module';
 export {

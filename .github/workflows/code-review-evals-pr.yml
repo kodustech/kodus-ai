@@ -43,6 +43,7 @@ on:
             # The shipped defaults (writing guidelines): read by production's
             # resolveWritingGuidelines, which evals/format runs.
             - "default-kodus-config.yml"
+            - "release/features-snapshot.json"
             # The mcp-manager's Kodus MCP tool list and registry: the
             # connection the conversation eval gives its agent.
             - "apps/mcp-manager/package.json"

@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import {
+    FEATURE_GATE_SERVICE_TOKEN,
+    FEATURE_KEYS,
+    IFeatureGateService,
+} from '@libs/feature-gate';
 import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
@@ -20,7 +24,8 @@ export class ConditionalApprovalAccessService implements IConditionalApprovalAcc
     );
 
     constructor(
-        private readonly featureGate: FeatureGateService,
+        @Inject(FEATURE_GATE_SERVICE_TOKEN)
+        private readonly featureGate: IFeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
         @Inject(LICENSE_SERVICE_TOKEN)

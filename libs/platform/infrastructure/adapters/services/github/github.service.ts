@@ -3,6 +3,7 @@ import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
@@ -5562,6 +5563,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            throw error;
         }
     }
 
@@ -6476,8 +6478,7 @@ This is an experimental feature that generates committable changes. Review the d
         prNumber: number;
         reason: string;
     }): Promise<number> {
-        const { organizationAndTeamData, repository, prNumber, reason } =
-            params;
+        const { organizationAndTeamData, repository, prNumber } = params;
         if (!repository?.name || !repository.id || !prNumber) {
             throw new Error(
                 'Repository and PR number are required to dismiss approval',
@@ -6508,13 +6509,42 @@ This is an experimental feature that generates committable changes. Review the d
                 review.user?.node_id === identity.viewer.id,
         );
         for (const review of ownApprovals) {
-            await octokit.rest.pulls.dismissReview({
-                owner: githubAuth.org,
-                repo: repository.name,
-                pull_number: prNumber,
-                review_id: review.id,
-                message: `Kody held automatic approval after a new review: ${reason}`,
-            });
+            const timeoutMs = 15_000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                await runWithBoundedTimeout(
+                    octokit.rest.pulls.dismissReview({
+                        owner: githubAuth.org,
+                        repo: repository.name,
+                        pull_number: prNumber,
+                        review_id: review.id,
+                        message:
+                            'Kody held automatic approval after a new review.',
+                        request: { signal: controller.signal },
+                    }),
+                    timeoutMs,
+                    `GitHub approval dismissal review=${review.id}`,
+                );
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'GitHub approval dismissal failed; review state is unverified',
+                    context: GithubService.name,
+                    error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        repositoryId: repository.id,
+                        prNumber,
+                        reviewId: review.id,
+                        timeoutMs,
+                    },
+                });
+                throw error;
+            } finally {
+                clearTimeout(timer);
+            }
         }
         return ownApprovals.length;
     }

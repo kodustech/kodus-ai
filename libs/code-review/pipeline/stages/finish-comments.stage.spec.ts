@@ -261,6 +261,41 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             commentManagerService.createComment.mock.calls[0][16],
         ).toBeUndefined();
     });
+
+    it('still posts the end-review comment when the separate hold reason fails', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const publicationError = new Error('comment update failed');
+        commentManagerService.postApprovalReason.mockRejectedValueOnce(
+            publicationError,
+        );
+        const context = baseContext({
+            lineComments: [],
+            approvalDecision: {
+                kind: 'hold',
+                reason: 'Sensitive path changed.',
+            },
+            pullRequestMessagesConfig: {
+                startReviewMessage: { status: PullRequestMessageStatus.OFF },
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.EVERY_PUSH,
+                    content: 'Review finished.',
+                },
+            },
+        });
+
+        const result = await (stage as any).executeStage(context);
+
+        expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    substage: 'approval-hold-reason-publication',
+                    severity: 'partial',
+                    error: publicationError,
+                }),
+            ]),
+        );
+    });
 });
 
 describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => {

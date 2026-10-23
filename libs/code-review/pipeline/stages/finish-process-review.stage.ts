@@ -53,6 +53,13 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             repository,
             codeReviewConfig,
         } = context;
+        const prNumber = pullRequest.number;
+        const approvalMetadata = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            repositoryId: repository.id,
+            prNumber,
+        };
 
         if (
             codeReviewConfig?.pullRequestApprovalActive &&
@@ -64,15 +71,16 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                     {
                         organizationAndTeamData,
                         repository,
-                        prNumber: pullRequest.number,
+                        prNumber,
                         reason: context.approvalDecision.reason,
                     },
                 );
             } catch (error) {
                 this.logger.error({
-                    message: `Could not dismiss Kody's earlier approval for PR#${pullRequest.number}`,
+                    message: `Could not dismiss Kody's earlier approval for PR#${prNumber}`,
                     context: this.stageName,
                     error,
+                    metadata: approvalMetadata,
                 });
                 context = this.updateContext(context, (draft) => {
                     draft.errors ??= [];
@@ -159,12 +167,6 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 requiresConditionalDecision &&
                 context.approvalDecision?.kind === 'approve'
             ) {
-                const publicationMetadata = {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    repositoryId: repository.id,
-                    prNumber: pullRequest.number,
-                };
                 try {
                     await this.commentManagerService.postApprovalReason(
                         organizationAndTeamData,
@@ -178,7 +180,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                         message: 'Could not post automatic approval reason',
                         context: this.stageName,
                         error,
-                        metadata: publicationMetadata,
+                        metadata: approvalMetadata,
                     });
                     context = this.updateContext(context, (draft) => {
                         draft.errors ??= [];

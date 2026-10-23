@@ -37,6 +37,14 @@ export interface FeatureCheckContext {
     releaseTrack?: ReleaseTrack;
 }
 
+export const FEATURE_GATE_SERVICE_TOKEN = Symbol.for(
+    'FEATURE_GATE_SERVICE_TOKEN',
+);
+
+export interface IFeatureGateService {
+    isEnabled(feature: FeatureKey, ctx: FeatureCheckContext): Promise<boolean>;
+}
+
 /**
  * NestJS adapter around the pure `evaluateCatalogGate` decision in
  * `libs/feature-gate/domain/decision.ts`. Loads the snapshot, decides
@@ -49,7 +57,7 @@ export interface FeatureCheckContext {
  * logic, even though the runtime adapters differ.
  */
 @Injectable()
-export class FeatureGateService {
+export class FeatureGateService implements IFeatureGateService {
     private readonly logger = createLogger(FeatureGateService.name);
     private readonly snapshot: FeaturesSnapshot;
     private readonly betaFeaturesEnabled: boolean;

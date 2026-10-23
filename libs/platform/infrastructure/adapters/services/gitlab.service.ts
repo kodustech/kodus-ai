@@ -3968,7 +3968,7 @@ export class GitlabService implements Omit<
 
             return isApprovedByCurrentUser
                 ? PullRequestReviewState.APPROVED
-                : null;
+                : PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error fetching review status for MR #${params.prNumber}`,

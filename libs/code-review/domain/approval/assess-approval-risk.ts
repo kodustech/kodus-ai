@@ -17,12 +17,18 @@ const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
 const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
 const TEST_FILE =
-    /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$/i;
+    /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
 const ADDED_CONTROL_FLOW = /^\+(?!\+).*\b(?:if\s*\(|return\b|throw\b)/m;
+const ADDED_TEST_LINE = /^\+(?!\+).+/m;
 
 function hasUntestedControlFlowChange(files: FileChange[]): boolean {
     return (
-        !files.some((file) => TEST_FILE.test(file.filename)) &&
+        !files.some(
+            (file) =>
+                file.status !== 'removed' &&
+                TEST_FILE.test(file.filename) &&
+                ADDED_TEST_LINE.test(file.patch ?? ''),
+        ) &&
         files.some(
             (file) =>
                 SOURCE_FILE.test(file.filename) &&

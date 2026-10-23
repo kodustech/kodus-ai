@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { GitlabService } from './gitlab.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
 jest.mock('@gitbeaker/rest', () => ({
@@ -52,6 +53,31 @@ describe('GitlabService', () => {
         );
 
         jest.clearAllMocks();
+    });
+
+    it('distinguishes no Kody approval from an unavailable GitLab lookup', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestApprovals: {
+                showConfiguration: jest
+                    .fn()
+                    .mockResolvedValueOnce({ approved_by: [] })
+                    .mockRejectedValueOnce(new Error('GitLab unavailable')),
+            },
+            Users: { showCurrentUser: jest.fn().mockResolvedValue({ id: 7 }) },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('normalizes bare stored hosts before creating the GitLab API client', () => {
@@ -364,13 +390,11 @@ describe('GitlabService', () => {
                 'https://gitlab.example.com',
                 'https://gitlab.example.com/',
             ]) {
-                jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue(
-                    {
-                        accessToken: 'oauth-token',
-                        authMode: AuthMode.OAUTH,
-                        host,
-                    },
-                );
+                jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                    host,
+                });
 
                 await service.getCloneParams({
                     organizationAndTeamData,

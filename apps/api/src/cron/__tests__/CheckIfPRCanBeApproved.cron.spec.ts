@@ -108,6 +108,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         const distributedLockService = {
             acquire: jest.fn().mockResolvedValue(lock),
         } as any;
+        const conditionalApprovalAccess = {
+            isEnabled: jest.fn().mockResolvedValue(true),
+        };
 
         const cron = new CheckIfPRCanBeApprovedCronProvider(
             teamService,
@@ -120,7 +123,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             teamAutomationService,
             pullRequestMessagesService,
             distributedLockService,
-            { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+            conditionalApprovalAccess as any,
         );
 
         return {
@@ -136,10 +139,38 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 teamAutomationService,
                 pullRequestMessagesService,
                 distributedLockService,
+                conditionalApprovalAccess,
                 lock,
             },
         };
     };
+
+    it('does not evaluate a saved conditional policy when access is disabled', async () => {
+        const { cron, deps } = makeCron();
+        deps.conditionalApprovalAccess.isEnabled.mockResolvedValue(false);
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalLabels: ['auto-approve'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(deps.conditionalApprovalAccess.isEnabled).toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.getPullRequest,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
 
     it('processes a successful PR when a different PR is in progress for the same team', async () => {
         const { cron, deps } = makeCron();
@@ -570,6 +601,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             );
             expect(
                 deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.getAllCommentsInPullRequest,
             ).not.toHaveBeenCalled();
         },
     );

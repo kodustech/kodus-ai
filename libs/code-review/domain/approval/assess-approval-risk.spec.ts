@@ -134,3 +134,58 @@ it('allows a low judgment when the PR includes a test for the control-flow chang
 
     expect(result.level).toBe('low');
 });
+
+it.each([
+    'tests/EmailServiceTests.cs',
+    'test_email.py',
+    'email_test.go',
+    'EmailServiceTest.java',
+    'test_email.rs',
+])('recognizes added test evidence in %s', async (testPath) => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior is covered by a changed test.',
+    });
+
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/EmailService.cs',
+                status: 'modified',
+                patch: '@@ -1 +1 @@\n+if (missing) return false;',
+            } as any,
+            {
+                filename: testPath,
+                status: 'modified',
+                patch: '@@ -1 +1 @@\n+assert behavior',
+            } as any,
+        ],
+    });
+
+    expect(result.level).toBe('low');
+});
+
+it.each([
+    { status: 'removed', patch: '@@ -1 +0 @@\n-assert behavior' },
+    { status: 'modified', patch: '@@ -1 +0 @@\n-assert behavior' },
+])('does not count deleted test evidence (%p)', async (testChange) => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Behavior unchanged.',
+    });
+
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/EmailService.cs',
+                status: 'modified',
+                patch: '@@ -1 +1 @@\n+if (missing) return false;',
+            } as any,
+            { filename: 'tests/EmailServiceTests.cs', ...testChange } as any,
+        ],
+    });
+
+    expect(result.level).toBe('medium');
+});

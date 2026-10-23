@@ -942,7 +942,7 @@ export class AzureReposService implements Omit<
                 return null;
             }
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const reviewer of reviewers || []) {
                 if (
                     reviewer.id === currentUserId &&

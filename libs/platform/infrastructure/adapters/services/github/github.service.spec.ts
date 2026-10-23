@@ -123,9 +123,56 @@ describe('GithubService', () => {
             expect.objectContaining({
                 review_id: 10,
                 pull_number: 42,
+                message: 'Kody held automatic approval after a new review.',
+                request: { signal: expect.any(AbortSignal) },
             }),
         );
         expect(dismissReview).toHaveBeenCalledTimes(1);
+    });
+
+    it('bounds a stalled GitHub approval dismissal and reports unknown state', async () => {
+        jest.useFakeTimers();
+        try {
+            const dismissReview = jest
+                .fn()
+                .mockReturnValue(new Promise(() => {}));
+            jest.spyOn(
+                service as any,
+                'getGithubAuthDetails',
+            ).mockResolvedValue({
+                org: 'kodustech',
+            });
+            jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+                paginate: jest.fn().mockResolvedValue([
+                    {
+                        id: 10,
+                        state: 'APPROVED',
+                        user: { login: 'kody-ai[bot]', node_id: 'kody-id' },
+                    },
+                ]),
+                rest: { pulls: { listReviews: jest.fn(), dismissReview } },
+            });
+            jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+                jest.fn().mockResolvedValue({
+                    viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+                }),
+            );
+
+            const dismissal = service.dismissOwnPullRequestApprovals({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                reason: 'Sensitive path changed.',
+            });
+            const outcome = expect(dismissal).rejects.toThrow(
+                'GitHub approval dismissal review=10 bounded timeout after 15000ms',
+            );
+            await jest.advanceTimersByTimeAsync(15_000);
+            await outcome;
+            expect(dismissReview).toHaveBeenCalledTimes(1);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('updates the repository config before removing deselected webhooks and recreating selected ones', async () => {

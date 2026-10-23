@@ -68,21 +68,46 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         context: CodeReviewPipelineContext,
         reviewFailed: boolean,
         reviewHasPartialErrors: boolean,
-    ): Promise<void> {
+    ): Promise<CodeReviewPipelineContext> {
         if (
             context.approvalDecision?.kind !== 'hold' ||
             reviewFailed ||
             reviewHasPartialErrors
         ) {
-            return;
+            return context;
         }
-        await this.commentManagerService.postApprovalReason(
-            context.organizationAndTeamData,
-            context.pullRequest.number,
-            context.repository,
-            context.approvalDecision.reason,
-            'hold',
-        );
+        try {
+            await this.commentManagerService.postApprovalReason(
+                context.organizationAndTeamData,
+                context.pullRequest.number,
+                context.repository,
+                context.approvalDecision.reason,
+                'hold',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not publish automatic approval hold reason',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData.organizationId,
+                    teamId: context.organizationAndTeamData.teamId,
+                    repositoryId: context.repository.id,
+                    prNumber: context.pullRequest.number,
+                },
+            });
+            return this.updateContext(context, (draft) => {
+                draft.errors ??= [];
+                draft.errors.push({
+                    stage: this.stageName,
+                    substage: 'approval-hold-reason-publication',
+                    severity: 'partial',
+                    error,
+                });
+            });
+        }
+        return context;
     }
 
     /**
@@ -395,7 +420,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             endReviewMessage.status === PullRequestMessageStatus.OFF ||
             endReviewMessage.status === PullRequestMessageStatus.INACTIVE
         ) {
-            await this.postHoldReasonIfNeeded(
+            context = await this.postHoldReasonIfNeeded(
                 context,
                 reviewFailed,
                 reviewHasPartialErrors,
@@ -408,7 +433,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             context.lastExecution
         ) {
-            await this.postHoldReasonIfNeeded(
+            context = await this.postHoldReasonIfNeeded(
                 context,
                 reviewFailed,
                 reviewHasPartialErrors,
@@ -494,7 +519,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             // End-review messages can be created on every push. Keep the
             // approval reason in its marked comment so an older message does
             // not keep showing a stale hold after a later review.
-            await this.postHoldReasonIfNeeded(
+            context = await this.postHoldReasonIfNeeded(
                 context,
                 reviewFailed,
                 reviewHasPartialErrors,

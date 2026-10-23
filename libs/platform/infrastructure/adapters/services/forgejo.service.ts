@@ -3040,7 +3040,7 @@ export class ForgejoService implements Omit<
                 },
             );
 
-            if (reviews.length === 0) return null;
+            if (reviews.length === 0) return PullRequestReviewState.NONE;
 
             const latestReview = reviews[reviews.length - 1];
 

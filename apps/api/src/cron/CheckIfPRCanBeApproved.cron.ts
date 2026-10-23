@@ -1065,11 +1065,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         currentHeadSha: latestHeadSha,
                     });
                     if (conditionalDecision.kind !== 'approve') {
-                        await this.postConditionalApprovalReason(
-                            codeManagementRequestData,
-                            platformType,
-                            conditionalDecision,
-                        );
+                        if (conditionalDecision.kind === 'hold') {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                conditionalDecision,
+                            );
+                        }
                         return false;
                     }
                 }
