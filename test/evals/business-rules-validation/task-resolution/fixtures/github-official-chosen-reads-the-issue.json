@@ -1,0 +1,80 @@
+{
+    "name": "github-official-chosen-reads-the-issue",
+    "issue": "#1908",
+    "trackers": [
+        {
+            "integrationId": "int-github",
+            "appName": "GitHub",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "github_official",
+            "tools": [
+                {
+                    "name": "issue_read",
+                    "kind": "get",
+                    "idArg": "issue_number",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "method": {
+                                "type": "string",
+                                "enum": ["get", "get_comments", "get_labels"]
+                            },
+                            "owner": {
+                                "type": "string"
+                            },
+                            "repo": {
+                                "type": "string"
+                            },
+                            "issue_number": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["method", "owner", "repo", "issue_number"]
+                    }
+                },
+                {
+                    "name": "search_issues",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["issue_write", "add_issue_comment"],
+            "tasks": [
+                {
+                    "id": "12",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes #12"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["issue_read"]
+    },
+    "settings": {
+        "taskSource": "int-github",
+        "lookupTool": "issue_read"
+    }
+}

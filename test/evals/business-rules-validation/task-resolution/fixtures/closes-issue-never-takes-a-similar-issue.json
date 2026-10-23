@@ -1,0 +1,40 @@
+{
+    "name": "closes-issue-never-takes-a-similar-issue",
+    "issue": "#1770",
+    "repository": {
+        "issues": [
+            {
+                "number": 12,
+                "title": "Export tickets as CSV",
+                "body": "## Acceptance criteria\n- The export includes the priority column"
+            },
+            {
+                "number": 13,
+                "title": "Export tickets as CSV (v2)",
+                "body": "## Acceptance criteria\n- The export streams rows instead of buffering"
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: csv export",
+        "body": "Closes #12",
+        "branch": "feature/csv-export"
+    },
+    "expect": {
+        "outcome": "validated",
+        "judgedTasks": [
+            "#12"
+        ],
+        "taskContains": [
+            "priority column"
+        ],
+        "taskNotContains": [
+            "streams rows"
+        ],
+        "toolsCalled": [
+            "KODUS_GET_ISSUE"
+        ]
+    }
+}

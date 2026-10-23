@@ -1,12 +1,13 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { Greeting } from "@components/system/greeting";
+import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { CockpitPageSkeleton } from "@components/system/page-skeletons";
 import {
     availabilityLine,
     planCtaTarget,
     unlockedByLabel,
 } from "@components/system/plan-cta-target";
-import { cookies } from "next/headers";
-import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
-import { CockpitPageSkeleton } from "@components/system/page-skeletons";
 import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
@@ -14,13 +15,13 @@ import { getReviewedPullRequestCount } from "@services/pull-requests/fetch";
 import type { CookieName } from "src/core/utils/cookie";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-import { Greeting } from "@components/system/greeting";
 
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
 import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
 import { DateRangePicker } from "./_components/date-range-picker";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
+import { IntentTab } from "./_components/intent-tab";
 import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
 import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
@@ -200,6 +201,7 @@ async function CockpitLayoutBody({
     const showProductivity = metricsVisibility.tabs?.productivity ?? true;
     const tabsVisibility: Record<TabValue, boolean> = {
         "kodus-review": showKodusReview,
+        "intent": metricsVisibility.tabs?.intent ?? true,
         "productivity": showProductivity || !showKodusReview,
     };
     const defaultTab: TabValue = showKodusReview
@@ -217,7 +219,9 @@ async function CockpitLayoutBody({
             {!hasAnalyticsData && <CockpitNoDataBanner />}
 
             <Page.Header>
-                <Page.Title><Greeting /></Page.Title>
+                <Page.Title>
+                    <Greeting />
+                </Page.Title>
                 <div className="ml-auto flex items-center gap-2">
                     <RepositoryPicker
                         cookieValue={repositoryCookieValue}
@@ -292,6 +296,19 @@ async function CockpitLayoutBody({
                                         </div>
                                     )}
                                 </div>
+                            </TabsContent>
+                        )}
+
+                        {tabsVisibility.intent && (
+                            <TabsContent
+                                value={"intent" satisfies TabValue}
+                                className="flex flex-col gap-4">
+                                <IntentTab
+                                    cookieValue={dateRangeCookieValue}
+                                    repositoryCookieValue={
+                                        repositoryCookieValue
+                                    }
+                                />
                             </TabsContent>
                         )}
 

@@ -389,6 +389,7 @@ const DEFAULT_COCKPIT_METRICS_VISIBILITY: CockpitMetricsVisibility = {
     tabs: {
         kodusReview: true,
         productivity: true,
+        intent: true,
     },
     summary: {
         deployFrequency: true,

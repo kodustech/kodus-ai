@@ -161,6 +161,7 @@ export interface CockpitMetricsVisibility {
     tabs: {
         kodusReview: boolean;
         productivity: boolean;
+        intent: boolean;
     };
     summary: {
         deployFrequency: boolean;

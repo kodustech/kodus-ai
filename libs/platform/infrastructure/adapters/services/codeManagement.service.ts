@@ -1530,6 +1530,23 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.isWebhookActive(params);
     }
 
+    async userCanWrite(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id: string };
+            userId: string | number;
+        },
+        type?: PlatformType,
+    ): Promise<boolean | undefined> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        if (!type) {
+            return undefined;
+        }
+        return this.platformIntegrationFactory
+            .getCodeManagementService(type)
+            .userCanWrite?.(params);
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

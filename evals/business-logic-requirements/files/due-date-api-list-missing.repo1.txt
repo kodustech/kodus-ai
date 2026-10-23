@@ -1,0 +1,6 @@
+components:
+  schemas:
+    Loan:
+      properties:
+        id: { type: string }
+        bookId: { type: string }
