@@ -19,6 +19,11 @@
  */
 import { anthropicModule } from './index';
 import { runConformance, type ProviderFixture } from '../kernel/conformance';
+import {
+    compatibleTemperaturePolicy,
+    planStructuredCall,
+    resolveCompatibleReasoningTraits,
+} from '../kernel/reasoning-traits';
 import reasoningFixture from './__fixtures__/reasoning.json';
 
 const reasoning = reasoningFixture as ProviderFixture;
@@ -71,7 +76,9 @@ describe('anthropicModule.reasoning — effort=none owns "thinking off"', () => 
 
 describe('anthropicModule.normalizeUsage — real extraction (Q4: detail-OF output)', () => {
     it('extended-thinking fixture: input/output are the raw counts; reasoning === 0 (anthropic folds thinking into output_tokens)', () => {
-        const usage = anthropicModule.normalizeUsage({ usage: reasoning.usage });
+        const usage = anthropicModule.normalizeUsage({
+            usage: reasoning.usage,
+        });
 
         expect(usage.input).toBe(reasoning.usage.inputTokens);
         // output stays the FULL completion count (it already includes thinking tokens).
@@ -198,5 +205,59 @@ describe('anthropicModule offline conformance (real boundary: build → SDK → 
         // normalize(raw) usage matches normalizeUsage exactly.
         expect(run.result.usage).toEqual(run.usage);
         expect(run.result.raw).toBe(run.raw);
+    });
+});
+
+describe('anthropicModule — a Claude id proxied over anthropic_compatible (#2125)', () => {
+    const cfg = (model: string, provider = 'anthropic_compatible') =>
+        ({ provider, model, apiKey: '' }) as any;
+
+    it('takes the native Claude traits, so structured calls never force tool_choice on Opus 5.5', () => {
+        const traits = anthropicModule.reasoningTraits!(cfg('claude-opus-5-5'));
+
+        expect(traits).toEqual(
+            anthropicModule.reasoningTraits!(
+                cfg('claude-opus-5-5', 'anthropic'),
+            ),
+        );
+        // Opus 5.5 rejects both `disabled` thinking and a forced tool_choice:
+        // the unknown-upstream default planned `suppress-thinking` here.
+        expect(planStructuredCall('none', traits)).toBe('reroute-json');
+    });
+
+    it('withholds temperature from a Claude that rejects it', () => {
+        expect(
+            anthropicModule.temperaturePolicy!(cfg('claude-opus-5-5')),
+        ).toEqual({ kind: 'unsupported' });
+    });
+
+    it('keeps temperature for a Claude that still accepts it', () => {
+        expect(
+            anthropicModule.temperaturePolicy!(cfg('claude-sonnet-4-5')),
+        ).toEqual({ kind: 'adjustable' });
+    });
+
+    it('turns reasoning off the way native Claude does', () => {
+        for (const model of [
+            'claude-opus-5-5',
+            'claude-fable-5',
+            'claude-sonnet-4-5',
+            'claude-opus-5',
+        ]) {
+            expect(
+                anthropicModule.reasoning!(cfg(model), 'none'),
+            ).toEqual(
+                anthropicModule.reasoning!(cfg(model, 'anthropic'), 'none'),
+            );
+        }
+    });
+
+    it('leaves non-Claude compatible ids on the compatible table', () => {
+        expect(anthropicModule.reasoningTraits!(cfg('kimi-k2.6'))).toEqual(
+            resolveCompatibleReasoningTraits('kimi-k2.6'),
+        );
+        expect(anthropicModule.temperaturePolicy!(cfg('kimi-k2.6'))).toEqual(
+            compatibleTemperaturePolicy('kimi-k2.6', undefined),
+        );
     });
 });
