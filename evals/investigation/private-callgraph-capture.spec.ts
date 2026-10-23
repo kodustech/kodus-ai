@@ -95,6 +95,57 @@ describe('private call graph capture', () => {
         expect(sleep).toHaveBeenCalledWith(0);
     });
 
+    it('times out while consuming a successful response body', async () => {
+        const fetchTrace = jest.fn(async (_url, options) => ({
+            ok: true,
+            json: () =>
+                new Promise((_, reject) => {
+                    options.signal.addEventListener('abort', () => {
+                        reject(new Error('body stalled'));
+                    });
+                }),
+        }));
+        const onTimeout = jest.fn();
+
+        await expect(
+            fetchTraceWithRetry(
+                fetchTrace,
+                'https://langfuse.example/trace-a',
+                {
+                    attemptTimeoutMs: 1,
+                    onTimeout,
+                },
+            ),
+        ).rejects.toThrow('Langfuse trace request timed out');
+
+        expect(onTimeout).toHaveBeenCalledWith(1);
+    });
+
+    it('falls back to the bounded retry default for invalid maxAttempts', async () => {
+        const fetchTrace = jest.fn(() => {
+            if (fetchTrace.mock.calls.length > 5) {
+                throw new Error('retry limit was not applied');
+            }
+
+            return Promise.resolve({
+                ok: false,
+                status: 429,
+                headers: { get: () => '0' },
+            });
+        });
+        const sleep = jest.fn().mockResolvedValue(undefined);
+
+        await expect(
+            fetchTraceWithRetry(
+                fetchTrace,
+                'https://langfuse.example/trace-a',
+                { maxAttempts: Infinity, sleep },
+            ),
+        ).rejects.toThrow('Langfuse 429 while capturing a trace');
+
+        expect(fetchTrace).toHaveBeenCalledTimes(5);
+    });
+
     it('skips cases already captured in a private checkpoint', () => {
         const requests = [
             { caseId: 'private-case-a', traceId: 'trace-a' },
