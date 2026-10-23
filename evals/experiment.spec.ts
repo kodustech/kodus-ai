@@ -160,6 +160,11 @@ describe('evals/experiment.js main refuses what it cannot compare', () => {
         expect(await run(['--step=dedup', `--team-config=${file}`])).toMatchObject({ code: 2, said: expect.stringContaining('does not take a team config') });
         expect(await run(['--step=finder', '--team-config=/nonexistent/config.json'])).toMatchObject({ code: 2, said: expect.stringContaining('not a readable JSON') });
     });
+
+    it('an embedder it does not know, or one asked of a step whose evals do not embed', async () => {
+        expect(await run(['--step=dedup', '--embedder=bedrock'])).toMatchObject({ code: 2, said: expect.stringContaining('unknown --embedder=bedrock') });
+        expect(await run(['--step=finder', '--embedder=none'])).toMatchObject({ code: 2, said: expect.stringContaining('does not embed') });
+    });
 });
 
 describe('evals/experiment.js sets', () => {
@@ -364,6 +369,14 @@ describe('evals/experiment.js measuredAlready', () => {
         expect(measuredAlready([recorded], { ...ask, set: cases, env: envHashOf({ JUDGE_MODEL: 'j1' }) }, same)).toBe(recorded);
         expect(measuredAlready([recorded], { ...ask, set: setIdentity({ id: 'private:verify-prod', private: true, hash: 'c2' }), env: envHashOf({ JUDGE_MODEL: 'j1' }) }, same)).toBeNull();
         expect(measuredAlready([recorded], { ...ask, set: cases, env: envHashOf({ JUDGE_MODEL: 'j2' }) }, same)).toBeNull();
+    });
+
+    it('matches the embedder it recorded; a record without one ran with the platform embedder', () => {
+        const without = { ...record, reuse: { model: 'm', runs: 2, evals_tree: 't1', embedder: 'none' } };
+        expect(measuredAlready([without], { ...ask, embedder: 'none' }, same)).toBe(without);
+        expect(measuredAlready([without], ask, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, embedder: 'none' }, same)).toBeNull();
+        expect(measuredAlready([record], { ...ask, embedder: 'platform' }, same)).toBe(record);
     });
 
     it('never reuses a phase that was not asked, not answered or not measured', () => {

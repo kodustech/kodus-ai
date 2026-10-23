@@ -127,6 +127,10 @@ The repository is organized as a monorepo:
 - Update documentation as needed
 - Follow the commit message convention
 
+### Licensing
+
+Code outside the Enterprise Code is licensed under AGPL-3.0. Files with `.ee.` in the filename or inside an `ee/` directory are Enterprise Code, covered by the [Kodus Enterprise Code License](./license_ee.md). That license lets you fork the repository and modify Enterprise Code to submit a pull request, and by submitting a change to Enterprise Code you agree to its contribution terms. See [license.md](./license.md) for the summary.
+
 ## Testing
 
 We use Jest for testing. Run tests with:
