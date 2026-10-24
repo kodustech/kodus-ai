@@ -70,6 +70,14 @@ on:
                 description: "Unique batch name for concurrent approval-risk runs"
                 required: false
                 type: string
+            approval_set:
+                description: "Frozen approval-risk corpus"
+                required: false
+                type: choice
+                default: full
+                options:
+                    - full
+                    - full-balanced
 
 concurrency:
     # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
@@ -156,19 +164,27 @@ jobs:
                   export const environment = devEnvironment;
                   EOF
             - name: Validate frozen labels
-              run: node evals/approval-risk/validate-adjudications.js
+              env:
+                  APPROVAL_SET: ${{ inputs.approval_set }}
+              run: |
+                  if [ "$APPROVAL_SET" = "full-balanced" ]; then
+                    node evals/approval-risk/validate-adjudications.js --balanced
+                  else
+                    node evals/approval-risk/validate-adjudications.js
+                  fi
             - name: Compare approval decisions
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   APPROVAL_CASE_IDS: ${{ inputs.approval_case_ids }}
+                  APPROVAL_SET: ${{ inputs.approval_set }}
               run: |
                   case_args=()
                   if [ -n "$APPROVAL_CASE_IDS" ]; then
                     case_args+=("--ids=$APPROVAL_CASE_IDS")
                   fi
                   node evals/approval-risk/run.js \
-                    --set=full --model=deepseek-v4-flash@fireworks \
+                    --set="$APPROVAL_SET" --model=deepseek-v4-flash@fireworks \
                     "${case_args[@]}" \
                     --output=eval-results/approval-risk-full.json
             - name: Report comparison

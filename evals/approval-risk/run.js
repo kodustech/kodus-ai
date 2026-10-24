@@ -53,8 +53,12 @@ const storedIntegrations = require('./integrations.json');
 
 function loadCases() {
     if (set === 'controlled') return require('./controlled.json');
-    if (set !== 'full') throw new Error(`Unknown set: ${set}`);
-    const adjudications = require('./adjudications.json').cases;
+    if (set !== 'full' && set !== 'full-balanced')
+        throw new Error(`Unknown set: ${set}`);
+    const adjudications =
+        set === 'full-balanced'
+            ? require('./adjudications-balanced.json').cases
+            : require('./adjudications.json').cases;
     const scored = adjudications.filter((row) =>
         ['hold', 'eligible'].includes(row.decision),
     );
@@ -296,7 +300,7 @@ async function main() {
     let errored = 0;
     for (const item of cases) {
         try {
-            if (set === 'full') {
+            if (set !== 'controlled') {
                 const baseline = evaluateApproval({
                     approvalActive: true,
                     reviewClean: true,
@@ -377,6 +381,7 @@ async function main() {
     const target = targets.models[model] || {};
     const result = {
         eval: 'approval-risk',
+        set,
         question: evalQuestion('evals/approval-risk'),
         model,
         runs: 1,
@@ -389,7 +394,7 @@ async function main() {
         cases: rows,
         tokens: tokensUsed(),
         infra: { errored, total: cases.length },
-        ...(set === 'full' ? { comparisons: summaryMetrics(rows) } : {}),
+        ...(set !== 'controlled' ? { comparisons: summaryMetrics(rows) } : {}),
     };
     if (args.output) {
         fs.mkdirSync(path.dirname(path.resolve(args.output)), {

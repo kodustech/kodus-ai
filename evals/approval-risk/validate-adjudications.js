@@ -2,13 +2,21 @@
 // Exit 0: corpus ready; 1: invalid labels; 2: not enough measured cases.
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const dir = __dirname;
+const balanced = process.argv.includes('--balanced');
 const manifest = JSON.parse(
     fs.readFileSync(path.join(dir, 'candidates.json'), 'utf8'),
 );
 const labels = JSON.parse(
-    fs.readFileSync(path.join(dir, 'adjudications.json'), 'utf8'),
+    fs.readFileSync(
+        path.join(
+            dir,
+            balanced ? 'adjudications-balanced.json' : 'adjudications.json',
+        ),
+        'utf8',
+    ),
 );
 const candidates = new Map(manifest.cases.map((entry) => [entry.id, entry]));
 const decisions = new Set(['hold', 'eligible', 'uncertain']);
@@ -16,6 +24,34 @@ const seen = new Set();
 const errors = [];
 const scored = [];
 const rows = Array.isArray(labels.cases) ? labels.cases : [];
+
+if (balanced) {
+    const plan = JSON.parse(
+        fs.readFileSync(path.join(dir, 'adjudication-plan.json'), 'utf8'),
+    ).ids;
+    const selection = JSON.parse(
+        fs.readFileSync(path.join(dir, 'balanced-selection.json'), 'utf8'),
+    ).ids;
+    const expected = [...plan]
+        .sort((left, right) => {
+            const hash = (id) =>
+                crypto.createHash('sha256').update(id).digest('hex');
+            return (
+                hash(left).localeCompare(hash(right)) ||
+                left.localeCompare(right)
+            );
+        })
+        .slice(0, 200);
+    if (
+        new Set(plan).size !== plan.length ||
+        selection.length !== 200 ||
+        selection.some((id, index) => id !== expected[index]) ||
+        rows.length !== 200 ||
+        rows.some((row, index) => row.id !== selection[index])
+    ) {
+        errors.push('balanced labels must match the frozen SHA-256 selection');
+    }
+}
 
 if (
     labels.schemaVersion !== 1 ||
