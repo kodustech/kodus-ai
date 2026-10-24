@@ -1128,9 +1128,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         latestPullRequest?.head?.sha ||
                         (latestPullRequest as any)?.headSha ||
                         (latestPullRequest as any)?.head?.commit?.sha;
+                    const directoryPolicyBaseSha =
+                        preloadedPullRequest?.base?.sha;
                     if (
                         !latestHeadSha ||
                         latestHeadSha !== lastAnalyzedCommitSha ||
+                        (directoryPolicyBaseSha &&
+                            latestPullRequest?.base?.sha !==
+                                directoryPolicyBaseSha) ||
                         (policy?.labels?.length && !latestPullRequest?.labels)
                     ) {
                         return false;

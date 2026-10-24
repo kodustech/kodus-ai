@@ -737,6 +737,54 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         },
     );
 
+    it('holds approval if the base changes after directory policy resolution', async () => {
+        const { cron, deps } = makeCron();
+        deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+            PullRequestReviewState.PENDING,
+        );
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalDecision: { kind: 'approve' },
+                },
+            },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            base: { sha: 'new-base' },
+            labels: ['ready'],
+            user: { login: 'alice' },
+        });
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalLabels: ['ready'],
+            },
+            teamAutomationId: 'team-automation-1',
+            currentPullRequest: {
+                head: { sha: 'same-sha' },
+                base: { sha: 'old-base' },
+                labels: ['ready'],
+                user: { login: 'alice' },
+            },
+        });
+
+        expect(result).toBe(false);
+        expect(deps.codeManagementService.getPullRequest).toHaveBeenCalledTimes(
+            1,
+        );
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
     it('does not approve a zero-comment PR whose review was held', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getPullRequest = jest.fn();
