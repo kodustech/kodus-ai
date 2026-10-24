@@ -304,6 +304,32 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
     });
 
+    it('records a failed status comment after dismissing an out-of-scope approval', async () => {
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            new Error('Comment update failed'),
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(codeManagement.dismissOwnPullRequestApprovals).toHaveBeenCalled();
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    substage: 'approval-reason-publication',
+                    severity: 'partial',
+                }),
+            ]),
+        );
+    });
+
     it('does not attempt GitHub review dismissal on another provider', async () => {
         await stage.execute(
             makeContext({

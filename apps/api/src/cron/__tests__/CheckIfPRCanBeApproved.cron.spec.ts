@@ -1276,6 +1276,39 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).toHaveBeenCalledTimes(2);
     });
 
+    it('does not resolve directory policy from files when the live PR has no head', async () => {
+        const { cron, deps } = makeCron();
+        deps.parametersService.findOne.mockResolvedValue({
+            team: { uuid: 'team-1' },
+            configValue: {
+                repositories: [
+                    {
+                        id: 'repo-a',
+                        name: 'Repo A',
+                        directories: [{ path: 'src/auth', configs: {} }],
+                    },
+                ],
+            },
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a')],
+        );
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            { dataExecution: { lastAnalyzedCommit: 'head-1' } },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue(undefined);
+
+        await cron.handleCron();
+
+        expect(
+            deps.codeManagementService.getFilesByPullRequestId,
+        ).not.toHaveBeenCalled();
+        expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
+    });
+
     it('reuses directory files across TTL only while both head and base are unchanged', async () => {
         const now = jest.spyOn(Date, 'now').mockReturnValue(0);
         try {

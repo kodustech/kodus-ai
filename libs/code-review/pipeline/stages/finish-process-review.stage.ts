@@ -96,6 +96,15 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             error,
                             metadata: approvalMetadata,
                         });
+                        context = this.updateContext(context, (draft) => {
+                            draft.errors ??= [];
+                            draft.errors.push({
+                                stage: this.stageName,
+                                substage: 'approval-reason-publication',
+                                severity: 'partial',
+                                error,
+                            });
+                        });
                     }
                 }
             } catch (error) {

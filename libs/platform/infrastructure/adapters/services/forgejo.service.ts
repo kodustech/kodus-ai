@@ -3409,26 +3409,22 @@ export class ForgejoService implements Omit<
         prNumber: number;
         failOnError?: boolean;
     }): Promise<any[]> {
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) {
+            throw new Error('Forgejo authentication unavailable');
+        }
+
+        const repoInfo = this.extractRepoInfo(
+            params.repository.name,
+            'getAllCommentsInPullRequest',
+        );
+        if (!repoInfo) {
+            throw new Error('Forgejo repository unavailable');
+        }
+
         try {
-            const authDetail = await this.getAuthDetails(
-                params.organizationAndTeamData,
-            );
-            if (!authDetail) {
-                if (params.failOnError)
-                    throw new Error('Forgejo authentication unavailable');
-                return [];
-            }
-
-            const repoInfo = this.extractRepoInfo(
-                params.repository.name,
-                'getAllCommentsInPullRequest',
-            );
-            if (!repoInfo) {
-                if (params.failOnError)
-                    throw new Error('Forgejo repository unavailable');
-                return [];
-            }
-
             const client = this.createForgejoClient(authDetail);
             const result = await issueGetComments({
                 client,
