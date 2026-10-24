@@ -184,6 +184,82 @@ function answersNothing(result: string): boolean {
     );
 }
 
+interface CallGraphBlock {
+    header: string;
+    lines: string[];
+}
+
+function decodeXmlAttribute(value: string): string {
+    return value
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+}
+
+function xmlAttributes(input: string): Record<string, string> {
+    const attrs: Record<string, string> = {};
+    for (const match of input.matchAll(/([\w-]+)="([^"]*)"/g)) {
+        attrs[match[1]] = decodeXmlAttribute(match[2]);
+    }
+    return attrs;
+}
+
+function parseXmlCallGraph(callGraph: string): CallGraphBlock[] {
+    const blocks: CallGraphBlock[] = [];
+
+    for (const changed of callGraph.matchAll(
+        /<ChangedFunction\b([^>]*)>([\s\S]*?)<\/ChangedFunction>/g,
+    )) {
+        const attrs = xmlAttributes(changed[1]);
+        if (!attrs.name || !attrs.file) {
+            continue;
+        }
+
+        const lines: string[] = [];
+        for (const caller of changed[2].matchAll(/<Caller\b([^>]*)\/>/g)) {
+            const ref = xmlAttributes(caller[1]);
+            if (!ref.name || !ref.file || !ref.line) {
+                continue;
+            }
+            const confidence = ref.confidence
+                ? `, confidence ${ref.confidence}`
+                : '';
+            lines.push(`← ${ref.name} (${ref.file}:${ref.line}${confidence})`);
+        }
+        for (const callee of changed[2].matchAll(/<Callee\b([^>]*)\/>/g)) {
+            const ref = xmlAttributes(callee[1]);
+            if (!ref.name || !ref.file) {
+                continue;
+            }
+            const confidence = ref.confidence
+                ? `, confidence ${ref.confidence}`
+                : '';
+            lines.push(`→ ${ref.name} (${ref.file}${confidence})`);
+        }
+
+        blocks.push({ header: `${attrs.name} (${attrs.file})`, lines });
+    }
+
+    return blocks;
+}
+
+function parseLegacyCallGraph(callGraph: string): CallGraphBlock[] {
+    const blocks: CallGraphBlock[] = [];
+    for (const raw of callGraph.split('\n')) {
+        const line = raw.replace(/\s+$/, '');
+        if (!line.trim()) continue;
+        const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
+        if (isChild && blocks.length > 0) {
+            blocks[blocks.length - 1].lines.push(line.trim());
+        } else if (!/^Changed functions/i.test(line) && !line.startsWith(' ')) {
+            blocks.push({ header: line.trim(), lines: [] });
+        }
+    }
+    return blocks;
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -1563,22 +1639,12 @@ fi
     // On-demand caller/callee lookup, backed by the runtime callGraph string
     // (kodus-graph). The STANCE prompt gives the agent a REASON to pull it:
     // proving a change fulfills its intent "everywhere it touches" requires
-    // checking callers/implementations. Parsed by ←/→ markers.
+    // checking callers/implementations. New graph versions render XML; legacy
+    // graph context remains supported while older reviews are in flight.
     if (callGraph && callGraph.trim().length > 0) {
-        const blocks: Array<{ header: string; lines: string[] }> = [];
-        for (const raw of callGraph.split('\n')) {
-            const line = raw.replace(/\s+$/, '');
-            if (!line.trim()) continue;
-            const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
-            if (isChild && blocks.length > 0) {
-                blocks[blocks.length - 1].lines.push(line.trim());
-            } else if (
-                !/^Changed functions/i.test(line) &&
-                !line.startsWith(' ')
-            ) {
-                blocks.push({ header: line.trim(), lines: [] });
-            }
-        }
+        const blocks = callGraph.includes('<ChangedFunction')
+            ? parseXmlCallGraph(callGraph)
+            : parseLegacyCallGraph(callGraph);
         if (blocks.length > 0) {
             const names = blocks.map((b) => b.header);
             tools.getCallers = mkTool(

@@ -28,6 +28,8 @@ const KNOWN_FLAGS = new Set([
     'gate',
     'no-judge',
     'team-config',
+    'call-graph',
+    'call-graph-expectations',
 ]);
 
 function parseArgs(argv) {
@@ -48,6 +50,8 @@ function parseArgs(argv) {
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
         teamConfig: '',
+        callGraph: process.env.RECALL_CALL_GRAPH || 'captured',
+        callGraphExpectations: process.env.RECALL_CALL_GRAPH_EXPECTATIONS || '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -103,6 +107,12 @@ function parseArgs(argv) {
             out.gate = true;
         } else if (key === 'team-config') {
             out.teamConfig = value || '';
+            if (consumesNext) i += 1;
+        } else if (key === 'call-graph') {
+            out.callGraph = value || out.callGraph;
+            if (consumesNext) i += 1;
+        } else if (key === 'call-graph-expectations') {
+            out.callGraphExpectations = value || '';
             if (consumesNext) i += 1;
         }
     }
@@ -206,10 +216,15 @@ function runMetaOf(args) {
             // How the finder reached it (model-route.js resolveRoute): a BYOK
             // config, or none for `kodus-managed`.
             // A subscription model never runs (main exits 2 before it).
-            accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
+            accessPath:
+                TIER0[args.model] && TIER0[args.model].managed
+                    ? 'managed'
+                    : 'byok',
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
+        callGraphVariant: args.callGraph,
+        callGraphExpectations: Boolean(args.callGraphExpectations),
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
@@ -273,7 +288,9 @@ async function main() {
         try {
             args.team = readTeamConfig(args.teamConfig);
         } catch (error) {
-            console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(
+                `finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`,
+            );
             process.exit(2);
         }
     }
@@ -366,12 +383,48 @@ async function main() {
         tests = await buildTests();
     } catch (error) {
         // An unknown set, or a set naming a case with no dataset: nothing to measure.
-        console.error(`finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(
+            `finder-recall on ${args.model}, set ${args.set}: not measured: ${error instanceof Error ? error.message : String(error)}`,
+        );
         process.exit(2);
     }
     let selectedTests = Number.isFinite(args.limit)
         ? tests.slice(0, args.limit)
         : tests;
+
+    const { applyCallGraphVariant } = require('./callgraph-context');
+    const { auditCallGraphCases } = require('./callgraph-evidence');
+    const capturedCallGraphCases = selectedTests.filter(
+        (test) =>
+            typeof test.vars?.callGraph === 'string' &&
+            test.vars.callGraph.includes('<CallGraph>'),
+    ).length;
+    let callGraphEvidence = null;
+    if (args.callGraphExpectations) {
+        try {
+            const manifest = JSON.parse(
+                fs.readFileSync(args.callGraphExpectations, 'utf8'),
+            );
+            // Audit the captured graph before the `off` control removes it.
+            callGraphEvidence = auditCallGraphCases(selectedTests, manifest);
+        } catch (error) {
+            console.error(
+                `call graph expectations cannot be measured: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            process.exit(2);
+        }
+    }
+    try {
+        selectedTests = selectedTests.map((test) => ({
+            ...test,
+            vars: applyCallGraphVariant(test.vars || {}, args.callGraph),
+        }));
+    } catch (error) {
+        console.error(
+            `call graph variant ${args.callGraph} cannot be measured: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        process.exit(2);
+    }
 
     if (!selectedTests.length) {
         console.error('No finder-recall cases selected.');
@@ -397,7 +450,7 @@ async function main() {
     const startedAt = new Date().toISOString();
 
     console.log(
-        `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
+        `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · call-graph=${args.callGraph} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
     );
 
     const submissionResults = [];
@@ -602,6 +655,11 @@ async function main() {
         finishedAt: new Date().toISOString(),
         tokens,
         usage: tokensUsed(),
+        callGraph: {
+            variant: args.callGraph,
+            capturedCases: capturedCallGraphCases,
+            evidence: callGraphEvidence,
+        },
         cases: rows.length,
         // The model that scored every case: a number holds only under its judge.
         judge: NO_JUDGE ? null : JUDGE_MODEL,
@@ -657,7 +715,9 @@ async function main() {
     console.log(`cases: ${summary.cases}`);
     console.log(`recall_mean: ${fmtPct(summary.metrics.recall_mean)}`);
     console.log(`precision_mean: ${fmtPct(summary.metrics.precision_mean)}`);
-    console.log(`loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`);
+    console.log(
+        `loop_recall_mean: ${fmtPct(summary.metrics.loop_recall_mean)}`,
+    );
     console.log(`artifact: ${path.relative(process.cwd(), outputPath)}`);
     if (NO_JUDGE) {
         // The percentages above are empty by construction, not a result. Say so
