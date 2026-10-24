@@ -1156,6 +1156,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
                 'conditional approval comment lookup',
             );
+            if (!Array.isArray(comments)) {
+                throw new Error(
+                    'Conditional approval comment lookup returned no result',
+                );
+            }
             const existing = comments?.find(isApprovalReasonComment);
             const commentId = [
                 existing?.id,
@@ -1172,7 +1177,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 operation = 'updateIssueComment';
                 const updatedComment = await runWithBoundedTimeout(
                     this.codeManagementService.updateIssueComment(
-                        { ...request, body, commentId, noteId: commentId },
+                        {
+                            ...request,
+                            body,
+                            commentId,
+                            noteId: commentId,
+                            threadId: existing?.threadId,
+                        },
                         platformType,
                     ),
                     APPROVAL_REASON_WRITE_TIMEOUT_MS,

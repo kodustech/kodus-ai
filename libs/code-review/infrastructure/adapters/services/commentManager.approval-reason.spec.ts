@@ -6,6 +6,7 @@ it('updates the existing approval reason after a review hold', async () => {
         getAllCommentsInPullRequest: jest.fn().mockResolvedValue([
             {
                 id: 42,
+                threadId: 99,
                 body: formatApprovalReasonComment('hold', 'Previous reason'),
             },
         ]),
@@ -31,9 +32,35 @@ it('updates the existing approval reason after a review hold', async () => {
     expect(codeManagement.updateIssueComment).toHaveBeenCalledWith(
         expect.objectContaining({
             commentId: 42,
+            threadId: 99,
             body: formatApprovalReasonComment('hold', 'Current reason'),
         }),
     );
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+});
+
+it('does not create an approval reason when the comment lookup fails', async () => {
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue(null),
+        createIssueComment: jest.fn(),
+    };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+    );
+
+    await expect(
+        service.postApprovalReason(
+            { organizationId: 'org', teamId: 'team' },
+            12,
+            { id: 'repo', name: 'api' },
+            'Current reason',
+            'hold',
+        ),
+    ).rejects.toThrow('Approval reason comment lookup returned no result');
     expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
 });
 

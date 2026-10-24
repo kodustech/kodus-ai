@@ -438,6 +438,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             [
                 {
                     id: 42,
+                    threadId: 99,
                     body: '<!-- kodus-conditional-approval -->\n**Automatic approval held:** Old reason.',
                 },
             ],
@@ -452,7 +453,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 repository: { id: 'repo-1', name: 'api' },
                 prNumber: 7,
             },
-            PlatformType.GITHUB,
+            PlatformType.AZURE_REPOS,
             { kind: 'hold', reason: 'Sensitive path needs a person.' },
         );
 
@@ -461,13 +462,45 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).toHaveBeenCalledWith(
             expect.objectContaining({
                 commentId: 42,
+                threadId: 99,
                 body: expect.stringContaining('Sensitive path needs a person.'),
             }),
-            PlatformType.GITHUB,
+            PlatformType.AZURE_REPOS,
         );
         expect(
             deps.codeManagementService.createIssueComment,
         ).not.toHaveBeenCalled();
+    });
+
+    it('does not create a reason comment when the provider lookup fails', async () => {
+        const { cron, deps } = makeCron();
+        deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
+            null,
+        );
+
+        await (cron as any).postConditionalApprovalReason(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 7,
+            },
+            PlatformType.AZURE_REPOS,
+            { kind: 'hold', reason: 'A person should review this.' },
+        );
+
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+        expect((cron as any).logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    operation: 'getAllCommentsInPullRequest',
+                }),
+            }),
+        );
     });
 
     it('uses the provider numeric note ID when its primary ID is opaque', async () => {

@@ -134,6 +134,11 @@ export class CommentManagerService implements ICommentManagerService {
             10_000,
             'approval hold comment lookup',
         );
+        if (!Array.isArray(comments)) {
+            throw new Error(
+                'Approval reason comment lookup returned no result',
+            );
+        }
         const existing = comments?.find(isApprovalReasonComment);
         const commentId = [
             existing?.id,
@@ -152,6 +157,7 @@ export class CommentManagerService implements ICommentManagerService {
                     body,
                     commentId,
                     noteId: commentId,
+                    threadId: existing?.threadId,
                 }),
                 15_000,
                 `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
