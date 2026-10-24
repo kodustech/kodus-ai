@@ -6509,6 +6509,7 @@ This is an experimental feature that generates committable changes. Review the d
                 review.user?.node_id === identity.viewer.id,
         );
         for (const review of ownApprovals) {
+            const reviewId = review.id;
             const timeoutMs = 15_000;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -6518,13 +6519,13 @@ This is an experimental feature that generates committable changes. Review the d
                         owner: githubAuth.org,
                         repo: repository.name,
                         pull_number: prNumber,
-                        review_id: review.id,
+                        review_id: reviewId,
                         message:
                             'Kody held automatic approval after a new review.',
                         request: { signal: controller.signal },
                     }),
                     timeoutMs,
-                    `GitHub approval dismissal review=${review.id}`,
+                    `GitHub approval dismissal review=${reviewId}`,
                 );
             } catch (error) {
                 this.logger.warn({
@@ -6537,7 +6538,7 @@ This is an experimental feature that generates committable changes. Review the d
                         teamId: organizationAndTeamData.teamId,
                         repositoryId: repository.id,
                         prNumber,
-                        reviewId: review.id,
+                        reviewId,
                         timeoutMs,
                     },
                 });

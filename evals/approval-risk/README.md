@@ -10,6 +10,8 @@
 
 **Cost:** One model call per clean, in-scope PR without a sensitive-path veto. Results include input/output/cache tokens and model time.
 
+The runner uses production's license service for the Teams access check, with an active Teams license response supplied at the external billing HTTP boundary for each case.
+
 Issue: [#1765](https://github.com/kodustech/kodus-ai/issues/1765). The historical area map is [#2192](https://github.com/kodustech/kodus-ai/issues/2192).
 
 ## Source and status

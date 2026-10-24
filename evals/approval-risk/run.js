@@ -32,6 +32,7 @@ const {
 const {
     FeatureGateService,
 } = require('../../libs/feature-gate/application/feature-gate.service.ts');
+const { LicenseService } = require('../../libs/ee/license/license.service.ts');
 const {
     CodeManagementService,
 } = require('../../libs/platform/infrastructure/adapters/services/codeManagement.service.ts');
@@ -131,16 +132,29 @@ async function runCase(item, slot, withMap = true) {
     // Supply persisted organization state at its boundaries while running the
     // same beta and paid-plan access decision that production uses.
     const featureGate = new FeatureGateService({});
-    const access = new ConditionalApprovalAccessService(
-        featureGate,
-        { getReleaseTrack: async () => 'beta' },
-        {
-            validateOrganizationLicense: async () => ({
+    const licenseService = new LicenseService();
+    // The eval supplies the billing response at the external HTTP boundary;
+    // production LicenseService still performs the access validation call.
+    licenseService.licenseRequest = {
+        get: async (path, request) => {
+            if (
+                path !== 'validate-org-license' ||
+                request?.params?.organizationId !== organizationId ||
+                request?.params?.teamId !== teamId
+            ) {
+                throw new Error('Unexpected approval eval license request');
+            }
+            return {
                 valid: true,
                 subscriptionStatus: 'active',
                 planType: 'teams_monthly',
-            }),
+            };
         },
+    };
+    const access = new ConditionalApprovalAccessService(
+        featureGate,
+        { getReleaseTrack: async () => 'beta' },
+        licenseService,
     );
     const stage = new DecidePrApprovalStage(host, maps, access);
     const context = {

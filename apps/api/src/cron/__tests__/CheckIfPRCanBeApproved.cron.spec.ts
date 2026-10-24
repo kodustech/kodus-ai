@@ -462,6 +462,47 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([
+        { existing: true, operation: 'updateIssueComment' },
+        { existing: false, operation: 'createIssueComment' },
+    ])(
+        'logs a $operation failure returned as null',
+        async ({ existing, operation }) => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
+                existing
+                    ? [
+                          {
+                              id: 42,
+                              body: '<!-- kodus-conditional-approval -->\n**Automatic approval held:** Old reason.',
+                          },
+                      ]
+                    : [],
+            );
+            deps.codeManagementService[operation].mockResolvedValue(null);
+
+            await (cron as any).postConditionalApprovalReason(
+                {
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    repository: { id: 'repo-1', name: 'api' },
+                    prNumber: 7,
+                },
+                PlatformType.GITHUB,
+                { kind: 'hold', reason: 'A person should review this.' },
+            );
+
+            expect((cron as any).logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'Could not post conditional approval reason',
+                    metadata: expect.objectContaining({ operation }),
+                }),
+            );
+        },
+    );
+
     it('bounds reason-comment lookup without posting after the lookup times out', async () => {
         jest.useFakeTimers();
         try {

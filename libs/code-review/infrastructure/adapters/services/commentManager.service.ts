@@ -146,7 +146,7 @@ export class CommentManagerService implements ICommentManagerService {
             if ((existing.body ?? existing.note ?? existing.content) === body) {
                 return;
             }
-            await runWithBoundedTimeout(
+            const updatedComment = await runWithBoundedTimeout(
                 this.codeManagementService.updateIssueComment({
                     ...request,
                     body,
@@ -156,8 +156,11 @@ export class CommentManagerService implements ICommentManagerService {
                 15_000,
                 `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
             );
+            if (updatedComment === null) {
+                throw new Error('Approval reason comment update returned null');
+            }
         } else {
-            await runWithBoundedTimeout(
+            const createdComment = await runWithBoundedTimeout(
                 this.codeManagementService.createIssueComment({
                     ...request,
                     body,
@@ -165,6 +168,9 @@ export class CommentManagerService implements ICommentManagerService {
                 15_000,
                 `approval hold comment create org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
             );
+            if (createdComment === null) {
+                throw new Error('Approval reason comment create returned null');
+            }
         }
     }
 

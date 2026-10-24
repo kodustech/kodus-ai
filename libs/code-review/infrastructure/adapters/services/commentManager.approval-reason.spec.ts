@@ -39,14 +39,12 @@ it('updates the existing approval reason after a review hold', async () => {
 
 it('replaces a previous hold with the completed approval reason', async () => {
     const codeManagement = {
-        getAllCommentsInPullRequest: jest
-            .fn()
-            .mockResolvedValue([
-                {
-                    id: 42,
-                    body: formatApprovalReasonComment('hold', 'Old risk'),
-                },
-            ]),
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue([
+            {
+                id: 42,
+                body: formatApprovalReasonComment('hold', 'Old risk'),
+            },
+        ]),
         updateIssueComment: jest.fn().mockResolvedValue(undefined),
         createIssueComment: jest.fn().mockResolvedValue(undefined),
     };
@@ -141,3 +139,47 @@ it('bounds a stalled hold-comment write', async () => {
         jest.useRealTimers();
     }
 });
+
+it.each([
+    { existing: true, method: 'updateIssueComment', action: 'update' },
+    { existing: false, method: 'createIssueComment', action: 'create' },
+])(
+    'reports a provider $action failure returned as null',
+    async ({ existing, method, action }) => {
+        const codeManagement = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue(
+                existing
+                    ? [
+                          {
+                              id: 42,
+                              body: formatApprovalReasonComment(
+                                  'hold',
+                                  'Old reason',
+                              ),
+                          },
+                      ]
+                    : [],
+            ),
+            updateIssueComment: jest.fn().mockResolvedValue(null),
+            createIssueComment: jest.fn().mockResolvedValue(null),
+        };
+        const service = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagement as any,
+        );
+
+        await expect(
+            service.postApprovalReason(
+                { organizationId: 'org', teamId: 'team' },
+                12,
+                { id: 'repo', name: 'api' },
+                'Current reason',
+                'hold',
+            ),
+        ).rejects.toThrow(`Approval reason comment ${action} returned null`);
+        expect(codeManagement[method]).toHaveBeenCalledTimes(1);
+    },
+);

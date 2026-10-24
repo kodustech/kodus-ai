@@ -1163,7 +1163,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     existing?.body ?? existing?.note ?? existing?.content;
                 if (previous === body) return;
                 operation = 'updateIssueComment';
-                await runWithBoundedTimeout(
+                const updatedComment = await runWithBoundedTimeout(
                     this.codeManagementService.updateIssueComment(
                         { ...request, body, commentId, noteId: commentId },
                         platformType,
@@ -1171,9 +1171,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     APPROVAL_REASON_WRITE_TIMEOUT_MS,
                     'conditional approval comment update',
                 );
+                if (updatedComment === null) {
+                    throw new Error(
+                        'Conditional approval comment update returned null',
+                    );
+                }
             } else {
                 operation = 'createIssueComment';
-                await runWithBoundedTimeout(
+                const createdComment = await runWithBoundedTimeout(
                     this.codeManagementService.createIssueComment(
                         { ...request, body },
                         platformType,
@@ -1181,6 +1186,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     APPROVAL_REASON_WRITE_TIMEOUT_MS,
                     'conditional approval comment create',
                 );
+                if (createdComment === null) {
+                    throw new Error(
+                        'Conditional approval comment create returned null',
+                    );
+                }
             }
         } catch (error) {
             this.logger.warn({
