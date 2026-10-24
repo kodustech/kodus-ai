@@ -58,10 +58,10 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // gate no longer discards — it strips `improvedCode` and keeps the
         // suggestion, so it has no `allDiscarded.push` site to guard here.
         // 8: #2097's repeat check discards what an earlier comment raised.
-        // 9: the suggestion sanitizer (#1821) discards no-problem suggestions.
-        // 10: #2171 keeps findings whose verify run failed apart.
-        // 11: #2172 keeps a custom agent's findings below its own floor apart.
-        // 12: anchoring drops a finding on a file the PR does not change (#1821).
+        // 9: #2171 keeps findings whose verify run failed apart.
+        // 10: #2172 keeps a custom agent's findings below its own floor apart.
+        // 11: anchoring drops a finding on a file the PR does not change (#1821).
+        // 12: label normalization drops a category the team turned off (#1821).
         expect(discardBlocks()).toHaveLength(12);
     });
 

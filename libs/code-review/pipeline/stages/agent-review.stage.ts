@@ -8,11 +8,6 @@ import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engin
 import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import { enrichSuggestions } from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
 import {
-    buildSanitizerPrompt,
-    SANITIZER_SCHEMA,
-    sanitizerDiscardIndices,
-} from '@libs/code-review/infrastructure/agents/engine/suggestion-sanitizer-prompt';
-import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
     DEDUP_EMBEDDING_LOW,
@@ -363,13 +358,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     readonly visibility = StageVisibility.PRIMARY;
 
     private readonly logger = createLogger(AgentReviewStage.name);
-
-    /** TEMP_LOG_NEW_FINDER: stops the review after the finder's deterministic
-     *  steps (parse schema, anchoring, label normalization) while the new
-     *  finder is validated on its own. Off under jest; the evals that drive
-     *  this stage turn it off (evals/shared/review-stage.js). Remove with every
-     *  TEMP_LOG_NEW_FINDER log. */
-    tempStopAfterNewFinder = process.env.NODE_ENV !== 'test';
 
     private summarizeDedupSuggestion(
         suggestion?: Partial<CodeSuggestion>,
@@ -1386,7 +1374,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             // After the finder, in order: parse schema, anchoring, label
-            // normalization (#1821). Then the sanitizer, the dedup and the rest.
+            // normalization (#1821). Then the dedup and the rest.
             //
             // Parse schema, check half: a finder suggestion without the five
             // lean fields is discarded here, before anchoring, so every
@@ -1432,8 +1420,45 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded,
             );
 
-            // Label normalization: a label off the list becomes `bug`.
-            const labeled = normalizeFinderLabels(anchoredSuggestions);
+            // Label normalization: a label off the list becomes `bug`, and a
+            // label the team turned off is discarded, never moved to one that
+            // is on. Kody Rules and custom agents answer to their own config.
+            const labeled = normalizeFinderLabels(anchoredSuggestions, {
+                allowed: new Set<string>([
+                    ...(['bug', 'security', 'performance'] as const).filter(
+                        (c) => reviewOptions?.[c] !== false,
+                    ),
+                    ...(repoInstructions?.files?.length
+                        ? ['repo_instruction']
+                        : []),
+                ]),
+                exempt: (s) =>
+                    s.label === 'kody_rules' || isCustomAgentFinding(s),
+            });
+            for (const s of labeled.discarded) {
+                allDiscarded.push({
+                    ...s,
+                    priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
+                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                });
+            }
+            if (labeled.discarded.length > 0) {
+                const byLabel: Record<string, number> = {};
+                for (const s of labeled.discarded) {
+                    byLabel[s.label] = (byLabel[s.label] || 0) + 1;
+                }
+                this.logger.log({
+                    message: `[LABEL-NORMALIZE] PR#${prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        prNumber,
+                        byLabel,
+                    },
+                });
+            }
             if (Object.keys(labeled.replaced).length > 0) {
                 this.logger.warn({
                     message: `[LABEL-NORMALIZE] PR#${prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
@@ -1451,7 +1476,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // TEMP_LOG_NEW_FINDER: what the finder delivered and what each
             // deterministic step kept. Remove with the stop below.
             this.logger.log({
-                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: finder=${finderSuggestions.length} kodyRules=${anchoringInput.length - (finderSuggestions.length - parsed.discarded.length)} parseDiscarded=${parsed.discarded.length} anchored=${anchoredSuggestions.length} labelReplaced=${JSON.stringify(labeled.replaced)}`,
+                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: finder=${finderSuggestions.length} kodyRules=${anchoringInput.length - (finderSuggestions.length - parsed.discarded.length)} parseDiscarded=${parsed.discarded.length} anchored=${anchoredSuggestions.length} labelReplaced=${JSON.stringify(labeled.replaced)} categoryOff=${labeled.discarded.length}`,
                 context: this.stageName,
                 metadata: {
                     organizationId:
@@ -1469,47 +1494,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     })),
                 },
             });
-            // TEMP_LOG_NEW_FINDER: the review stops after the finder until the
-            // steps after it take the lean output. Remove with the log above.
-            if (this.tempStopAfterNewFinder) {
-                this.logger.warn({
-                    message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: stopping the review after the finder`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        prNumber,
-                    },
-                });
-                return this.updateContext(context, (draft) => {
-                    draft.statusInfo = {
-                        status: AutomationStatus.SKIPPED,
-                        message:
-                            'TEMP_LOG_NEW_FINDER: review stopped after the finder',
-                    };
-                });
-            }
-
-            // Sanitizer (#1821): drops the finder suggestions that report no
-            // problem ("no sensitive data exposed") before anything else reads them.
-            const sanitized = await this.sanitizeSuggestions(
-                labeled.suggestions.filter((s) => s.label !== 'kody_rules'),
-                prNumber,
-                context.codeReviewConfig?.resolvedModelSlot,
-                telemetryMeta,
-            );
-            for (const s of sanitized.discarded) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_SAFEGUARD,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            const sanitizedOut = new Set(sanitized.discarded);
-            const validatedSuggestions = labeled.suggestions.filter(
-                (s) => !sanitizedOut.has(s),
-            );
+            const validatedSuggestions = labeled.suggestions;
 
             // Verify/Discover removed — was hurting recall across all models.
             // Benchmark showed F1 drops of -5.7pp to -18.3pp with verify enabled.
@@ -1616,6 +1601,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
             let deduped = dedup.deduped;
             const dedupTrace = dedup.dedupTrace;
+            // TEMP_LOG_NEW_FINDER: the repeat check and the dedup, in and out.
+            this.logger.log({
+                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: repeats in=${repeatCheck.kept.length + repeatCheck.repeats.length} discarded=${repeatCheck.repeats.length}; dedup in=${severityNormalized.length} out=${deduped.length}`,
+                context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber,
+                },
+            });
             // A custom agent's findings the dedup merged into another
             // comment, which posts in their place: neither posted as the
             // agent's nor dropped, so the outcome log counts them apart.
@@ -2590,11 +2586,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.byokConfig,
                 context.organizationAndTeamData?.organizationId,
             );
+            // Findings the classifier left out keep the default (medium).
+            let unclassified = 0;
             for (let i = 0; i < deduped.length; i++) {
-                const classified = severityMap.get(i);
-                if (!classified) {
-                    continue;
-                }
                 const hasKodyRuleSeverity =
                     deduped[i].brokenKodyRulesIds?.length > 0;
                 // A custom agent's severity is the team's call too: its
@@ -2604,16 +2598,35 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (hasKodyRuleSeverity || hasCustomAgentSeverity) {
                     continue;
                 }
+                const classified = severityMap.get(i);
+                if (!classified) {
+                    unclassified++;
+                    continue;
+                }
                 deduped[i].severity = classified;
             }
             this.logger.log({
-                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
+                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions (${unclassified} left unclassified, default kept)`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified,
+                },
             });
         } catch (err) {
             this.logger.warn({
                 message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified: deduped.length,
+                },
             });
         }
 
@@ -3124,77 +3137,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * Deduplicate suggestions that describe the same issue using LLM.
      * Groups by file, then asks Gemini Flash which suggestions are duplicates.
      */
-    /** Removes the suggestions that report no problem. Keeps everything when
-     *  there is no model or the call fails: a missed discard only costs a
-     *  useless comment, a wrong one would cost a finding. */
-    private async sanitizeSuggestions(
-        suggestions: Partial<CodeSuggestion>[],
-        prNumber: number,
-        resolvedSlot?: NormalizedModel,
-        telemetryMeta?: LangfuseTelemetryMetadata,
-    ): Promise<{
-        kept: Partial<CodeSuggestion>[];
-        discarded: Partial<CodeSuggestion>[];
-    }> {
-        if (!suggestions.length || (!resolvedSlot && !hasManagedModelKey())) {
-            return { kept: suggestions, discarded: [] };
-        }
-        try {
-            const out = await LLM.run({
-                byokConfig: resolvedSlot,
-                schema: jsonSchema(SANITIZER_SCHEMA as any),
-                user: buildSanitizerPrompt(suggestions),
-                runName: 'code-review-suggestion-sanitizer',
-                spanName: 'code-review::suggestion-sanitizer',
-                organizationId: telemetryMeta?.organizationId,
-                telemetryMetadata: telemetryMeta,
-                attrs: {
-                    type: resolvedSlot ? 'byok' : 'system',
-                    prNumber,
-                    ...(telemetryMeta?.teamId
-                        ? { teamId: telemetryMeta.teamId }
-                        : {}),
-                },
-            });
-            const drop = new Set(
-                sanitizerDiscardIndices(suggestions.length, out),
-            );
-            const discarded = suggestions.filter((_, i) => drop.has(i));
-            if (discarded.length > 0) {
-                this.logger.log({
-                    message: `[SANITIZER] PR#${prNumber}: discarded ${discarded.length} of ${suggestions.length} suggestions that report no problem`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId: telemetryMeta?.organizationId,
-                        teamId: telemetryMeta?.teamId,
-                        prNumber,
-                        discarded: discarded.map((d) => ({
-                            relevantFile: d.relevantFile,
-                            relevantLinesStart: d.relevantLinesStart,
-                            suggestionContent: (d.suggestionContent || '').slice(0, 200),
-                        })),
-                    },
-                });
-            }
-            return {
-                kept: suggestions.filter((_, i) => !drop.has(i)),
-                discarded,
-            };
-        } catch (error) {
-            this.logger.warn({
-                message: `[SANITIZER] PR#${prNumber}: failed, keeping all suggestions`,
-                context: this.stageName,
-                error,
-                metadata: {
-                    organizationId: telemetryMeta?.organizationId,
-                    teamId: telemetryMeta?.teamId,
-                    prNumber,
-                },
-            });
-            return { kept: suggestions, discarded: [] };
-        }
-    }
-
     private async deduplicateSuggestions(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,

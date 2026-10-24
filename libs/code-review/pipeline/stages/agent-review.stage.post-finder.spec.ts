@@ -19,8 +19,8 @@ jest.mock('@libs/llm/managed-slot', () => {
 /**
  * #1821 — after the finder, in order: the parse schema discards a suggestion
  * missing a lean field, anchoring discards one outside the PR's hunks or on a
- * file the PR does not change, and a label off the list becomes `bug`. Only
- * what survives reaches the sanitizer and the dedup.
+ * file the PR does not change, a label off the list becomes `bug` and a label
+ * the team turned off is discarded. Only what survives reaches the dedup.
  */
 const envelope = (suggestions: any[]) => ({
     suggestions,
@@ -61,7 +61,7 @@ const makeStage = () => {
     return { stage, reviewOrchestrator, historyUseCase };
 };
 
-const makeContext = () =>
+const makeContext = (reviewOptions: Record<string, boolean> = {}) =>
     frozenContext({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'repo-1', fullName: 'acme/repo-1' },
@@ -74,7 +74,7 @@ const makeContext = () =>
             },
         ],
         codeReviewConfig: {
-            reviewOptions: {},
+            reviewOptions,
             heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             kodyRules: [
@@ -132,25 +132,13 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — after the finder (#1821)', () => {
-    it('parses, anchors and normalizes the label before the sanitizer', async () => {
+    it('parses, anchors and normalizes the label before the dedup', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             envelope([kept, noLines, outsideHunks, otherFile]),
         );
 
         const result = await (stage as any).executeStage(makeContext());
-
-        const sanitizerCall = runSpy.mock.calls.find(
-            ([req]: any[]) =>
-                req.spanName === 'code-review::suggestion-sanitizer',
-        );
-        expect(sanitizerCall).toBeDefined();
-        expect(sanitizerCall![0].user).toContain(kept.suggestionContent);
-        for (const gone of [noLines, outsideHunks, otherFile]) {
-            expect(sanitizerCall![0].user).not.toContain(
-                gone.suggestionContent,
-            );
-        }
 
         const published = (result.fileAnalysisResults ?? []).flatMap(
             (f: any) => f.validSuggestionsToAnalyze ?? [],
@@ -194,5 +182,31 @@ describe('AgentReviewStage — after the finder (#1821)', () => {
                     'for (const item of items) total += item.price * item.qty;',
             }),
         );
+    });
+
+    it('discards a suggestion in a category the team turned off, never moving it to one that is on', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        const perf = { ...kept, label: 'performance', suggestionContent: 'Loops twice over the items.' };
+        const invented = { ...kept, suggestionContent: 'An invented label becomes bug, which is off.' };
+        const security = { ...kept, label: 'security', suggestionContent: 'The price comes from the client.' };
+        reviewOrchestrator.execute.mockResolvedValue(envelope([perf, invented, security]));
+
+        const result = await (stage as any).executeStage(
+            makeContext({ bug: false, performance: false }),
+        );
+
+        const published = (result.fileAnalysisResults ?? []).flatMap(
+            (f: any) => f.validSuggestionsToAnalyze ?? [],
+        );
+        expect(published.map((s: any) => s.label)).toEqual(['security']);
+        const discarded = (result.fileAnalysisResults ?? []).flatMap(
+            (f: any) => f.discardedSuggestionsBySafeGuard ?? [],
+        );
+        expect(
+            discarded
+                .filter((s: any) => s.priorityStatus === 'discarded-by-category')
+                .map((s: any) => s.label)
+                .sort(),
+        ).toEqual(['bug', 'performance']);
     });
 });
