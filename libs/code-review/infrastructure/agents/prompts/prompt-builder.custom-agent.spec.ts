@@ -145,7 +145,7 @@ describe('generalist prompts are byte-identical', () => {
             existingCode: 'i <= n',
         };
         expect(sha(buildVerifierPrompt('', 0).system)).toBe(
-            'fda55bb39bb4eec4c453667da722d3e6aed0f2778ee41ce826fe79ea9603d32e',
+            '8b281d919d78cf8125620983d883213ce2b16aef9ccc9ea3085b17dcc9c8db98',
         );
         expect(sha(verifierPromptFor(finding))).toBe(
             'b8bf172b6524042f9f1249952eacbba2f15aa2fb868341c7be7d873246697877',

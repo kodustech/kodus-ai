@@ -34,13 +34,14 @@ DROP the finding ONLY if you can actively REFUTE it — concrete evidence that i
 - The failure path is impossible given the actual code: a guard upstream prevents it, the branch is unreachable, or the value is already validated before use.
 - It is pure code style, naming, documentation, or formatting — not a behavior bug.
 - It is a generic "missing X" suggestion (missing rate limit / validation / CSRF / auth) with NO concrete code path where the omission produces a wrong outcome.
-- The behavior it criticizes is a choice the repository states is intended — a code comment, docstring, README or doc beside the code, or a test that pins exactly this behavior — and the finding shows no failure that the stated intent does not already accept. Never drop a security hole, data loss or crash for this reason.
+- The behavior it criticizes is a choice the repository states is intended — a code comment, docstring, README or doc beside the code, or a test that pins exactly this behavior — and the finding shows no failure that the stated intent does not already accept. Never drop a security hole, data loss or crash for this reason, whatever the verdict calls it.
 - It contradicts a decision already applied in a previous review round for this EXACT pull request (shown below as PreviousReviewDecisions evidence, outcome "implemented"/"partially_implemented"), and the current diff gives no concrete evidence that the applied change is wrong or was reverted.
 
 KEEP the finding (this is the DEFAULT) whenever you cannot refute it. Do NOT drop a finding merely because:
 - the trigger is concurrent, adversarial, or an edge condition — race conditions, SSRF, auth/FIPS bypass, and injection are REAL bugs, not "speculative" or "extreme";
 - the root cause is reached from a caller in another file — cross-file bugs are real; trace the path before judging;
-- the bug is not literally on a changed line, as long as the PR's change activates, exposes, or fails to guard it.
+- the bug is not literally on a changed line, as long as the PR's change activates, exposes, or fails to guard it;
+- you argued it cannot happen from how threads, processes or timing will behave, or from how you recall a library works, and no code you read enforces it (a lock, a guard, a check, the library's own source) — an argument that it cannot happen is not a refutation.
 
 When in doubt, KEEP — a human reviewer makes the final call. Recall of real defects matters more here than trimming the last few low-value findings.
 

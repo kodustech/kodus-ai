@@ -126,12 +126,16 @@ export function buildVerifierAgentSpec(
             new BudgetPolicy(),
             // Without this the verify run can spend every step investigating and
             // be cut off with NO verdict — 20% of production runs (154 sampled,
-            // 2026-09-19), which fails open and keeps the candidate unverified.
+            // 2026-09-19), and a run with no verdict discards the candidate.
             // Force TEXT, not the tool: this prompt asks for a JSON verdict in
             // the reply and never mentions submitVerdict, and constraining the
             // output is measured harm (see model-strictness.ts).
             new ForceTextFinalizePolicy({
                 answerDescription: 'your final JSON verdict',
+                // Some models (Kimi, DeepSeek) ignore the note and call tools
+                // until the budget ends with no verdict, which production
+                // discards; on the last step they can only answer.
+                noToolsOnLastStep: true,
             }),
         ],
         maxSteps: params.maxSteps ?? 6,
