@@ -401,8 +401,9 @@ jobs:
                       $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                         "docker exec kodus_api pnpm run seed:preview:cockpit-demo"
                     fi
+                    # The wiring eval uses a fake licensed beta tenant; leave the preview API gate unchanged.
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
-                      "node evals/wiring-smoke.js --only=approval-risk"
+                      "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
                   done
 
             - name: Comment the preview link
