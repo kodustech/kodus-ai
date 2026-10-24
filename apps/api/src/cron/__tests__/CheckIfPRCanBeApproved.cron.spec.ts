@@ -1436,6 +1436,16 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
             expect(shouldApprove).not.toHaveBeenCalled();
             expect(deps.distributedLockService.acquire).toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'timed out while loading changed files',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
         } finally {
             jest.useRealTimers();
         }

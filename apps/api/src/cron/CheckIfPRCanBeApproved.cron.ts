@@ -71,6 +71,7 @@ import {
 import { IntegrationStatusFilter } from '@libs/organization/domain/team/interfaces/team.interface';
 import { AzureRepoCommentTypeString } from '@libs/platform/domain/azure/entities/azureRepoExtras.type';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { summarizeProviderError } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
@@ -614,6 +615,44 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                             APPROVAL_FILES_TIMEOUT_MS,
                                                     },
                                                 });
+                                                const failure =
+                                                    summarizeProviderError(
+                                                        error,
+                                                    );
+                                                let reason =
+                                                    'Changed files could not be verified from the Git provider. Automatic approval will be retried.';
+                                                if (
+                                                    failure.includes(
+                                                        'bounded timeout',
+                                                    )
+                                                ) {
+                                                    reason =
+                                                        'The Git provider timed out while loading changed files. Automatic approval will be retried.';
+                                                } else if (
+                                                    /^(401|403)\b/.test(
+                                                        failure,
+                                                    )
+                                                ) {
+                                                    reason =
+                                                        'The Git provider denied access to changed files. Check the integration permissions before retrying automatic approval.';
+                                                } else if (
+                                                    /^429\b/.test(failure)
+                                                ) {
+                                                    reason =
+                                                        'The Git provider rate-limited the changed-file lookup. Automatic approval will be retried.';
+                                                }
+                                                await this.postConditionalApprovalReason(
+                                                    {
+                                                        organizationAndTeamData,
+                                                        repository: {
+                                                            id: repository.id,
+                                                            name: repository.name,
+                                                        },
+                                                        prNumber: pr.number,
+                                                    },
+                                                    pr.provider as PlatformType,
+                                                    { kind: 'hold', reason },
+                                                );
                                                 return;
                                             }
                                             files = liveFiles?.map((file) => ({
