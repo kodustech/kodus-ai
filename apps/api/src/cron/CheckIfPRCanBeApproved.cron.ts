@@ -483,6 +483,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                     ?.lastAnalyzedCommit,
                                             );
                                         if (reviewedHead) {
+                                            const reportMissingHead = async () =>
+                                                this.postConditionalApprovalReason(
+                                                    {
+                                                        organizationAndTeamData,
+                                                        repository: {
+                                                            id: repository.id,
+                                                            name: repository.name,
+                                                        },
+                                                        prNumber: pr.number,
+                                                    },
+                                                    pr.provider as PlatformType,
+                                                    {
+                                                        kind: 'hold',
+                                                        reason: 'The source commit could not be verified from the Git provider. Automatic approval will be retried.',
+                                                    },
+                                                );
                                             try {
                                                 currentPullRequest =
                                                     await this.codeManagementService.getPullRequest(
@@ -511,9 +527,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                         prNumber: pr.number,
                                                     },
                                                 });
+                                                await reportMissingHead();
                                                 return;
                                             }
                                             if (!currentPullRequest?.head?.sha) {
+                                                await reportMissingHead();
                                                 return;
                                             }
                                             const currentHead =

@@ -1307,6 +1307,12 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             deps.codeManagementService.getFilesByPullRequestId,
         ).not.toHaveBeenCalled();
         expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('source commit could not be verified'),
+            }),
+            PlatformType.GITLAB,
+        );
     });
 
     it('reuses directory files across TTL only while both head and base are unchanged', async () => {

@@ -1,5 +1,6 @@
 import {
     CommitSchema,
+    ExpandedMergeRequestSchema,
     Gitlab,
     MergeRequestSchema,
     MergeRequestSchemaWithBasicLabels,
@@ -5522,6 +5523,12 @@ export class GitlabService implements Omit<
         repository: Partial<Repositories>,
         organizationAndTeamData: OrganizationAndTeamData,
     ): PullRequest {
+        const hasDiffRefs = (
+            value: MergeRequestSchema,
+        ): value is ExpandedMergeRequestSchema => 'diff_refs' in value;
+        const diffRefs = hasDiffRefs(mergeRequest)
+            ? mergeRequest.diff_refs
+            : undefined;
         return {
             id: mergeRequest?.id?.toString() ?? '',
             number: mergeRequest?.iid ?? -1,
@@ -5560,16 +5567,7 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
-                // `diff_refs` is typed loosely by the client; the head sha
-                // lives there on a merge-request payload and falls back to
-                // the MR's own sha.
-                sha:
-                    (
-                        mergeRequest?.diff_refs as
-                            { head_sha?: string } | undefined
-                    )?.head_sha ??
-                    mergeRequest?.sha ??
-                    '',
+                sha: diffRefs?.head_sha ?? mergeRequest?.sha ?? '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',
@@ -5580,10 +5578,7 @@ export class GitlabService implements Omit<
             targetRefName: mergeRequest?.target_branch ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: mergeRequest?.target_branch ?? '',
-                sha: (
-                    mergeRequest?.diff_refs as
-                        { start_sha?: string } | undefined
-                )?.start_sha ?? '',
+                sha: diffRefs?.start_sha ?? '',
                 repo: {
                     id: repository?.id ?? '',
                     name: repository?.name ?? '',
