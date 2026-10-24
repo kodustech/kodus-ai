@@ -303,10 +303,16 @@ export class GraphContextService {
                     'export PATH="$HOME/.bun/bin:$PATH" 2>/dev/null || true',
                     `cd ${sandbox.repoDir}`,
                     `rm -rf ${BASE_FILES_DIR} && mkdir -p ${BASE_FILES_DIR}`,
-                    `git archive ${safeBaseRef} | tar -x -C ${BASE_FILES_DIR}`,
-                    `kodus-graph parse --all --no-gitignore --repo-dir ${BASE_FILES_DIR} --out ${shSingleQuote(BASE_GRAPH_PATH)}`,
+                    // One full parse at a time per machine (the eval runs cases in
+                    // parallel on one runner), bounded memory, copy removed after.
+                    `flock /tmp/kodus-graph-full-parse.lock sh -c ${shSingleQuote(
+                        `git archive ${safeBaseRef} | tar -x -C ${BASE_FILES_DIR} && ` +
+                            `kodus-graph parse --all --no-gitignore --max-memory 3072 --repo-dir ${BASE_FILES_DIR} --out ${BASE_GRAPH_PATH}; ` +
+                            `code=$?; rm -rf ${BASE_FILES_DIR}; exit $code`,
+                    )}`,
                 ].join(' && '),
-                { timeoutMs: KODUS_GRAPH_TIMEOUTS.parseAll },
+                // Queued behind the lock: allow for the parses ahead of it.
+                { timeoutMs: 3 * KODUS_GRAPH_TIMEOUTS.parseAll },
             );
             if (build.exitCode !== 0) {
                 this.logger.warn({
