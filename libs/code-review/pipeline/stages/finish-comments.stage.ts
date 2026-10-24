@@ -393,6 +393,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             context.pullRequestMessagesConfig?.endReviewMessage;
 
         if (!endReviewMessage) {
+            // The default completion comment is updated in place. Keep the
+            // separate approval status current when a later review holds a PR
+            // that Kody previously approved.
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,

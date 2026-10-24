@@ -230,6 +230,34 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         );
     });
 
+    it('updates the prior approval reason when the default end-review message is used', async () => {
+        const { stage, commentManagerService } = makeStage();
+        const context = baseContext({
+            lineComments: [],
+            approvalDecision: {
+                kind: 'hold',
+                reason: 'The PR changes a team-marked sensitive path: qa/test.md.',
+            },
+            pullRequestMessagesConfig: {
+                startReviewMessage: {
+                    status: PullRequestMessageStatus.ACTIVE,
+                    content: 'Review started',
+                },
+                endReviewMessage: undefined,
+            },
+        });
+
+        await (stage as any).executeStage(context);
+
+        expect(commentManagerService.postApprovalReason).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            7,
+            context.repository,
+            'The PR changes a team-marked sensitive path: qa/test.md.',
+            'hold',
+        );
+    });
+
     it('keeps hold reasons out of end comments created on each push', async () => {
         const { stage, commentManagerService } = makeStage();
         const context = baseContext({

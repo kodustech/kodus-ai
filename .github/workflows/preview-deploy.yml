@@ -62,11 +62,6 @@ on:
                 required: false
                 default: false
                 type: boolean
-            webhook_diagnostics:
-                description: Read sanitized webhook and worker event markers without redeploying
-                required: false
-                default: false
-                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -84,39 +79,6 @@ env:
     RUNO_REF: main
 
 jobs:
-    webhook-diagnostics:
-        if: github.event_name == 'workflow_dispatch' && inputs.webhook_diagnostics == true
-        runs-on: ubuntu-latest
-        environment: Preview
-        steps:
-            - uses: actions/checkout@v6.0.2
-            - uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
-            - name: Install runo
-              run: |
-                  git clone --depth 1 --branch "$RUNO_REF" https://github.com/kodustech/runo.git "$RUNNER_TEMP/runo"
-                  cd "$RUNNER_TEMP/runo"
-                  bun install --frozen-lockfile
-                  echo "RUNO=bun $RUNNER_TEMP/runo/bin/runo.ts" >> "$GITHUB_ENV"
-            - name: Read sanitized event markers
-              env:
-                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
-                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
-              run: |
-                  set -euo pipefail
-                  env_name=$($RUNO environments | jq -r \
-                    'map(select(.repo == "kodus-ai" and .branch == "malinosqui/conditional-pr-approval" and .profile == "cloud")) | .[0].envName // empty')
-                  : "${env_name:?Cloud preview environment was not found}"
-                  $RUNO attach "$env_name"
-                  for service in kodus_webhooks kodus_worker; do
-                    echo "== $service"
-                    $RUNO exec --branch malinosqui/conditional-pr-approval --profile cloud -- \
-                      "docker logs --since 90m $service 2>&1 | grep -Eo 'Webhook enqueued|Error enqueuing webhook|Failed to enqueue raw webhook payload|No active automation found|No active code review found|Webhook ignored: no code review automation|Webhook ignored: repository is connected|@kody start command detected|Code review job enqueued from command|Could not fetch pull request details|Error processing GitHub pull request comment|PR#134|PR #134|930934303' | sort | uniq -c || true"
-                  done
-                  $RUNO exec --branch malinosqui/conditional-pr-approval --profile cloud -- \
-                    bash scripts/preview/qa-webhook-status.sh
-
     preview:
         name: Preview environment
         # Secrets are not available to forks, and a fork branch name could
@@ -125,7 +87,7 @@ jobs:
         # `/preview` on a pull request, from someone with write access (the
         # fork check for comments happens when the revision is resolved).
         if: >-
-            (github.event_name == 'workflow_dispatch' && inputs.webhook_diagnostics != true || github.event.pull_request.head.repo.full_name == github.repository
+            (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
               || github.event_name == 'issue_comment' && github.event.issue.pull_request
                  && startsWith(github.event.comment.body, '/preview')
                  && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
