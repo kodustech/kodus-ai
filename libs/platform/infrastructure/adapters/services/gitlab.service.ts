@@ -2854,9 +2854,10 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
         prNumber: number;
-        commentId: string;
+        commentId: string | number;
         body: string;
         noteId?: number;
+        threadId?: string | number;
     }): Promise<any | null> {
         try {
             const {
@@ -2866,6 +2867,7 @@ export class GitlabService implements Omit<
                 commentId,
                 body,
                 noteId,
+                threadId,
             } = params;
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -2878,8 +2880,8 @@ export class GitlabService implements Omit<
             const response = await gitlabAPI.MergeRequestDiscussions.editNote(
                 repository.id,
                 prNumber,
-                commentId,
-                noteId,
+                threadId ?? commentId,
+                noteId ?? Number(commentId),
                 { body: body },
             );
 
@@ -4166,7 +4168,12 @@ export class GitlabService implements Omit<
                 { perPage: GITLAB_MAX_PER_PAGE },
             );
 
-            return discussions.flatMap((discussion) => discussion.notes);
+            return discussions.flatMap((discussion) =>
+                discussion.notes.map((note) => ({
+                    ...note,
+                    threadId: discussion.id,
+                })),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to get all comments in pull request',
@@ -4175,7 +4182,7 @@ export class GitlabService implements Omit<
                 error: error.message,
                 metadata: params,
             });
-            return [];
+            throw error;
         }
     }
 

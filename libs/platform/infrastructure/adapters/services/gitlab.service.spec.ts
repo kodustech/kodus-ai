@@ -74,6 +74,65 @@ describe('GitlabService', () => {
         ).resolves.toBeNull();
     });
 
+    it('keeps the discussion ID needed to update an approval reason', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const editNote = jest.fn().mockResolvedValue({ id: 42 });
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest.fn().mockResolvedValue([
+                    {
+                        id: 'discussion-1',
+                        notes: [{ id: 42, body: 'Old reason' }],
+                    },
+                ]),
+                editNote,
+            },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        const comments = await service.getAllCommentsInPullRequest(request);
+        expect(comments).toEqual([
+            { id: 42, body: 'Old reason', threadId: 'discussion-1' },
+        ]);
+        await service.updateIssueComment({
+            ...request,
+            commentId: 42,
+            noteId: 42,
+            threadId: comments[0].threadId,
+            body: 'Current reason',
+        });
+        expect(editNote).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'discussion-1',
+            42,
+            { body: 'Current reason' },
+        );
+    });
+
+    it('reports a failed comment lookup instead of treating it as an empty list', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest
+                    .fn()
+                    .mockRejectedValue(new Error('GitLab unavailable')),
+            },
+        });
+
+        await expect(
+            service.getAllCommentsInPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+            }),
+        ).rejects.toThrow('GitLab unavailable');
+    });
+
     it('distinguishes no Kody approval from an unavailable GitLab lookup', async () => {
         jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
         jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
