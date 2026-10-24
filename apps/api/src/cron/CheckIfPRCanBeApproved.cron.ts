@@ -513,7 +513,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 });
                                                 return;
                                             }
-                                            if (currentPullRequest === null) {
+                                            if (!currentPullRequest?.head?.sha) {
                                                 return;
                                             }
                                             const currentHead =
@@ -836,6 +836,17 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 ) {
                     return false;
                 }
+                if (preloadedPullRequest && !preloadedPullRequest.base?.sha) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason: 'The target branch commit could not be verified for the directory policy.',
+                        },
+                    );
+                    return false;
+                }
                 if (policy.sensitivePaths?.length) {
                     let files: Awaited<
                         ReturnType<
@@ -847,7 +858,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             this.codeManagementService.getFilesByPullRequestId(
                                 {
                                     ...codeManagementRequestData,
-                                    headSha: currentHeadSha,
                                 },
                                 platformType,
                             ),
@@ -1130,14 +1140,27 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         (latestPullRequest as any)?.head?.commit?.sha;
                     const directoryPolicyBaseSha =
                         preloadedPullRequest?.base?.sha;
+                    const directoryBaseChanged =
+                        !!preloadedPullRequest &&
+                        (!directoryPolicyBaseSha ||
+                            latestPullRequest?.base?.sha !==
+                                directoryPolicyBaseSha);
                     if (
                         !latestHeadSha ||
                         latestHeadSha !== lastAnalyzedCommitSha ||
-                        (directoryPolicyBaseSha &&
-                            latestPullRequest?.base?.sha !==
-                                directoryPolicyBaseSha) ||
+                        directoryBaseChanged ||
                         (policy?.labels?.length && !latestPullRequest?.labels)
                     ) {
+                        if (directoryBaseChanged) {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                {
+                                    kind: 'hold',
+                                    reason: 'The target branch changed while the directory policy was checked. Approval will be reconsidered on the next pass.',
+                                },
+                            );
+                        }
                         return false;
                     }
                     conditionalDecision = evaluateApproval({

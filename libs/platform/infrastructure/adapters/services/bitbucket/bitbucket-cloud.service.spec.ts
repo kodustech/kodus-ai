@@ -1,5 +1,26 @@
 import { BitbucketCloudService } from './bitbucket-cloud.service';
 
+it('maps both source and destination commits on a pull request', () => {
+    const service = new BitbucketCloudService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        undefined,
+    );
+    const result = (service as any).transformPullRequest(
+        {
+            id: 42,
+            source: { commit: { hash: 'source-tip' } },
+            destination: { commit: { hash: 'target-tip' } },
+        },
+        { organizationId: 'org-1', teamId: 'team-1' },
+    );
+
+    expect(result.head.sha).toBe('source-tip');
+    expect(result.base.sha).toBe('target-tip');
+});
+
 it('propagates a failed strict Bitbucket comment lookup', async () => {
     const service = new BitbucketCloudService(
         {} as any,

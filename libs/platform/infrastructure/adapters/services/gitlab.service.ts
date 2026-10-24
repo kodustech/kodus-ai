@@ -316,6 +316,7 @@ export class GitlabService implements Omit<
                 },
                 base: {
                     ref: mergeRequest.target_branch,
+                    sha: mergeRequest.diff_refs?.start_sha ?? '',
                     repo: {
                         name: params.repository.name,
                         id: projectId,
@@ -5579,6 +5580,10 @@ export class GitlabService implements Omit<
             targetRefName: mergeRequest?.target_branch ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: mergeRequest?.target_branch ?? '',
+                sha: (
+                    mergeRequest?.diff_refs as
+                        { start_sha?: string } | undefined
+                )?.start_sha ?? '',
                 repo: {
                     id: repository?.id ?? '',
                     name: repository?.name ?? '',

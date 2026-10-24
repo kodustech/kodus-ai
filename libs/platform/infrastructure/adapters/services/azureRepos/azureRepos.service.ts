@@ -6023,6 +6023,7 @@ export class AzureReposService implements Omit<
             targetRefName: pr?.targetRefName ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pr?.targetRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeTargetCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

@@ -547,6 +547,21 @@ describe('GitlabService', () => {
             });
         };
 
+        it('maps the target branch commit from diff_refs.start_sha', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                diff_refs: {
+                    base_sha: 'merge-base',
+                    start_sha: 'target-tip',
+                    head_sha: 'source-tip',
+                },
+            });
+
+            expect(result?.base?.sha).toBe('target-tip');
+            expect(result?.head?.sha).toBe('source-tip');
+        });
+
         it('maps draft null and work_in_progress true to draft', async () => {
             const result = await getPullRequest({
                 id: 1,

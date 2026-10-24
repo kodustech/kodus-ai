@@ -151,6 +151,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             sourceRefName: 'refs/heads/feature/anchors',
             repository: stubRepository,
             lastMergeSourceCommit: { commitId: 'a1b2c3d4e5f6' },
+            lastMergeTargetCommit: { commitId: 'target-commit' },
         });
 
         const result = await service.getPullRequest({
@@ -160,6 +161,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         });
 
         expect(result?.head?.sha).toBe('a1b2c3d4e5f6');
+        expect(result?.base?.sha).toBe('target-commit');
         // The ref keeps its existing shape (the `refs/heads/` prefix stripped).
         expect(result?.head?.ref).toBe('feature/anchors');
     });

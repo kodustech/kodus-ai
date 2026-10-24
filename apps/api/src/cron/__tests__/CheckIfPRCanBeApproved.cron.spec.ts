@@ -783,7 +783,61 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalled();
     });
+
+    it.each(['initial', 'final'])(
+        'holds directory approval when the %s target commit is unavailable',
+        async (missingAt) => {
+            const { cron, deps } = makeCron();
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    dataExecution: {
+                        lastAnalyzedCommit: 'same-sha',
+                        approvalDecision: { kind: 'approve' },
+                    },
+                },
+            );
+            deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+                PullRequestReviewState.PENDING,
+            );
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                head: { sha: 'same-sha' },
+                base: missingAt === 'final' ? {} : { sha: 'base-1' },
+                labels: ['ready'],
+                user: { login: 'alice' },
+            });
+
+            const result = await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: makeOpenPr(77, 'repo-b'),
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalLabels: ['ready'],
+                },
+                teamAutomationId: 'team-automation-1',
+                currentPullRequest: {
+                    head: { sha: 'same-sha' },
+                    base: missingAt === 'initial' ? {} : { sha: 'base-1' },
+                    labels: ['ready'],
+                    user: { login: 'alice' },
+                },
+            });
+
+            expect(result).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalled();
+        },
+    );
 
     it('does not approve a zero-comment PR whose review was held', async () => {
         const { cron, deps } = makeCron();
@@ -927,7 +981,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 organizationId: 'org-1',
                 teamId: 'team-1',
             },
-            pr: makeOpenPr(77, 'repo-b'),
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 1 } }],
+            },
             codeReviewConfig: {
                 pullRequestApprovalActive: true,
                 approvalSensitivePaths: ['src/auth/**'],
@@ -936,6 +993,12 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         });
 
         expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.getFilesByPullRequestId,
+        ).toHaveBeenCalledWith(
+            expect.not.objectContaining({ headSha: expect.anything() }),
+            expect.anything(),
+        );
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).not.toHaveBeenCalled();
@@ -1164,6 +1227,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
     it('reuses directory file paths until the reviewed head changes', async () => {
         const { cron, deps } = makeCron();
+        deps.codeManagementService.getPullRequest
+            .mockResolvedValueOnce({ head: { sha: 'head-1' } })
+            .mockResolvedValueOnce({ head: { sha: 'head-1' } })
+            .mockResolvedValueOnce({ head: { sha: 'head-2' } });
         deps.parametersService.findOne.mockResolvedValue({
             team: { uuid: 'team-1' },
             configValue: {

@@ -856,6 +856,7 @@ export class BitbucketDataCenterService implements Omit<
             sourceRefName: pr.fromRef?.displayId || '',
             head: {
                 ref: pr.fromRef?.displayId || '',
+                sha: pr.fromRef?.latestCommit || '',
                 repo: {
                     id: pr.fromRef?.repository?.id?.toString() || '',
                     name: pr.fromRef?.repository?.slug || '',
@@ -866,6 +867,7 @@ export class BitbucketDataCenterService implements Omit<
             targetRefName: pr.toRef?.displayId || '',
             base: {
                 ref: pr.toRef?.displayId || '',
+                sha: pr.toRef?.latestCommit || '',
                 repo: {
                     id: pr.toRef?.repository?.id?.toString() || '',
                     name: pr.toRef?.repository?.slug || '',
