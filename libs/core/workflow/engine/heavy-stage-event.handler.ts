@@ -70,23 +70,6 @@ export class HeavyStageEventHandler {
             },
         },
     })
-    @RabbitSubscribe({
-        exchange: 'workflow.events.delayed',
-        routingKey: 'stage.completed.*',
-        queue: 'workflow.events.stage.completed',
-        allowNonJsonMessages: false,
-        errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: createRabbitMQErrorHandlerWithFallback(
-            'workflow.events.dlq',
-        ),
-        queueOptions: {
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.events.dlx',
-                'x-dead-letter-routing-key': 'workflow.events.dlq',
-            },
-        },
-    })
     async onStageCompleted(
         event: StageCompletedEvent,
         amqpMsg: ConsumeMessage,
