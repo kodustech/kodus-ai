@@ -388,6 +388,50 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it('repairs a missing reason comment for an already approved PR', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'same-sha',
+                    approvalDecision: { kind: 'approve' },
+                },
+            },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            labels: ['ready'],
+            user: { login: 'alice' },
+        });
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [],
+        );
+        deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+            PullRequestReviewState.APPROVED,
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalLabels: ['ready'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).toHaveBeenCalledTimes(1);
+    });
+
     it('updates the existing approval reason instead of posting another comment', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(

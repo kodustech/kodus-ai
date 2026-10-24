@@ -1027,6 +1027,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return false;
                     }
                     if (before === PullRequestReviewState.APPROVED) {
+                        // Approval may have succeeded while its reason comment
+                        // failed. Retry the idempotent comment on later passes.
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            conditionalDecision,
+                        );
                         return false;
                     }
                     // Comments and provider status checks can take time. A new

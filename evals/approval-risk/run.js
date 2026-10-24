@@ -34,6 +34,9 @@ const {
 } = require('../../libs/feature-gate/application/feature-gate.service.ts');
 const { LicenseService } = require('../../libs/ee/license/license.service.ts');
 const {
+    OrganizationService,
+} = require('../../libs/organization/infrastructure/adapters/services/organization.service.ts');
+const {
     CodeManagementService,
 } = require('../../libs/platform/infrastructure/adapters/services/codeManagement.service.ts');
 const {
@@ -132,6 +135,10 @@ async function runCase(item, slot, withMap = true) {
     // Supply persisted organization state at its boundaries while running the
     // same beta and paid-plan access decision that production uses.
     const featureGate = new FeatureGateService({});
+    const organizationService = new OrganizationService({
+        findOne: async (filter) =>
+            filter.uuid === organizationId ? { releaseTrack: 'beta' } : null,
+    });
     const licenseService = new LicenseService();
     // The eval supplies the billing response at the external HTTP boundary;
     // production LicenseService still performs the access validation call.
@@ -153,7 +160,7 @@ async function runCase(item, slot, withMap = true) {
     };
     const access = new ConditionalApprovalAccessService(
         featureGate,
-        { getReleaseTrack: async () => 'beta' },
+        organizationService,
         licenseService,
     );
     const stage = new DecidePrApprovalStage(host, maps, access);
