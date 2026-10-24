@@ -114,6 +114,8 @@ jobs:
                     $RUNO exec --branch malinosqui/conditional-pr-approval --profile cloud -- \
                       "docker logs --since 90m $service 2>&1 | grep -Eo 'Webhook enqueued|Error enqueuing webhook|Failed to enqueue raw webhook payload|No active automation found|No active code review found|Webhook ignored: no code review automation|Webhook ignored: repository is connected|@kody start command detected|Code review job enqueued from command|Could not fetch pull request details|Error processing GitHub pull request comment|PR#134|PR #134|930934303' | sort | uniq -c || true"
                   done
+                  $RUNO exec --branch malinosqui/conditional-pr-approval --profile cloud -- \
+                    bash scripts/preview/qa-webhook-status.sh
 
     preview:
         name: Preview environment
