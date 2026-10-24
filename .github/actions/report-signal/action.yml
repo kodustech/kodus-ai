@@ -1,19 +1,18 @@
 name: 'Report quality signal'
-description: 'Write one row, or a list of rows, to BigQuery quality.signals (see docs/quality-signals.md)'
+description: 'Write one row, or a list of rows, to quality.signals through kodus-quality (see docs/quality-signals.md)'
 
 # One block per workflow, always with `if: always()`, so red runs are rows too.
-# Auth is Workload Identity Federation: the caller needs
+# Rows go to kodus-quality's POST /api/ingest, authenticated by this job's own
+# GitHub OIDC token (audience kodus-quality), so no secret is passed. The
+# caller needs
 #     permissions:
 #         id-token: write
-# and passes the repo variables GCP_WIF_PROVIDER, GCP_SA_EMAIL, GCP_PROJECT
-# (scripts/quality/bootstrap-gcp.sh sets them) as the three gcp_* inputs:
-# a composite action cannot read `vars` itself.
 #
-# Graceful degradation, like discord-notify: when any gcp_* input is empty
-# (fork, or the variable isn't set yet) we warn and exit 0, and the auth and
-# insert steps are continue-on-error. This is telemetry: it never turns a
-# green gate red. A missing row shows up as a gap in the series, which the
-# dashboard makes visible.
+# Graceful degradation, like discord-notify: without an OIDC token (fork, or
+# the permission is missing) we warn and exit 0, and the post step is
+# continue-on-error. This is telemetry: it never turns a green gate red. A
+# missing row shows up as a gap in the series, which the dashboard makes
+# visible.
 
 inputs:
     name:
@@ -49,39 +48,22 @@ inputs:
         required: false
         default: ''
     gcp_wif_provider:
-        description: 'Pass vars.GCP_WIF_PROVIDER'
+        description: 'Deprecated and ignored: rows no longer go to BigQuery. Kept so existing callers do not warn'
         required: false
         default: ''
     gcp_sa_email:
-        description: 'Pass vars.GCP_SA_EMAIL'
+        description: 'Deprecated and ignored: rows no longer go to BigQuery. Kept so existing callers do not warn'
         required: false
         default: ''
     gcp_project:
-        description: 'Pass vars.GCP_PROJECT'
+        description: 'Deprecated and ignored: rows no longer go to BigQuery. Kept so existing callers do not warn'
         required: false
         default: ''
 
 runs:
     using: composite
     steps:
-        - name: Check WIF is configured
-          id: check
-          shell: bash
-          env:
-              PROVIDER: ${{ inputs.gcp_wif_provider }}
-              SA: ${{ inputs.gcp_sa_email }}
-              PROJECT: ${{ inputs.gcp_project }}
-              NAME: ${{ inputs.name }}
-          run: |
-              if [ -z "$PROVIDER" ] || [ -z "$SA" ] || [ -z "$PROJECT" ]; then
-                  echo "::warning::gcp_wif_provider / gcp_sa_email / gcp_project not all set — quality signal '$NAME' not recorded."
-                  echo "skip=true" >> "$GITHUB_OUTPUT"
-              else
-                  echo "skip=false" >> "$GITHUB_OUTPUT"
-              fi
-
         - name: Build row
-          if: steps.check.outputs.skip == 'false'
           id: row
           # Telemetry: a bad status, name or value is the producer's bug, reported
           # as a failed step of this action, never as a red gate for the caller.
@@ -156,28 +138,22 @@ runs:
                 for (const r of rows) console.log(JSON.stringify(r));
               '
 
-        - name: Authenticate to GCP (WIF)
-          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
-          continue-on-error: true
-          uses: google-github-actions/auth@v2
-          with:
-              workload_identity_provider: ${{ inputs.gcp_wif_provider }}
-              service_account: ${{ inputs.gcp_sa_email }}
-              project_id: ${{ inputs.gcp_project }}
-
-        - name: Set up bq
-          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
-          continue-on-error: true
-          uses: google-github-actions/setup-gcloud@v2
-          with:
-              project_id: ${{ inputs.gcp_project }}
-
-        - name: Insert row
-          if: steps.check.outputs.skip == 'false' && steps.row.outcome == 'success'
+        - name: Post rows to kodus-quality
+          if: steps.row.outcome == 'success'
+          # Telemetry: never turns a green gate red.
           continue-on-error: true
           shell: bash
-          env:
-              PROJECT: ${{ inputs.gcp_project }}
           run: |
-              bq insert --project_id="$PROJECT" quality.signals quality-signal-row.json
-              rm -f quality-signal-row.json
+              if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                  echo "::warning::no OIDC token (the caller needs permissions: id-token: write; forks get none): quality signal not recorded."
+                  exit 0
+              fi
+              token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kodus-quality" | jq -r .value)
+              jq -cs '{table: "signals", rows: .}' quality-signal-row.json > quality-signal-body.json
+              curl -sS --fail-with-body -X POST https://quality.kodus.io/api/ingest \
+                  -H "Authorization: Bearer $token" -H 'content-type: application/json' \
+                  --data-binary @quality-signal-body.json | tee quality-signal-answer.json
+              echo
+              jq -r '.dropped[]? | "::warning::report-signal: row \(.index) dropped: \(.reason)"' quality-signal-answer.json
+              rm -f quality-signal-row.json quality-signal-body.json quality-signal-answer.json
