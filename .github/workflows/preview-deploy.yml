@@ -89,6 +89,7 @@ jobs:
         runs-on: ubuntu-latest
         environment: Preview
         steps:
+            - uses: actions/checkout@v6.0.2
             - uses: oven-sh/setup-bun@v2
               with:
                   bun-version: latest
