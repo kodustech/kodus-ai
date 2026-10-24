@@ -32,6 +32,7 @@ changed_paths="$(
 
 FILES=()
 while IFS= read -r file; do
+    [[ "$file" == apps/* || "$file" == libs/* ]] || continue
     [[ "$file" == *.ts ]] || continue
     [[ "$file" =~ \.(spec|test|integration)\.ts$ ]] && continue
     [[ "$file" == *.d.ts ]] && continue
@@ -39,7 +40,7 @@ while IFS= read -r file; do
     [ -f "$file" ] && FILES+=("$file")
 done < <(printf '%s\n' "$changed_paths" | sort -u)
 
-if [ "${#FILES[@]}" -eq 0 ]; then
+if [ -z "${FILES[0]-}" ]; then
     echo "[mutation:diff] No changed production .ts files vs ${BASE_REF} — nothing to mutate."
     exit 0
 fi
@@ -84,7 +85,7 @@ for f in "${FILES[@]}"; do
     done
 done
 
-if [ "${#SPECS[@]}" -eq 0 ]; then
+if [ -z "${SPECS[0]-}" ]; then
     echo "[mutation:diff] None of the changed files have a nearby spec — nothing to validate."
     echo "                (That is itself a signal: this change added/edited untested production code.)"
     exit 0
@@ -121,12 +122,18 @@ for f in "${FILES[@]}"; do
     done <<< "$ranges"
 done
 
-if [ "${#MUTATE_GLOBS[@]}" -eq 0 ]; then
+if [ -z "${MUTATE_GLOBS[0]-}" ]; then
     echo "[mutation:diff] Changed files have no current lines to mutate."
     exit 0
 fi
 
-echo "[mutation:diff] Mutating ${#MUTATE_GLOBS[@]} changed range(s)/file(s)."
-MUTATE="$(IFS=,; echo "${MUTATE_GLOBS[*]}")"
+SHARD_INDEX="${MUTATION_SHARD_INDEX:-0}"
+SHARD_COUNT="${MUTATION_SHARD_COUNT:-1}"
+MUTATE="$(node scripts/dev/mutation-shard.cjs "$SHARD_INDEX" "$SHARD_COUNT" "${MUTATE_GLOBS[@]}")"
+if [ -z "$MUTATE" ]; then
+    echo "[mutation:diff] Shard ${SHARD_INDEX}/${SHARD_COUNT} has no changed lines."
+    exit 0
+fi
+echo "[mutation:diff] Mutating shard ${SHARD_INDEX}/${SHARD_COUNT} from ${#MUTATE_GLOBS[@]} changed range(s)/file(s)."
 
 exec npx stryker run --mutate "$MUTATE"
