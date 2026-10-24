@@ -98,5 +98,11 @@ export interface IAutomationExecutionRepository {
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    >;
 }

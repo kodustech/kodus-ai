@@ -380,14 +380,19 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             );
                         // A repository's kodus-config.yml may define the
                         // label scope even when the stored team config does
-                        // not. Resolve each candidate before deciding whether
-                        // a clean, zero-suggestion PR can be approved.
-                        const noSuggestionPrs =
-                            (await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
-                                organizationId,
-                                eligiblePullRequestRefs,
-                                PullRequestState.OPENED,
-                            )) ?? [];
+                        // not. An execution with that policy records approve
+                        // or out-of-scope, so only those refs can pass the
+                        // later no-comment guard after a label is added.
+                        const noSuggestionRefs = eligiblePullRequestRefs.filter(
+                            (ref) => ref.mayAllowNoComments,
+                        );
+                        const noSuggestionPrs = noSuggestionRefs.length
+                            ? ((await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                                  organizationId,
+                                  noSuggestionRefs,
+                                  PullRequestState.OPENED,
+                              )) ?? [])
+                            : [];
                         const openPullRequests = [
                             ...(openPullRequestsWithSuggestions ?? []),
                             ...noSuggestionPrs,

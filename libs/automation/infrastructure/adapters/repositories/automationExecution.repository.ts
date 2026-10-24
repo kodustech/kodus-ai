@@ -929,7 +929,13 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    > {
         try {
             const queryBuilder =
                 this.automationExecutionRepository.createQueryBuilder(
@@ -962,6 +968,10 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
             const result = await queryBuilder
                 .select(successRepositoryExpr, 'repositoryId')
                 .addSelect(successPullRequestExpr, 'pullRequestNumber')
+                .addSelect(
+                    `BOOL_OR(("success"."dataExecution"->'approvalDecision'->>'kind') IN (:...allowNoCommentKinds))`,
+                    'mayAllowNoComments',
+                )
                 .where('success.createdAt BETWEEN :startDate AND :endDate')
                 .andWhere('success.team_automation_id = :teamAutomationId')
                 .andWhere('success.status = :successStatus')
@@ -976,16 +986,19 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                     teamAutomationId,
                     successStatus: AutomationStatus.SUCCESS,
                     inProgressStatus: AutomationStatus.IN_PROGRESS,
+                    allowNoCommentKinds: ['approve', 'out-of-scope'],
                 })
                 .getRawMany<{
                     repositoryId: string;
                     pullRequestNumber: number | string;
+                    mayAllowNoComments: boolean | null;
                 }>();
 
             return (result ?? [])
                 .map((item) => ({
                     repositoryId: item.repositoryId,
                     pullRequestNumber: Number(item.pullRequestNumber),
+                    mayAllowNoComments: item.mayAllowNoComments === true,
                 }))
                 .filter(
                     (item) =>

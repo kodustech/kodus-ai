@@ -1,5 +1,6 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
@@ -192,6 +193,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.pullRequestService.findPullRequestsWithDeliveredSuggestions,
         ).toHaveBeenCalledWith('org-1', [2], expect.anything());
+        expect(
+            deps.pullRequestService
+                .findPullRequestsWithoutDeliveredSuggestionsForApproval,
+        ).not.toHaveBeenCalled();
         expect(shouldApproveSpy).toHaveBeenCalledTimes(1);
         expect(shouldApproveSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1016,7 +1021,18 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
     it('discovers zero-suggestion PRs when approval labels come from kodus-config.yml', async () => {
         const { cron, deps } = makeCron();
         deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
-            [{ repositoryId: 'repo-a', pullRequestNumber: 7 }],
+            [
+                {
+                    repositoryId: 'repo-a',
+                    pullRequestNumber: 7,
+                    mayAllowNoComments: true,
+                },
+                {
+                    repositoryId: 'repo-b',
+                    pullRequestNumber: 8,
+                    mayAllowNoComments: false,
+                },
+            ],
         );
         deps.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval.mockResolvedValue(
             [makeOpenPr(7, 'repo-a')],
@@ -1034,7 +1050,16 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.pullRequestService
                 .findPullRequestsWithoutDeliveredSuggestionsForApproval,
-        ).toHaveBeenCalled();
+        ).toHaveBeenCalledWith(
+            'org-1',
+            [
+                expect.objectContaining({
+                    repositoryId: 'repo-a',
+                    pullRequestNumber: 7,
+                }),
+            ],
+            PullRequestState.OPENED,
+        );
         expect(shouldApproveSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 codeReviewConfig: expect.objectContaining({
