@@ -64,17 +64,40 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         if (
             codeReviewConfig?.pullRequestApprovalActive &&
             context.platformType === PlatformType.GITHUB &&
-            context.approvalDecision?.kind === 'hold'
+            (context.approvalDecision?.kind === 'hold' ||
+                context.approvalDecision?.kind === 'out-of-scope')
         ) {
             try {
-                await this.codeManagementService.dismissOwnPullRequestApprovals(
-                    {
-                        organizationAndTeamData,
-                        repository,
-                        prNumber,
-                        reason: context.approvalDecision.reason,
-                    },
-                );
+                const dismissed =
+                    await this.codeManagementService.dismissOwnPullRequestApprovals(
+                        {
+                            organizationAndTeamData,
+                            repository,
+                            prNumber,
+                            reason: context.approvalDecision.reason,
+                        },
+                    );
+                if (
+                    dismissed > 0 &&
+                    context.approvalDecision.kind === 'out-of-scope'
+                ) {
+                    try {
+                        await this.commentManagerService.postApprovalReason(
+                            organizationAndTeamData,
+                            prNumber,
+                            repository,
+                            context.approvalDecision.reason,
+                            'hold',
+                        );
+                    } catch (error) {
+                        this.logger.warn({
+                            message: `Could not update Kody's approval status for PR#${prNumber}`,
+                            context: this.stageName,
+                            error,
+                            metadata: approvalMetadata,
+                        });
+                    }
+                }
             } catch (error) {
                 this.logger.error({
                     message: `Could not dismiss Kody's earlier approval for PR#${prNumber}`,

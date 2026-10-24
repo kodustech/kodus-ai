@@ -266,6 +266,44 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
+    it('dismisses an earlier Kody approval when a new review is outside the approval scope', async () => {
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(codeManagement.dismissOwnPullRequestApprovals).toHaveBeenCalled();
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            42,
+            { id: 'repo-1', name: 'acme/api' },
+            'The PR does not carry a configured approval label.',
+            'hold',
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('does not post a hold notice for an out-of-scope PR with no prior approval', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
+
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
+    });
+
     it('does not attempt GitHub review dismissal on another provider', async () => {
         await stage.execute(
             makeContext({
