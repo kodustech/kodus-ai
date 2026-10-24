@@ -473,6 +473,17 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#getAreaRiskMap",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/area-risk-map",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#getCurrentUser",
     "httpMethod": "GET",
     "urlPath": "/code-management/current-user",

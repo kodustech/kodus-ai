@@ -65,7 +65,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             expect(numbers).toEqual([7, 9]);
             const [filter, projection] = find.mock.calls[0];
             expect(filter).toEqual({
-                organizationId: 'org-A',
+                'organizationId': 'org-A',
                 'repository.id': 'repo-alpha',
             });
             expect(projection).toEqual({ number: 1 });
@@ -81,9 +81,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             await repo.findNumbersByRepositoryId('org-A', 'r', until);
 
             expect(find.mock.calls[0][0]).toEqual({
-                organizationId: 'org-A',
+                'organizationId': 'org-A',
                 'repository.id': 'r',
-                createdAt: { $lte: until },
+                'createdAt': { $lte: until },
             });
         });
     });
@@ -95,9 +95,11 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             const lean = jest.fn().mockReturnValue({ maxTimeMS });
             model.find = jest.fn().mockReturnValue({ lean });
 
-            await repo.findPRNumbersByTitleAndOrganization('fix(api) .*', 'org-A', [
-                'r1',
-            ]);
+            await repo.findPRNumbersByTitleAndOrganization(
+                'fix(api) .*',
+                'org-A',
+                ['r1'],
+            );
 
             const [filter] = model.find.mock.calls[0];
             expect(filter).toEqual({
@@ -208,6 +210,44 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findPullRequestsWithoutDeliveredSuggestionsForApproval', () => {
+        it('queries exact repository/PR pairs in bounded pages without loading file arrays', async () => {
+            const findExec = jest.fn().mockResolvedValue([]);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            const limit = jest.fn().mockReturnValue({ lean });
+            const sort = jest.fn().mockReturnValue({ limit });
+            model.find = jest.fn().mockReturnValue({ sort });
+            const refs = Array.from({ length: 101 }, (_, index) => ({
+                repositoryId: index % 2 ? 'repo-b' : 'repo-a',
+                pullRequestNumber: index + 1,
+            }));
+
+            await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                'org-A',
+                refs,
+                'open',
+            );
+
+            expect(model.find).toHaveBeenCalledTimes(2);
+            const [filter, projection] = model.find.mock.calls[0];
+            expect(filter).toMatchObject({
+                organizationId: 'org-A',
+                status: 'open',
+            });
+            expect(filter.$or).toHaveLength(100);
+            expect(filter.$or[0]).toEqual({
+                'repository.id': 'repo-a',
+                'number': 1,
+            });
+            expect(filter.$nor).toHaveLength(1);
+            expect(projection.files).toBeUndefined();
+            expect(sort).toHaveBeenCalledWith({ _id: 1 });
+            expect(limit).toHaveBeenNthCalledWith(1, 100);
+            expect(limit).toHaveBeenNthCalledWith(2, 1);
+        });
+    });
+
     describe('addFileToPullRequest', () => {
         it('includes organizationId in the Mongo filter', async () => {
             await repo.addFileToPullRequest(
@@ -239,12 +279,10 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
 
         it('uses the organizationId from the argument, not a hardcoded value', async () => {
-            await repo.addFileToPullRequest(
-                42,
-                'cal.com',
-                {} as any,
-                { organizationId: 'org-B', teamId: 'team-1' },
-            );
+            await repo.addFileToPullRequest(42, 'cal.com', {} as any, {
+                organizationId: 'org-B',
+                teamId: 'team-1',
+            });
 
             const filter = findOneAndUpdate.mock.calls[0][0];
             expect(filter.organizationId).toBe('org-B');
@@ -359,9 +397,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
             // No clamp fired, so the payload's explicit `false` flows through
             // unchanged — the flag reflects the actual diff completeness.
-            expect(
-                doc.updateOne.update.$set['files.$.patchTruncated'],
-            ).toBe(false);
+            expect(doc.updateOne.update.$set['files.$.patchTruncated']).toBe(
+                false,
+            );
             expect(doc.updateOne.update.$set['files.$.patch']).toBe(small);
         });
     });
@@ -463,8 +501,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             const capStage = pipeline.find(
                 (stage: any) => stage.$addFields?.['files.suggestions'],
             )?.$addFields['files.suggestions'];
-            const filterCond =
-                capStage.$slice[0].$sortArray.input.$filter.cond;
+            const filterCond = capStage.$slice[0].$sortArray.input.$filter.cond;
             expect(filterCond).toEqual({
                 $eq: ['$$suggestion.deliveryStatus', 'sent'],
             });
@@ -508,9 +545,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             // BEFORE sortArray/slice, not after. $ifNull guards a file
             // pushed without a `suggestions` key at all (addFileToPullRequest
             // $push'es whatever IFile it's given).
-            expect(
-                capStage.$slice[0].$sortArray.input.$filter.input,
-            ).toEqual({ $ifNull: ['$files.suggestions', []] });
+            expect(capStage.$slice[0].$sortArray.input.$filter.input).toEqual({
+                $ifNull: ['$files.suggestions', []],
+            });
         });
 
         it('short-circuits without querying Mongo when filenames is empty', async () => {
@@ -530,7 +567,13 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     describe('findSuggestionsOnPR (PrDecisionStore read, whole PR)', () => {
         const run = async () => {
             (exec as jest.Mock).mockResolvedValueOnce([]);
-            await repo.findSuggestionsOnPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any, 40);
+            await repo.findSuggestionsOnPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+                40,
+            );
             return aggregate.mock.calls[0][0];
         };
 
@@ -545,8 +588,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
 
         it('reads every file of the PR (no file filter), only the given deliveryStatus', async () => {
             const pipeline = await run();
-            expect(pipeline.some((stage: any) => stage.$match?.['files.path'])).toBe(false);
-            expect(pipeline).toContainEqual({ $match: { 'files.suggestions.deliveryStatus': 'sent' } });
+            expect(
+                pipeline.some((stage: any) => stage.$match?.['files.path']),
+            ).toBe(false);
+            expect(pipeline).toContainEqual({
+                $match: { 'files.suggestions.deliveryStatus': 'sent' },
+            });
         });
 
         it('keeps the most recent `limit` — sorted newest first, then limited, inside the query', async () => {
@@ -562,9 +609,23 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
     describe('findPrLevelSuggestionsByPR (issue #1313 Fase 1b — PR-level PrDecisionStore read)', () => {
         it('keeps the most recent `limit` PR-level suggestions when given one (default 5)', async () => {
             (exec as jest.Mock).mockResolvedValue([]);
-            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any, 40);
-            await repo.findPrLevelSuggestionsByPR(42, 'kodustech/kodus-ai', 'org-A', 'sent' as any);
-            const sliceOf = (call: number) => JSON.stringify(aggregate.mock.calls[call][0]).match(/"\$slice":\[.*?,(\d+)\]/)?.[1];
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+                40,
+            );
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+            const sliceOf = (call: number) =>
+                JSON.stringify(aggregate.mock.calls[call][0]).match(
+                    /"\$slice":\[.*?,(\d+)\]/,
+                )?.[1];
             expect(sliceOf(0)).toBe('40');
             expect(sliceOf(1)).toBe('5');
         });
@@ -600,10 +661,12 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
 
             const pipeline = aggregate.mock.calls[0][0];
-            expect(pipeline.some((s: any) => s.$unwind === '$prLevelSuggestions')).toBe(
-                true,
+            expect(
+                pipeline.some((s: any) => s.$unwind === '$prLevelSuggestions'),
+            ).toBe(true);
+            expect(pipeline.some((s: any) => s.$unwind === '$files')).toBe(
+                false,
             );
-            expect(pipeline.some((s: any) => s.$unwind === '$files')).toBe(false);
         });
 
         it('scopes to the given deliveryStatus (never returns unsent/failed suggestions)', async () => {
@@ -620,8 +683,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             const capStage = pipeline.find(
                 (stage: any) => stage.$addFields?.prLevelSuggestions,
             )?.$addFields.prLevelSuggestions;
-            const filterCond =
-                capStage.$slice[0].$sortArray.input.$filter.cond;
+            const filterCond = capStage.$slice[0].$sortArray.input.$filter.cond;
             expect(filterCond).toEqual({
                 $eq: ['$$suggestion.deliveryStatus', 'sent'],
             });

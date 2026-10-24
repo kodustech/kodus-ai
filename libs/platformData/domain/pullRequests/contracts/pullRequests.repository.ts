@@ -233,6 +233,11 @@ export interface IPullRequestsRepository {
         prNumbers: number[],
         status: string | string[],
     ): Promise<IPullRequestWithDeliveredSuggestions[]>;
+    findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]>;
     findByOrganizationAndRepositoryWithStatusAndSyncedFlag(
         organizationId: string,
         repository: Pick<Repository, 'id' | 'fullName'>,

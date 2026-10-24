@@ -4178,13 +4178,14 @@ export class BitbucketCloudService implements Omit<
             };
 
             const userUuid = currentUserRes?.data?.uuid;
+            if (!userUuid) return null;
             const activities =
                 await this.getPaginatedResults<BitbucketActivity>(
                     bitbucketAPI,
                     activitiesRes,
                 );
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const activity of activities) {
                 if (activity.approval?.user?.uuid === userUuid) {
                     state = PullRequestReviewState.APPROVED;

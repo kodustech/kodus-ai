@@ -1,4 +1,5 @@
 import { AzureReposService } from './azureRepos.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 /**
  * Regression test for issue #1045 / Bug B — Azure DevOps' API uses
@@ -51,6 +52,28 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             service as any,
             'getProjectIdFromRepository',
         ).mockResolvedValue(stubRepository.project.id);
+    });
+
+    it('distinguishes no Kody vote from an unavailable Azure lookup', async () => {
+        (azureReposRequestHelper as any).getAuthenticatedUserId = jest
+            .fn()
+            .mockResolvedValue('kody');
+        (azureReposRequestHelper as any).getListOfPullRequestReviewers = jest
+            .fn()
+            .mockResolvedValueOnce([])
+            .mockRejectedValueOnce(new Error('Azure unavailable'));
+        const request = {
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('maps Azure `description` onto `body` while preserving the original `description` field', async () => {

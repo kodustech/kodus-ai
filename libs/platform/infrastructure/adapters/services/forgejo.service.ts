@@ -905,6 +905,7 @@ export class ForgejoService implements Omit<
             | Repositories
             | { id: string; name: string; default_branch?: string },
         organizationAndTeamData?: OrganizationAndTeamData,
+        labels?: string[],
     ): PullRequest {
         const state = this.mapPullRequestState(pr);
         const repoWithDefaults = {
@@ -925,6 +926,7 @@ export class ForgejoService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pr.title ?? '',
             body: pr.body ?? '',
+            labels,
             state,
             prURL: pr.html_url ?? '',
             repository: repositoryFullName,
@@ -1800,6 +1802,7 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -1858,10 +1861,54 @@ export class ForgejoService implements Omit<
 
             if (!result.data) return null;
 
-            return this.transformPullRequest(result.data, {
-                id: params.repository.id || '',
-                name: params.repository.name!,
-            });
+            // Forgejo exposes labels on the issue endpoint. The SDK's PR
+            // response does not declare them, so avoid treating a missing
+            // field on that response as an empty label list.
+            const labelTimeoutMs = 5000;
+            let labels: string[] | undefined;
+            if (params.includeLabels) {
+                try {
+                    const issue = await issueGetIssue({
+                        client,
+                        timeout: labelTimeoutMs,
+                        path: {
+                            owner: repoInfo.owner,
+                            repo: repoInfo.repo,
+                            index: params.prNumber,
+                        },
+                    });
+                    if (issue.error) throw issue.error;
+                    labels = issue.data?.labels
+                        ?.map((label) => label.name)
+                        .filter(
+                            (name): name is string => typeof name === 'string',
+                        );
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Forgejo issue labels unavailable for pull request',
+                        context: ForgejoService.name,
+                        error,
+                        metadata: {
+                            repository: params.repository.name,
+                            prNumber: params.prNumber,
+                            organizationId:
+                                params.organizationAndTeamData.organizationId,
+                            teamId: params.organizationAndTeamData.teamId,
+                            timeoutMs: labelTimeoutMs,
+                        },
+                    });
+                }
+            }
+            return this.transformPullRequest(
+                result.data,
+                {
+                    id: params.repository.id || '',
+                    name: params.repository.name!,
+                },
+                undefined,
+                labels,
+            );
         } catch (error) {
             if ((error as any)?.status === 404) {
                 return null;
@@ -2993,7 +3040,7 @@ export class ForgejoService implements Omit<
                 },
             );
 
-            if (reviews.length === 0) return null;
+            if (reviews.length === 0) return PullRequestReviewState.NONE;
 
             const latestReview = reviews[reviews.length - 1];
 
@@ -3184,7 +3231,6 @@ export class ForgejoService implements Omit<
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-
 
         const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement

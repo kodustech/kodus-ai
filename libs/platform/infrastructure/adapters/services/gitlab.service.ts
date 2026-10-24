@@ -563,7 +563,8 @@ export class GitlabService implements Omit<
         }
 
         const gitlabAPI = this.instanceGitlabApi(authDetail);
-        const projectId = `${repository.owner}/${repository.name}`;
+        const projectId =
+            repository.id ?? `${repository.owner}/${repository.name}`;
 
         try {
             const issue = await gitlabAPI.Issues.show(issueNumber, {
@@ -3967,7 +3968,7 @@ export class GitlabService implements Omit<
 
             return isApprovedByCurrentUser
                 ? PullRequestReviewState.APPROVED
-                : null;
+                : PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error fetching review status for MR #${params.prNumber}`,
@@ -4539,6 +4540,8 @@ export class GitlabService implements Omit<
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<any[]> {
         try {
@@ -4556,8 +4559,26 @@ export class GitlabService implements Omit<
 
             const mergeRequests = await gitlabAPI.MergeRequests.all({
                 projectId: repository.id,
-                createdAfter: filters?.startDate,
-                createdBefore: filters?.endDate,
+                ...(filters?.maxResults
+                    ? {
+                          perPage: filters.maxResults,
+                          maxPages: 1,
+                          orderBy:
+                              filters.dateField === 'updated'
+                                  ? ('updated_at' as const)
+                                  : ('created_at' as const),
+                          sort: 'desc' as const,
+                      }
+                    : {}),
+                ...(filters?.dateField === 'updated'
+                    ? {
+                          updatedAfter: filters.startDate,
+                          updatedBefore: filters.endDate,
+                      }
+                    : {
+                          createdAfter: filters?.startDate,
+                          createdBefore: filters?.endDate,
+                      }),
             });
 
             return mergeRequests.map(
@@ -4566,6 +4587,7 @@ export class GitlabService implements Omit<
                     author_id: pr.author?.id.toString(),
                     author_name: pr.author?.name,
                     author_created_at: pr.created_at,
+                    updated_at: pr.updated_at,
                     repository: repository.name,
                     repositoryId: repository.id,
                     message: pr.description,
@@ -5495,6 +5517,9 @@ export class GitlabService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: mergeRequest?.title ?? '',
             body: mergeRequest?.description ?? '',
+            labels: (mergeRequest?.labels ?? []).map((label) =>
+                typeof label === 'string' ? label : label.name,
+            ),
             state:
                 this._prStateMap.get(
                     mergeRequest?.state as GitlabPullRequestState,

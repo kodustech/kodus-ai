@@ -31,13 +31,32 @@ import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
-import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfig,
+    FileChange,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    approvalPolicyForPlatform,
+    approvalPolicyFromConfig,
+    evaluateApproval,
+    type ApprovalDecision,
+} from '@libs/code-review/domain/approval/approval-decision';
+import {
+    CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+    IConditionalApprovalAccessService,
+} from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import {
+    formatApprovalReasonComment,
+    isApprovalReasonComment,
+} from '@libs/code-review/infrastructure/approval/approval-reason-comment';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -87,9 +106,18 @@ const TEAM_CONCURRENCY = 10;
 // trade is wrong. 15 keeps the git-provider work wide while the DB
 // slice of it stays around a fifth of that in practice.
 const PR_CONCURRENCY = 15;
+const FINAL_PROVIDER_TIMEOUT_MS = 15_000;
+const APPROVAL_REASON_LOOKUP_TIMEOUT_MS = 10_000;
+const APPROVAL_REASON_WRITE_TIMEOUT_MS = 15_000;
+const APPROVAL_FILES_TIMEOUT_MS = 10_000;
+const DIRECTORY_FILE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
+    private readonly directoryFilesByReviewedHead = new Map<
+        string,
+        { files: Array<Pick<FileChange, 'filename'>>; fetchedAt: number }
+    >();
     private readonly logger = createLogger(
         CheckIfPRCanBeApprovedCronProvider.name,
     );
@@ -117,6 +145,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
         private readonly distributedLockService: DistributedLockService,
+        @Inject(CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN)
+        private readonly conditionalApprovalAccess: IConditionalApprovalAccessService,
     ) {}
 
     @Cron(API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED, {
@@ -342,12 +372,26 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             return;
                         }
 
-                        const openPullRequests =
+                        const openPullRequestsWithSuggestions =
                             await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
                                 organizationId,
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
                             );
+                        // A repository's kodus-config.yml may define the
+                        // label scope even when the stored team config does
+                        // not. Resolve each candidate before deciding whether
+                        // a clean, zero-suggestion PR can be approved.
+                        const noSuggestionPrs =
+                            (await this.pullRequestService.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                                organizationId,
+                                eligiblePullRequestRefs,
+                                PullRequestState.OPENED,
+                            )) ?? [];
+                        const openPullRequests = [
+                            ...(openPullRequestsWithSuggestions ?? []),
+                            ...noSuggestionPrs,
+                        ];
 
                         this.logger.log({
                             message: 'Open pull requests found',
@@ -405,27 +449,148 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         return;
                                     }
 
+                                    let resolvedConfig:
+                                        CodeReviewConfig | undefined;
                                     if (
-                                        !configByRepository.has(
-                                            codeReviewConfigFromRepo.id,
-                                        )
+                                        codeReviewConfigFromRepo.directories
+                                            ?.length
                                     ) {
-                                        configByRepository.set(
-                                            codeReviewConfigFromRepo.id,
-                                            this.codeBaseConfigService.getConfig(
-                                                organizationAndTeamData,
+                                        const execution =
+                                            await this.automationExecutionService.findLatestExecutionByFilters(
                                                 {
-                                                    id: codeReviewConfigFromRepo.id,
-                                                    name: codeReviewConfigFromRepo.name,
+                                                    status: AutomationStatus.SUCCESS,
+                                                    teamAutomation: {
+                                                        uuid: teamAutomation.uuid,
+                                                    },
+                                                    pullRequestNumber:
+                                                        pr.number,
+                                                    repositoryId: repository.id,
                                                 },
-                                                [],
-                                            ),
-                                        );
+                                            );
+                                        const reviewedHead =
+                                            this.getLastAnalyzedCommitSha(
+                                                execution?.dataExecution
+                                                    ?.lastAnalyzedCommit,
+                                            );
+                                        const cacheKey = reviewedHead
+                                            ? `${organizationId}:${repository.id}:${pr.number}:${reviewedHead}`
+                                            : null;
+                                        const cached = cacheKey
+                                            ? this.directoryFilesByReviewedHead.get(
+                                                  cacheKey,
+                                              )
+                                            : undefined;
+                                        let files =
+                                            cached &&
+                                            Date.now() - cached.fetchedAt <
+                                                DIRECTORY_FILE_CACHE_TTL_MS
+                                                ? cached.files
+                                                : undefined;
+                                        if (!files) {
+                                            let liveFiles: Awaited<
+                                                ReturnType<
+                                                    CodeManagementService['getFilesByPullRequestId']
+                                                >
+                                            >;
+                                            try {
+                                                liveFiles =
+                                                    await runWithBoundedTimeout(
+                                                        this.codeManagementService.getFilesByPullRequestId(
+                                                            {
+                                                                organizationAndTeamData,
+                                                                repository: {
+                                                                    id: repository.id,
+                                                                    name: repository.name,
+                                                                },
+                                                                prNumber:
+                                                                    pr.number,
+                                                                headSha:
+                                                                    reviewedHead ??
+                                                                    undefined,
+                                                            },
+                                                            pr.provider as PlatformType,
+                                                        ),
+                                                        APPROVAL_FILES_TIMEOUT_MS,
+                                                        'approval directory files',
+                                                    );
+                                            } catch (error) {
+                                                this.logger.warn({
+                                                    message:
+                                                        'Could not load PR files for directory approval policy',
+                                                    context:
+                                                        CheckIfPRCanBeApprovedCronProvider.name,
+                                                    error,
+                                                    metadata: {
+                                                        ...organizationAndTeamData,
+                                                        repositoryId:
+                                                            repository.id,
+                                                        prNumber: pr.number,
+                                                        reviewedHead,
+                                                        timeoutMs:
+                                                            APPROVAL_FILES_TIMEOUT_MS,
+                                                    },
+                                                });
+                                                return;
+                                            }
+                                            files = liveFiles?.map((file) => ({
+                                                filename:
+                                                    file.filename ?? file.path,
+                                            }));
+                                            if (cacheKey && files?.length) {
+                                                if (
+                                                    this
+                                                        .directoryFilesByReviewedHead
+                                                        .size >= 1000
+                                                ) {
+                                                    const oldest =
+                                                        this.directoryFilesByReviewedHead
+                                                            .keys()
+                                                            .next().value;
+                                                    if (oldest) {
+                                                        this.directoryFilesByReviewedHead.delete(
+                                                            oldest,
+                                                        );
+                                                    }
+                                                }
+                                                this.directoryFilesByReviewedHead.set(
+                                                    cacheKey,
+                                                    {
+                                                        files,
+                                                        fetchedAt: Date.now(),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        if (!files?.length) return;
+                                        resolvedConfig =
+                                            await this.codeBaseConfigService.getConfig(
+                                                organizationAndTeamData,
+                                                repository,
+                                                files as FileChange[],
+                                            );
+                                    } else {
+                                        if (
+                                            !configByRepository.has(
+                                                codeReviewConfigFromRepo.id,
+                                            )
+                                        ) {
+                                            configByRepository.set(
+                                                codeReviewConfigFromRepo.id,
+                                                this.codeBaseConfigService.getConfig(
+                                                    organizationAndTeamData,
+                                                    {
+                                                        id: codeReviewConfigFromRepo.id,
+                                                        name: codeReviewConfigFromRepo.name,
+                                                    },
+                                                    [],
+                                                ),
+                                            );
+                                        }
+                                        resolvedConfig =
+                                            await configByRepository.get(
+                                                codeReviewConfigFromRepo.id,
+                                            );
                                     }
-                                    const resolvedConfig =
-                                        await configByRepository.get(
-                                            codeReviewConfigFromRepo.id,
-                                        );
 
                                     if (
                                         resolvedConfig?.pullRequestApprovalActive ===
@@ -494,6 +659,41 @@ export class CheckIfPRCanBeApprovedCronProvider {
             prNumber: prNumber,
         };
 
+        const configuredPolicy = codeReviewConfig
+            ? approvalPolicyFromConfig(codeReviewConfig)
+            : undefined;
+        if (
+            platformType === PlatformType.AZURE_REPOS &&
+            configuredPolicy?.labels?.length
+        ) {
+            return false;
+        }
+        const policy = configuredPolicy
+            ? approvalPolicyForPlatform(configuredPolicy, platformType)
+            : undefined;
+        const policyActive = !!(
+            policy?.labels?.length ||
+            policy?.authors?.length ||
+            policy?.assessRisk ||
+            policy?.sensitivePaths?.length
+        );
+        // A saved policy must never silently fall back to legacy approval
+        // when its beta flag or paid entitlement is no longer available.
+        if (
+            policyActive &&
+            !(await this.conditionalApprovalAccess.isEnabled(
+                organizationAndTeamData,
+            ))
+        ) {
+            return false;
+        }
+        let conditionalDecision: ApprovalDecision | undefined;
+        const noSuggestions =
+            Array.isArray(pr?.suggestions) && pr.suggestions.length === 0;
+        const allowNoComments = !!policy?.labels?.length && noSuggestions;
+        if (noSuggestions && !allowNoComments) {
+            return false;
+        }
         const lastExecution =
             await this.automationExecutionService.findLatestExecutionByFilters({
                 status: AutomationStatus.SUCCESS,
@@ -501,13 +701,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 pullRequestNumber: prNumber,
                 repositoryId: repository?.id,
             });
-
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
+        let changedPaths: string[] = [];
+        if (
+            allowNoComments &&
+            !['approve', 'out-of-scope'].includes(
+                lastExecution?.dataExecution?.approvalDecision?.kind,
+            )
+        ) {
+            return false;
+        }
+        let currentPullRequest;
 
-        if (lastAnalyzedCommitSha) {
-            const currentPullRequest =
+        if (lastAnalyzedCommitSha || policyActive) {
+            currentPullRequest =
                 await this.codeManagementService.getPullRequest(
                     {
                         organizationAndTeamData,
@@ -516,6 +725,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                             name: repository?.name,
                         },
                         prNumber: prNumber,
+                        includeLabels: !!policy?.labels?.length,
                     },
                     platformType,
                 );
@@ -542,6 +752,85 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 });
 
                 return false;
+            }
+
+            if (policyActive) {
+                // A conditional approval must have a saved successful review
+                // and a live head. Do not infer either from a missing response.
+                if (
+                    !lastExecution ||
+                    !lastAnalyzedCommitSha ||
+                    !currentHeadSha ||
+                    (policy?.labels?.length && !currentPullRequest?.labels)
+                ) {
+                    return false;
+                }
+                if (policy.sensitivePaths?.length) {
+                    let files: Awaited<
+                        ReturnType<
+                            CodeManagementService['getFilesByPullRequestId']
+                        >
+                    >;
+                    try {
+                        files = await runWithBoundedTimeout(
+                            this.codeManagementService.getFilesByPullRequestId(
+                                {
+                                    ...codeManagementRequestData,
+                                    headSha: currentHeadSha,
+                                },
+                                platformType,
+                            ),
+                            APPROVAL_FILES_TIMEOUT_MS,
+                            'approval sensitive paths files',
+                        );
+                    } catch (error) {
+                        this.logger.warn({
+                            message:
+                                'Could not load PR files for sensitive-path approval policy',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: {
+                                ...organizationAndTeamData,
+                                repositoryId: repository?.id,
+                                prNumber,
+                                reviewedHead: currentHeadSha,
+                                timeoutMs: APPROVAL_FILES_TIMEOUT_MS,
+                            },
+                        });
+                        return false;
+                    }
+                    if (!files) return false;
+                    changedPaths = files
+                        .map((file) => file.filename ?? file.path)
+                        .filter((path): path is string => !!path);
+                }
+                const decision = evaluateApproval({
+                    approvalActive: true,
+                    policy,
+                    author:
+                        currentPullRequest?.user?.login ??
+                        currentPullRequest?.user?.username,
+                    labels: currentPullRequest?.labels,
+                    changedPaths,
+                    reviewClean: true,
+                    risk: lastExecution.dataExecution?.approvalRisk,
+                    currentHeadSha,
+                });
+                conditionalDecision = decision;
+                if (decision.kind !== 'approve') {
+                    if (decision.kind === 'hold') {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            decision,
+                        );
+                    }
+                    this.logger.log({
+                        message: `Holding cron approval for PR#${prNumber}: ${decision.reason}`,
+                        context: CheckIfPRCanBeApprovedCronProvider.name,
+                    });
+                    return false;
+                }
             }
         }
 
@@ -584,9 +873,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
             }
 
-            if (!reviewComments || reviewComments?.length < 1) {
+            if (
+                (!reviewComments || reviewComments.length < 1) &&
+                !allowNoComments
+            ) {
                 return false;
             }
+            reviewComments ??= [];
 
             if (pr?.suggestions && pr?.suggestions?.length > 0) {
                 const deliveredCommentIds = new Set(
@@ -664,7 +957,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 }
             }
 
-            if (!reviewComments || reviewComments?.length < 1) {
+            if (reviewComments.length < 1 && !allowNoComments) {
                 return false;
             }
 
@@ -712,6 +1005,77 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     },
                 });
 
+                if (conditionalDecision) {
+                    const before = await runWithBoundedTimeout(
+                        this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval provider-status lookup',
+                    );
+                    if (before == null) {
+                        this.logger.warn({
+                            message: 'Approval provider status unavailable',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository?.id,
+                                prNumber,
+                                timeoutMs: FINAL_PROVIDER_TIMEOUT_MS,
+                            },
+                        });
+                        return false;
+                    }
+                    if (before === PullRequestReviewState.APPROVED) {
+                        return false;
+                    }
+                    // Comments and provider status checks can take time. A new
+                    // commit or a removed scope label invalidates the decision
+                    // made at the start of this cron pass.
+                    const latestPullRequest = await runWithBoundedTimeout(
+                        this.codeManagementService.getPullRequest(
+                            {
+                                ...codeManagementRequestData,
+                                includeLabels: !!policy?.labels?.length,
+                            },
+                            platformType,
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval final PR refresh',
+                    );
+                    const latestHeadSha =
+                        latestPullRequest?.head?.sha ||
+                        (latestPullRequest as any)?.headSha ||
+                        (latestPullRequest as any)?.head?.commit?.sha;
+                    if (
+                        !latestHeadSha ||
+                        latestHeadSha !== lastAnalyzedCommitSha ||
+                        (policy?.labels?.length && !latestPullRequest?.labels)
+                    ) {
+                        return false;
+                    }
+                    conditionalDecision = evaluateApproval({
+                        approvalActive: true,
+                        policy,
+                        author: latestPullRequest?.user?.login,
+                        labels: latestPullRequest?.labels,
+                        changedPaths,
+                        reviewClean: true,
+                        risk: lastExecution?.dataExecution?.approvalRisk,
+                        currentHeadSha: latestHeadSha,
+                    });
+                    if (conditionalDecision.kind !== 'approve') {
+                        if (conditionalDecision.kind === 'hold') {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                conditionalDecision,
+                            );
+                        }
+                        return false;
+                    }
+                }
+
                 await this.codeManagementService.checkIfPullRequestShouldBeApproved(
                     {
                         organizationAndTeamData,
@@ -723,6 +1087,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     },
                     platformType,
                 );
+                if (conditionalDecision?.kind === 'approve') {
+                    const after =
+                        await this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        );
+                    if (after !== PullRequestReviewState.APPROVED) {
+                        return false;
+                    }
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        conditionalDecision,
+                    );
+                }
                 return true;
             }
         } catch (error) {
@@ -742,6 +1120,82 @@ export class CheckIfPRCanBeApprovedCronProvider {
             });
 
             return false;
+        }
+    }
+
+    private async postConditionalApprovalReason(
+        request: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id: string; name: string };
+            prNumber: number;
+        },
+        platformType: PlatformType,
+        decision: ApprovalDecision,
+    ): Promise<void> {
+        let operation = 'getAllCommentsInPullRequest';
+        try {
+            const body = formatApprovalReasonComment(
+                decision.kind === 'approve' ? 'approve' : 'hold',
+                decision.reason,
+            );
+            // The lookup is only for keeping one reason comment current. A
+            // timed-out read may finish later, but cannot post a comment: the
+            // write happens only after this bounded await resolves.
+            const comments = await runWithBoundedTimeout(
+                this.codeManagementService.getAllCommentsInPullRequest(
+                    request,
+                    platformType,
+                ),
+                APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
+                'conditional approval comment lookup',
+            );
+            const existing = comments?.find(isApprovalReasonComment);
+            const commentId = [
+                existing?.id,
+                existing?.commentId,
+                existing?.note_id,
+            ].find(
+                (candidate): candidate is number =>
+                    typeof candidate === 'number',
+            );
+            if (typeof commentId === 'number') {
+                const previous =
+                    existing?.body ?? existing?.note ?? existing?.content;
+                if (previous === body) return;
+                operation = 'updateIssueComment';
+                await runWithBoundedTimeout(
+                    this.codeManagementService.updateIssueComment(
+                        { ...request, body, commentId, noteId: commentId },
+                        platformType,
+                    ),
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                    'conditional approval comment update',
+                );
+            } else {
+                operation = 'createIssueComment';
+                await runWithBoundedTimeout(
+                    this.codeManagementService.createIssueComment(
+                        { ...request, body },
+                        platformType,
+                    ),
+                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                    'conditional approval comment create',
+                );
+            }
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not post conditional approval reason',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: request.organizationAndTeamData,
+                    repositoryId: request.repository.id,
+                    prNumber: request.prNumber,
+                    operation,
+                    lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
+                    writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                },
+            });
         }
     }
 

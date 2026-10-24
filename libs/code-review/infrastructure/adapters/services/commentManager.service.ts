@@ -1,6 +1,11 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
 import { Inject, Injectable } from '@nestjs/common';
+import {
+    formatApprovalReasonComment,
+    isApprovalReasonComment,
+} from '@libs/code-review/infrastructure/approval/approval-reason-comment';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -109,6 +114,58 @@ export class CommentManagerService implements ICommentManagerService {
         private readonly codeManagementService: CodeManagementService,
     ) {
         this.llmResponseProcessor = new LLMResponseProcessor();
+    }
+
+    async postApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+    ): Promise<void> {
+        const request = {
+            organizationAndTeamData,
+            prNumber,
+            repository,
+        };
+        const body = formatApprovalReasonComment(kind, reason);
+        const comments = await runWithBoundedTimeout(
+            this.codeManagementService.getAllCommentsInPullRequest(request),
+            10_000,
+            'approval hold comment lookup',
+        );
+        const existing = comments?.find(isApprovalReasonComment);
+        const commentId = [
+            existing?.id,
+            existing?.commentId,
+            existing?.note_id,
+        ].find(
+            (candidate): candidate is number => typeof candidate === 'number',
+        );
+        if (typeof commentId === 'number') {
+            if ((existing.body ?? existing.note ?? existing.content) === body) {
+                return;
+            }
+            await runWithBoundedTimeout(
+                this.codeManagementService.updateIssueComment({
+                    ...request,
+                    body,
+                    commentId,
+                    noteId: commentId,
+                }),
+                15_000,
+                `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
+            );
+        } else {
+            await runWithBoundedTimeout(
+                this.codeManagementService.createIssueComment({
+                    ...request,
+                    body,
+                }),
+                15_000,
+                `approval hold comment create org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
+            );
+        }
     }
 
     /**
@@ -1079,6 +1136,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         reviewWarnings?: ReviewWarning[],
         /** `@kody -v <agent>`: one agent re-checked the pull request. */
         singleAgentRun?: boolean,
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -1139,6 +1197,12 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     commentBody = `${commentBody}${skippedNotice}`;
                 }
                 commentBody = `${commentBody}${formatConfigFileNotice(reviewWarnings)}`;
+            }
+
+            if (approvalDecision?.kind === 'hold') {
+                commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
+            } else if (approvalDecision?.kind === 'approve') {
+                commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
             }
 
             await this.codeManagementService.updateIssueComment(
@@ -2979,6 +3043,7 @@ ${reviewOptions}
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         reviewWarnings?: ReviewWarning[],
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void> {
         let commentBody: string;
 
@@ -3041,6 +3106,12 @@ ${reviewOptions}
                 undefined,
                 reviewWarnings,
             );
+        }
+
+        if (approvalDecision?.kind === 'hold') {
+            commentBody = `${commentBody}\n\n**Automatic approval held:** ${approvalDecision.reason}`;
+        } else if (approvalDecision?.kind === 'approve') {
+            commentBody = `${commentBody}\n\n**Automatic approval eligible:** ${approvalDecision.reason}`;
         }
 
         const comment = await this.codeManagementService.createIssueComment(

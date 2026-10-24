@@ -141,6 +141,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null>;
     getRepositories(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -416,6 +417,13 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repository: Partial<Repository>;
         prNumber: number;
     }): Promise<PullRequestReviewState | null>;
+
+    dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
 
     addReactionToPR?(params: {
         organizationAndTeamData: OrganizationAndTeamData;

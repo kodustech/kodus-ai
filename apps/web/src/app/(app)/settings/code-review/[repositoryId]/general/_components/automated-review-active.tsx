@@ -1,10 +1,7 @@
 "use client";
 
-import { Button } from "@components/ui/button";
-import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Collapsible, CollapsibleContent } from "@components/ui/collapsible";
 import { FormControl } from "@components/ui/form-control";
-import { Heading } from "@components/ui/heading";
 import { InlineCode } from "@components/ui/inline-code";
 import { NumberInput } from "@components/ui/number-input";
 import {
@@ -30,68 +27,60 @@ export const AutomatedReviewActive = () => {
             name="automatedReviewActive.value"
             control={form.control}
             render={({ field }) => (
-                <Card>
+                <div>
                     <Collapsible open={field.value}>
-                        <Button
-                            size="sm"
-                            variant="helper"
-                            className="w-full"
-                            disabled={field.disabled}
-                            onClick={() => {
-                                const newValue = !field.value;
-                                field.onChange(newValue);
-
-                                if (newValue) {
-                                    const currentCadence = form.getValues(
-                                        "reviewCadence.type.value",
-                                    );
-
-                                    if (!currentCadence) {
-                                        form.setValue(
-                                            "reviewCadence.type.value",
-                                            ReviewCadenceType.AUTOMATIC,
-                                            { shouldDirty: true },
-                                        );
-                                    }
-
-                                    form.trigger();
-                                } else {
-                                    form.resetField("reviewCadence");
-
-                                    form.trigger();
-                                }
-                            }}>
-                            <CardHeader className="flex flex-row items-center justify-between gap-6">
-                                <div className="flex flex-col gap-1">
-                                    <div className="flex flex-row items-center gap-2">
-                                        <Heading variant="h3">
-                                            Enable Automated Code Review
-                                        </Heading>
-
-                                        <OverrideIndicatorForm fieldName="automatedReviewActive" />
-                                    </div>
-                                    <p className="text-text-secondary text-sm">
-                                        Whenever a Pull Request is opened, Kody
-                                        will automatically review the code,
-                                        highlighting improvements, issues, and
-                                        suggestions to ensure code quality.
-                                    </p>
-
-                                    <p className="text-text-tertiary text-xs">
-                                        When disabled, you can manually start
-                                        the review by using the command{" "}
-                                        <InlineCode>
-                                            @kody start-review
-                                        </InlineCode>{" "}
-                                        in the Pull Request comments.
-                                    </p>
+                        <div className="flex min-w-0 items-start justify-between gap-4 px-5 py-5 sm:px-6">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <label
+                                        htmlFor={field.name}
+                                        className="text-text-primary cursor-pointer text-base leading-5 font-semibold">
+                                        Automated code review
+                                    </label>
+                                    <OverrideIndicatorForm fieldName="automatedReviewActive" />
                                 </div>
+                                <p className="text-text-secondary mt-1.5 text-sm leading-5">
+                                    Review pull requests automatically and
+                                    highlight issues and improvements.
+                                </p>
+                                <p className="text-text-tertiary mt-1 text-xs leading-5">
+                                    When off, start a review by commenting{" "}
+                                    <InlineCode>@kody start-review</InlineCode>{" "}
+                                    on the pull request.
+                                </p>
+                            </div>
+                            <Switch
+                                id={field.name}
+                                checked={field.value ?? false}
+                                disabled={field.disabled}
+                                onCheckedChange={(newValue) => {
+                                    field.onChange(newValue);
 
-                                <Switch decorative checked={field.value} />
-                            </CardHeader>
-                        </Button>
-                        <CollapsibleContent className="*:pb-2">
-                            <CardContent className="px-10">
+                                    if (newValue) {
+                                        const currentCadence = form.getValues(
+                                            "reviewCadence.type.value",
+                                        );
+
+                                        if (!currentCadence) {
+                                            form.setValue(
+                                                "reviewCadence.type.value",
+                                                ReviewCadenceType.AUTOMATIC,
+                                                { shouldDirty: true },
+                                            );
+                                        }
+
+                                        form.trigger();
+                                    } else {
+                                        form.resetField("reviewCadence");
+
+                                        form.trigger();
+                                    }
+                                }}
+                                className="mt-0.5 shrink-0"
+                            />
+                        </div>
+                        <CollapsibleContent>
+                            <div className="border-card-lv3/60 min-w-0 border-t px-5 py-5 sm:px-6">
                                 <Controller
                                     name="reviewCadence.type.value"
                                     control={form.control}
@@ -179,7 +168,7 @@ export const AutomatedReviewActive = () => {
 
                                 {reviewCadenceType ===
                                     ReviewCadenceType.AUTO_PAUSE && (
-                                    <div className="mt-6 flex flex-row gap-8">
+                                    <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:gap-8">
                                         <Controller
                                             name="reviewCadence.pushesToTrigger.value"
                                             control={form.control}
@@ -225,7 +214,10 @@ export const AutomatedReviewActive = () => {
                                             )}
                                         />
 
-                                        <Separator orientation="vertical" />
+                                        <Separator
+                                            orientation="vertical"
+                                            className="hidden sm:block"
+                                        />
 
                                         <Controller
                                             name="reviewCadence.timeWindow.value"
@@ -274,10 +266,10 @@ export const AutomatedReviewActive = () => {
                                         />
                                     </div>
                                 )}
-                            </CardContent>
+                            </div>
                         </CollapsibleContent>
                     </Collapsible>
-                </Card>
+                </div>
             )}
         />
     );

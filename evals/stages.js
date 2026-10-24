@@ -42,11 +42,19 @@
 //         caveat    what a green number does not prove
 //   short — what it does in a few words, for the panel's overview (`does` says it in full)
 //   note — shown beside the step when something about it needs saying
-const GROUPS = ['Before the agents', 'The agents, side by side', 'After the agents', 'On the PR', 'Where rules and memories come from', 'Conversation with Kody'];
+const GROUPS = [
+    'Before the agents',
+    'The agents, side by side',
+    'After the agents',
+    'On the PR',
+    'Where rules and memories come from',
+    'Conversation with Kody',
+];
 
 // The funnel's evals read a production review's frozen output (evals/funnel/snapshot).
 const FUNNEL_SETS = {
-    controlled: "the controlled PRs' findings from a production review (evals/funnel/snapshot) that reach this step, and the step's control pair",
+    controlled:
+        "the controlled PRs' findings from a production review (evals/funnel/snapshot) that reach this step, and the step's control pair",
     full: "the findings of every snapshot PR (30) that reach this step, and the step's control pair",
 };
 
@@ -95,7 +103,8 @@ const STAGES = [
             path: 'evals/business-logic',
             metric: 'of PRs the stage answered right',
             sets: {
-                controlled: 'three PRs that close a Jira ticket: one leaves a requirement out, one does it all, one links a ticket that cannot be read',
+                controlled:
+                    'three PRs that close a Jira ticket: one leaves a requirement out, one does it all, one links a ticket that cannot be read',
                 full: null,
             },
             nightly: 'shared',
@@ -146,16 +155,34 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.snapshot.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "A scripted model's review of a PR reaches scoring with its finding", wiring: ['finder-recall'] },
-            { kind: 'unit', name: "An org with no model of its own: the default model is built on Kodus's key", specs: ['libs/llm/byok-to-vercel.env-default.spec.ts'] },
-            { kind: 'contract', name: "An org with no model of its own: the review runs end to end on Kodus's default model", wiring: ['managed-route'] },
-            { kind: 'contract', name: "Kodus's default model is a real model the provider answers", signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' },
+            {
+                kind: 'contract',
+                name: "A scripted model's review of a PR reaches scoring with its finding",
+                wiring: ['finder-recall'],
+            },
+            {
+                kind: 'unit',
+                name: "An org with no model of its own: the default model is built on Kodus's key",
+                specs: ['libs/llm/byok-to-vercel.env-default.spec.ts'],
+            },
+            {
+                kind: 'contract',
+                name: "An org with no model of its own: the review runs end to end on Kodus's default model",
+                wiring: ['managed-route'],
+            },
+            {
+                kind: 'contract',
+                name: "Kodus's default model is a real model the provider answers",
+                signal: 'contract.api',
+                spec: 'libs/llm/trial-model-availability.contract.spec.ts',
+            },
         ],
         eval: {
             path: 'evals/investigation',
             metric: 'of known bugs found',
             sets: {
-                controlled: '15 real PRs whose bugs we know, three per repository',
+                controlled:
+                    '15 real PRs whose bugs we know, three per repository',
                 full: 'all 50 real PRs whose bugs we know',
             },
             nightly: 'finder-recall',
@@ -170,14 +197,25 @@ const STAGES = [
         does: "Inside the finder: follows the team's memories (conventions the team saved). Stays quiet on code a memory says is intended, flags code a memory says is wrong.",
         pipeline: ['AgentReviewStage'],
         tests: [
-            { kind: 'unit', name: 'Memories reach the prompt', specs: ['test/unit/shared/utils/prompts/memories-injection.spec.ts'] },
-            { kind: 'contract', name: "A scripted model's review of each memory case runs end to end", wiring: ['memories'] },
+            {
+                kind: 'unit',
+                name: 'Memories reach the prompt',
+                specs: [
+                    'test/unit/shared/utils/prompts/memories-injection.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: "A scripted model's review of each memory case runs end to end",
+                wiring: ['memories'],
+            },
         ],
         eval: {
             path: 'evals/memories',
             metric: 'of memory cases the review got right',
             sets: {
-                controlled: 'small invented pull requests, one per kind of memory production teams keep, each paired with a bug the memory must not silence',
+                controlled:
+                    'small invented pull requests, one per kind of memory production teams keep, each paired with a bug the memory must not silence',
                 full: null,
             },
             nightly: 'shared',
@@ -218,7 +256,7 @@ const STAGES = [
         name: 'Output parsing',
         short: "Turns the finder's output into findings",
         group: 'The agents, side by side',
-        does: "Turns what the finder writes at the end of each run into findings, and recovers the ones a model wrote as prose instead of the schema.",
+        does: 'Turns what the finder writes at the end of each run into findings, and recovers the ones a model wrote as prose instead of the schema.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -232,10 +270,14 @@ const STAGES = [
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],
             },
-            { kind: 'contract', name: 'Recorded outputs of nine production models go through the parse; a finding written twice in two shapes parses the same', wiring: ['parse', 'review-chain', 'shape-invariance'] },
+            {
+                kind: 'contract',
+                name: 'Recorded outputs of nine production models go through the parse; a finding written twice in two shapes parses the same',
+                wiring: ['parse', 'review-chain', 'shape-invariance'],
+            },
         ],
         eval: null,
-        note: 'Tests only for now: they replay recorded model output through production\'s parse. An eval of this step comes later.',
+        note: "Tests only for now: they replay recorded model output through production's parse. An eval of this step comes later.",
     },
     {
         id: 'verify',
@@ -256,7 +298,11 @@ const STAGES = [
                     'libs/agent-harness/infrastructure/verify/llm-verdict.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "A scripted verdict reaches the evidence gate, and verify keeps a confirmed finding and drops a refuted one", wiring: ['verifier-verdict', 'funnel-verify'] },
+            {
+                kind: 'contract',
+                name: 'A scripted verdict reaches the evidence gate, and verify keeps a confirmed finding and drops a refuted one',
+                wiring: ['verifier-verdict', 'funnel-verify'],
+            },
         ],
         eval: {
             path: 'evals/funnel/verify',
@@ -284,12 +330,20 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.prompt.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "Production's review of a merged PR compiles a rule and runs the stage", wiring: ['kody-rules'] },
+            {
+                kind: 'contract',
+                name: "Production's review of a merged PR compiles a rule and runs the stage",
+                wiring: ['kody-rules'],
+            },
         ],
         eval: {
             path: 'evals/kody-rules',
             metric: 'of known rule violations flagged',
-            sets: { controlled: 'real PRs where we know every line that breaks a rule', full: null },
+            sets: {
+                controlled:
+                    'real PRs where we know every line that breaks a rule',
+                full: null,
+            },
             nightly: 'kody-rules',
             caveat: 'The set holds mechanical rules only (no console, no any, no process.env, no generic Error): a green number says the rule machinery works, not that Kody is good at harder rules. A Ruby-only rule over polyglot PRs runs by hand (--dataset=polyglot-cases).',
         },
@@ -316,13 +370,18 @@ const STAGES = [
                     'libs/ee/codeBase/__tests__/directory-custom-agents-cascade.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "A scripted model's review of each case: what the review hands every agent (scope, ignored files, disabled agents)", wiring: ['custom-agents'] },
+            {
+                kind: 'contract',
+                name: "A scripted model's review of each case: what the review hands every agent (scope, ignored files, disabled agents)",
+                wiring: ['custom-agents'],
+            },
         ],
         eval: {
             path: 'evals/custom-agents',
             metric: "of the agents' property checks right",
             sets: {
-                controlled: 'small invented pull requests, each reviewed by a team with one custom agent: a violation of its instructions to flag, a defect outside them and a file outside its globs to leave alone, an ignored file its glob names, and compliant controls',
+                controlled:
+                    'small invented pull requests, each reviewed by a team with one custom agent: a violation of its instructions to flag, a defect outside them and a file outside its globs to leave alone, an ignored file its glob names, and compliant controls',
                 full: null,
             },
             nightly: 'shared',
@@ -346,7 +405,11 @@ const STAGES = [
                     'test/unit/shared/utils/resolve-added-line-anchor.spec.ts',
                 ],
             },
-            { kind: 'contract', name: 'Keeps a finding on a changed line and drops one outside the diff', wiring: ['funnel-anchoring'] },
+            {
+                kind: 'contract',
+                name: 'Keeps a finding on a changed line and drops one outside the diff',
+                wiring: ['funnel-anchoring'],
+            },
         ],
         eval: null,
         note: "Tests only for now: no model decides here. Run on a production review's findings by hand: node evals/funnel/anchoring/run.js.",
@@ -369,13 +432,18 @@ const STAGES = [
                     'libs/code-review/pipeline/stages/load-external-context.stage.previous-decisions.spec.ts',
                 ],
             },
-            { kind: 'contract', name: 'Two rounds of a PR, and a Kody Rule lifecycle, run end to end', wiring: ['review-rounds', 'review-lifecycle'] },
+            {
+                kind: 'contract',
+                name: 'Two rounds of a PR, and a Kody Rule lifecycle, run end to end',
+                wiring: ['review-rounds', 'review-lifecycle'],
+            },
         ],
         eval: {
             path: 'evals/review-rounds',
             metric: 'of claims handled right',
             sets: {
-                controlled: 'later rounds of a PR (targets.json sets.nightly): reposts that must stay off it, new problems and revisions that must post',
+                controlled:
+                    'later rounds of a PR (targets.json sets.nightly): reposts that must stay off it, new problems and revisions that must post',
                 full: null,
             },
             nightly: 'shared',
@@ -393,9 +461,16 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'The dedup contract and its merge guard',
-                specs: ['libs/code-review/pipeline/stages/agent-review.stage.dedup-contract.spec.ts', 'libs/code-review/infrastructure/agents/engine/dedup-prompt.spec.ts'],
+                specs: [
+                    'libs/code-review/pipeline/stages/agent-review.stage.dedup-contract.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/dedup-prompt.spec.ts',
+                ],
             },
-            { kind: 'contract', name: 'Merges two findings of one bug and keeps two different bugs', wiring: ['funnel-dedup'] },
+            {
+                kind: 'contract',
+                name: 'Merges two findings of one bug and keeps two different bugs',
+                wiring: ['funnel-dedup'],
+            },
         ],
         eval: {
             path: 'evals/funnel/dedup',
@@ -416,9 +491,16 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'The classifier and the threshold',
-                specs: ['libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts', 'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts'],
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts',
+                ],
             },
-            { kind: 'contract', name: 'Keeps a crash and drops a naming nit at the default threshold', wiring: ['funnel-severity'] },
+            {
+                kind: 'contract',
+                name: 'Keeps a crash and drops a naming nit at the default threshold',
+                wiring: ['funnel-severity'],
+            },
         ],
         eval: {
             path: 'evals/funnel/severity',
@@ -438,14 +520,25 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'The formatter and what it is given',
-                specs: ['libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions.spec.ts', 'libs/code-review/pipeline/stages/agent-review.stage.formatter-input.spec.ts'],
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/format-and-shape-suggestions.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.formatter-input.spec.ts',
+                ],
             },
-            { kind: 'contract', name: 'Every case formats through the local fallback when the model answers nothing usable', wiring: ['format'] },
+            {
+                kind: 'contract',
+                name: 'Every case formats through the local fallback when the model answers nothing usable',
+                wiring: ['format'],
+            },
         ],
         eval: {
             path: 'evals/format',
             metric: 'of findings formatted right',
-            sets: { controlled: 'batches of findings: each of 31 real reviews under four team languages and a writing guideline', full: null },
+            sets: {
+                controlled:
+                    'batches of findings: each of 31 real reviews under four team languages and a writing guideline',
+                full: null,
+            },
             nightly: 'shared',
             caveat: 'Checks the text a reviewer sees, not whether the claim stayed the same.',
         },
@@ -457,7 +550,15 @@ const STAGES = [
         group: 'On the PR',
         does: 'Posts the findings that have no line in the diff as one comment on the PR.',
         pipeline: ['CreatePrLevelCommentsStage'],
-        tests: [{ kind: 'unit', name: 'The stage', specs: ['libs/code-review/pipeline/stages/create-pr-level-comments.stage.spec.ts'] }],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The stage',
+                specs: [
+                    'libs/code-review/pipeline/stages/create-pr-level-comments.stage.spec.ts',
+                ],
+            },
+        ],
         eval: null,
     },
     {
@@ -493,10 +594,21 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'The summary and its findings',
-                specs: ['test/unit/code-review/services/commentManager-summary-findings.spec.ts', 'test/unit/code-review/services/commentManager-summary-chunking.spec.ts'],
+                specs: [
+                    'test/unit/code-review/services/commentManager-summary-findings.spec.ts',
+                    'test/unit/code-review/services/commentManager-summary-chunking.spec.ts',
+                ],
             },
-            { kind: 'contract', name: "Generated, posted, sent to the org's model and composed as configured, with a scripted model", wiring: ['pr-summary'] },
-            { kind: 'contract', name: "Generated, posted, sent to the org's model and composed as configured, on every tier-0 model", weekly: ['evals/pr-summary/run.js', '--gate'] },
+            {
+                kind: 'contract',
+                name: "Generated, posted, sent to the org's model and composed as configured, with a scripted model",
+                wiring: ['pr-summary'],
+            },
+            {
+                kind: 'contract',
+                name: "Generated, posted, sent to the org's model and composed as configured, on every tier-0 model",
+                weekly: ['evals/pr-summary/run.js', '--gate'],
+            },
         ],
         eval: null,
         note: 'Tests only for now: summaries once died for every client because the step went to a model nobody configured, and these catch that. Whether a summary is a good one is not measured yet.',
@@ -506,16 +618,30 @@ const STAGES = [
         name: 'Approval',
         short: 'Approves or requests changes',
         group: 'On the PR',
-        does: 'Approves the PR or requests changes, when the team turned it on.',
-        pipeline: ['RequestChangesOrApproveStage'],
+        does: 'Checks approval scope and risk after the review, then approves or requests changes when the team turned it on.',
+        pipeline: ['DecidePrApprovalStage', 'RequestChangesOrApproveStage'],
         tests: [
             {
                 kind: 'unit',
                 name: 'The approval flow and its cron',
-                specs: ['libs/code-review/pipeline/stages/summary-failure-to-approve.flow.spec.ts', 'apps/api/src/cron/CheckIfPRCanBeApproved.cron.spec.ts', 'apps/api/src/cron/__tests__/CheckIfPRCanBeApproved.cron.spec.ts'],
+                specs: [
+                    'libs/code-review/domain/approval/approval-decision.spec.ts',
+                    'libs/code-review/domain/approval/assess-approval-risk.spec.ts',
+                    'libs/code-review/pipeline/stages/decide-pr-approval.stage.spec.ts',
+                    'libs/code-review/pipeline/stages/finish-process-review.stage.spec.ts',
+                    'libs/code-review/pipeline/stages/summary-failure-to-approve.flow.spec.ts',
+                    'apps/api/src/cron/CheckIfPRCanBeApproved.cron.spec.ts',
+                    'apps/api/src/cron/__tests__/CheckIfPRCanBeApproved.cron.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Production approval decision with a scripted model',
+                wiring: ['approval-risk'],
             },
         ],
         eval: null,
+        note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring.',
     },
     {
         id: 'rules-learned',
@@ -528,7 +654,11 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'Which comments it reads, and its cron',
-                specs: ['libs/kodyRules/application/use-cases/generate-kody-rules.use-case.spec.ts', 'test/unit/kodyRules/use-cases/generate-kody-rules.sampling.spec.ts', 'apps/api/src/cron/kodyLearning.cron.spec.ts'],
+                specs: [
+                    'libs/kodyRules/application/use-cases/generate-kody-rules.use-case.spec.ts',
+                    'test/unit/kodyRules/use-cases/generate-kody-rules.sampling.spec.ts',
+                    'apps/api/src/cron/kodyLearning.cron.spec.ts',
+                ],
             },
         ],
         eval: null,
@@ -554,7 +684,12 @@ const STAGES = [
                     'test/unit/kodyRules/use-cases/resync-rules-from-ide.use-case.spec.ts',
                 ],
             },
-            { kind: 'e2e', name: 'File sync, lifecycle and rule-file detection on a real stack', scenario: 'tests/e2e/scenarios/kody-rules-file-sync.ts', signal: 'e2e.selfhosted.matrix' },
+            {
+                kind: 'e2e',
+                name: 'File sync, lifecycle and rule-file detection on a real stack',
+                scenario: 'tests/e2e/scenarios/kody-rules-file-sync.ts',
+                signal: 'e2e.selfhosted.matrix',
+            },
         ],
         eval: null,
     },
@@ -569,15 +704,26 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'What the agent may write, and when',
-                specs: ['libs/agents/infrastructure/services/agents/conversation/write-gate.policy.spec.ts', 'libs/agents/infrastructure/services/agents/conversation/write-truth.policy.spec.ts'],
+                specs: [
+                    'libs/agents/infrastructure/services/agents/conversation/write-gate.policy.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/write-truth.policy.spec.ts',
+                ],
             },
-            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-rule'] },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-rule'],
+            },
         ],
         eval: {
             path: 'evals/thread-actions',
             catalog: 'evals/thread-actions/catalog.js#rule',
             metric: 'of write checks right',
-            sets: { controlled: 'invented PR threads that do or do not call for a Kody Rule, in English and Portuguese', full: null },
+            sets: {
+                controlled:
+                    'invented PR threads that do or do not call for a Kody Rule, in English and Portuguese',
+                full: null,
+            },
             nightly: 'shared',
             caveat: "Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
         },
@@ -593,15 +739,26 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'What the agent may write, and when',
-                specs: ['libs/agents/infrastructure/services/agents/conversation/write-gate.policy.spec.ts', 'libs/agents/infrastructure/services/agents/conversation/write-truth.policy.spec.ts'],
+                specs: [
+                    'libs/agents/infrastructure/services/agents/conversation/write-gate.policy.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/write-truth.policy.spec.ts',
+                ],
             },
-            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-memory'] },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's MCP server",
+                wiring: ['thread-memory'],
+            },
         ],
         eval: {
             path: 'evals/thread-actions',
             catalog: 'evals/thread-actions/catalog.js#memory',
             metric: 'of write checks right',
-            sets: { controlled: 'invented PR threads that do or do not call for a memory, in English and Portuguese', full: null },
+            sets: {
+                controlled:
+                    'invented PR threads that do or do not call for a memory, in English and Portuguese',
+                full: null,
+            },
             nightly: 'shared',
             caveat: "Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
         },
@@ -623,13 +780,18 @@ const STAGES = [
                     'libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.implicit-reply.spec.ts',
                 ],
             },
-            { kind: 'contract', name: 'Two replies go through the gate and the classifier with a scripted model', wiring: ['reply-addressing'] },
+            {
+                kind: 'contract',
+                name: 'Two replies go through the gate and the classifier with a scripted model',
+                wiring: ['reply-addressing'],
+            },
         ],
         eval: {
             path: 'evals/reply-addressing',
             metric: 'of replies handled right',
             sets: {
-                controlled: 'conversations where someone replies in a Kody thread without @kody',
+                controlled:
+                    'conversations where someone replies in a Kody thread without @kody',
                 full: 'the same conversations and 373 real replies from kodus-ai threads, labelled by hand',
             },
             nightly: 'shared',
@@ -655,12 +817,20 @@ const STAGES = [
                     'libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "Each thread runs end to end through production's sandbox and MCP server", wiring: ['conversation'] },
+            {
+                kind: 'contract',
+                name: "Each thread runs end to end through production's sandbox and MCP server",
+                wiring: ['conversation'],
+            },
         ],
         eval: {
             path: 'evals/conversation',
             metric: 'of reply checks right',
-            sets: { controlled: 'invented threads where the developer is right or wrong about the code, in English and Portuguese', full: null },
+            sets: {
+                controlled:
+                    'invented threads where the developer is right or wrong about the code, in English and Portuguese',
+                full: null,
+            },
             nightly: 'shared',
             caveat: 'A judge reads whether the reply asserts what the code shows; offering or taking actions is evals/thread-actions.',
         },
@@ -683,9 +853,25 @@ const PLUMBING = {
 };
 
 // Every unit spec a stage names, once: what evals/stage-tests.js runs.
-const unitSpecs = (stages = STAGES) => [...new Set(stages.flatMap((s) => s.tests.filter((t) => t.kind === 'unit').flatMap((t) => t.specs)))];
+const unitSpecs = (stages = STAGES) => [
+    ...new Set(
+        stages.flatMap((s) =>
+            s.tests.filter((t) => t.kind === 'unit').flatMap((t) => t.specs),
+        ),
+    ),
+];
 
 // The wiring smoke steps a stage's contract tests name.
-const wiringSteps = (stage) => stage.tests.filter((t) => t.kind === 'contract' && t.wiring).flatMap((t) => t.wiring);
+const wiringSteps = (stage) =>
+    stage.tests
+        .filter((t) => t.kind === 'contract' && t.wiring)
+        .flatMap((t) => t.wiring);
 
-module.exports = { STAGES, GROUPS, PLUMBING, FUNNEL_SETS, unitSpecs, wiringSteps };
+module.exports = {
+    STAGES,
+    GROUPS,
+    PLUMBING,
+    FUNNEL_SETS,
+    unitSpecs,
+    wiringSteps,
+};

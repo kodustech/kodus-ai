@@ -43,6 +43,7 @@ on:
             # The shipped defaults (writing guidelines): read by production's
             # resolveWritingGuidelines, which evals/format runs.
             - "default-kodus-config.yml"
+            - "release/features-snapshot.json"
             # The mcp-manager's Kodus MCP tool list and registry: the
             # connection the conversation eval gives its agent.
             - "apps/mcp-manager/package.json"
@@ -55,10 +56,24 @@ on:
             - ".github/actions/eval-sandbox/**"
             - "docker/Dockerfile"
     workflow_dispatch:
+        inputs:
+            run_full_approval_eval:
+                description: "Run paid 200-case approval-risk evaluation"
+                required: false
+                type: boolean
+                default: false
+            approval_case_ids:
+                description: "Comma-separated approval-risk case IDs to rerun (empty = all 200)"
+                required: false
+                type: string
+            approval_batch:
+                description: "Unique batch name for concurrent approval-risk runs"
+                required: false
+                type: string
 
 concurrency:
     # A label that asks for nothing gets a group of its own: it must not cancel a running experiment.
-    group: code-review-evals-pr-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'experiment:full' && format('-label-{0}', github.event.label.name) || '' }}
+    group: code-review-evals-pr-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && format('-approval-{0}', inputs.approval_batch) || github.event.action == 'labeled' && github.event.label.name != 'experiment:full' && format('-label-{0}', github.event.label.name) || '' }}
     cancel-in-progress: true
 
 jobs:
@@ -118,6 +133,55 @@ jobs:
                   gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
                   gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
                   gcp_project: ${{ vars.GCP_PROJECT }}
+
+    approval-risk-full:
+        if: github.event_name == 'workflow_dispatch' && inputs.run_full_approval_eval
+        name: "approval risk · 200 snapshots"
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Validate frozen labels
+              run: node evals/approval-risk/validate-adjudications.js
+            - name: Compare approval decisions
+              env:
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  APPROVAL_CASE_IDS: ${{ inputs.approval_case_ids }}
+              run: |
+                  case_args=()
+                  if [ -n "$APPROVAL_CASE_IDS" ]; then
+                    case_args+=("--ids=$APPROVAL_CASE_IDS")
+                  fi
+                  node evals/approval-risk/run.js \
+                    --set=full --model=deepseek-v4-flash@fireworks \
+                    "${case_args[@]}" \
+                    --output=eval-results/approval-risk-full.json
+            - name: Report comparison
+              if: always() && hashFiles('eval-results/approval-risk-full.json') != ''
+              run: |
+                  node -e 'const r=require("./eval-results/approval-risk-full.json"); console.log(JSON.stringify({metric:r.metric,comparisons:r.comparisons,infra:r.infra,tokens:r.tokens},null,2))' >> "$GITHUB_STEP_SUMMARY"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: approval-risk-full
+                  path: eval-results/approval-risk-full.json
+                  if-no-files-found: ignore
+                  retention-days: 30
 
     experiment:
         needs: wiring

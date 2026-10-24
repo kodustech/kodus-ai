@@ -12,6 +12,17 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { SUMMARY_GENERATION_FAILED_REASON } from './finish-comments.stage';
+import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
+import {
+    approvalPolicyForPlatform,
+    approvalPolicyFromConfig,
+} from '@libs/code-review/domain/approval/approval-decision';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    COMMENT_MANAGER_SERVICE_TOKEN,
+    ICommentManagerService,
+} from '@libs/code-review/domain/contracts/CommentManagerService.contract';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -26,6 +37,8 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         private readonly codeManagementService: CodeManagementService,
         private readonly notificationService: NotificationService,
         private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
+        @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
+        private readonly commentManagerService: ICommentManagerService,
     ) {
         super();
     }
@@ -40,6 +53,69 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
             repository,
             codeReviewConfig,
         } = context;
+        const prNumber = pullRequest.number;
+        const approvalMetadata = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            repositoryId: repository.id,
+            prNumber,
+        };
+
+        if (
+            codeReviewConfig?.pullRequestApprovalActive &&
+            context.platformType === PlatformType.GITHUB &&
+            (context.approvalDecision?.kind === 'hold' ||
+                context.approvalDecision?.kind === 'out-of-scope')
+        ) {
+            try {
+                const dismissed =
+                    await this.codeManagementService.dismissOwnPullRequestApprovals(
+                        {
+                            organizationAndTeamData,
+                            repository,
+                            prNumber,
+                            reason: context.approvalDecision.reason,
+                        },
+                    );
+                if (
+                    dismissed > 0 &&
+                    context.approvalDecision.kind === 'out-of-scope'
+                ) {
+                    try {
+                        await this.commentManagerService.postApprovalReason(
+                            organizationAndTeamData,
+                            prNumber,
+                            repository,
+                            context.approvalDecision.reason,
+                            'hold',
+                        );
+                    } catch (error) {
+                        this.logger.warn({
+                            message: `Could not update Kody's approval status for PR#${prNumber}`,
+                            context: this.stageName,
+                            error,
+                            metadata: approvalMetadata,
+                        });
+                    }
+                }
+            } catch (error) {
+                this.logger.error({
+                    message: `Could not dismiss Kody's earlier approval for PR#${prNumber}`,
+                    context: this.stageName,
+                    error,
+                    metadata: approvalMetadata,
+                });
+                context = this.updateContext(context, (draft) => {
+                    draft.errors ??= [];
+                    draft.errors.push({
+                        stage: this.stageName,
+                        substage: 'dismiss-prior-approval',
+                        severity: 'partial',
+                        error,
+                    });
+                });
+            }
+        }
 
         if (!lineComments) {
             this.logger.warn({
@@ -84,17 +160,62 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
         // whole, so it never approves.
+        const approvalPolicy = approvalPolicyForPlatform(
+            approvalPolicyFromConfig(codeReviewConfig),
+            context.platformType,
+        );
+        const requiresConditionalDecision = !!(
+            approvalPolicy.labels?.length ||
+            approvalPolicy.authors?.length ||
+            approvalPolicy.assessRisk ||
+            approvalPolicy.sensitivePaths?.length
+        );
         const approved = await this.approvePullRequest(
             codeReviewConfig.pullRequestApprovalActive &&
                 !context.onlyCustomAgent,
-            lineComments.length,
+            lineComments.length +
+                (requiresConditionalDecision
+                    ? (context.prLevelCommentResults?.length ?? 0)
+                    : 0),
             organizationAndTeamData,
             pullRequest.number,
             repository,
             reviewHasFailures,
+            context.approvalDecision,
+            requiresConditionalDecision,
         );
 
         if (approved) {
+            if (
+                requiresConditionalDecision &&
+                context.approvalDecision?.kind === 'approve'
+            ) {
+                try {
+                    await this.commentManagerService.postApprovalReason(
+                        organizationAndTeamData,
+                        pullRequest.number,
+                        repository,
+                        context.approvalDecision.reason,
+                        'approve',
+                    );
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Could not post automatic approval reason',
+                        context: this.stageName,
+                        error,
+                        metadata: approvalMetadata,
+                    });
+                    context = this.updateContext(context, (draft) => {
+                        draft.errors ??= [];
+                        draft.errors.push({
+                            stage: this.stageName,
+                            substage: 'approval-reason-publication',
+                            severity: 'partial',
+                            error,
+                        });
+                    });
+                }
+            }
             await this.notifyAutoApproved(context);
         }
 
@@ -170,9 +291,27 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         prNumber: number,
         repository: { id: string; name: string },
         reviewHasFailures: boolean,
+        approvalDecision?: ApprovalDecision,
+        requiresConditionalDecision = false,
     ): Promise<boolean> {
         try {
             if (!pullRequestApprovalActive || lineCommentsLength > 0) {
+                return false;
+            }
+
+            if (requiresConditionalDecision && !approvalDecision) {
+                this.logger.warn({
+                    message: `Holding auto-approval for PR#${prNumber}: conditional decision is unavailable`,
+                    context: this.stageName,
+                });
+                return false;
+            }
+
+            if (approvalDecision && approvalDecision.kind !== 'approve') {
+                this.logger.log({
+                    message: `Holding auto-approval for PR#${prNumber}: ${approvalDecision.reason}`,
+                    context: this.stageName,
+                });
                 return false;
             }
 

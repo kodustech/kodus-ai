@@ -2635,14 +2635,14 @@ export class BitbucketDataCenterService implements Omit<
                 (r: any) => r.user?.name === currentUser.id,
             );
 
-            if (!userReview) return null;
+            if (!userReview) return PullRequestReviewState.NONE;
 
             if (userReview.status === 'APPROVED')
                 return PullRequestReviewState.APPROVED;
             if (userReview.status === 'NEEDS_WORK')
                 return PullRequestReviewState.CHANGES_REQUESTED;
 
-            return null;
+            return PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error getting review status for PR #${params.prNumber} in Data Center`,

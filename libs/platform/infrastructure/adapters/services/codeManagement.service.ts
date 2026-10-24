@@ -703,6 +703,7 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             file: any;
             pullRequest: any;
+            suppressNotFoundLogs?: boolean;
         },
         type?: PlatformType,
     ) {
@@ -988,6 +989,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: Partial<Repository>;
             prNumber: number;
+            includeLabels?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequest | null> {
@@ -1398,6 +1400,8 @@ export class CodeManagementService implements ICodeManagementService {
                 endDate: string;
                 number?: number;
                 branch?: string;
+                dateField?: 'created' | 'updated';
+                maxResults?: number;
             };
         },
         type?: PlatformType,
@@ -1706,6 +1710,26 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getReviewStatusByPullRequest(params);
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        if (type !== PlatformType.GITHUB) {
+            return 0;
+        }
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        if (!provider.dismissOwnPullRequestApprovals) {
+            throw new Error('GitHub approval dismissal is unavailable');
+        }
+        return provider.dismissOwnPullRequestApprovals(params);
     }
 
     async addReactionToPR(params: {

@@ -59,6 +59,12 @@ compose_build="RUNO_PUBLIC_URL=build RUNO_PUBLIC_HOST=build RUNO_URL_WEBHOOKS=bu
     runo up --here --recipe "$RECIPE" || true
     runo push --recipe "$RECIPE" || true
 
+    # A reused preview VM can retain this fixed-name container from an older
+    # Compose project. Compose then cannot create the current profile's MCP
+    # service even though every other service reconciles. This VM belongs to
+    # this branch/profile; let the next up recreate only the MCP container.
+    runo exec -- "docker rm -f kodus-mcp-manager >/dev/null 2>&1 || true" || true
+
     runo up --here --recipe "$RECIPE"
     if [ "$PROFILE" = cloud ]; then
         # The billing context tracks its own repository. Rebuild its pinned
