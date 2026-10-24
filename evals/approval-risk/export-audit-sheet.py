@@ -25,31 +25,49 @@ def measured_cases(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--full', type=Path, required=True)
-    parser.add_argument('--retry', type=Path, required=True)
+    parser.add_argument('--full', type=Path)
+    parser.add_argument('--retry', type=Path)
+    parser.add_argument('--merged', type=Path, help='One merged 200-case result')
+    parser.add_argument('--set', choices=('full', 'full-balanced'), default='full')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--blind-output', type=Path)
     parser.add_argument('--candidate-run', action='append', default=[], metavar='RUN_ID=JSON')
     parser.add_argument('--candidate-output', type=Path)
     args = parser.parse_args()
+    if bool(args.merged) == bool(args.full):
+        parser.error('provide --merged or --full with --retry')
+    if args.full and not args.retry:
+        parser.error('--full requires --retry')
+    if args.merged and args.retry:
+        parser.error('--retry is only valid with --full')
+    if args.set == 'full-balanced' and not args.merged:
+        parser.error('the balanced corpus requires --merged')
     if bool(args.candidate_run) != bool(args.candidate_output):
         parser.error('--candidate-run and --candidate-output must be used together')
 
-    candidate_plan = json.loads((ROOT / 'adjudication-plan.json').read_text())['ids']
-    labels = {case['id']: case for case in json.loads((ROOT / 'adjudications.json').read_text())['cases']}
-    plan = candidate_plan[:len(labels)]
+    balanced = args.set == 'full-balanced'
+    candidate_plan = json.loads((ROOT / ('balanced-selection.json' if balanced else 'adjudication-plan.json')).read_text())['ids']
+    labels = {case['id']: case for case in json.loads((ROOT / ('adjudications-balanced.json' if balanced else 'adjudications.json')).read_text())['cases']}
+    plan = candidate_plan if balanced else candidate_plan[:len(labels)]
     if set(plan) != set(labels):
         raise ValueError('the first scored cases do not match the frozen candidate plan')
     snapshots = {
         case['id']: case
         for case in json.load(gzip.open(ROOT / 'snapshots.json.gz'))['cases']
     }
-    full_cases = measured_cases(args.full)
-    retry_cases = measured_cases(args.retry)
-    missing = set(plan) - set(full_cases)
-    if set(retry_cases) != missing:
-        raise ValueError(f'retry IDs {sorted(retry_cases)} differ from missing IDs {sorted(missing)}')
-    cases = full_cases | retry_cases
+    if args.merged:
+        merged_result = json.loads(args.merged.read_text())
+        if merged_result.get('set', 'full') != args.set:
+            raise ValueError('merged result uses a different corpus')
+        cases = measured_cases(args.merged)
+        retry_cases = {}
+    else:
+        full_cases = measured_cases(args.full)
+        retry_cases = measured_cases(args.retry)
+        missing = set(plan) - set(full_cases)
+        if set(retry_cases) != missing:
+            raise ValueError(f'retry IDs {sorted(retry_cases)} differ from missing IDs {sorted(missing)}')
+        cases = full_cases | retry_cases
     if len(plan) != 200 or len(set(plan)) != 200 or set(cases) != set(plan):
         raise ValueError('expected exactly 200 distinct measured cases from the frozen plan')
 
@@ -85,7 +103,7 @@ def main():
             'modelMapReason': metadata['risks']['modelAndMap']['reason'],
             'sparseHistory': metadata['sparseHistory'],
             'linkedBugHistory': metadata['linkedBugHistory'],
-            'evalRun': '39508066835' if ident in retry_cases else '39493931285',
+            'evalRun': 'merged' if args.merged else ('39508066835' if ident in retry_cases else '39493931285'),
         })
 
     order = {'wrong_approval': 0, 'missed_approval': 1, 'agreement': 2}

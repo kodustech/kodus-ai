@@ -74,6 +74,8 @@ Run the corrected comparison with `node evals/approval-risk/run.js --set=full-ba
 
 The 200-case run can exceed the workflow's two-hour limit. Dispatch four runs with disjoint `approval_case_ids` inputs of 50 IDs each and distinct `approval_batch` names (`01` through `04`), all with the same `approval_set`. Download each run's `approval-risk-full` artifact, then run `node evals/approval-risk/merge-results.js --set=full-balanced --output=eval-results/approval-risk-merged.json path/to/batch-01.json path/to/batch-02.json path/to/batch-03.json path/to/batch-04.json`. The merger rejects missing, duplicate, errored, or mislabeled cases and recomputes all comparisons across exactly the frozen 200 labels. Keep all four run links with the merged result.
 
+Export the balanced result for case review with `python3 evals/approval-risk/export-audit-sheet.py --set full-balanced --merged eval-results/approval-risk-merged.json --output eval-results/approval-risk-balanced-audit.csv`. This orders disagreements against Codex labels first; it is not a human error count. Use the separate blind 50-case CSV for independent labeling.
+
 ## Baselines and gate
 
 Run production's review and approval decision on the **same** frozen snapshots for: current clean-review approval, the model-only risk decision, and model plus the area map and team marks. Report approvals contrary to `hold` labels, approval coverage among `eligible` cases, and both metrics on sparse-history cases. Treat the first metric as a proxy for wrong approvals until humans validate the labels. Measure the baseline before fixing acceptance thresholds in #1765. The area map has a separate temporal ranking eval in #2192; do not use its bug-fix proxy as the approval label.
