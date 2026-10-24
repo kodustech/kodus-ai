@@ -339,8 +339,6 @@ function buildAgentReviewStage({ permissionService, codeManagement, previousDeci
         undefined, // licenseService: no linked repositories
         previousDecisionsUseCase,
     );
-    // TEMP_LOG_NEW_FINDER: the evals run the whole stage.
-    stage.tempStopAfterNewFinder = false;
     return stage;
 }
 

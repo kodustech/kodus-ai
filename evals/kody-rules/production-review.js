@@ -180,8 +180,6 @@ function agentReviewStage(permission, log) {
             undefined, // code management: read only for linked repositories, off without a license
             new KodyRuleSummaryService(permission, rulesRepo, obs),
         );
-        // TEMP_LOG_NEW_FINDER: the eval runs the whole stage.
-        stage.tempStopAfterNewFinder = false;
         return stage;
     };
 }
