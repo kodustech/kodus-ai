@@ -32,10 +32,11 @@
 // tools, and the gate then fails open and keeps the candidate unverified. So this
 // also walks the REAL verifier spec step by step and asserts that every one of
 // the last steps carries either budget guidance or a finalize nudge — and that
-// the nudge does NOT restrict the tools, because this agent's contract is TEXT
-// (its prompt asks for a JSON verdict and never names the done tool, and
-// constraining the output is measured harm — model-strictness.ts). Swap in a
-// tool-forcing policy and this section goes red on purpose.
+// no step narrows the tools to the done tool, because this agent's contract is
+// TEXT (its prompt asks for a JSON verdict and never names the done tool, and
+// constraining the output is measured harm — model-strictness.ts). Only the last
+// step may take every tool away, which leaves the model nothing but the text
+// answer. Swap in a tool-forcing policy and this section goes red on purpose.
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at IMPORT time
 // (`Buffer.from(process.env.API_CRYPTO_KEY, 'hex')`), and the verifier agent
@@ -385,7 +386,7 @@ for (const r of modeDrift) {
 // lands here. It is also the depth where BudgetPolicy short-circuits
 // (`maxSteps < 6`), which is why an unguided last step went unnoticed.
 const DEPTHS = [
-    { label: 'light (default, confidence >= 5)', maxSteps: 5 },
+    { label: 'light (default, confidence >= 5)', maxSteps: 7 },
     { label: 'full (confidence < 5, evidence gate)', maxSteps: 10 },
 ];
 const emptyTools = { get: () => undefined, list: () => [] };
@@ -408,7 +409,8 @@ for (const depth of DEPTHS) {
         `${depth.label}  maxSteps=${spec.maxSteps}  policies=[${spec.policies.map((p) => p.name).join(', ')}]`,
     );
     console.log('  step   budget-note  finalize-note  tools-restricted');
-    for (let stepNumber = 1; stepNumber <= spec.maxSteps; stepNumber++) {
+    // stepNumber is 0-based, as the AI SDK's prepareStep passes it; printed 1-based.
+    for (let stepNumber = 0; stepNumber < spec.maxSteps; stepNumber++) {
         const view = {
             runId: 'r',
             agentId: 'verifier',
@@ -433,16 +435,20 @@ for (const depth of DEPTHS) {
         const guided = budgetNote || finalizeNote;
         if (isLastStretch && !guided) {
             ledgerProblems.push(
-                `${depth.label}: step ${stepNumber}/${spec.maxSteps} has NO budget note and NO finalize nudge — the run can end here with no verdict`,
+                `${depth.label}: step ${stepNumber + 1}/${spec.maxSteps} has NO budget note and NO finalize nudge — the run can end here with no verdict`,
             );
         }
-        if (restricted) {
+        if (restricted?.length) {
             ledgerProblems.push(
-                `${depth.label}: step ${stepNumber}/${spec.maxSteps} restricts tools to [${restricted.join(', ')}] — this agent answers in TEXT; forcing the done tool contradicts its prompt`,
+                `${depth.label}: step ${stepNumber + 1}/${spec.maxSteps} restricts tools to [${restricted.join(', ')}] — this agent answers in TEXT; forcing the done tool contradicts its prompt`,
+            );
+        } else if (restricted && stepNumber < spec.maxSteps - 1) {
+            ledgerProblems.push(
+                `${depth.label}: step ${stepNumber + 1}/${spec.maxSteps} takes every tool away before the last step — the run loses steps it could investigate in`,
             );
         }
         console.log(
-            `  ${String(stepNumber).padEnd(6)} ${(budgetNote ? 'yes' : '-').padEnd(12)} ${(finalizeNote ? 'yes' : '-').padEnd(14)} ${restricted ? restricted.join(',') : '-'}`,
+            `  ${String(stepNumber + 1).padEnd(6)} ${(budgetNote ? 'yes' : '-').padEnd(12)} ${(finalizeNote ? 'yes' : '-').padEnd(14)} ${restricted ? (restricted.length ? restricted.join(',') : 'none (text only)') : '-'}`,
         );
     }
     console.log('');
@@ -451,7 +457,7 @@ if (ledgerProblems.length) {
     console.log('LEDGER problems:');
     for (const m of ledgerProblems) console.log(`  ${m}`);
 } else {
-    console.log('LEDGER ok — no unguided final step, tools never restricted.');
+    console.log('LEDGER ok — no unguided final step, the done tool never forced.');
 }
 
 const bad = lost.length + failed.length + ledgerProblems.length;
