@@ -25,19 +25,19 @@ MERGE_BASE="$(git merge-base "$BASE_REF" HEAD 2>/dev/null || echo "$BASE_REF")"
 # Changed production TS: exclude specs/tests (mutating a test is meaningless) and
 # type-only declaration files (no runtime logic to mutate). Include unstaged work
 # so the sensor runs pre-commit, not just post-push.
+changed_paths="$(
+    git diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD &&
+    git diff --name-only --diff-filter=ACMR HEAD
+)" || { echo "[mutation:diff] Could not list changed files." >&2; exit 1; }
+
 FILES=()
-while IFS= read -r file; do FILES+=("$file"); done < <(
-    {
-        git diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD
-        git diff --name-only --diff-filter=ACMR HEAD
-    } \
-        | sort -u \
-        | grep -E '\.ts$' \
-        | grep -vE '\.(spec|test|integration)\.ts$' \
-        | grep -vE '\.d\.ts$' \
-        | grep -vE '^(node_modules|dist|coverage|\.stryker-tmp)/' \
-        | while read -r f; do [ -f "$f" ] && echo "$f"; done
-)
+while IFS= read -r file; do
+    [[ "$file" == *.ts ]] || continue
+    [[ "$file" =~ \.(spec|test|integration)\.ts$ ]] && continue
+    [[ "$file" == *.d.ts ]] && continue
+    [[ "$file" =~ ^(node_modules|dist|coverage|\.stryker-tmp)/ ]] && continue
+    [ -f "$file" ] && FILES+=("$file")
+done < <(printf '%s\n' "$changed_paths" | sort -u)
 
 if [ "${#FILES[@]}" -eq 0 ]; then
     echo "[mutation:diff] No changed production .ts files vs ${BASE_REF} — nothing to mutate."
@@ -90,15 +90,17 @@ for f in "${FILES[@]}"; do
             ;;
     esac
 
+    patch="$(git diff --no-ext-diff --no-renames --unified=0 "$MERGE_BASE" -- "$f")" || {
+        echo "[mutation:diff] Could not read changed lines for $f." >&2
+        exit 1
+    }
+    ranges="$(printf '%s\n' "$patch" | sed -nE 's/^@@ .* \+([0-9]+)(,([0-9]+))? @@.*/\1 \3/p')"
     while read -r start count; do
         [ -n "$start" ] || continue
         count="${count:-1}"
         [ "$count" -gt 0 ] || continue
         MUTATE_GLOBS+=("${f}:${start}-$((start + count - 1))")
-    done < <(
-        git diff --no-ext-diff --no-renames --unified=0 "$MERGE_BASE" -- "$f" \
-            | sed -nE 's/^@@ .* \+([0-9]+)(,([0-9]+))? @@.*/\1 \3/p'
-    )
+    done <<< "$ranges"
 done
 
 if [ "${#MUTATE_GLOBS[@]}" -eq 0 ]; then
