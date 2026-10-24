@@ -40,36 +40,22 @@ describe('resolveSuggestionLabel', () => {
         expect(resolveSuggestionLabel({}, mixedPolicy)).toBe('bug');
         expect(resolveSuggestionLabel({ label: null } as any, mixedPolicy)).toBe('bug');
     });
-    it('mixed agent moves a known label this run does not allow to the first allowed', () => {
+    it('mixed agent passes a known label this run does not allow through, for the category step to discard', () => {
         expect(
             resolveSuggestionLabel(
                 { label: 'security' },
                 { ...mixedPolicy, allowedLabels: ['performance'] },
             ),
-        ).toBe('performance');
+        ).toBe('security');
     });
     it('mixed agent cannot claim kody_rules', () => {
         expect(
             resolveSuggestionLabel({ label: 'kody_rules' }, mixedPolicy),
         ).toBe('bug');
     });
-    it('keeps repo_instruction only when the run allows it', () => {
+    it('passes repo_instruction through, for the category step to decide', () => {
         expect(
             resolveSuggestionLabel({ label: 'repo_instruction' }, mixedPolicy),
-        ).toBe('bug');
-        expect(
-            resolveSuggestionLabel(
-                { label: 'repo_instruction' },
-                {
-                    ...mixedPolicy,
-                    allowedLabels: [
-                        'bug',
-                        'security',
-                        'performance',
-                        'repo_instruction',
-                    ],
-                },
-            ),
         ).toBe('repo_instruction');
     });
 });

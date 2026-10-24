@@ -93,8 +93,8 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
     // tagged with this.getCategoryLabel() ('generalist'), overwriting the
     // bug/security/performance label the LLM emitted. Downstream filters and
     // the UI rely on the finding-level category, not the agent-level one.
-    // resolveSuggestionLabel preserves the original label when it is one of
-    // the allowed values and falls back to the first allowed label otherwise.
+    // resolveSuggestionLabel preserves the label the LLM wrote and fills a
+    // missing one with bug.
 
     // resolveSuggestionLabel moved off the provider into finding-mapper; it now
     // takes a LabelPolicy built from the provider's own policy methods (exactly
@@ -128,7 +128,7 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
         expect(resolve('generalist')).not.toBe('generalist');
     });
 
-    it('falls back to the first allowed category when the label is missing', () => {
+    it('falls back to bug when the label is missing', () => {
         // GeneralistAgentProvider.getAllowedSuggestionLabels returns
         // ['bug', 'security', 'performance'] by default — so fallback is 'bug'.
         expect(resolve(undefined)).toBe('bug');
@@ -146,9 +146,9 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
         const narrowResolve = (label: unknown) =>
             resolveSuggestionLabel({ label } as any, policyFor(narrowInput));
 
-        // bug is out of the allowed set now — must fall back to the first
-        // allowed category instead of leaking through.
-        expect(narrowResolve('bug')).toBe('security');
+        // bug is off: the label passes through and the category step after
+        // anchoring discards it (#1821), never moving it to security.
+        expect(narrowResolve('bug')).toBe('bug');
         expect(narrowResolve('security')).toBe('security');
         expect(narrowResolve('performance')).toBe('performance');
     });

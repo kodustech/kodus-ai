@@ -86,26 +86,16 @@ export interface LabelPolicy {
     supportsMixed: boolean;
 }
 
-/** Labels the pipeline routes on; one this run does not allow falls back to
- *  the first allowed. `kody_rules` is here so a generalist cannot claim it:
- *  the stage would exempt the finding from the parse schema and the sanitizer
- *  and treat it as a rule violation with no rule behind it. */
-const KNOWN_FINDING_LABELS = new Set<string>([
-    // The generalist agent's own category, never a finding label.
-    'generalist',
-    'bug',
-    'security',
-    'performance',
-    'repo_instruction',
-    'kody_rules',
-]);
+/** Labels a mixed reviewer cannot claim: `generalist` is the agent's own
+ *  category, and a `kody_rules` finding with no rule behind it would skip the
+ *  parse schema. Both become `bug`. */
+const UNCLAIMABLE_LABELS = new Set<string>(['generalist', 'kody_rules']);
 
-/** Resolve the final label of a suggestion under the agent's label policy.
- *  Single-category agents always return their category. Mixed reviewers honor
- *  an allowed label, give a missing or known-but-disallowed one the first
- *  allowed (prose recovery returns findings with no label), and pass an
- *  unknown label through as written: normalizeFinderLabels turns it into
- *  `bug` after anchoring. */
+/** Resolve the label of a suggestion under the agent's label policy.
+ *  Single-category agents always return their category. A mixed reviewer's
+ *  label passes through lowercased, a missing or unclaimable one becomes
+ *  `bug`; normalizeFinderLabels, after anchoring, replaces a label off the list
+ *  with `bug` and discards one the team turned off (#1821). */
 export function resolveSuggestionLabel(
     suggestion: { label?: string },
     policy: LabelPolicy,
@@ -113,16 +103,12 @@ export function resolveSuggestionLabel(
     if (!policy.supportsMixed) {
         return policy.categoryLabel;
     }
-    const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
             ? suggestion.label.trim().toLowerCase()
             : '';
-    if (allowed.has(rawLabel)) {
-        return rawLabel;
-    }
-    if (!rawLabel || KNOWN_FINDING_LABELS.has(rawLabel)) {
-        return policy.allowedLabels[0] || 'bug';
+    if (!rawLabel || UNCLAIMABLE_LABELS.has(rawLabel)) {
+        return 'bug';
     }
     return rawLabel;
 }
