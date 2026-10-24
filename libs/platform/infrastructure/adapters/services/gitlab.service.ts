@@ -4152,6 +4152,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4182,7 +4183,8 @@ export class GitlabService implements Omit<
                 error: error.message,
                 metadata: params,
             });
-            throw error;
+            if (params.failOnError) throw error;
+            return [];
         }
     }
 

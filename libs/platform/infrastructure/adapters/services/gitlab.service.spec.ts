@@ -129,6 +129,7 @@ describe('GitlabService', () => {
                 organizationAndTeamData,
                 repository: { id: 'repo-1', name: 'repo' },
                 prNumber: 42,
+                failOnError: true,
             }),
         ).rejects.toThrow('GitLab unavailable');
     });
