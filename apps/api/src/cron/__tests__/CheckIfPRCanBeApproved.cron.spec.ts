@@ -1222,6 +1222,13 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 deps.codeManagementService.getFilesByPullRequestId,
             ).toHaveBeenCalledTimes(2);
             expect(
+                deps.codeManagementService.getFilesByPullRequestId,
+            ).toHaveBeenNthCalledWith(
+                2,
+                expect.not.objectContaining({ headSha: expect.anything() }),
+                expect.anything(),
+            );
+            expect(
                 deps.codeManagementService.getPullRequest,
             ).toHaveBeenCalledTimes(3);
             expect(shouldApprove).toHaveBeenLastCalledWith(

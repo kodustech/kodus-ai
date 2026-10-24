@@ -570,9 +570,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                                 },
                                                                 prNumber:
                                                                     pr.number,
-                                                                headSha:
-                                                                    reviewedHead ??
-                                                                    undefined,
+                                                                // The GitHub adapter caches by head only.
+                                                                // A new base can change this diff, so a
+                                                                // directory-policy miss must fetch live files.
                                                             },
                                                             pr.provider as PlatformType,
                                                         ),
