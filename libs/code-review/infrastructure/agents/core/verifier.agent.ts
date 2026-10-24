@@ -126,7 +126,7 @@ export function buildVerifierAgentSpec(
             new BudgetPolicy(),
             // Without this the verify run can spend every step investigating and
             // be cut off with NO verdict — 20% of production runs (154 sampled,
-            // 2026-09-19), and a run with no verdict discards the candidate.
+            // 2026-09-19); a run cut off at the step cap discards the candidate.
             // Force TEXT, not the tool: this prompt asks for a JSON verdict in
             // the reply and never mentions submitVerdict, and constraining the
             // output is measured harm (see model-strictness.ts).
