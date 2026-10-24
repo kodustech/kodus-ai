@@ -8,6 +8,8 @@
     "enableFindRelatedTests": true
   },
   "coverageAnalysis": "perTest",
+  "_ignoreStatic_comment": "Static mutants run every selected test and are excluded from this advisory PR score. The last changed-line run found 84 static mutants (3%) responsible for an estimated 99% of mutation time and hit the 25-minute job limit.",
+  "ignoreStatic": true,
   "mutate": [
     "libs/llm/resolve-model-slot.ts"
   ],
