@@ -51,7 +51,7 @@ describe('evals/weekly.js', () => {
         expect(report(dir).status).toBe('success');
         const r = report(dir, expected);
         expect(r.status).toBe('cancelled');
-        expect(r.title).toBe('⚠️ Weekly evals: 3 not measured');
+        expect(r.title).toBe('⚠️ Weekly evals: 4 not measured');
         expect(r.description).toContain('⚠️ `m1` verify · its job ended before reporting');
         expect(r.description).not.toContain('finder');
     });
