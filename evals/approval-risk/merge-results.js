@@ -20,6 +20,7 @@ function merge(files, set = 'full') {
             ]),
     );
     const seen = new Set();
+    const unmeasured = new Set();
     const rows = [];
     const results = files.map((file) => {
         try {
@@ -40,9 +41,11 @@ function merge(files, set = 'full') {
         for (const row of result.cases) {
             if (!labels.has(row.id))
                 throw new Error(`Unexpected case: ${row.id}`);
+            if (row.total !== 1 || row.unmeasured || !row.metadata?.arms) {
+                unmeasured.add(row.id);
+                continue;
+            }
             if (seen.has(row.id)) throw new Error(`Duplicate case: ${row.id}`);
-            if (row.total !== 1 || row.unmeasured || !row.metadata?.arms)
-                throw new Error(`Unmeasured case: ${row.id}`);
             if (row.metadata.expect !== labels.get(row.id))
                 throw new Error(`Wrong expected decision: ${row.id}`);
             if (
@@ -61,6 +64,11 @@ function merge(files, set = 'full') {
             rows.push(row);
         }
     }
+    const unresolved = [...unmeasured].filter((id) => !seen.has(id));
+    if (unresolved.length)
+        throw new Error(
+            `Unmeasured cases without successful retry: ${unresolved.slice(0, 5).join(', ')}`,
+        );
     const missing = [...labels.keys()].filter((id) => !seen.has(id));
     if (missing.length)
         throw new Error(
@@ -109,6 +117,7 @@ function merge(files, set = 'full') {
         set,
         model,
         sources: files.map((file) => path.basename(file)),
+        retriedCaseIds: [...unmeasured].filter((id) => seen.has(id)),
         metric: {
             ...results[0].metric,
             value: hits / rows.length,
