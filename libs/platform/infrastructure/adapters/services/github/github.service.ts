@@ -5528,6 +5528,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            return null;
         }
     }
 

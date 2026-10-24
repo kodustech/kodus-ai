@@ -55,6 +55,25 @@ describe('GitlabService', () => {
         jest.clearAllMocks();
     });
 
+    it.each([
+        ['createIssueComment', 'MergeRequestDiscussions'],
+        ['createSingleIssueComment', 'MergeRequestNotes'],
+    ] as const)('returns null when %s cannot publish', async (method, api) => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            [api]: { create: jest.fn().mockRejectedValue(new Error('denied')) },
+        });
+
+        await expect(
+            service[method]({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                body: 'Automatic approval held',
+            }),
+        ).resolves.toBeNull();
+    });
+
     it('distinguishes no Kody approval from an unavailable GitLab lookup', async () => {
         jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
         jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({

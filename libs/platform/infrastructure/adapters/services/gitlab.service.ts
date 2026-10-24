@@ -2572,6 +2572,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -2604,6 +2605,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 

@@ -56,6 +56,26 @@ describe('GithubService', () => {
         );
     });
 
+    it('returns null when an issue comment cannot be created', async () => {
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            issues: {
+                createComment: jest.fn().mockRejectedValue(new Error('denied')),
+            },
+        });
+
+        await expect(
+            service.createIssueComment({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                body: 'Automatic approval held',
+            }),
+        ).resolves.toBeNull();
+    });
+
     it.each([
         ['the PR has no reviews', []],
         [
