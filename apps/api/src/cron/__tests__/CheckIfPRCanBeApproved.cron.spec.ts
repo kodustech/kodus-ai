@@ -288,10 +288,6 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 dataExecution: { lastAnalyzedCommit: 'same-sha' },
             });
 
-        deps.codeManagementService.getPullRequest = jest
-            .fn()
-            .mockResolvedValue({ head: { sha: 'same-sha' } });
-
         deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
             [{ id: 'c-1', body: 'Resolved', isResolved: true }],
         );
@@ -312,9 +308,13 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 configLevel: 'repository',
             },
             teamAutomationId: 'team-automation-1',
+            currentPullRequest: { head: { sha: 'same-sha' } },
         });
 
         expect(result).toBe(true);
+        expect(
+            deps.codeManagementService.getPullRequest,
+        ).not.toHaveBeenCalled();
         expect(
             deps.codeManagementService.checkIfPullRequestShouldBeApproved,
         ).toHaveBeenCalled();
@@ -1159,6 +1159,87 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.getFilesByPullRequestId,
         ).toHaveBeenCalledTimes(2);
+    });
+
+    it('reuses directory files across TTL only while both head and base are unchanged', async () => {
+        const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+        try {
+            const { cron, deps } = makeCron();
+            deps.parametersService.findOne.mockResolvedValue({
+                team: { uuid: 'team-1' },
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-a',
+                            name: 'Repo A',
+                            directories: [{ path: 'src/auth', configs: {} }],
+                        },
+                    ],
+                },
+            });
+            deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+                [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+            );
+            deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [makeOpenPr(1, 'repo-a')],
+            );
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { dataExecution: { lastAnalyzedCommit: 'head-1' } },
+            );
+            deps.codeManagementService.getPullRequest
+                .mockResolvedValueOnce({
+                    head: { sha: 'head-1' },
+                    base: { sha: 'base-1' },
+                })
+                .mockResolvedValueOnce({
+                    head: { sha: 'head-1' },
+                    base: { sha: 'base-1' },
+                })
+                .mockResolvedValueOnce({
+                    head: { sha: 'head-1' },
+                    base: { sha: 'base-2' },
+                })
+                .mockResolvedValueOnce({
+                    head: { sha: 'head-2' },
+                    base: { sha: 'base-2' },
+                });
+            deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(
+                [{ filename: 'src/auth/session.ts' }],
+            );
+            const shouldApprove = jest
+                .spyOn(cron as any, 'shouldApprovePR')
+                .mockResolvedValue(false);
+
+            await cron.handleCron();
+            now.mockReturnValue(11 * 60 * 1000);
+            await cron.handleCron();
+            expect(
+                deps.codeManagementService.getFilesByPullRequestId,
+            ).toHaveBeenCalledTimes(1);
+
+            await cron.handleCron();
+            expect(
+                deps.codeManagementService.getFilesByPullRequestId,
+            ).toHaveBeenCalledTimes(2);
+            expect(
+                deps.codeManagementService.getPullRequest,
+            ).toHaveBeenCalledTimes(3);
+            expect(shouldApprove).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    currentPullRequest: expect.objectContaining({
+                        base: { sha: 'base-2' },
+                    }),
+                }),
+            );
+
+            await cron.handleCron();
+            expect(
+                deps.codeManagementService.getFilesByPullRequestId,
+            ).toHaveBeenCalledTimes(2);
+            expect(shouldApprove).toHaveBeenCalledTimes(3);
+        } finally {
+            now.mockRestore();
+        }
     });
 
     it('stops approval when the directory file lookup stalls', async () => {

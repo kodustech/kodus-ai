@@ -49,7 +49,10 @@ import {
     formatApprovalReasonComment,
     isApprovalReasonComment,
 } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
-import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import {
+    PullRequest,
+    PullRequestReviewState,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import {
@@ -456,6 +459,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
                                     let resolvedConfig:
                                         CodeReviewConfig | undefined;
+                                    let currentPullRequest:
+                                        PullRequest | null | undefined;
                                     if (
                                         codeReviewConfigFromRepo.directories
                                             ?.length
@@ -477,8 +482,63 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 execution?.dataExecution
                                                     ?.lastAnalyzedCommit,
                                             );
+                                        if (reviewedHead) {
+                                            try {
+                                                currentPullRequest =
+                                                    await this.codeManagementService.getPullRequest(
+                                                        {
+                                                            organizationAndTeamData,
+                                                            repository: {
+                                                                id: repository.id,
+                                                                name: repository.name,
+                                                            },
+                                                            prNumber: pr.number,
+                                                            includeLabels: true,
+                                                        },
+                                                        pr.provider as PlatformType,
+                                                    );
+                                            } catch (error) {
+                                                this.logger.warn({
+                                                    message:
+                                                        'Could not load PR for directory approval policy',
+                                                    context:
+                                                        CheckIfPRCanBeApprovedCronProvider.name,
+                                                    error,
+                                                    metadata: {
+                                                        ...organizationAndTeamData,
+                                                        repositoryId:
+                                                            repository.id,
+                                                        prNumber: pr.number,
+                                                    },
+                                                });
+                                                return;
+                                            }
+                                            if (currentPullRequest === null) {
+                                                return;
+                                            }
+                                            const currentHead =
+                                                currentPullRequest?.head?.sha;
+                                            if (
+                                                currentHead &&
+                                                currentHead !== reviewedHead
+                                            ) {
+                                                return;
+                                            }
+                                        }
+                                        // A changed base can change the PR diff
+                                        // without changing its head. When the
+                                        // provider supplies both SHAs, the file
+                                        // list is stable for that exact pair.
+                                        // Otherwise retain the short TTL.
+                                        const currentBase =
+                                            currentPullRequest?.base?.sha;
+                                        const stableVersion =
+                                            reviewedHead &&
+                                            currentPullRequest?.head?.sha ===
+                                                reviewedHead &&
+                                            currentBase;
                                         const cacheKey = reviewedHead
-                                            ? `${organizationId}:${repository.id}:${pr.number}:${reviewedHead}`
+                                            ? `${organizationId}:${repository.id}:${pr.number}:${reviewedHead}${stableVersion ? `:${currentBase}` : ''}`
                                             : null;
                                         const cached = cacheKey
                                             ? this.directoryFilesByReviewedHead.get(
@@ -487,8 +547,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             : undefined;
                                         let files =
                                             cached &&
-                                            Date.now() - cached.fetchedAt <
-                                                DIRECTORY_FILE_CACHE_TTL_MS
+                                            (stableVersion ||
+                                                Date.now() - cached.fetchedAt <
+                                                    DIRECTORY_FILE_CACHE_TTL_MS)
                                                 ? cached.files
                                                 : undefined;
                                         if (!files) {
@@ -609,6 +670,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         pr,
                                         codeReviewConfig: resolvedConfig,
                                         teamAutomationId: teamAutomation.uuid,
+                                        currentPullRequest,
                                     });
                                 }),
                             ),
@@ -645,11 +707,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
         pr,
         codeReviewConfig,
         teamAutomationId,
+        currentPullRequest: preloadedPullRequest,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         pr: IPullRequestWithDeliveredSuggestions;
         codeReviewConfig?: CodeReviewConfig;
         teamAutomationId: string;
+        currentPullRequest?: PullRequest | null;
     }): Promise<boolean> {
         const repository = pr?.repository;
         const prNumber = pr?.number;
@@ -718,22 +782,24 @@ export class CheckIfPRCanBeApprovedCronProvider {
         ) {
             return false;
         }
-        let currentPullRequest;
+        let currentPullRequest = preloadedPullRequest;
 
         if (lastAnalyzedCommitSha || policyActive) {
-            currentPullRequest =
-                await this.codeManagementService.getPullRequest(
-                    {
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository?.id,
-                            name: repository?.name,
+            if (!currentPullRequest) {
+                currentPullRequest =
+                    await this.codeManagementService.getPullRequest(
+                        {
+                            organizationAndTeamData,
+                            repository: {
+                                id: repository?.id,
+                                name: repository?.name,
+                            },
+                            prNumber: prNumber,
+                            includeLabels: !!policy?.labels?.length,
                         },
-                        prNumber: prNumber,
-                        includeLabels: !!policy?.labels?.length,
-                    },
-                    platformType,
-                );
+                        platformType,
+                    );
+            }
 
             const currentHeadSha =
                 currentPullRequest?.head?.sha ||
@@ -814,7 +880,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     policy,
                     author:
                         currentPullRequest?.user?.login ??
-                        currentPullRequest?.user?.username,
+                        (
+                            currentPullRequest?.user as
+                                { username?: string } | undefined
+                        )?.username,
                     labels: currentPullRequest?.labels,
                     changedPaths,
                     reviewClean: true,
