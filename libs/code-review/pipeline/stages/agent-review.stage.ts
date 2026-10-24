@@ -2420,7 +2420,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         } catch (err) {
             this.logger.warn({
-                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
                 context: this.stageName,
                 error: err,
             });
@@ -2435,9 +2435,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
      *   2. else semantic cosine of the two descriptions:
      *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
-     * Every external failure (no embed key, embedding/LLM error) falls back to a
-     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
-     * honored blindly.
+     * Without an embedding (no embedder, or the call failed) the tiebreak
+     * decides the model's proposed merges (#2170). A tiebreak failure falls
+     * back to a veto, so a low-overlap merge is never honored blindly.
      *
      * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
      * grouping to corroborate a match, so the cheap lexical-honor shortcut is
@@ -2479,17 +2479,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
-            // Without embeddings this vetoes EVERY merge, which republishes
-            // the one duplicate we are most sure about: a scanner fact the
-            // model restated. Only that pair overrides the veto — where
-            // embeddings work, the full guard still decides, so a wide agent
-            // finding that merely overlaps a scanner line is not swallowed.
+            // A scanner fact the model restated is the duplicate we are most
+            // sure about: it merges without asking. Where embeddings work, the
+            // full guard still decides, so a wide agent finding that merely
+            // overlaps a scanner line is not swallowed.
             if (restatesAnalyzerFinding(dup, keep)) {
                 return {
                     honor: true,
                     reason: 'restates-analyzer (no-embed)',
                     score: lexical,
                 };
+            }
+            // No embedding (a self-hosted install without the platform OpenAI
+            // key, or a failed call, #2170): the model proposed this merge, so
+            // the tiebreak decides it. The cross-stream pass has no such proposal and
+            // would ask once per suggestion × rule pair: it keeps the veto.
+            if (!opts?.crossStream) {
+                const sameBug = await tiebreak(dup, keep);
+                if (sameBug !== null) {
+                    return {
+                        honor: sameBug,
+                        reason: `llm-tiebreak=${sameBug} (no-embed)`,
+                        score: lexical,
+                    };
+                }
             }
             return {
                 honor: false,
