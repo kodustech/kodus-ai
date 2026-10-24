@@ -2316,3 +2316,164 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
         expect(result.lastAnalyzedCommit).toBe(PUSHED);
     });
 });
+
+describe('CommentManagerService — GitLab status note reuse on push (#1721)', () => {
+    let service: CommentManagerService;
+    let codeManagementService: {
+        createIssueComment: jest.Mock;
+        createSingleIssueComment: jest.Mock;
+        updateIssueComment: jest.Mock;
+    };
+    let messageProcessor: { processTemplate: jest.Mock };
+
+    const stubRepository = { name: 'sample', id: 'repo-id' };
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+    const changedFiles = [
+        { filename: 'a.ts', patch: '+ code', status: 'modified' },
+    ] as any;
+    const statusBody = 'Kody status body';
+    const everyPushStartMessage = {
+        startReviewMessage: { status: 'EVERY_PUSH', content: 'Start' },
+    } as any;
+
+    beforeEach(() => {
+        codeManagementService = {
+            createIssueComment: jest.fn(),
+            createSingleIssueComment: jest.fn().mockResolvedValue({ id: 123 }),
+            updateIssueComment: jest.fn().mockResolvedValue({}),
+        };
+        messageProcessor = {
+            processTemplate: jest.fn().mockResolvedValue(statusBody),
+        };
+
+        service = new CommentManagerService(
+            {} as any,
+            messageProcessor as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+        );
+    });
+
+    it('first run posts a new plain MR note and exposes its id as commentId', async () => {
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            changedFiles,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            everyPushStartMessage,
+        );
+
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+        // Plain MR note: `id` is the note id, so it rides in commentId and
+        // noteId stays null (there is no discussion to address).
+        expect(result).toEqual({ commentId: 123, noteId: null, threadId: null });
+    });
+
+    it('a second review of the same MR edits the existing note instead of creating another', async () => {
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            changedFiles,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            everyPushStartMessage,
+            { commentId: 123, noteId: null as any, threadId: null as any },
+        );
+
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.updateIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.updateIssueComment.mock.calls[0][0],
+        ).toMatchObject({
+            organizationAndTeamData: stubOrg,
+            prNumber: 5,
+            repository: { name: 'sample', id: 'repo-id' },
+            body: statusBody,
+            commentId: 123,
+        });
+        // No noteId on the update: GitlabService.updateIssueComment routes a
+        // missing noteId to MergeRequestNotes.edit (#1721).
+        expect(
+            codeManagementService.updateIssueComment.mock.calls[0][0].noteId,
+        ).toBeUndefined();
+        expect(result).toEqual({ commentId: 123, noteId: null, threadId: null });
+    });
+
+    it('never reuses a numeric noteId (legacy status discussion data)', async () => {
+        await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            changedFiles,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            everyPushStartMessage,
+            { commentId: 7, noteId: 9 },
+        );
+
+        expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to creating a new note when editing the previous one fails', async () => {
+        codeManagementService.updateIssueComment.mockRejectedValue(
+            new Error('404 Not Found'),
+        );
+
+        const result = await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            changedFiles,
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            everyPushStartMessage,
+            { commentId: 123 },
+        );
+
+        expect(
+            codeManagementService.updateIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({ commentId: 123, noteId: null, threadId: null });
+    });
+
+    it('non-GitLab platforms never reuse a previous id', async () => {
+        await service.createInitialComment(
+            stubOrg,
+            5,
+            stubRepository,
+            changedFiles,
+            'en-US',
+            PlatformType.GITHUB,
+            undefined,
+            everyPushStartMessage,
+            { commentId: 123 },
+        );
+
+        expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.createSingleIssueComment,
+        ).toHaveBeenCalledTimes(1);
+    });
+});
