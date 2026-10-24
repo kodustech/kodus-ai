@@ -296,65 +296,31 @@ export class GraphContextService {
             // stays unquoted so the shell loop variable expands.
             const safeBaseRef = shSingleQuote(`origin/${baseBranch}`);
 
-            const extractResult = await sandbox.run(
+            // EXPERIMENT: the whole repository at the base, not only the changed
+            // files, so callers/callees/blast radius can leave the PR.
+            const build = await sandbox.run(
                 [
+                    'export PATH="$HOME/.bun/bin:$PATH" 2>/dev/null || true',
                     `cd ${sandbox.repoDir}`,
                     `rm -rf ${BASE_FILES_DIR} && mkdir -p ${BASE_FILES_DIR}`,
-                    // `${f%/*}` is POSIX parameter expansion — it strips the
-                    // last `/...` from the path without spawning a subshell.
-                    // The previous `$(dirname "$f")` form invoked a command
-                    // substitution inside the shell loop, which meant a
-                    // filename like `dir/$(reboot).txt` would execute in the
-                    // sandbox. Parameter expansion is a pure text operation
-                    // and can't be abused by filename content.
-                    `for f in ${fileList}; do ` +
-                        `d="${BASE_FILES_DIR}/\${f%/*}" && ` +
-                        `mkdir -p "$d" 2>/dev/null; ` +
-                        `git show ${safeBaseRef}":$f" > "${BASE_FILES_DIR}/$f" 2>/dev/null || rm -f "${BASE_FILES_DIR}/$f"; ` +
-                        `done`,
-                    `find ${BASE_FILES_DIR} -type f -size +0c | sed 's|^${BASE_FILES_DIR}/||' | sort`,
+                    `git archive ${safeBaseRef} | tar -x -C ${BASE_FILES_DIR}`,
+                    `kodus-graph parse --all --no-gitignore --repo-dir ${BASE_FILES_DIR} --out ${shSingleQuote(BASE_GRAPH_PATH)}`,
                 ].join(' && '),
-                { timeoutMs: 30_000 },
+                { timeoutMs: KODUS_GRAPH_TIMEOUTS.parseAll },
             );
-
-            if (extractResult.exitCode !== 0) {
+            if (build.exitCode !== 0) {
                 this.logger.warn({
-                    message: `[KODUS-GRAPH] buildBaseGraphFromGit: extract failed (exit=${extractResult.exitCode})`,
+                    message: `[KODUS-GRAPH] buildBaseGraphFromGit: full base parse failed (exit=${build.exitCode})`,
                     context: GraphContextService.name,
-                    metadata: {
-                        stderr: (extractResult.stderr || '').slice(0, 300),
-                    },
+                    metadata: { stderr: (build.stderr || '').slice(0, 300) },
                 });
                 return undefined;
             }
-
-            const extractedFiles = (extractResult.stdout || '')
-                .split('\n')
-                .map((l) => l.trim())
-                .filter(Boolean);
-
-            if (extractedFiles.length === 0) {
-                this.logger.log({
-                    message: `[KODUS-GRAPH] buildBaseGraphFromGit: no old files found on origin/${baseBranch} (all ${filePaths.length} files are new)`,
-                    context: GraphContextService.name,
-                });
-                return undefined;
-            }
-
-            await this.cli.parseFiles(sandbox, extractedFiles, {
-                outPath: BASE_GRAPH_PATH,
-                repoDir: BASE_FILES_DIR,
-                timeoutMs: KODUS_GRAPH_TIMEOUTS.parseFiles,
-            });
-
+            void fileList;
             this.logger.log({
-                message: `[KODUS-GRAPH] buildBaseGraphFromGit: base graph built from ${extractedFiles.length}/${filePaths.length} files on origin/${baseBranch}`,
+                message: `[KODUS-GRAPH] buildBaseGraphFromGit: full base graph built on origin/${baseBranch}`,
                 context: GraphContextService.name,
-                metadata: {
-                    baseBranch,
-                    extractedFiles: extractedFiles.length,
-                    totalFiles: filePaths.length,
-                },
+                metadata: { baseBranch, totalFiles: filePaths.length, fullBase: true },
             });
 
             return BASE_GRAPH_PATH;
