@@ -2880,7 +2880,7 @@ export class GitlabService implements Omit<
             const response = await gitlabAPI.MergeRequestDiscussions.editNote(
                 repository.id,
                 prNumber,
-                threadId ?? commentId,
+                String(threadId ?? commentId),
                 noteId ?? Number(commentId),
                 { body: body },
             );
