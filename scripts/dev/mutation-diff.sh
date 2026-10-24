@@ -54,20 +54,38 @@ printf '  - %s\n' "${FILES[@]}"
 # `\` to `/` before matching.
 glob_escape() { printf '%s' "$1" | sed -e 's/[][()*?{}]/[&]/g'; }
 
-# Scope the dry run to the co-located specs of the changed files. Stryker's dry
+# Scope the dry run to nearby specs of the changed files. Stryker's dry
 # run runs the whole configured testMatch; without this it would run the manual
 # default list (jest.stryker.config.ts) instead of the tests that actually cover
 # THESE files. jest.stryker.config.ts reads STRYKER_JEST_TESTMATCH when set.
 SPECS=()
+add_spec() {
+    [ -f "$1" ] || return 0
+    local escaped="<rootDir>/$(glob_escape "$1")"
+    for existing in "${SPECS[@]-}"; do
+        [ "$existing" = "$escaped" ] && return 0
+    done
+    SPECS+=("$escaped")
+}
+
 for f in "${FILES[@]}"; do
-    b="${f%.ts}"
-    for cand in "${b}.spec.ts" "${b}.test.ts" "${b}.input-contract.spec.ts"; do
-        [ -f "$cand" ] && SPECS+=("<rootDir>/$(glob_escape "$cand")")
+    directory="${f%/*}"
+    stem="${f##*/}"
+    stem="${stem%.ts}"
+    prefix="${stem%%.*}"
+    for suffix in spec test integration; do
+        for cand in \
+            "${directory}/${stem}"*."${suffix}".ts \
+            "${directory}/${prefix}"*."${suffix}".ts \
+            "${directory}/__tests__/${stem}"*."${suffix}".ts \
+            "${directory}/__tests__/${prefix}"*."${suffix}".ts; do
+            add_spec "$cand"
+        done
     done
 done
 
 if [ "${#SPECS[@]}" -eq 0 ]; then
-    echo "[mutation:diff] None of the changed files have a co-located spec — nothing to validate."
+    echo "[mutation:diff] None of the changed files have a nearby spec — nothing to validate."
     echo "                (That is itself a signal: this change added/edited untested production code.)"
     exit 0
 fi
@@ -75,7 +93,7 @@ fi
 # Emit the spec list as a JSON array for jest.stryker.config.ts (node does the
 # quoting so a path with odd characters can't corrupt it).
 export STRYKER_JEST_TESTMATCH="$(node -e 'process.stdout.write(JSON.stringify(process.argv.slice(1)))' "${SPECS[@]}")"
-echo "[mutation:diff] Scoping tests to ${#SPECS[@]} co-located spec(s)."
+echo "[mutation:diff] Scoping tests to ${#SPECS[@]} nearby spec(s)."
 
 # Stryker supports literal-file mutation ranges, but cannot combine ranges with
 # glob syntax. Next.js route paths contain glob characters, so keep those files
