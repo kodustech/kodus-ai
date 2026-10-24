@@ -172,7 +172,25 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         previousSha: string;
         currentHeadSha?: string;
         totalCommits: number;
+        /** What the rebase left to review (#2037), or why it fell back to a full review. */
+        interdiff?:
+            | {
+                  filesToReview: number;
+                  unchangedFiles: number;
+                  partialFiles: number;
+                  uncomparedFiles: number;
+                  hunksKept: number;
+                  hunksDropped: number;
+              }
+            | { fallback: string };
     };
+
+    /**
+     * After a rebase, the PR files with only the hunks that changed since the
+     * last review (#2037). ResolveConfigStage reviews these instead of the
+     * whole PR diff.
+     */
+    rebaseInterdiffFiles?: FileChange[];
 
     validSuggestionsByPR?: ISuggestionByPR[];
     validCrossFileSuggestions?: CodeSuggestion[];

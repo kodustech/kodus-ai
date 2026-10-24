@@ -64,13 +64,15 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
 
             // Busca apenas metadados dos arquivos (sem conteúdo) - mais rápido
             // O conteúdo será buscado depois no FetchChangedFilesStage apenas para arquivos não ignorados
+            // After a rebase, ValidateNewCommitsStage already read what changed.
             const preliminaryFiles =
-                await this.pullRequestHandlerService.getChangedFilesMetadata(
+                context.rebaseInterdiffFiles ??
+                (await this.pullRequestHandlerService.getChangedFilesMetadata(
                     context.organizationAndTeamData,
                     context.repository,
                     context.pullRequest,
                     baseCommit,
-                );
+                ));
 
             if (!preliminaryFiles || preliminaryFiles.length === 0) {
                 this.logger.warn({

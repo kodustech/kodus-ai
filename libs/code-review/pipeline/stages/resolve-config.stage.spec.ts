@@ -3,18 +3,10 @@ import { ModuleRef } from '@nestjs/core';
 
 import { ResolveConfigStage } from './resolve-config.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import {
-    CODE_BASE_CONFIG_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
-import {
-    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
-import {
-    PULL_REQUEST_MESSAGES_SERVICE_TOKEN,
-} from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
-import {
-    PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { PULL_REQUEST_MESSAGES_SERVICE_TOKEN } from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
+import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { ParametersKey } from '@libs/core/domain/enums';
 import {
     AutomationMessage,
@@ -54,7 +46,9 @@ describe('ResolveConfigStage — input contract', () => {
         }) as unknown as CodeReviewPipelineContext;
 
     beforeEach(async () => {
-        codeBaseConfig = { getConfig: jest.fn().mockResolvedValue({ id: 'cfg' }) };
+        codeBaseConfig = {
+            getConfig: jest.fn().mockResolvedValue({ id: 'cfg' }),
+        };
         prManager = {
             getChangedFilesMetadata: jest.fn().mockResolvedValue(FILES),
         };
@@ -65,9 +59,18 @@ describe('ResolveConfigStage — input contract', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ResolveConfigStage,
-                { provide: CODE_BASE_CONFIG_SERVICE_TOKEN, useValue: codeBaseConfig },
-                { provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN, useValue: prManager },
-                { provide: PULL_REQUEST_MESSAGES_SERVICE_TOKEN, useValue: prMessages },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: codeBaseConfig,
+                },
+                {
+                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+                    useValue: prManager,
+                },
+                {
+                    provide: PULL_REQUEST_MESSAGES_SERVICE_TOKEN,
+                    useValue: prMessages,
+                },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: parameters },
                 { provide: ModuleRef, useValue: moduleRef },
             ],
@@ -105,6 +108,23 @@ describe('ResolveConfigStage — input contract', () => {
             PR,
             undefined,
         );
+    });
+
+    it('after a rebase, reviews only the files the rebase changed (#2037)', async () => {
+        const rebased = [{ filename: 'src/edited.ts', patch: '@@' }];
+        const context = buildContext({
+            rebaseInterdiffFiles: rebased,
+        } as any);
+
+        const result = await stage.execute(context);
+
+        expect(prManager.getChangedFilesMetadata).not.toHaveBeenCalled();
+        expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(
+            ORG,
+            REPO,
+            rebased,
+        );
+        expect(result.preliminaryFiles).toBe(rebased);
     });
 
     it('derives the review config from (org, repo, preliminaryFiles) and stamps it on the context', async () => {
@@ -150,7 +170,9 @@ describe('ResolveConfigStage — input contract', () => {
 
         // enabled → resolves + executes the sync use-case
         const syncExec = jest.fn().mockResolvedValue(undefined);
-        parameters.findByKey.mockResolvedValue({ configValue: { enabled: true } });
+        parameters.findByKey.mockResolvedValue({
+            configValue: { enabled: true },
+        });
         moduleRef.resolve.mockResolvedValue({ execute: syncExec });
 
         await stage.execute(buildContext());
@@ -159,7 +181,9 @@ describe('ResolveConfigStage — input contract', () => {
     });
 
     it('a failing centralized sync never breaks the stage (falls back to DB config)', async () => {
-        parameters.findByKey.mockResolvedValue({ configValue: { enabled: true } });
+        parameters.findByKey.mockResolvedValue({
+            configValue: { enabled: true },
+        });
         moduleRef.resolve.mockRejectedValue(new Error('sync down'));
 
         const result = await stage.execute(buildContext());

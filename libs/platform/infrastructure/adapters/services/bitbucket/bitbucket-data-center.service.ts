@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -41,7 +42,10 @@ import {
     PullRequestReviewState,
     PullRequestWithFiles,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
     isDeniedStatus,
@@ -1311,31 +1315,10 @@ export class BitbucketDataCenterService implements Omit<
                         const diffs = diffRes.data.diffs || [];
 
                         for (const diff of diffs) {
-                            const hunks = diff.hunks || [];
-
-                            for (const hunk of hunks) {
-                                // Construct standard Unified Diff hunk header
-                                patch += `@@ -${hunk.sourceLine || 0},${hunk.sourceSpan || 0} +${hunk.destinationLine || 0},${hunk.destinationSpan || 0} @@\n`;
-
-                                const segments = hunk.segments || [];
-                                for (const segment of segments) {
-                                    const prefix =
-                                        segment.type === 'ADDED'
-                                            ? '+'
-                                            : segment.type === 'REMOVED'
-                                              ? '-'
-                                              : ' ';
-
-                                    if (segment.type === 'ADDED')
-                                        additions += segment.lines?.length || 0;
-                                    if (segment.type === 'REMOVED')
-                                        deletions += segment.lines?.length || 0;
-
-                                    for (const line of segment.lines || []) {
-                                        patch += `${prefix}${line.line}\n`;
-                                    }
-                                }
-                            }
+                            const unified = this.toUnifiedPatch(diff);
+                            patch += unified.patch;
+                            additions += unified.additions;
+                            deletions += unified.deletions;
                         }
                     } catch (err) {
                         this.logger.error({
@@ -1373,6 +1356,134 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,
                 error,
+            });
+            return null;
+        }
+    }
+
+    /** Data Center returns diffs as JSON hunks; rebuilds the unified patch. */
+    private toUnifiedPatch(diff: any): {
+        patch: string;
+        additions: number;
+        deletions: number;
+    } {
+        let patch = '';
+        let additions = 0;
+        let deletions = 0;
+
+        for (const hunk of diff?.hunks || []) {
+            patch += `@@ -${hunk.sourceLine || 0},${hunk.sourceSpan || 0} +${hunk.destinationLine || 0},${hunk.destinationSpan || 0} @@\n`;
+
+            for (const segment of hunk.segments || []) {
+                const prefix =
+                    segment.type === 'ADDED'
+                        ? '+'
+                        : segment.type === 'REMOVED'
+                          ? '-'
+                          : ' ';
+
+                if (segment.type === 'ADDED')
+                    additions += segment.lines?.length || 0;
+                if (segment.type === 'REMOVED')
+                    deletions += segment.lines?.length || 0;
+
+                for (const line of segment.lines || []) {
+                    patch += `${prefix}${line.line}\n`;
+                }
+            }
+        }
+
+        return { patch, additions, deletions };
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            repositoryId: repository?.id,
+            prNumber,
+            baseBranch,
+            headSha,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const repoConfig = await this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            );
+            if (!authDetails || !repoConfig) return null;
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+            const repoPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}`;
+
+            const prResponse = await axiosClient.get(
+                `${repoPath}/pull-requests/${prNumber}`,
+            );
+            const target = prResponse.data?.toRef?.latestCommit;
+            if (!target) {
+                throw new Error('PR has no target commit');
+            }
+
+            // What `from` has that `to` does not: the PR's own changes.
+            const { data } = await axiosClient.get(`${repoPath}/compare/diff`, {
+                params: { from: headSha, to: target },
+            });
+
+            const diffs = data?.diffs || [];
+            if (data?.truncated || diffs.some((diff) => diff?.truncated)) {
+                this.logger.warn({
+                    message: `Compare for PR#${prNumber} at ${headSha} was truncated`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: { ...metadata, reason: 'compare_truncated' },
+                });
+                return null;
+            }
+
+            return diffs.map((diff) => {
+                const source = diff.source?.toString;
+                const destination = diff.destination?.toString;
+                const unified = this.toUnifiedPatch(diff);
+                return {
+                    filename: destination ?? source,
+                    previous_filename:
+                        source && destination && source !== destination
+                            ? source
+                            : undefined,
+                    status: !source
+                        ? 'added'
+                        : !destination
+                          ? 'removed'
+                          : source !== destination
+                            ? 'renamed'
+                            : 'modified',
+                    additions: unified.additions,
+                    deletions: unified.deletions,
+                    changes: unified.additions + unified.deletions,
+                    patch: unified.patch,
+                } as FileChange;
+            });
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: { ...metadata, reason: 'compare_failed' },
             });
             return null;
         }

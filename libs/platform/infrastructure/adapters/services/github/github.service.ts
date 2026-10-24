@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
@@ -56,6 +57,7 @@ import {
 } from '@libs/core/domain/enums';
 import {
     CommentResult,
+    FileChange,
     Repository,
     ReviewComment,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -156,6 +158,9 @@ interface GitHubInstallationData {
     target_type: 'User' | 'Organization';
     target_id: number;
 }
+
+/** A compare response lists at most this many files, with no way to page. */
+const GITHUB_COMPARE_MAX_FILES = 300;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
@@ -4166,6 +4171,72 @@ export class GithubService
                 changes: file.changes,
                 patch: file.patch,
             }));
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            repository: repository?.name,
+            prNumber,
+            baseBranch,
+            headSha,
+        };
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            // Three dots: from the merge base, so only the PR's own changes.
+            const { data } = await octokit.repos.compareCommitsWithBasehead({
+                owner: githubAuthDetail?.org,
+                repo: repository?.name,
+                basehead: `${baseBranch}...${headSha}`,
+            });
+
+            const files = data?.files ?? [];
+            if (files.length >= GITHUB_COMPARE_MAX_FILES) {
+                this.logger.warn({
+                    message: `Compare for PR#${prNumber} at ${headSha} hit the ${GITHUB_COMPARE_MAX_FILES}-file cap`,
+                    context: GithubService.name,
+                    metadata: { ...metadata, reason: 'compare_file_cap' },
+                });
+                return null;
+            }
+
+            return files.map((file) => ({
+                filename: file.filename,
+                previous_filename: file.previous_filename,
+                status: file.status,
+                additions: file.additions,
+                deletions: file.deletions,
+                changes: file.changes,
+                patch: file.patch,
+            })) as FileChange[];
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: GithubService.name,
+                error,
+                metadata: { ...metadata, reason: 'compare_failed' },
+            });
+            return null;
+        }
     }
 
     async getPullRequestsForRTTM(

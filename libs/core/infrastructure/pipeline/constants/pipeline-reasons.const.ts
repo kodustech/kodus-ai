@@ -41,6 +41,11 @@ export const PipelineReasons = {
             message: 'Only Merge Commits',
             description: 'Merge commits are skipped to avoid noise',
         } as PipelineReason,
+        REBASE_NO_CHANGES: {
+            message: 'Rebase Without Changes',
+            description:
+                'The rebase changed nothing in the code already reviewed',
+        } as PipelineReason,
         PROVIDER_RATE_LIMITED: {
             message: 'Provider Rate Limited',
             description:
