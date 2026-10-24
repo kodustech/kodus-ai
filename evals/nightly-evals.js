@@ -67,6 +67,18 @@ const NIGHTLY_EVALS = [
         files: [`evals/funnel/${stage}/targets.json`, 'evals/funnel/known-bugs.js'],
     })),
     {
+        id: 'suggestion-enrichment',
+        stage: 'enrichment',
+        run: ['evals/suggestion-enrichment/run.js'],
+        sets: { controlled: [], full: null },
+        files: [
+            'evals/suggestion-enrichment/targets.json',
+            'evals/suggestion-enrichment/judge.js',
+            'evals/suggestion-enrichment/dataset/head-files.json',
+            'evals/enrichment/dataset/items.json',
+        ],
+    },
+    {
         id: 'business-logic',
         stage: 'business-logic',
         run: ['evals/business-logic/run.js'],

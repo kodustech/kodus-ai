@@ -16,14 +16,26 @@ function casesOf() {
             ref,
             mustFix: fix,
             checks: fix
-                ? `Writes a fix for the cited lines of ${item.finding.relevantFile} that the judge passes, under a title that names the problem`
-                : `Writes no code for ${item.finding.relevantFile} (no correct fix fits the cited lines: ${ref.fixability}), under a title that names the problem`,
+                ? 'Writes a fix for the cited lines that the judge passes, under a title that names the problem'
+                : `Writes no code (no fix fits the cited lines: ${ref.fixability}), under a title that names the problem`,
         };
     });
 }
 
+// The panel lists the cases by repository and by what they must get.
 function catalog() {
-    return casesOf().map((c) => ({ id: c.id, checks: c.checks }));
+    const groups = new Map();
+    for (const c of casesOf()) {
+        const key = `${c.item.repo}:${c.mustFix ? 'fix' : 'no-code'}`;
+        if (!groups.has(key)) groups.set(key, { repo: c.item.repo, mustFix: c.mustFix, n: 0 });
+        groups.get(key).n++;
+    }
+    return [...groups].map(([id, g]) => ({
+        id,
+        checks: g.mustFix
+            ? `Writes a fix the judge passes for each of ${g.n} ${g.repo} findings whose fix fits the cited lines, under a title that names the problem`
+            : `Writes no code for each of ${g.n} ${g.repo} findings no fix fits, under a title that names the problem`,
+    }));
 }
 
 module.exports = { catalog, casesOf };

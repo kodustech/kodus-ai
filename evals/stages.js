@@ -408,7 +408,7 @@ const STAGES = [
     {
         id: 'enrichment',
         name: 'Enrichment',
-        short: 'Writes the title, cited code and fix of each finding',
+        short: 'Titles each finding and writes its fix',
         group: 'After the agents',
         does: 'Completes each finding the review keeps: the cited code and its language from the file at the PR head, then one model call for a title that names the problem and, when a fix fits exactly the cited lines, the code that replaces them. A finding with no fix that fits ships with no code.',
         pipeline: ['AgentReviewStage'],
