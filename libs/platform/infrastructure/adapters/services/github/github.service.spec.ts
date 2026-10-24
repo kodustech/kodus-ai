@@ -76,6 +76,27 @@ describe('GithubService', () => {
         ).resolves.toBeNull();
     });
 
+    it('propagates a failed strict comment lookup', async () => {
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            issues: { listComments: jest.fn() },
+            paginate: jest
+                .fn()
+                .mockRejectedValue(new Error('GitHub unavailable')),
+        });
+
+        await expect(
+            service.getAllCommentsInPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+                failOnError: true,
+            }),
+        ).rejects.toThrow('GitHub unavailable');
+    });
+
     it.each([
         ['the PR has no reviews', []],
         [

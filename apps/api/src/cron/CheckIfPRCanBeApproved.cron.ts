@@ -1150,7 +1150,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // write happens only after this bounded await resolves.
             const comments = await runWithBoundedTimeout(
                 this.codeManagementService.getAllCommentsInPullRequest(
-                    request,
+                    { ...request, failOnError: true },
                     platformType,
                 ),
                 APPROVAL_REASON_LOOKUP_TIMEOUT_MS,

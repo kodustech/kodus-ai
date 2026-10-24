@@ -130,7 +130,10 @@ export class CommentManagerService implements ICommentManagerService {
         };
         const body = formatApprovalReasonComment(kind, reason);
         const comments = await runWithBoundedTimeout(
-            this.codeManagementService.getAllCommentsInPullRequest(request),
+            this.codeManagementService.getAllCommentsInPullRequest({
+                ...request,
+                failOnError: true,
+            }),
             10_000,
             'approval hold comment lookup',
         );

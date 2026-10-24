@@ -6830,6 +6830,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -6858,6 +6859,7 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }

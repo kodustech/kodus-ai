@@ -37,6 +37,9 @@ it('updates the existing approval reason after a review hold', async () => {
         }),
     );
     expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+    expect(codeManagement.getAllCommentsInPullRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ failOnError: true }),
+    );
 });
 
 it('does not create an approval reason when the comment lookup fails', async () => {

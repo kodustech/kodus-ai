@@ -1238,6 +1238,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: { name: string; id: string };
             prNumber: number;
+            failOnError?: boolean;
         },
         type?: PlatformType,
     ) {

@@ -4439,6 +4439,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4484,6 +4485,7 @@ export class BitbucketCloudService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }

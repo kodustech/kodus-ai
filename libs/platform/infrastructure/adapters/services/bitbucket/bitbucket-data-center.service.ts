@@ -110,7 +110,9 @@ export class BitbucketDataCenterService implements Omit<
     // Bitbucket Cloud-only feature; Server users track work in Jira). These
     // satisfy the contract for the routing wrapper and return empty so the
     // generic issues MCP degrades gracefully on Server.
-    async listIssues(_params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+    async listIssues(
+        _params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
         this.logger.warn({
             message:
                 'listIssues called on Bitbucket Data Center, which has no issue tracker',
@@ -119,7 +121,9 @@ export class BitbucketDataCenterService implements Omit<
         return [];
     }
 
-    async getIssue(_params: GetIssueParams): Promise<CodeManagementIssue | null> {
+    async getIssue(
+        _params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
         this.logger.warn({
             message:
                 'getIssue called on Bitbucket Data Center, which has no issue tracker',
@@ -2347,8 +2351,12 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }): Promise<any[]> {
         const comments = await this.getPullRequestReviewComments(params);
+        if (!comments && params.failOnError) {
+            throw new Error('Could not load pull request comments');
+        }
         return comments || [];
     }
 
@@ -3379,9 +3387,7 @@ export class BitbucketDataCenterService implements Omit<
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for Bitbucket Data Center — callers fall
         // back to per-user `getUserByUsername`.
         return null;

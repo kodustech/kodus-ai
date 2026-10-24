@@ -3407,18 +3407,27 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
         prNumber: number;
+        failOnError?: boolean;
     }): Promise<any[]> {
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return [];
+            if (!authDetail) {
+                if (params.failOnError)
+                    throw new Error('Forgejo authentication unavailable');
+                return [];
+            }
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getAllCommentsInPullRequest',
             );
-            if (!repoInfo) return [];
+            if (!repoInfo) {
+                if (params.failOnError)
+                    throw new Error('Forgejo repository unavailable');
+                return [];
+            }
 
             const client = this.createForgejoClient(authDetail);
             const result = await issueGetComments({
@@ -3437,6 +3446,7 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }

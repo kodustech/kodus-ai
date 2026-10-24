@@ -494,6 +494,12 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.createIssueComment,
         ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.getAllCommentsInPullRequest,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ failOnError: true }),
+            PlatformType.AZURE_REPOS,
+        );
         expect((cron as any).logger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({
