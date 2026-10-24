@@ -121,6 +121,16 @@ Add to your `.env`:
 WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
 ```
 
+### GitHub Enterprise Server
+
+If the GitHub App is registered on a self-hosted GitHub Enterprise Server instead of github.com, set its host:
+
+```
+API_GITHUB_APP_HOST="https://ghe.example.com"
+```
+
+Kodus then requests installation tokens and calls the REST and GraphQL APIs on that host (`<host>/api/v3`, `<host>/api/graphql`). The installation URL comes from the same server and looks like `https://ghe.example.com/github-apps/<app-slug>/installations/new`. Leave `API_GITHUB_APP_HOST` unset for github.com.
+
 ## Summary of Environment Variables
 
 At the end, your configuration file should contain:
