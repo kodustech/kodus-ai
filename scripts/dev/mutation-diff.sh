@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# Incremental mutation gate. Runs Stryker on ONLY the production .ts files this
-# branch changed versus its merge-base with the base branch — the sensor a PR
-# can afford, versus mutating the whole repo (minutes per file).
+# Incremental mutation gate. Runs Stryker on changed lines of production .ts
+# files versus the merge-base with the base branch.
 #
 # Why a diff scope: a full-repo mutation run is too slow to gate on. Scoping to
-# the changed files answers the question that actually matters on a PR — "are the
+# the changed lines answers the question that actually matters on a PR — "are the
 # lines THIS change touched covered by an assertion, or just executed?" — in the
 # time budget of a normal check.
 #
@@ -77,9 +76,36 @@ fi
 export STRYKER_JEST_TESTMATCH="$(node -e 'process.stdout.write(JSON.stringify(process.argv.slice(1)))' "${SPECS[@]}")"
 echo "[mutation:diff] Scoping tests to ${#SPECS[@]} co-located spec(s)."
 
-# Comma-join for Stryker's --mutate (overrides the config's mutate list).
+# Stryker supports literal-file mutation ranges, but cannot combine ranges with
+# glob syntax. Next.js route paths contain glob characters, so keep those files
+# as whole-file globs; normal paths use each added/changed diff hunk. Deleted-only
+# hunks have no current lines to mutate.
 MUTATE_GLOBS=()
-for f in "${FILES[@]}"; do MUTATE_GLOBS+=("$(glob_escape "$f")"); done
+for f in "${FILES[@]}"; do
+    case "$f" in
+        *"["*|*"]"*|*"("*|*")"*|*"*"*|*"?"*|*"{"*|*"}"*)
+            MUTATE_GLOBS+=("$(glob_escape "$f")")
+            continue
+            ;;
+    esac
+
+    while read -r start count; do
+        [ -n "$start" ] || continue
+        count="${count:-1}"
+        [ "$count" -gt 0 ] || continue
+        MUTATE_GLOBS+=("${f}:${start}-$((start + count - 1))")
+    done < <(
+        git diff --no-ext-diff --no-renames --unified=0 "$MERGE_BASE" -- "$f" \
+            | sed -nE 's/^@@ .* \+([0-9]+)(,([0-9]+))? @@.*/\1 \3/p'
+    )
+done
+
+if [ "${#MUTATE_GLOBS[@]}" -eq 0 ]; then
+    echo "[mutation:diff] Changed files have no current lines to mutate."
+    exit 0
+fi
+
+echo "[mutation:diff] Mutating ${#MUTATE_GLOBS[@]} changed range(s)/file(s)."
 MUTATE="$(IFS=,; echo "${MUTATE_GLOBS[*]}")"
 
 exec npx stryker run --mutate "$MUTATE"

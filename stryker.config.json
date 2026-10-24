@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed files in a PR). testRunner runs only tests related to each mutated file.",
+  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed lines in a PR). testRunner runs only tests related to each mutated file.",
   "packageManager": "pnpm",
   "testRunner": "jest",
   "jest": {

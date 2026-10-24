@@ -1,8 +1,8 @@
 name: "Backend: Mutation Gate"
 
-# Incremental mutation testing on the files a PR changes. Coverage says a line
+# Incremental mutation testing on the lines a PR changes. Coverage says a line
 # ran; the mutation score says an assertion actually caught a change to it. This
-# runs `pnpm mutation:diff`, which mutates only the changed production .ts files
+# runs `pnpm mutation:diff`, which mutates changed lines in production .ts files
 # and scopes the test run to their co-located specs.
 #
 # ADVISORY ROLLOUT: the job is `continue-on-error`, and stryker.config.json sets
@@ -19,6 +19,7 @@ on:
             - "apps/**/*.ts"
             - "stryker.config.json"
             - "jest.stryker.config.ts"
+            - "scripts/dev/mutation-diff.sh"
             - ".github/workflows/mutation-gate.yml"
 
 # Least privilege for the automatically-provisioned GITHUB_TOKEN. Without this
