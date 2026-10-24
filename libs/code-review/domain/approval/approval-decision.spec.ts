@@ -77,3 +77,24 @@ it('holds sensitive paths and stale or failed risk assessments', () => {
         }).kind,
     ).toBe('hold');
 });
+
+it('requires a person for unknown or elevated risk and respects the master toggle', () => {
+    const policy = { assessRisk: true };
+    expect(
+        evaluateApproval({ ...base, approvalActive: false, policy }).kind,
+    ).toBe('disabled');
+
+    for (const level of ['unknown', 'medium', 'high'] as const) {
+        expect(
+            evaluateApproval({
+                ...base,
+                policy,
+                risk: {
+                    level,
+                    reason: `${level} risk`,
+                    reviewedHeadSha: base.currentHeadSha,
+                },
+            }).kind,
+        ).toBe('hold');
+    }
+});
