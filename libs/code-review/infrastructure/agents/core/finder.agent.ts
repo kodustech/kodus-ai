@@ -1659,6 +1659,22 @@ export async function runFinderWithVerify(
         kept = kept.filter((f) => !unverifiedSet.has(f));
     }
 
+    // TEMP_LOG_NEW_FINDER: what the verify embedded in the finder received
+    // and kept.
+    finderLogger.log({
+        message: `TEMP_LOG_NEW_FINDER verify: in=${suggestions.length} kept=${kept.length} refuted=${dropped.length} unverified=${unverified.length} quoteRejected=${route.rejected.length}`,
+        context: 'finder',
+        metadata: {
+            organizationId: params.telemetryMetadata?.organizationId,
+            teamId: params.telemetryMetadata?.teamId,
+            refuted: dropped.map((d) => ({
+                relevantFile: d.candidate.relevantFile,
+                relevantLinesStart: d.candidate.relevantLinesStart,
+                rationale: d.verdict.rationale,
+            })),
+        },
+    });
+
     return {
         reasoning,
         kept,
