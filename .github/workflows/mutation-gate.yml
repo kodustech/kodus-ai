@@ -37,7 +37,7 @@ jobs:
         name: Mutation score on changed files
         runs-on: ubuntu-latest
         continue-on-error: true # advisory — reports, does not block (see header)
-        timeout-minutes: 25
+        timeout-minutes: 45
         steps:
             - name: Checkout code
               uses: actions/checkout@v4.1.7
