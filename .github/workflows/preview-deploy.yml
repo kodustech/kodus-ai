@@ -105,6 +105,10 @@ jobs:
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
               run: |
                   set -euo pipefail
+                  env_name=$($RUNO environments | jq -r \
+                    'map(select(.repo == "kodus-ai" and .branch == "malinosqui/conditional-pr-approval" and .profile == "cloud")) | .[0].name // empty')
+                  : "${env_name:?Cloud preview environment was not found}"
+                  $RUNO attach "$env_name"
                   for service in kodus_webhooks kodus_worker; do
                     echo "== $service"
                     $RUNO exec --branch malinosqui/conditional-pr-approval --profile cloud -- \
