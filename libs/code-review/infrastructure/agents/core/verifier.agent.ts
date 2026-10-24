@@ -316,7 +316,8 @@ export interface LlmVerifierParams {
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 5. */
+    /** Depth for high-confidence findings (light verify). Default 7: six
+     *  tool steps to reach where the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
     /** Depth for low-confidence findings (full verify). Default 10. */
     fullMaxSteps?: number;
@@ -388,7 +389,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             runName: verifyRunName,
             agentName: params.agentName,
             tools: params.tools,
-            maxSteps: params.lightMaxSteps ?? 5,
+            maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
         });
         this.fullSpec = buildVerifierAgentSpec({
