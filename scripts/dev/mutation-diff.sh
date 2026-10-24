@@ -25,7 +25,8 @@ MERGE_BASE="$(git merge-base "$BASE_REF" HEAD 2>/dev/null || echo "$BASE_REF")"
 # Changed production TS: exclude specs/tests (mutating a test is meaningless) and
 # type-only declaration files (no runtime logic to mutate). Include unstaged work
 # so the sensor runs pre-commit, not just post-push.
-mapfile -t FILES < <(
+FILES=()
+while IFS= read -r file; do FILES+=("$file"); done < <(
     {
         git diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD
         git diff --name-only --diff-filter=ACMR HEAD
