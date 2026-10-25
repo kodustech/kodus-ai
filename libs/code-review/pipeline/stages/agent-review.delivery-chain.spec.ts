@@ -206,7 +206,6 @@ const makeContext = (
         prAllCommits: [{ sha: 'head' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             kodyRules: over.kodyRules ?? [
                 {
@@ -229,7 +228,6 @@ const makeContext = (
                 },
             ],
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],

@@ -287,34 +287,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
         const buildWithPipeline = (execute: jest.Mock) =>
             new LLMAnalysisService(observability, { execute } as any);
 
-        it('strips suggestionEmbedded before delegating, leaving other suggestions intact', async () => {
-            const execute = jest.fn().mockResolvedValue({ suggestions: 'ok' });
-            const service = buildWithPipeline(execute);
-            const input = [
-                { id: 'a', suggestionEmbedded: { vec: [1] }, keep: 1 },
-                { id: 'b' },
-            ] as any[];
-
-            await service.filterSuggestionsSafeGuard(
-                org,
-                77,
-                { filename: 'f.ts' },
-                'content',
-                'diff',
-                input,
-                'en-US',
-                ReviewModeResponse.HEAVY_MODE,
-                byokConfig,
-            );
-
-            const payload = execute.mock.calls[0][0];
-            expect(payload.suggestions[0]).not.toHaveProperty(
-                'suggestionEmbedded',
-            );
-            expect(payload.suggestions[0].keep).toBe(1);
-            expect(payload.suggestions[1]).toEqual({ id: 'b' });
-        });
-
         it('does not throw on a null suggestion entry', async () => {
             const execute = jest.fn().mockResolvedValue({ suggestions: [] });
             const service = buildWithPipeline(execute);
@@ -326,7 +298,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
                     { filename: 'f.ts' },
                     'content',
                     'diff',
-                    [null, { id: 'x', suggestionEmbedded: 1 }] as any[],
+                    [null, { id: 'x' }] as any[],
                     'en-US',
                     ReviewModeResponse.HEAVY_MODE,
                     byokConfig,
@@ -334,10 +306,10 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             ).resolves.toBeDefined();
         });
 
-        it('is fail-safe: a pipeline failure returns the (stripped) suggestions instead of dropping them', async () => {
+        it('is fail-safe: a pipeline failure returns the suggestions instead of dropping them', async () => {
             const execute = jest.fn().mockRejectedValue(new Error('pipeline'));
             const service = buildWithPipeline(execute);
-            const input = [{ id: 'a', suggestionEmbedded: 1 }] as any[];
+            const input = [{ id: 'a' }] as any[];
 
             const out = await service.filterSuggestionsSafeGuard(
                 org,
@@ -352,7 +324,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             );
 
             expect(out).toEqual({ suggestions: input });
-            expect(input[0]).not.toHaveProperty('suggestionEmbedded');
         });
     });
 

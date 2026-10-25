@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
 import { createHash, randomBytes } from 'crypto';
 
@@ -29,6 +30,27 @@ export function buildWellKnownUrl(base: string, wellKnownName: string): string {
     return new URL(wellKnownPath, origin).toString();
 }
 
+/**
+ * Where an authorization server publishes its metadata, in the order the MCP
+ * spec tries them: OAuth (RFC 8414) and OpenID Connect discovery, with the
+ * issuer's path inserted after `/.well-known/`, then OpenID Connect with it
+ * appended.
+ */
+export function authorizationServerMetadataUrls(issuer: string): string[] {
+    const u = new URL(issuer);
+    const path = u.pathname.replace(/\/$/, '');
+    const urls = [
+        `${u.origin}/.well-known/oauth-authorization-server${path}`,
+        `${u.origin}/.well-known/openid-configuration${path}`,
+    ];
+    if (path) {
+        urls.push(`${u.origin}${path}/.well-known/openid-configuration`);
+    }
+    return urls;
+}
+
+const logger = new Logger('OAuthDiscovery');
+
 export async function discoverOAuth(baseUrl: string) {
     let rsMetadataUrl = buildWellKnownUrl(baseUrl, 'oauth-protected-resource');
     let rsResp = await axios.get<OAuthProtectedResourceMetadata>(
@@ -38,8 +60,8 @@ export async function discoverOAuth(baseUrl: string) {
         },
     );
     if (rsResp.status >= 400) {
-        console.error(
-            `Error accessing ${rsMetadataUrl}, code: ${rsResp.status}, attempting with root url`,
+        logger.warn(
+            `Error accessing ${rsMetadataUrl}, status: ${rsResp.status}, attempting with root url`,
         );
 
         rsMetadataUrl = buildWellKnownUrl(
@@ -52,8 +74,8 @@ export async function discoverOAuth(baseUrl: string) {
         });
 
         if (rsResp.status >= 400) {
-            console.error(
-                `Error accessing ${rsMetadataUrl}, code: ${rsResp.status}, attempting to proceed without`,
+            logger.warn(
+                `Error accessing ${rsMetadataUrl}, status: ${rsResp.status}, attempting to proceed without`,
             );
         }
     }
@@ -67,45 +89,32 @@ export async function discoverOAuth(baseUrl: string) {
         throw new Error('authorization_servers not found in resource metadata');
     }
 
-    let asIssuer = authorizationServers?.[0] || baseUrl;
-    let asWellKnown = buildWellKnownUrl(asIssuer, 'oauth-authorization-server');
-    let asResp = await axios.get<OAuthAuthorizationServerMetadata>(
-        asWellKnown,
-        {
-            validateStatus: () => true,
-        },
-    );
-    if (asResp.status >= 400) {
-        console.error(
-            `Error accessing ${asWellKnown}, status: ${asResp.status}, attempting with baseUrl`,
-        );
-
-        asIssuer = baseUrl;
-        asWellKnown = buildWellKnownUrl(asIssuer, 'oauth-authorization-server');
-        asResp = await axios.get(asWellKnown, {
+    // The issuer the resource names, then the server itself, then its origin;
+    // each with every metadata URL the MCP spec lists, so an OpenID-only
+    // issuer (Microsoft Entra: `…/{tenant}/v2.0/.well-known/openid-configuration`)
+    // is found too.
+    const issuers = [
+        ...new Set([
+            authorizationServers?.[0],
+            baseUrl,
+            new URL(baseUrl).origin,
+        ]),
+    ].filter(Boolean);
+    let asResp: AxiosResponse<OAuthAuthorizationServerMetadata> | undefined;
+    for (const url of issuers.flatMap(authorizationServerMetadataUrls)) {
+        const resp = await axios.get<OAuthAuthorizationServerMetadata>(url, {
             validateStatus: () => true,
         });
-
-        if (asResp.status >= 400) {
-            console.error(
-                `Error accessing ${asWellKnown}, status: ${asResp.status}, attempting with root url`,
-            );
-
-            asIssuer = new URL(baseUrl).origin;
-            asWellKnown = buildWellKnownUrl(
-                asIssuer,
-                'oauth-authorization-server',
-            );
-            asResp = await axios.get(asWellKnown, {
-                validateStatus: () => true,
-            });
-
-            if (asResp.status >= 400) {
-                throw new Error(
-                    'Failed to fetch authorization server metadata',
-                );
-            }
+        if (resp.status < 400) {
+            asResp = resp;
+            break;
         }
+        logger.error(
+            `Error accessing authorization server metadata at ${url}, status: ${resp.status}`,
+        );
+    }
+    if (!asResp) {
+        throw new Error('Failed to fetch authorization server metadata');
     }
     const as = asResp.data || ({} as OAuthAuthorizationServerMetadata);
 
@@ -290,26 +299,42 @@ export async function exchangeCodeForTokens(
         state,
     } = params;
 
-    const body = new URLSearchParams({
-        client_id: clientId,
-        ...(clientSecret ? { client_secret: clientSecret } : {}),
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        code_verifier: codeVerifier,
-        resource,
-        state,
-    });
+    const exchange = (withResource: boolean) =>
+        axios.post(
+            endpoint,
+            new URLSearchParams({
+                client_id: clientId,
+                ...(clientSecret ? { client_secret: clientSecret } : {}),
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier,
+                ...(withResource ? { resource } : {}),
+                state,
+            }).toString(),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                validateStatus: () => true,
+            },
+        );
 
-    const tokenResp = await axios.post(endpoint, body.toString(), {
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        validateStatus: () => true,
-    });
+    let tokenResp = await exchange(true);
+    // RFC 8707 §2: `invalid_target` is a server refusing the `resource` it
+    // was sent. Microsoft Entra does when the resource is not exactly the
+    // host its scopes name (`https://mcp.dev.azure.com/.default` against
+    // `https://mcp.dev.azure.com/{org}`); it takes the resource from the
+    // scopes, so the code is redeemed once more without it.
+    if (
+        tokenResp.status === 400 &&
+        tokenErrorCode(tokenResp) === 'invalid_target'
+    ) {
+        tokenResp = await exchange(false);
+    }
 
     if (tokenResp.status >= 400) {
-        throw new Error('OAuth token exchange failed');
+        throw new Error(`OAuth token exchange failed${tokenError(tokenResp)}`);
     }
 
     const parsedTokens = parseTokenResponse(tokenResp);
@@ -348,7 +373,7 @@ export async function checkAndRefreshOAuth(
         });
 
         if (tokenResp.status >= 400) {
-            throw new Error('Failed to refresh tokens');
+            throw new Error(`Failed to refresh tokens${tokenError(tokenResp)}`);
         }
 
         const tokens = parseTokenResponse(tokenResp);
@@ -371,6 +396,40 @@ export interface TokenData {
     expiresAt?: number;
     refreshToken?: string;
     scope?: string;
+}
+
+/**
+ * Why the token endpoint refused, as RFC 6749 §5.2 names it (`error`,
+ * `error_description`): Entra's AADSTS code says which setting is wrong.
+ * Never the request, which carries the code and the client secret.
+ */
+function errorBody(response: AxiosResponse): Record<string, unknown> {
+    const raw: unknown = response.data;
+    if (typeof raw !== 'string') {
+        return (raw as Record<string, unknown>) || {};
+    }
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
+
+function tokenErrorCode(response: AxiosResponse): string | undefined {
+    const error = errorBody(response).error;
+    return typeof error === 'string' ? error : undefined;
+}
+
+function tokenError(response: AxiosResponse): string {
+    const body = errorBody(response);
+    const parts = [
+        `status ${response.status}`,
+        typeof body.error === 'string' ? body.error : '',
+        typeof body.error_description === 'string'
+            ? body.error_description.split('\n')[0].slice(0, 300)
+            : '',
+    ].filter(Boolean);
+    return `: ${parts.join(' · ')}`;
 }
 
 function parseTokenResponse(response: AxiosResponse): TokenData {

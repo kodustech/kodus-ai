@@ -931,19 +931,17 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopSecrets.byokErrorReporter).toBeUndefined();
     });
 
-    it('forwards heavy-pass / synthesis-rescue / heavy opt-in flags explicitly', async () => {
+    it('forwards heavy-pass / synthesis-rescue flags explicitly', async () => {
         await newAgent().execute(
             makeInput({
                 skipHeavyPasses: true,
                 skipSynthesisRescue: true,
-                heavy: true,
                 maxSteps: 33,
             }),
         );
         const [loopParams] = runLoopMock.mock.calls[0];
         expect(loopParams.skipHeavyPasses).toBe(true);
         expect(loopParams.skipSynthesisRescue).toBe(true);
-        expect(loopParams.heavy).toBe(true);
         expect(loopParams.maxSteps).toBe(33);
     });
 

@@ -188,15 +188,15 @@ export const configEnvCheck: DoctorCheck = {
             results.push({
                 check: 'advisory.dedup',
                 status: 'info',
-                title: 'Duplicate-suggestion filtering by similarity is off.',
-                impact: 'Kody may post near-identical suggestions on the same PR.',
+                title: 'Duplicate suggestions are compared by the review model, not by embeddings.',
+                impact: 'Each likely duplicate costs one extra call to the review model.',
                 fix: 'Optional: set API_OPEN_AI_API_KEY (used for embeddings).',
             });
         } else {
             results.push({
                 check: 'advisory.dedup',
                 status: 'ok',
-                title: 'Duplicate-suggestion filtering by similarity is on.',
+                title: 'Duplicate suggestions are compared by embeddings.',
             });
         }
 

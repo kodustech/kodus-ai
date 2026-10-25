@@ -1,10 +1,10 @@
 {
     "__doc": [
         "Floors per model for the share of PRs the stage answered right on cases.json (run.js --gate), as ratios.",
-        "eval-fake (the wiring smoke, every PR): deterministic. Two runs of the same commit gave 1 of 3 alike: the scripted analyzer's answer is published as a gap on both PRs it reaches (right on missing-requirement's outcome, without the word it must name; wrong on fully-implemented), and the unreadable ticket is skipped. floor = observed.",
-        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs on one commit, 2 of 3 each, every case alike (paired difference 0); a third run with --verify gave the same. fully-implemented fails in all three: the analyzer answers '**Status:** Compliant' (the format SKILL.md prescribes) and the stage's classifyResult does not read that as a pass, so it publishes 'Business logic gap detected'. floor = observed: any further miss fails, and the nightly measures again before alerting. With the stage's classification broken to call every answer a pass: 1 of 3, below the floor.",
-        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 1 and 2 of 3. fully-implemented fails in both (#2019); no-task-context is skipped in one run and published as a gap in the other. A floor from these runs would be 1 of 3, which the deliberate break above also scores, so deepseek has no floor until the cases can tell a broken stage from a good one: measured, reported as ungated.",
-        "gpt-6-sol 1/3 and 1/3, claude-sonnet-5-5 2/3 and 2/3 in 2 local runs each on a725253d6 (evals/weekly.js): measured every week, no floor, for the reason above. deepseek's observed is the mean of its two cloud-route runs (1 and 2 of 3).",
+        "eval-fake (the wiring smoke, every PR): deterministic. The scripted judge's answer reads as a task too thin to judge on both PRs whose ticket it reads (skipped, weak_task_context), and the unreadable ticket is skipped: 1 of 3. floor = observed.",
+        "2026-10-19, the business-validation redesign (#2086: BusinessValidationService, the verdict as data, #2019 fixed): deepseek-v4-flash@fireworks 3 of 3 in 3 local runs on the cloud route, one of them with --verify; gpt-6-sol 3 of 3 in one run. With the stage's verdict broken to call every PR a pass, deepseek scores 2 of 3 (missing-requirement published as a success), so a floor of 3 of 3 tells a broken stage from a good one: any miss fails, and the nightly measures again before alerting.",
+        "Before the redesign (BusinessRulesValidationAgentProvider), deepseek scored 1 and 2 of 3 and had no floor: fully-implemented failed on '**Status:** Compliant' (#2019).",
+        "A judge call that fails (a key, a quota, a timeout) is not measured (exit 2), never scored as a miss. claude-sonnet-5-5 not measured on 2026-10-19 (the local key is invalid); its observed is the old stage's.",
         "RATCHET: a PR that moves the value on purpose (the stage's classification, the skill, the cases) recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -13,19 +13,18 @@
             "observed": 0.333
         },
         "deepseek-v4-flash@fireworks": {
-            "floor": null,
-            "observed": 0.5,
-            "noFloor": "Three cases: a broken stage scores what a working one does, so no floor (__doc)."
+            "floor": 1.0,
+            "observed": 1.0
         },
         "gpt-6-sol": {
             "floor": null,
-            "observed": 0.333,
-            "noFloor": "Three cases: a broken stage scores what a working one does, so no floor (__doc)."
+            "observed": 1.0,
+            "noFloor": "One run on the redesigned stage: measured every week, a floor after a second run (__doc)."
         },
         "claude-sonnet-5-5": {
             "floor": null,
             "observed": 0.667,
-            "noFloor": "Three cases: a broken stage scores what a working one does, so no floor (__doc)."
+            "noFloor": "Not measured on the redesigned stage yet (__doc)."
         }
     }
 }

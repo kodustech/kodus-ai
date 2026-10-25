@@ -1,19 +1,36 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@components/ui/button";
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@components/ui/dropdown-menu";
+import { Link } from "@components/ui/link";
 import { Switch } from "@components/ui/switch";
-import { getMCPPlugins } from "@services/mcp-manager/fetch";
-import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
+import {
+    useBusinessLogicStatus,
+    useTaskSources,
+} from "@services/business-logic/hooks";
+import type { BusinessLogicStatus } from "@services/business-logic/types";
+import { KODUS_ISSUES_INTEGRATION_ID } from "@services/mcp-manager/types";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
-import { useQuery } from "@tanstack/react-query";
+import { EllipsisIcon, FlaskConicalIcon, PencilIcon } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
-import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
+import {
+    useCodeReviewRouteParams,
+    useCurrentConfigLevel,
+} from "src/app/(app)/settings/_hooks";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 import { CustomAgentsSectionGate } from "src/features/ee/custom-agents/custom-agents-plan-gate";
 
@@ -26,7 +43,6 @@ import {
     getPromptFieldText,
     parsePromptFieldValue,
 } from "../../custom-prompts/_utils/custom-prompts-state";
-import { hasTaskManagementConnection } from "../../general/_components/analysis-types";
 import {
     filterVisibleReviewLabels,
     mergeMissingReviewOptions,
@@ -74,6 +90,68 @@ const InstructionsChip = ({
     );
 };
 
+/**
+ * What the Business Logic row says under its description: where tasks come
+ * from and how it went, or why it stopped (UC-06, UC-07).
+ */
+const BusinessLogicSummary = ({
+    status,
+    hasTaskMcp,
+    gitIssuesConnected,
+    lookupFailed,
+}: {
+    status?: BusinessLogicStatus;
+    hasTaskMcp: boolean;
+    /** Git Issues reads the issues those skipped PRs referenced. */
+    gitIssuesConnected?: boolean;
+    /** The plugin lookup failed: we can't say whether a tracker is connected. */
+    lookupFailed?: boolean;
+}) => {
+    if (lookupFailed) {
+        return (
+            <p className="text-text-secondary text-xs">
+                Couldn&apos;t check your plugins right now.
+            </p>
+        );
+    }
+    if (!hasTaskMcp) {
+        return (
+            <p className="text-warning text-xs">
+                No task tracker is connected, so nothing is checked.{" "}
+                <Link href="/settings/plugins">Connect one in Plugins</Link>
+            </p>
+        );
+    }
+    if (status?.state === "paused" && status.paused) {
+        return (
+            <p className="text-warning text-xs">
+                Paused. {status.paused.tracker} hasn&apos;t answered since{" "}
+                {new Date(status.paused.since).toLocaleString()};{" "}
+                {status.paused.uncheckedPullRequests} PRs weren&apos;t checked.{" "}
+                <Link href="/settings/plugins">
+                    Reconnect {status.paused.tracker}
+                </Link>
+            </p>
+        );
+    }
+    return (
+        <p className="text-text-secondary text-xs">
+            {status?.lastTaskRead
+                ? `Last task read from ${status.lastTaskRead.tracker} · ${status.stats.pullRequestsChecked} PRs checked in the last 30 days`
+                : "Waiting for the first pull request that references a task"}
+            {status?.pointsElsewhere && !gitIssuesConnected && (
+                <>
+                    {" "}
+                    · {status.pointsElsewhere.pullRequests} PRs referenced
+                    repository issues (#12) no connected tracker reads; they
+                    were skipped without a comment.{" "}
+                    <Link href="/settings/plugins">Connect Git Issues</Link>
+                </>
+            )}
+        </p>
+    );
+};
+
 const CategoryRow = ({
     type,
     name,
@@ -84,6 +162,8 @@ const CategoryRow = ({
     showMcpWarning,
     promptDefault,
     canEdit,
+    summary,
+    href,
 }: {
     type: string;
     name: string;
@@ -94,7 +174,12 @@ const CategoryRow = ({
     showMcpWarning: boolean;
     promptDefault?: string;
     canEdit: boolean;
+    summary?: ReactNode;
+    /** A category with a page of its own: the name opens it, and a menu
+     *  edits or tries it, as a custom agent's row does. */
+    href?: string;
 }) => {
+    const router = useRouter();
     const promptKey = promptCategoryOf(type);
     const fieldName = promptKey
         ? `v2PromptOverrides.categories.descriptions.${promptKey}`
@@ -115,11 +200,19 @@ const CategoryRow = ({
                 />
                 <div className="flex min-w-[10rem] flex-1 flex-col gap-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                        <label
-                            htmlFor={switchId}
-                            className="text-text-primary cursor-pointer text-sm font-medium">
-                            {name}
-                        </label>
+                        {href ? (
+                            <Link
+                                href={href}
+                                className="text-text-primary text-sm font-medium hover:underline">
+                                {name}
+                            </Link>
+                        ) : (
+                            <label
+                                htmlFor={switchId}
+                                className="text-text-primary cursor-pointer text-sm font-medium">
+                                {name}
+                            </label>
+                        )}
                         <OverrideIndicatorForm
                             fieldName={`reviewOptions.${type}`}
                         />
@@ -130,7 +223,38 @@ const CategoryRow = ({
                         )}
                     </div>
                     <p className="text-text-secondary text-xs">{description}</p>
+                    {enabled && summary}
                 </div>
+
+                {href && (
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                size="icon-xs"
+                                variant="cancel"
+                                className="ml-auto shrink-0 self-center"
+                                aria-label={`More actions for ${name}`}
+                                title="More actions">
+                                <EllipsisIcon aria-hidden />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                                onSelect={() => router.push(href)}>
+                                <PencilIcon className="size-4" aria-hidden />
+                                {canEdit ? "Edit" : "View"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => router.push(`${href}#try-it`)}>
+                                <FlaskConicalIcon
+                                    className="size-4"
+                                    aria-hidden
+                                />
+                                Try it
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
 
                 {/* Instructions live on the row they belong to. Hidden while
                     the category is off: nothing to instruct. */}
@@ -196,29 +320,37 @@ export const CategoryList = ({
             ?.business_logic?.value,
     );
     const { data: labels = [], isLoading } = useGetCodeReviewLabels("v2");
-
-    // Same gating as the General page: only look up MCP plugins when the
-    // business-logic category is on, since that is the only row it affects.
-    const { data: mcpPlugins, isFetched: isMCPFetched } = useQuery({
-        queryKey: ["mcp-plugins-task-management"],
+    const { teamId } = useSelectedTeamId();
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const { data: businessLogicStatus } = useBusinessLogicStatus({
+        teamId,
+        repositoryId,
         enabled: businessLogicEnabled,
-        staleTime: 5 * 60 * 1000,
-        retry: false,
-        queryFn: async () => {
-            try {
-                return await getMCPPlugins();
-            } catch (error) {
-                if (error instanceof MCPServiceUnavailableError) return null;
-                return null;
-            }
-        },
     });
-    const hasTaskMcp = useMemo(() => {
-        if (!mcpPlugins) return false;
-        return hasTaskManagementConnection(
-            mcpPlugins.filter((plugin) => plugin.isConnected),
-        );
-    }, [mcpPlugins]);
+    const configureHref = `/settings/code-review/${repositoryId}/business-logic${
+        directoryId ? `?directoryId=${directoryId}` : ""
+    }`;
+
+    // The sources Business Logic reads, as the backend builds them: Git
+    // Issues and custom task plugins included, which name hints miss.
+    const taskSource = useWatch({
+        control: form.control,
+        name: "businessLogic.taskSource.value" as never,
+    }) as string | undefined;
+    const {
+        data: taskSources,
+        isFetched: isMCPFetched,
+        isError: taskSourcesFailed,
+    } = useTaskSources(businessLogicEnabled ? teamId : undefined);
+    const hasTaskMcp = useMemo(
+        () =>
+            !!taskSources?.some((source) =>
+                taskSource && taskSource !== "auto"
+                    ? source.integrationId === taskSource
+                    : source.inAuto,
+            ),
+        [taskSources, taskSource],
+    );
 
     const visibleLabels = useMemo(
         () => filterVisibleReviewLabels(labels, true),
@@ -285,11 +417,24 @@ export const CategoryList = ({
                                     onToggle={(value) =>
                                         setEnabled(label.type, value)
                                     }
-                                    showMcpWarning={
+                                    // The summary below says it, with a link.
+                                    showMcpWarning={false}
+                                    summary={
                                         label.type === "business_logic" &&
-                                        enabled &&
-                                        isMCPFetched &&
-                                        !hasTaskMcp
+                                        isMCPFetched ? (
+                                            <BusinessLogicSummary
+                                                status={businessLogicStatus}
+                                                hasTaskMcp={hasTaskMcp}
+                                                gitIssuesConnected={
+                                                    !!taskSources?.some(
+                                                        (source) =>
+                                                            source.integrationId ===
+                                                            KODUS_ISSUES_INTEGRATION_ID,
+                                                    )
+                                                }
+                                                lookupFailed={taskSourcesFailed}
+                                            />
+                                        ) : undefined
                                     }
                                     promptDefault={
                                         promptCategoryOf(label.type)
@@ -302,6 +447,11 @@ export const CategoryList = ({
                                             : undefined
                                     }
                                     canEdit={canEdit}
+                                    href={
+                                        label.type === "business_logic"
+                                            ? configureHref
+                                            : undefined
+                                    }
                                 />
                             );
                         })}

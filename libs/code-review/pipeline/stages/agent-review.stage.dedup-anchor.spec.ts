@@ -71,7 +71,6 @@ const makeContext = () =>
         changedFiles: [{ filename: 'src/bulkReassign.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             kodyRules: [
                 {
@@ -82,7 +81,6 @@ const makeContext = () =>
                 },
             ],
         },
-        heavy: false,
         previousDecisions: [],
         validSuggestions: [],
         discardedSuggestions: [],

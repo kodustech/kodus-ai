@@ -111,10 +111,8 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/user.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],
@@ -790,7 +788,6 @@ describe('E. model-agnostic delegation', () => {
             const ctx = makeContext({
                 codeReviewConfig: {
                     reviewOptions: {},
-                    heavy: false,
                     resolvedModelSlot: { provider, model: `${provider}/m` },
                 },
             });
@@ -807,7 +804,6 @@ describe('E. model-agnostic delegation', () => {
         const ctx = makeContext({
             codeReviewConfig: {
                 reviewOptions: {},
-                heavy: false,
                 resolvedModelSlot: { provider: 'moonshotai', model: 'kimi-k2' },
                 byokModelId: 'moonshotai:kimi-k2',
                 byokModel: 'kimi-k2-legacy-name',

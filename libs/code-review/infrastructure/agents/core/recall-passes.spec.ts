@@ -496,38 +496,6 @@ describe('runRecallPasses', () => {
                 // reflects the actual merge, not a placeholder 0.
                 expect(roleStats.every((p) => p.added === 1)).toBe(true);
             });
-
-            it('still runs heavy mode afterward when both are enabled', async () => {
-                const runner = fakeRunner([
-                    stateWith([]), // synthesis
-                    stateWith([]), // role 1
-                    stateWith([]), // role 2
-                    stateWith([sug('h.ts', 'heavy find')]), // heavy resample
-                    stateWith([sug('h2.ts', 'heavy find 2')]), // heavy resample
-                ]);
-                const out = await runRecallPasses(
-                    base,
-                    {
-                        runner,
-                        finderSpec: {} as any,
-                        makeResampleSpec: specFactory,
-                        finderState,
-                        userPrompt: 'p',
-                        expertRoles: roles,
-                        expertArbitrate: false,
-                        heavy: true,
-                    },
-                    ctx,
-                );
-                // synthesis + 2 role passes + 2 heavy resamples — the union-mode
-                // branch must fall through to heavy, not return early.
-                expect(runner.run).toHaveBeenCalledTimes(5);
-                expect(
-                    out.findings.suggestions.some(
-                        (s) => s.relevantFile === 'h.ts',
-                    ),
-                ).toBe(true);
-            });
         });
     });
 

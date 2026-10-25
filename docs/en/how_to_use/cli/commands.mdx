@@ -43,7 +43,6 @@ kodus review --prompt-only            # Output optimized for AI agents
 | `--rules-only`         | —     | Review using only configured rules (no general suggestions) |
 | `--fast`               | —     | Fast mode: quicker analysis with lighter checks             |
 | `--focus <text>`       | —     | Steer the review at a specific area — see [Steer a Review](/en/how_to_use/code_review/review_directive) |
-| `--heavy`              | —     | Deeper pass: extra critic rounds for higher recall (alpha, see below) |
 | `--interactive`        | `-i`  | Interactive mode: navigate and apply fixes                  |
 | `--fix`                | —     | Automatically apply all fixable issues                      |
 | `--prompt-only`        | —     | Output optimized for AI agents                              |
@@ -52,14 +51,6 @@ kodus review --prompt-only            # Output optimized for AI agents
 | `--fields <csv>`       | —     | Select response fields (JSON/agent mode), e.g. `summary,issues.file` |
 | `--github-pat <token>` | —     | GitHub token (`read:repo`) used to clone private repos. Trial users only. Also settable via `KODUS_GITHUB_PAT`. Held in memory only, never persisted. |
 | `--no-hunk`            | —     | Skip the hunk viewer and use the legacy interactive list (interactive sessions only) |
-
-<Warning>
-  `--heavy` is an **alpha** feature, **access by request** — it is off for every organization
-  until we enable it. Cloud only for now; not available self-hosted. Until you're opted in the
-  flag is accepted but the review runs normally, with no error and no warning. Ask for access on
-  [Discord](https://discord.gg/TFZBRk9fT6) or at [support@kodus.io](mailto:support@kodus.io).
-  See [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode).
-</Warning>
 
 ### Review Modes
 

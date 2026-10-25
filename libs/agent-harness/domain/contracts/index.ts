@@ -32,7 +32,6 @@ export type {
     AgentSpec,
     AgentRunner,
     AgentRunInput,
-    SubAgentFactory,
 } from './agent.contract';
 export type {
     ProgressLedger,

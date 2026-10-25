@@ -22,11 +22,10 @@ describe('SkillLoaderService', () => {
             'business-rules-validation',
         );
 
-        expect(instructions).toContain('No evidence in this PR diff');
-        expect(instructions).toContain('scope mismatch');
         expect(instructions).toContain(
-            'Do not state current system or backend behavior as fact unless that behavior appears in the PR_DIFF',
+            '`missing`: no evidence in this PR diff. Say so in `note`; never claim how the rest of the system behaves.',
         );
+        expect(instructions).toContain('Scope mismatch is valid');
     });
 
     it('loads business-rules instructions that require intent and alignment analysis before detailed findings', () => {
@@ -36,10 +35,9 @@ describe('SkillLoaderService', () => {
             'business-rules-validation',
         );
 
-        expect(instructions).toContain('Task Intent');
-        expect(instructions).toContain('PR Intent');
-        expect(instructions).toContain('Alignment');
-        expect(instructions).toContain('scope_mismatch');
+        expect(instructions).toContain("1. Read the task's intent");
+        expect(instructions).toContain("2. Read the PR's intent");
+        expect(instructions).toContain('scopeMismatch');
     });
 
     it('loads business-rules instructions that enforce generated prose in USER LANGUAGE', () => {
@@ -50,17 +48,15 @@ describe('SkillLoaderService', () => {
         );
 
         expect(instructions).toContain(
-            'Write all generated prose, headings, status labels, findings, explanations, and suggested actions in `USER LANGUAGE`.',
+            'Write `note`, `action`, `change`, `summary` and `missingInfo` in USER LANGUAGE',
         );
         expect(instructions).toContain(
-            'Only quoted requirement text copied from the task may remain in the original source language.',
+            "`requirement` stays quoted in the task's own language",
         );
-        expect(instructions).toContain(
-            'Do not mix languages in generated prose.',
-        );
+        expect(instructions).toContain('Do not mix languages in one field.');
     });
 
-    it('loads business-rules instructions that omit empty verification sections and include task reference details', () => {
+    it('loads business-rules instructions that ask for one verdict per requirement', () => {
         const service = new SkillLoaderService();
 
         const instructions = service.loadInstructions(
@@ -68,10 +64,10 @@ describe('SkillLoaderService', () => {
         );
 
         expect(instructions).toContain(
-            'If no task requirements were verified from the diff, omit the "Requirements Verified" section entirely.',
+            'One entry per requirement, in the order the task lists them',
         );
         expect(instructions).toContain(
-            'Include a short task reference near the top of the summary when task id, title, or link is available.',
+            'A low-confidence gap is shown as CHECK MANUALLY, not MISSING.',
         );
     });
 
@@ -84,62 +80,14 @@ describe('SkillLoaderService', () => {
 
         expect(meta.name).toBe('business-rules-validation');
         expect(meta.version).toBe('1.0.0');
-        expect(meta.capabilities).toEqual([
-            'pr.metadata.read',
-            'pr.diff.read',
-            'task.context.read',
-        ]);
-        expect(meta.capabilityDefinitions).toEqual({
-            'pr.metadata.read': {
-                mode: 'fixed_tools',
-                tools: ['KODUS_GET_PULL_REQUEST'],
-            },
-            'pr.diff.read': {
-                mode: 'fixed_tools',
-                tools: ['KODUS_GET_PULL_REQUEST_DIFF'],
-            },
-            'task.context.read': {
-                mode: 'provider_dynamic',
-            },
-        });
-        expect(meta.allowedTools).toEqual([
-            'KODUS_GET_PULL_REQUEST',
-            'KODUS_GET_PULL_REQUEST_DIFF',
-        ]);
-        expect(meta.fetcherPolicy).toEqual({
-            toolMode: 'any',
-            allowWithoutTools: false,
-        });
+        // The runtime reads only these; nothing else is declared.
         expect(meta.executionPolicy).toEqual({
-            onMissingMcp: 'fail',
-            onMcpConnectError: 'fail',
-            fetcherTimeoutMs: 120000,
             analyzerTimeoutMs: 120000,
-            fetcherMaxIterations: 2,
             analyzerMaxIterations: 1,
         });
-        expect(meta.contracts).toEqual({
-            input: {
-                requiredContextFields: [
-                    'organizationAndTeamData.organizationId',
-                    'organizationAndTeamData.teamId',
-                    'prepareContext.repository.id',
-                ],
-            },
-            output: {
-                requiredFields: ['needsMoreInfo', 'summary'],
-            },
-        });
-        expect(meta.requiredMcps).toEqual([
-            {
-                category: 'task-management',
-                label: 'Task Management',
-                examples:
-                    'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues, Git Issues',
-            },
-        ]);
+        expect(meta.requiredMcps).toBeUndefined();
+        expect(meta.capabilities).toBeUndefined();
     });
-
     it('parses complex YAML frontmatter using a YAML parser', () => {
         const service = new SkillLoaderService() as any;
 

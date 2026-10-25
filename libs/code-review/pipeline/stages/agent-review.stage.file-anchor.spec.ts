@@ -90,7 +90,6 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/user.ts', patch: PATCH }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             kodyRules: [
                 {
@@ -119,7 +118,6 @@ const makeContext = (over: Record<string, unknown> = {}) =>
                 },
             ],
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],

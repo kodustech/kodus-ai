@@ -136,6 +136,24 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
+/**
+ * The auth mode of a GitLab record whose `authMode` predates the field: an
+ * OAuth record carries a refresh token and a PAT never does.
+ *
+ * Only the settings card reads this. `isSetupComplete` keeps treating a missing
+ * mode as OAuth (its TOKEN branch does not require repositories), and
+ * `getAuthDetails` keeps the same default because `instanceGitlabApi` uses the
+ * mode to tell a raw token from an encrypted one.
+ */
+export function deriveGitlabAuthMode(
+    authDetails?: { authMode?: AuthMode; refreshToken?: string } | null,
+): AuthMode {
+    if (authDetails?.authMode) {
+        return authDetails.authMode;
+    }
+    return authDetails?.refreshToken ? AuthMode.OAUTH : AuthMode.TOKEN;
+}
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
@@ -1873,9 +1891,21 @@ export class GitlabService implements Omit<
 
             const hasRepositories = gitlabRepositories?.length > 0;
 
-            const authMode = gitlabOrg?.authIntegration?.authDetails?.authMode
-                ? gitlabOrg?.authIntegration?.authDetails?.authMode
+            const gitlabAuthDetails = gitlabOrg?.authIntegration?.authDetails;
+
+            // Unchanged for setup, and deliberately so: the TOKEN branch below
+            // does not require repositories, so letting a derived TOKEN through
+            // would stop a legacy PAT with none from being rejected as
+            // unconfigured.
+            const authMode = gitlabAuthDetails?.authMode
+                ? gitlabAuthDetails.authMode
                 : AuthMode.OAUTH;
+
+            // What the settings card reads, and only that: its
+            // `=== AuthMode.OAUTH` check is the only thing keeping an OAuth
+            // connection away from a rotation modal that saves a PAT, which
+            // REPLACES authDetails and drops the refresh token for good.
+            const cardAuthMode = deriveGitlabAuthMode(gitlabAuthDetails);
 
             const isSetupComplete =
                 (!!hasRepositories &&
@@ -1891,6 +1921,12 @@ export class GitlabService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
+                    host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
+                    // The settings card reads this to decide whether it may
+                    // offer the token rotation, so it carries the DERIVED mode.
+                    // The setup check above keeps its own reading of a missing
+                    // mode, on purpose.
+                    authMode: cardAuthMode,
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
@@ -1947,6 +1983,12 @@ export class GitlabService implements Omit<
 
         return {
             ...gitlabAuthDetail,
+            // Not the card's derivation: `instanceGitlabApi` reads this mode to
+            // decide whether the stored token is raw (OAuth) or encrypted
+            // (PAT), so inferring TOKEN for a record that predates the field and
+            // carries a raw token would send it to `decrypt` and break the
+            // connection. A missing mode keeps the reading this path has always
+            // had; the settings card derives its own, for the UI only.
             authMode: gitlabAuthDetail?.authMode || AuthMode.OAUTH,
         };
     }
@@ -2422,7 +2464,9 @@ export class GitlabService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 
@@ -3095,7 +3139,8 @@ export class GitlabService implements Omit<
         const isExecutable = (hook) =>
             (hook?.alert_status ?? 'executable') === 'executable';
         const hasEvents = (hook) =>
-            hook?.note_events !== false && hook?.merge_requests_events !== false;
+            hook?.note_events !== false &&
+            hook?.merge_requests_events !== false;
 
         // Executable first: GitLab never calls a disabled hook, while missing
         // events on an executable one are fixed by the edit below.
@@ -3108,10 +3153,15 @@ export class GitlabService implements Omit<
 
         if (!hasEvents(kept)) {
             try {
-                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
-                    noteEvents: true,
-                    mergeRequestsEvents: true,
-                });
+                await gitlabAPI.ProjectHooks.edit(
+                    projectId,
+                    kept.id,
+                    webhookUrl,
+                    {
+                        noteEvents: true,
+                        mergeRequestsEvents: true,
+                    },
+                );
             } catch (error) {
                 this.logger.warn({
                     message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
@@ -4770,6 +4820,31 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    /** Developer (30) or above, on the project or inherited from its group. */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        userId: string | number;
+    }): Promise<boolean | undefined> {
+        const authDetails = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetails) {
+            return undefined;
+        }
+        try {
+            const member = await this.instanceGitlabApi(
+                authDetails,
+            ).ProjectMembers.show(params.repository.id, Number(params.userId), {
+                includeInherited: true,
+            });
+            return (member?.access_level ?? 0) >= 30;
+        } catch (error) {
+            // Not a member answers 404; a credential that can't look, 401/403.
+            return isDeniedStatus(error) ? false : undefined;
         }
     }
 

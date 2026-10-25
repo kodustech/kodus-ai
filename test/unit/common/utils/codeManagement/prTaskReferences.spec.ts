@@ -63,26 +63,61 @@ describe('extractTaskReferenceLines', () => {
     });
 
     it('deduplicates repeated reference lines', () => {
-        expect(
-            extractTaskReferenceLines('Closes #993\nCloses #993'),
-        ).toEqual(['Closes #993']);
+        expect(extractTaskReferenceLines('Closes #993\nCloses #993')).toEqual([
+            'Closes #993',
+        ]);
     });
 
     it('caps how much of the old description can come back', () => {
-        const body = Array.from({ length: 30 }, (_, i) => `Closes #${i + 1}`).join(
-            '\n',
-        );
+        const body = Array.from(
+            { length: 30 },
+            (_, i) => `Closes #${i + 1}`,
+        ).join('\n');
         expect(extractTaskReferenceLines(body)).toHaveLength(10);
     });
 
     it('returns nothing for an empty body', () => {
         expect(extractTaskReferenceLines('')).toEqual([]);
-        expect(extractTaskReferenceLines(undefined as unknown as string)).toEqual(
-            [],
-        );
+        expect(
+            extractTaskReferenceLines(undefined as unknown as string),
+        ).toEqual([]);
     });
 
     it('ignores a markdown heading that only looks like a reference', () => {
         expect(extractTaskReferenceLines('### Changes')).toEqual([]);
+    });
+});
+
+describe('extractTaskReferenceLines with a caller reader', () => {
+    const none = () => false;
+
+    it('keeps a tracker link on a host the reader does not know', () => {
+        expect(
+            extractTaskReferenceLines(
+                'Closes https://youtrack.jetbrains.com/issue/XYZ-123\nhttps://bugs.mycorp.com/browse/PROJ-1\nPlain prose.',
+                none,
+            ),
+        ).toEqual([
+            'Closes https://youtrack.jetbrains.com/issue/XYZ-123',
+            'https://bugs.mycorp.com/browse/PROJ-1',
+        ]);
+    });
+
+    it('adds the lines the reader recognizes', () => {
+        expect(
+            extractTaskReferenceLines('Part of ab#12\nPlain prose.', (line) =>
+                line.includes('ab#12'),
+            ),
+        ).toEqual(['Part of ab#12']);
+    });
+
+    it('keeps a line only the reader recognizes, and drops it without the reader', () => {
+        const body = 'Part of 86a1b2c3\nPlain prose.';
+        expect(
+            extractTaskReferenceLines(body, (line) =>
+                line.includes('86a1b2c3'),
+            ),
+        ).toEqual(['Part of 86a1b2c3']);
+        expect(extractTaskReferenceLines(body, none)).toEqual([]);
     });
 });

@@ -28,6 +28,10 @@ not carry over: measure with the snapshot of that finder (`evals/funnel/dedup`).
 
 The run records whether the platform embedder answered (`environment.embedder`): the
 dedup's semantic tier needs it, and without it the guard vetoes more merges (#2170).
+`--embedder=none` runs without it, as a self-hosted install without the platform's
+OpenAI key, and records that it was asked (`environment.embedderRequested`). On the
+first 2 PRs of the controlled set at `f4f6855cf`: 47 of 48 gold pairs joined with the
+embedder, 10 of 48 without.
 
 Deliberate break, 2026-10-17 (local, DeepSeek, the first 6 PRs of the controlled set): the
 dedup returning every suggestion unmerged (`deduplicateSuggestions`) joins 0 of the 92 gold

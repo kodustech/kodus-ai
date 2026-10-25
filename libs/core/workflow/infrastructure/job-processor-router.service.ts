@@ -27,7 +27,7 @@ import { CliReviewJobProcessorService } from '@libs/cli-review/workflow/cli-revi
 // kills the channel, which would otherwise leave the message unacked and only
 // freed on a physical worker restart (the symptom seen in 2026-05).
 const WEBHOOK_PROCESS_TIMEOUT_MS = 9 * 60 * 1000; // 9 min (broker default 30min)
-const CODE_REVIEW_PROCESS_TIMEOUT_MS = 105 * 60 * 1000; // 1h45min (broker 2h)
+export const CODE_REVIEW_PROCESS_TIMEOUT_MS = 105 * 60 * 1000; // 1h45min (broker 2h)
 const CLI_CODE_REVIEW_PROCESS_TIMEOUT_MS = 28 * 60 * 1000; // 28 min
 const CHECK_IMPLEMENTATION_TIMEOUT_MS = 9 * 60 * 1000; // 9 min
 const AST_GRAPH_BUILD_TIMEOUT_MS = 19 * 60 * 1000; // 19 min

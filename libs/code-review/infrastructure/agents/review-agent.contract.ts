@@ -307,9 +307,6 @@ export interface FitConfig {
      *  passes. Used by very-narrow agents (rule checks in fast mode,
      *  self-contained CLI flow). */
     skipHeavyPasses?: boolean;
-    /** HEAVY mode — run an EXTRA critic pass in the finder for more recall
-     *  (opt-in per review via CLI `--heavy` or PR `@kody review --heavy`). */
-    heavy?: boolean;
     /** When true, run recovery + second-chance but skip ONLY the
      *  synthesis-rescue pass. The rescue pass re-words the same finding
      *  with different language, which is fine for open-ended bug review
@@ -488,9 +485,6 @@ export interface AgentLoopInput {
     contextWindowTokens?: number;
     /** When true, skip recovery/rescue/second-chance passes. Used by rule-checking agents that don't benefit from open-ended exploration. */
     skipHeavyPasses?: boolean;
-    /** HEAVY mode — run an EXTRA critic pass in the finder for more recall
-     *  (opt-in per review via CLI `--heavy` or PR `@kody review --heavy`). */
-    heavy?: boolean;
     /** A/B knob (default off): give each `critical`-tier file its own finder
      *  pass that reads the whole file, on top of the diff-wide review. Requires
      *  `fileTiers` — without tiers there is nothing to select. */

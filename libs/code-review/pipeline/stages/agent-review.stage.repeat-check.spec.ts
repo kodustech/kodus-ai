@@ -118,7 +118,6 @@ const makeContext = (previousDecisions: PrDecisionRecord[]) =>
         changedFiles: [{ filename: 'src/user.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             kodyRules: [
                 {
@@ -129,7 +128,6 @@ const makeContext = (previousDecisions: PrDecisionRecord[]) =>
                 },
             ],
         },
-        heavy: false,
         previousDecisions,
         validSuggestions: [],
         discardedSuggestions: [],

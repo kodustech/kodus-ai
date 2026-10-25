@@ -1,11 +1,39 @@
-import { createThreadId } from '@libs/common/utils/thread-id';
+import { randomUUID } from 'node:crypto';
+
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
-import { NO_TASK_MCP_SENTINEL } from '@libs/agents/infrastructure/services/agents/business-rules-validation/no-task-mcp-sentinel';
-import { BusinessRulesPrepareContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
+import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
+import type {
+    BusinessValidationOutcome,
+    BusinessValidationRequest,
+    BusinessValidationResult,
+    ResolutionAttempt,
+    TaskReference,
+} from '@libs/agents/business-validation/business-validation.types';
+import {
+    openPreview,
+    PreviewSealError,
+    sealPreview,
+} from '@libs/agents/business-validation/preview-seal';
+import { formatPullRequestDiff } from '@libs/agents/business-validation/pull-request-diff';
+import { renderCliText } from '@libs/agents/business-validation/render';
+import { repositoryForLookup } from '@libs/agents/business-validation/task-resolver';
+import {
+    buildRun,
+    toRunTasks,
+} from '@libs/agents/business-validation/runs/run-mapping';
+import type { RunTask } from '@libs/agents/business-validation/runs/validation-run.model';
+import { ValidationRunRepository } from '@libs/agents/business-validation/runs/validation-run.repository';
+import {
+    type BusinessLogicConfig,
+    type BusinessLogicSettings,
+    resolveBusinessLogicSettings,
+} from '@libs/agents/business-validation/settings';
+import {
+    BusinessLogicPublisher,
+    type PublishPreview,
+} from '@libs/platform/application/services/business-logic-publisher.service';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -38,7 +66,68 @@ export interface TriggerBusinessValidationResult {
     repositoryId?: string;
     repositoryName?: string;
     taskReference?: string;
+    /** What a person or an agent reads: one line per requirement. */
     result: string;
+    /** The same verdict, structured (`--json`). */
+    verdict: CliBusinessVerdict;
+}
+
+/** The verdict a coding agent acts on before it opens the PR (UC-41). */
+export interface CliBusinessVerdict {
+    status:
+        | 'compliant'
+        | 'issues_found'
+        | 'skipped'
+        | 'task_too_thin'
+        | 'task_missing'
+        | 'task_required';
+    passed: boolean;
+    reason?: string;
+    message?: string;
+    tasks: RunTask[];
+}
+
+/** What a preview carries to be posted later, as it was shown. */
+interface SealedPreview {
+    /** One per preview: posted once. */
+    id: string;
+    organizationId: string;
+    teamId?: string;
+    repositoryId: string;
+    request: BusinessValidationRequest;
+    result: BusinessValidationResult;
+    settings: BusinessLogicSettings;
+    headSha?: string;
+}
+
+/** What "Test on a pull request" shows, step by step. */
+export interface BusinessLogicTestResult {
+    pullRequest: {
+        number: number;
+        url: string;
+        title?: string;
+        repositoryName: string;
+    };
+    /** The task references found in the PR, and where. */
+    references: Array<
+        Pick<TaskReference, 'raw' | 'id' | 'kind' | 'source' | 'intent'>
+    >;
+    /** Which tracker was asked for each reference, with which tools, and what it said. */
+    attempts: ResolutionAttempt[];
+    trackers: string[];
+    /** The tasks as the judge read them, with the criteria taken from them. */
+    tasks: Array<{
+        tracker: string;
+        id: string;
+        title?: string;
+        url?: string;
+        criteria: string[];
+        descriptionLength: number;
+    }>;
+    verdict: CliBusinessVerdict;
+    comment: PublishPreview['comment'];
+    /** Posts this result as shown (`postPreview`), without running it again. */
+    previewToken: string;
 }
 
 interface BusinessValidationRepositoryContext {
@@ -58,6 +147,7 @@ interface BaseBusinessValidationExecutionContext {
 
 interface PullRequestValidationExecutionContext extends BaseBusinessValidationExecutionContext {
     mode: 'pull_request';
+    title?: string;
     repository: BusinessValidationRepositoryContext;
     prNumber: number;
     prUrl: string;
@@ -73,21 +163,14 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
     private readonly logger = createLogger(
         TriggerBusinessValidationUseCase.name,
     );
-    private static readonly MAX_SIGNAL_SOURCE_LENGTH = 20_000;
-    private static readonly REQUIREMENT_KEYWORDS = [
-        'requirement',
-        'acceptance criteria',
-        'user story',
-        'given',
-        'when',
-        'then',
-    ];
 
     constructor(
         private readonly codeManagementService: CodeManagementService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
-        private readonly businessRulesValidationAgentProvider: BusinessRulesValidationAgentProvider,
+        private readonly businessValidationService: BusinessValidationService,
+        private readonly businessLogicPublisher: BusinessLogicPublisher,
+        private readonly runs: ValidationRunRepository,
     ) {}
 
     async execute(params: {
@@ -115,38 +198,29 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                       taskReference,
                   });
 
-        const prepareContext = this.buildPrepareContext({
-            command,
-            taskReference,
-            taskId: input.taskId,
-            taskUrl: input.taskUrl,
-            platformType,
+        const config = await this.businessLogicPublisher.configFor(
+            organizationAndTeamData,
+            executionContext.repository?.id,
+            this.pullRequestScope(executionContext, platformType),
+        );
+        const request = this.buildRequest({
+            organizationAndTeamData,
             executionContext,
+            settings: config.settings,
+            config,
+            platformType,
+            taskInput: taskReference,
         });
-
-        const agentResult =
-            await this.businessRulesValidationAgentProvider.execute({
-                organizationAndTeamData,
-                thread: this.createThread({
-                    organizationAndTeamData,
-                    context: executionContext,
-                }),
-                prepareContext,
-            });
-
-        // NO_TASK_MCP_SENTINEL is an internal marker (never meant to reach a
-        // user) that the pipeline path silently swallows. This CLI-triggered
-        // path returns `result` straight through the API response to the
-        // `kodus` CLI's stdout, so leaving it unguarded here surfaces the raw
-        // "__NO_TASK_MCP__" string to whoever ran the command.
-        const result =
-            agentResult ===
-            NO_TASK_MCP_SENTINEL
-                ? 'No task-management MCP (Jira, GitHub Issues, Linear, Notion, ' +
-                  'ClickUp, etc.) is connected for this organization, so ' +
-                  'business rules validation has nothing to compare the PR ' +
-                  'against. Connect one in the Kodus settings to use this command.'
-                : agentResult;
+        const validation = await this.businessValidationService.validate(
+            this.businessLogicPublisher.withRepository(request),
+        );
+        // Recorded like any other door; the CLI never writes to the PR.
+        await this.runs.create(buildRun(request, validation));
+        const result = renderCliText(validation.outcome);
+        const verdict = toCliVerdict(
+            validation.outcome,
+            toRunTasks(validation),
+        );
 
         if (executionContext.mode === 'pull_request') {
             return {
@@ -159,6 +233,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 repositoryName: executionContext.repository.name,
                 taskReference,
                 result,
+                verdict,
             };
         }
 
@@ -170,6 +245,297 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             repositoryName: executionContext.repository?.name,
             taskReference,
             result,
+            verdict,
+        };
+    }
+
+    /**
+     * "Try it" with a task alone: reads it as a validation would, with the
+     * settings on screen. On a repository's page, `#12` is that repository's.
+     */
+    async tryReadTask(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        task: string;
+        settings?: BusinessLogicConfig;
+        repositoryId?: string;
+    }) {
+        const repository =
+            params.repositoryId && params.repositoryId !== 'global'
+                ? await this.resolveRepository({
+                      organizationAndTeamData: params.organizationAndTeamData,
+                      repositoryId: params.repositoryId,
+                  }).catch((error) => {
+                      this.logger.warn({
+                          message:
+                              'Could not resolve the repository; reading the task without it',
+                          context: TriggerBusinessValidationUseCase.name,
+                          error,
+                          metadata: {
+                              organizationId:
+                                  params.organizationAndTeamData.organizationId,
+                              repositoryId: params.repositoryId,
+                          },
+                      });
+                      return undefined;
+                  })
+                : undefined;
+        return this.businessValidationService.tryRead(
+            params.organizationAndTeamData,
+            params.task,
+            resolveBusinessLogicSettings(params.settings),
+            // As the validation reads it: GitLab stores `group/notes` as the
+            // name and the group's display name as the owner.
+            repository
+                ? repositoryForLookup({
+                      owner: repository.owner,
+                      name: repository.name,
+                  })
+                : undefined,
+        );
+    }
+
+    /**
+     * "Test on a pull request" (settings page): the whole run on a real PR,
+     * with the settings on screen, saved or not. Nothing is written unless
+     * `post` is set; then it publishes like `@kody -v business-logic`.
+     */
+    async testOnPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prUrl: string;
+        settings?: BusinessLogicConfig;
+        taskInput?: string;
+        /** Throws when the caller may not test this PR's repository. */
+        authorize?: (repositoryId: string) => Promise<void>;
+    }): Promise<BusinessLogicTestResult> {
+        const { organizationAndTeamData } = params;
+        const taskInput = params.taskInput?.trim() || undefined;
+        const [platformType, executionContext] = await Promise.all([
+            this.codeManagementService.getTypeIntegration(
+                organizationAndTeamData,
+            ),
+            this.resolvePullRequestContext({
+                organizationAndTeamData,
+                input: { prUrl: params.prUrl },
+            }),
+        ]);
+        await params.authorize?.(executionContext.repository.id);
+        const config = await this.businessLogicPublisher.configFor(
+            organizationAndTeamData,
+            executionContext.repository.id,
+            this.pullRequestScope(executionContext, platformType),
+        );
+        // The settings on screen, saved or not; the model the PR's review uses.
+        const settings = params.settings
+            ? resolveBusinessLogicSettings(params.settings)
+            : config.settings;
+        const request = this.buildRequest({
+            organizationAndTeamData,
+            executionContext,
+            settings,
+            config,
+            platformType,
+            taskInput,
+        });
+        const [validation, headSha] = await Promise.all([
+            this.businessValidationService.validate(
+                this.businessLogicPublisher.withRepository(request),
+            ),
+            this.businessLogicPublisher.headShaOf(
+                organizationAndTeamData,
+                executionContext.repository,
+                executionContext.prNumber,
+                platformType,
+            ),
+        ]);
+        const preview = await this.businessLogicPublisher.preview({
+            request,
+            result: validation,
+            settings,
+            headSha,
+        });
+        const outcome = preview.outcome;
+        const tasksRead =
+            outcome.kind === 'validated'
+                ? [...outcome.checks.map((c) => c.task), ...outcome.thinTasks]
+                : outcome.kind === 'task_too_thin'
+                  ? outcome.tasks
+                  : [];
+        return {
+            pullRequest: {
+                number: executionContext.prNumber,
+                url: executionContext.prUrl,
+                title: executionContext.title,
+                repositoryName: executionContext.repository.name,
+            },
+            references: validation.references.map((r) => ({
+                raw: r.raw,
+                id: r.id,
+                kind: r.kind,
+                source: r.source,
+                intent: r.intent,
+            })),
+            attempts: validation.attempts,
+            trackers: validation.trackers,
+            tasks: tasksRead.map((task) => ({
+                tracker: task.tracker,
+                id: task.id,
+                title: task.title,
+                url: task.url,
+                criteria: task.acceptanceCriteria ?? [],
+                descriptionLength: task.description?.length ?? 0,
+            })),
+            verdict: toCliVerdict(
+                outcome,
+                toRunTasks({ ...validation, outcome }),
+            ),
+            comment: preview.comment,
+            // Posting publishes this very result, sealed, not a second run.
+            previewToken: sealPreview<SealedPreview>({
+                id: randomUUID(),
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                repositoryId: executionContext.repository.id,
+                request: { ...request, diff: '' },
+                result: validation,
+                settings,
+                headSha,
+            }),
+        };
+    }
+
+    /**
+     * Posts the preview "Test on a pull request" showed, as the command
+     * would: the sealed result, on the PR it was for. A preview of another
+     * team, altered or expired is refused.
+     */
+    async postPreview(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previewToken: string;
+        authorize?: (repositoryId: string) => Promise<void>;
+    }): Promise<{ posted: 'created' | 'updated' | 'none' }> {
+        let sealed: SealedPreview;
+        try {
+            sealed = openPreview<SealedPreview>(params.previewToken);
+        } catch (error) {
+            throw new BadRequestException(
+                error instanceof PreviewSealError
+                    ? error.message
+                    : 'The preview is not one Kody made.',
+            );
+        }
+        if (
+            sealed.organizationId !==
+                params.organizationAndTeamData.organizationId ||
+            sealed.teamId !== params.organizationAndTeamData.teamId
+        ) {
+            throw new BadRequestException('The preview is not one Kody made.');
+        }
+        await params.authorize?.(sealed.repositoryId);
+        if (
+            !sealed.id ||
+            (await this.runs.previewPosted(
+                params.organizationAndTeamData.organizationId,
+                sealed.id,
+            ))
+        ) {
+            throw new BadRequestException(
+                'This preview was posted already: run the check again to post a new one.',
+            );
+        }
+        const { repository, pullRequest, platformType } = sealed.request;
+        if (sealed.headSha && repository && pullRequest) {
+            const head = await this.businessLogicPublisher.headShaOf(
+                params.organizationAndTeamData,
+                { id: repository.id, name: repository.name },
+                pullRequest.number,
+                platformType,
+            );
+            if (head && head !== sealed.headSha) {
+                throw new BadRequestException(
+                    'The pull request changed since this preview: run the check again.',
+                );
+            }
+        }
+        const published = await this.businessLogicPublisher.publish({
+            request: sealed.request,
+            result: sealed.result,
+            settings: sealed.settings,
+            trigger: 'command',
+            headSha: sealed.headSha,
+            previewId: sealed.id,
+        });
+        return { posted: published.comment };
+    }
+
+    /** The PR a run is on, so its directory's settings apply; none for a local diff. */
+    private pullRequestScope(
+        executionContext:
+            | PullRequestValidationExecutionContext
+            | LocalDiffValidationExecutionContext,
+        platformType?: string,
+    ) {
+        return executionContext.mode === 'pull_request'
+            ? {
+                  number: executionContext.prNumber,
+                  repositoryName: executionContext.repository.name,
+                  platformType,
+              }
+            : undefined;
+    }
+
+    private buildRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        executionContext:
+            | PullRequestValidationExecutionContext
+            | LocalDiffValidationExecutionContext;
+        settings: BusinessLogicSettings;
+        config?: { byokModel?: string; byokModelId?: string };
+        platformType?: string;
+        taskInput?: string;
+    }): BusinessValidationRequest {
+        const { organizationAndTeamData, executionContext } = params;
+        return {
+            door: 'cli',
+            settings: params.settings,
+            byokModel: params.config?.byokModel,
+            byokModelId: params.config?.byokModelId,
+            organizationAndTeamData,
+            repository: executionContext.repository
+                ? {
+                      id: executionContext.repository.id,
+                      name: executionContext.repository.name,
+                      owner: executionContext.repository.owner,
+                  }
+                : undefined,
+            pullRequest:
+                executionContext.mode === 'pull_request'
+                    ? {
+                          number: executionContext.prNumber,
+                          title: executionContext.title,
+                          body: executionContext.pullRequestDescription,
+                          headRef: executionContext.headRef,
+                          baseRef: executionContext.baseRef,
+                      }
+                    : undefined,
+            platformType: params.platformType,
+            taskInput: params.taskInput,
+            diff:
+                executionContext.mode === 'local_diff'
+                    ? executionContext.prDiff
+                    : async () =>
+                          formatPullRequestDiff(
+                              await this.codeManagementService.getFilesByPullRequestId(
+                                  {
+                                      organizationAndTeamData,
+                                      repository: {
+                                          id: executionContext.repository.id,
+                                          name: executionContext.repository
+                                              .name,
+                                      },
+                                      prNumber: executionContext.prNumber,
+                                  },
+                              ),
+                          ),
         };
     }
 
@@ -248,7 +614,19 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 );
             }
 
-            return this.mapPullRequestContext(selectedPr, requestedUrl);
+            const configured = await this.resolveRepository({
+                organizationAndTeamData,
+                repositoryId: String(
+                    selectedPr.repositoryData?.id ||
+                        selectedPr.repositoryId ||
+                        '',
+                ),
+            }).catch(() => undefined);
+            return this.mapPullRequestContext(
+                selectedPr,
+                requestedUrl,
+                configured,
+            );
         }
 
         const requestedPrNumber = Number(input.prNumber);
@@ -290,19 +668,23 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         });
     }
 
+    /**
+     * `configured` is the repository as the integration stores it: its name
+     * and owner win over the PR's, which some platforms give as `owner/name`
+     * (the diff then 404s).
+     */
     private mapPullRequestContext(
         pr: PullRequest,
         fallbackUrl: string,
-        fallbackRepository?: BusinessValidationRepositoryContext,
+        configured?: BusinessValidationRepositoryContext,
     ): PullRequestValidationExecutionContext {
         const repositoryId =
             String(pr.repositoryData?.id || pr.repositoryId || '').trim() ||
-            fallbackRepository?.id;
+            configured?.id;
         const repositoryName =
-            pr.repositoryData?.name ||
-            pr.repository ||
-            fallbackRepository?.name;
+            configured?.name || pr.repositoryData?.name || pr.repository;
         const repositoryOwner =
+            configured?.owner ||
             this.extractRepositoryOwnerFromFullName(
                 pr.head?.repo?.fullName,
                 pr.head?.repo?.name,
@@ -314,8 +696,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             this.extractRepositoryOwnerFromFullName(
                 pr.repository,
                 repositoryName,
-            ) ||
-            fallbackRepository?.owner;
+            );
 
         if (!repositoryId || !repositoryName) {
             throw new BadRequestException(
@@ -333,6 +714,7 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 owner: repositoryOwner,
                 defaultBranch: pr.base?.repo?.defaultBranch || pr.base?.ref,
             },
+            title: pr.title,
             pullRequestDescription: pr.body || pr.message || '',
             headRef: pr.head?.ref,
             baseRef: pr.base?.ref,
@@ -347,11 +729,51 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
             return undefined;
         }
 
+        // Never another PR than the one asked for: by its link, else by the
+        // number in the link, in the repository the link names.
         const normalizedRequestedUrl = this.normalizeUrl(requestedUrl);
+        const match = requestedUrl.match(
+            /^[a-z]+:\/\/[^/]+\/(.+?)\/(?:-\/)?(?:pulls?|merge_requests|pull-requests|pullrequest)\/(\d+)/i,
+        );
+        const number = Number(match?.[2]);
+        const linkRepository = match?.[1].toLowerCase().replace('/_git/', '/');
         return (
             pullRequests.find(
                 (pr) => this.normalizeUrl(pr.prURL) === normalizedRequestedUrl,
-            ) || pullRequests[0]
+            ) ??
+            pullRequests.find(
+                (pr) =>
+                    Number(pr.number || pr.pull_number) === number &&
+                    this.inRepository(pr, linkRepository, pullRequests.length),
+            )
+        );
+    }
+
+    /**
+     * Whether a PR is in the repository a link names (`acme/notes`,
+     * `org/project/repo` for Azure). A PR that names no repository only
+     * counts when it is the only one listed.
+     */
+    private inRepository(
+        pr: PullRequest,
+        linkRepository: string | undefined,
+        listed: number,
+    ): boolean {
+        const names = [
+            pr.repositoryData?.name,
+            typeof pr.repository === 'string' ? pr.repository : undefined,
+            pr.head?.repo?.fullName,
+            pr.base?.repo?.fullName,
+        ]
+            .filter((n): n is string => !!n)
+            .map((n) => n.toLowerCase());
+        if (!linkRepository || !names.length) {
+            return listed === 1;
+        }
+        // A full name says more than a bare one: `other/notes` is not `acme/notes`.
+        const full = names.filter((n) => n.includes('/'));
+        return (full.length ? full : names).some(
+            (n) => linkRepository === n || linkRepository.endsWith(`/${n}`),
         );
     }
 
@@ -542,176 +964,33 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
 
         return owner;
     }
+}
 
-    private buildPrepareContext(params: {
-        command: string;
-        taskReference?: string;
-        taskId?: string;
-        taskUrl?: string;
-        platformType?: string;
-        executionContext:
-            | PullRequestValidationExecutionContext
-            | LocalDiffValidationExecutionContext;
-    }): BusinessRulesPrepareContext {
-        const {
-            command,
-            taskReference,
-            taskId,
-            taskUrl,
-            platformType,
-            executionContext,
-        } = params;
-        const prepareContext: BusinessRulesPrepareContext = {
-            userQuestion: command,
-            taskReference: taskReference || undefined,
-            taskId: taskId?.trim() || undefined,
-            taskUrl: taskUrl?.trim() || undefined,
-            pullRequestDescription: executionContext.pullRequestDescription,
-            platformType: platformType || undefined,
-            businessSignals: this.detectSignals(
-                executionContext.pullRequestDescription,
-                taskReference,
-                executionContext.prDiff,
-                taskId,
-                taskUrl,
-            ),
-        };
-
-        if (executionContext.repository) {
-            prepareContext.repository = {
-                id: executionContext.repository.id,
-                name: executionContext.repository.name,
-                owner: executionContext.repository.owner,
-                defaultBranch: executionContext.repository.defaultBranch,
+function toCliVerdict(
+    outcome: BusinessValidationOutcome,
+    tasks: RunTask[],
+): CliBusinessVerdict {
+    switch (outcome.kind) {
+        case 'validated':
+            return {
+                status: outcome.passed ? 'compliant' : 'issues_found',
+                passed: outcome.passed,
+                tasks,
             };
-            prepareContext.defaultBranch =
-                executionContext.repository.defaultBranch ||
-                executionContext.baseRef;
-        }
-
-        if (executionContext.prDiff) {
-            prepareContext.prDiff = executionContext.prDiff;
-        }
-
-        if (executionContext.mode === 'pull_request') {
-            prepareContext.pullRequest = {
-                pullRequestNumber: executionContext.prNumber,
-                headRef: executionContext.headRef,
-                baseRef: executionContext.baseRef,
+        case 'skipped':
+            return {
+                status: 'skipped',
+                passed: false,
+                reason: outcome.reason,
+                message: outcome.message,
+                tasks,
             };
-            prepareContext.pullRequestNumber = executionContext.prNumber;
-            prepareContext.headRef = executionContext.headRef;
-            prepareContext.baseRef = executionContext.baseRef;
-        }
-
-        return prepareContext;
-    }
-
-    private detectSignals(
-        pullRequestDescription: string,
-        taskReference?: string,
-        prDiff?: string,
-        taskId?: string,
-        taskUrl?: string,
-    ): Record<string, string[]> {
-        const normalizedTaskId = taskId?.trim();
-        const normalizedTaskUrl = taskUrl?.trim();
-        const prDiffSignal =
-            typeof prDiff === 'string' && prDiff.length > 0
-                ? prDiff.slice(
-                      0,
-                      TriggerBusinessValidationUseCase.MAX_SIGNAL_SOURCE_LENGTH,
-                  )
-                : undefined;
-        const referenceSource = [taskReference, pullRequestDescription]
-            .filter(Boolean)
-            .join('\n');
-        const ticketSource = [referenceSource, prDiffSignal, normalizedTaskId]
-            .filter(Boolean)
-            .join('\n');
-        const taskLinkSource = [normalizedTaskUrl, referenceSource]
-            .filter(Boolean)
-            .join('\n');
-        const keywordSource = [referenceSource, prDiffSignal]
-            .filter(Boolean)
-            .join('\n');
-
-        const ticketKeys = [
-            ...(normalizedTaskId ? [normalizedTaskId] : []),
-            ...this.detectTicketKeys(ticketSource),
-        ];
-        const taskLinks = [
-            ...(normalizedTaskUrl ? [normalizedTaskUrl] : []),
-            ...this.detectTaskLinks(taskLinkSource),
-        ];
-
-        return {
-            ticketKeys: [...new Set(ticketKeys)],
-            taskLinks: [...new Set(taskLinks)],
-            requirementKeywords: this.detectRequirementKeywords(keywordSource),
-        };
-    }
-
-    private detectTicketKeys(content: string): string[] {
-        const matches = content.match(/[A-Z]{2,}-\d+/g);
-        return [...new Set(matches ?? [])];
-    }
-
-    private detectTaskLinks(content: string): string[] {
-        const matches = content.match(/https?:\/\/[^\s)>\]"']+/g);
-        return [...new Set(matches ?? [])];
-    }
-
-    private detectRequirementKeywords(content: string): string[] {
-        const lower = content.toLowerCase();
-        return TriggerBusinessValidationUseCase.REQUIREMENT_KEYWORDS.filter(
-            (keyword) => lower.includes(keyword),
-        );
-    }
-
-    private createThread(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        context:
-            | PullRequestValidationExecutionContext
-            | LocalDiffValidationExecutionContext;
-    }): ReturnType<typeof createThreadId> | undefined {
-        const { organizationAndTeamData, context } = params;
-
-        try {
-            const identifiers: Record<string, string | number> = {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
+        default:
+            return {
+                status: outcome.kind,
+                passed: false,
+                message: outcome.message,
+                tasks,
             };
-
-            if (context.repository?.id) {
-                identifiers.repositoryId = context.repository.id;
-            }
-
-            if (context.mode === 'pull_request') {
-                identifiers.pullRequestNumber = context.prNumber;
-            } else {
-                identifiers.localDiffHash = this.buildDiffHash(context.prDiff);
-            }
-
-            return createThreadId(identifiers, { prefix: 'vbl' });
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Failed to create business validation thread identifier',
-                context: TriggerBusinessValidationUseCase.name,
-                error,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    repositoryId: context.repository?.id,
-                    mode: context.mode,
-                },
-            });
-            return undefined;
-        }
-    }
-
-    private buildDiffHash(diff: string): string {
-        return createHash('sha256').update(diff).digest('hex').slice(0, 16);
     }
 }

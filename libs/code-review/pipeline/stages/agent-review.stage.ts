@@ -65,7 +65,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import { FeatureGateService } from '@libs/feature-gate';
 import {
     ORGANIZATION_SERVICE_TOKEN,
     IOrganizationService,
@@ -702,54 +702,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         });
     }
 
-    /**
-     * Resolve whether HEAVY mode actually runs: the per-review opt-in (CLI
-     * `--heavy` / `@kody review --heavy`) AND the `heavy-review` feature gate,
-     * which is an ALPHA feature — cloud gates it by the org's release track +
-     * PostHog allowlist, self-hosted keeps it off until it's promoted to beta.
-     * A denied request degrades silently to a normal review.
-     */
-    private async resolveHeavy(
-        context: CodeReviewPipelineContext,
-    ): Promise<boolean> {
-        const requested =
-            context.heavy || context.codeReviewConfig?.heavy || false;
-        if (!requested) {
-            return false;
-        }
-        const org = context.organizationAndTeamData;
-        try {
-            const releaseTrack = await this.organizationService.getReleaseTrack(
-                org.organizationId,
-            );
-            const enabled = await this.featureGate.isEnabled(
-                FEATURE_KEYS.heavyReview,
-                {
-                    identifier: org.organizationId,
-                    organizationAndTeamData: org,
-                    releaseTrack,
-                },
-            );
-            if (!enabled) {
-                this.logger.log({
-                    message: `[AGENT] Heavy review requested but not enabled for org (alpha feature) — running normal review`,
-                    context: this.stageName,
-                    metadata: { organizationId: org.organizationId },
-                });
-            }
-            return enabled;
-        } catch (err) {
-            // Fail safe: if the gate can't be evaluated, do NOT silently run the
-            // alpha path — degrade to normal.
-            this.logger.warn({
-                message: `[AGENT] Heavy feature-gate check failed; running normal review`,
-                context: this.stageName,
-                error: err,
-            });
-            return false;
-        }
-    }
-
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
@@ -983,20 +935,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // dropped — is unit-testable and can't drift from a second inline
             // copy. A committed merge conflict once kept an inline builder that
             // silently dropped reviewDirective; this is the single source now.
-            // Resolve HEAVY once (opt-in AND the alpha feature gate) and write it
-            // back onto the context so the SAME gated value flows to both the
-            // finder and the persisted PR record (create-file-comments stage).
-            const resolvedHeavy = await this.resolveHeavy(context);
-            // The pipeline context is Immer-frozen (auto-freeze) once it has
-            // passed through an earlier stage's produce(), so a direct
-            // `context.heavy = …` throws "Cannot assign to read only property".
-            // Write it back through updateContext so the gated value both flows
-            // into buildOrchestratorInput below AND persists to the downstream
-            // create-file-comments stage.
-            context = this.updateContext(context, (draft) => {
-                draft.heavy = resolvedHeavy;
-            });
-
             // Deterministic boundary gate (#1576): only arm linked-repo tools
             // + prompt when the diff touches boundary surface. Config alone is
             // not enough — pure internal refactors stay single-repo.
@@ -1041,7 +979,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     gitHubToken: await this.resolveGitHubToken(context),
                     callGraph,
                     adaptiveProfile,
-                    heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
                     repoInstructions,
@@ -2735,7 +2672,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         } catch (err) {
             this.logger.warn({
-                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
                 context: this.stageName,
                 error: err,
             });
@@ -2750,9 +2687,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
      *   2. else semantic cosine of the two descriptions:
      *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
-     * Every external failure (no embed key, embedding/LLM error) falls back to a
-     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
-     * honored blindly.
+     * Without an embedding (no embedder, or the call failed) the tiebreak
+     * decides the model's proposed merges (#2170). A tiebreak failure falls
+     * back to a veto, so a low-overlap merge is never honored blindly.
      *
      * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
      * grouping to corroborate a match, so the cheap lexical-honor shortcut is
@@ -2794,17 +2731,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
-            // Without embeddings this vetoes EVERY merge, which republishes
-            // the one duplicate we are most sure about: a scanner fact the
-            // model restated. Only that pair overrides the veto — where
-            // embeddings work, the full guard still decides, so a wide agent
-            // finding that merely overlaps a scanner line is not swallowed.
+            // A scanner fact the model restated is the duplicate we are most
+            // sure about: it merges without asking. Where embeddings work, the
+            // full guard still decides, so a wide agent finding that merely
+            // overlaps a scanner line is not swallowed.
             if (restatesAnalyzerFinding(dup, keep)) {
                 return {
                     honor: true,
                     reason: 'restates-analyzer (no-embed)',
                     score: lexical,
                 };
+            }
+            // No embedding (a self-hosted install without the platform OpenAI
+            // key, or a failed call, #2170): the model proposed this merge, so
+            // the tiebreak decides it. The cross-stream pass has no such proposal and
+            // would ask once per suggestion × rule pair: it keeps the veto.
+            if (!opts?.crossStream) {
+                const sameBug = await tiebreak(dup, keep);
+                if (sameBug !== null) {
+                    return {
+                        honor: sameBug,
+                        reason: `llm-tiebreak=${sameBug} (no-embed)`,
+                        score: lexical,
+                    };
+                }
             }
             return {
                 honor: false,

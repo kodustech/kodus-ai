@@ -13,7 +13,6 @@ import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/eng
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
 // strict-wire-safe before they 400 a BYOK-OpenAI customer).
-import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaCapture } from '@libs/cli-review/application/use-cases/classify-cli-session-capture.use-case';
 import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } from '@libs/cli-review/application/use-cases/classify-session.use-case';
 import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import {
@@ -105,10 +104,6 @@ describe('zodToStrictWireSchema', () => {
         ],
         ['decomposeOutputSchema (atom decomposition)', decomposeOutputSchema],
         // Phase 3 consumer-migration schemas (inline → exported).
-        [
-            'LLMDecisionExtractionSchema (cli capture classifier)',
-            llmDecisionExtractionSchemaCapture,
-        ],
         [
             'LLMDecisionExtractionSchema (cli session classifier)',
             llmDecisionExtractionSchemaSession,
@@ -314,7 +309,6 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts', // kodyRulesIDEGeneratorSchema
         'libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts', // decomposeOutputSchema (+ compilerOutputSchema, already covered)
         // Phase 3 consumer migrations.
-        'libs/cli-review/application/use-cases/classify-cli-session-capture.use-case.ts', // LLMDecisionExtractionSchema
         'libs/cli-review/application/use-cases/classify-session.use-case.ts', // LLMDecisionExtractionSchema
         'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema

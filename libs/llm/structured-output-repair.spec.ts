@@ -13,8 +13,112 @@ import {
     readOutput,
     repairAndValidate,
     repairJsonText,
+    salvageJsonText,
     salvageStructuredError,
 } from './structured-output-repair';
+
+describe('salvageJsonText (#2112 broken finder payloads)', () => {
+    const item = (n: number) =>
+        `{"relevantFile":"src/cart.ts","suggestionContent":"issue ${n}"}`;
+
+    it('step 1 — escapes a raw newline inside a string literal', () => {
+        const text = '[{"relevantFile":"src/cart.ts","existingCode":"a\nb"}]';
+        expect(() => JSON.parse(text)).toThrow();
+        expect(salvageJsonText(text)).toEqual({
+            value: [{ relevantFile: 'src/cart.ts', existingCode: 'a\nb' }],
+            reason: 'salvaged-escaped',
+        });
+    });
+
+    it("step 1 — fixes \\' and a backslash that starts no JSON escape", () => {
+        const text = String.raw`[{"existingCode":"it\'s \d+"}]`;
+        expect(() => JSON.parse(text)).toThrow();
+        expect(salvageJsonText(text)?.value).toEqual([
+            { existingCode: String.raw`it's \d+` },
+        ]);
+    });
+
+    it('step 1 — keeps valid escapes untouched', () => {
+        const text = '[{"a":"x\\ny \\"q\\" \\u00e9"}]\n}';
+        expect(salvageJsonText(text)?.value).toEqual([{ a: 'x\ny "q" é' }]);
+    });
+
+    it('step 2 — keeps a valid leading array and drops the stray } after it', () => {
+        const text = `[${item(1)},${item(2)}]}`;
+        expect(salvageJsonText(text)).toEqual({
+            value: [
+                { relevantFile: 'src/cart.ts', suggestionContent: 'issue 1' },
+                { relevantFile: 'src/cart.ts', suggestionContent: 'issue 2' },
+            ],
+            reason: 'salvaged-leading-value',
+        });
+    });
+
+    it('step 3 — keeps the complete items before an unescaped quote breaks the array', () => {
+        const text = `[${item(1)},${item(2)},{"relevantFile":"src/cart.ts","existingCode":"say "hi""}]`;
+        expect(salvageJsonText(text)).toEqual({
+            value: [
+                { relevantFile: 'src/cart.ts', suggestionContent: 'issue 1' },
+                { relevantFile: 'src/cart.ts', suggestionContent: 'issue 2' },
+            ],
+            reason: 'salvaged-items',
+        });
+    });
+
+    it('step 3 — finds the array under the key inside a broken top-level object', () => {
+        const text = `{"reasoning":"two found","suggestions":[${item(1)},{"relevantFile":"x","existingCode":"say "hi""}]}`;
+        expect(salvageJsonText(text, 'suggestions')).toEqual({
+            value: {
+                suggestions: [
+                    {
+                        relevantFile: 'src/cart.ts',
+                        suggestionContent: 'issue 1',
+                    },
+                ],
+            },
+            reason: 'salvaged-items',
+        });
+    });
+
+    it('keeps commas before } or ] inside recovered string values', () => {
+        const kept = {
+            relevantFile: 'src/cart.ts',
+            improvedCode: 'const o = { a, };\nlist([1, 2, ]);',
+        };
+        const leading = `[${JSON.stringify(kept)}]}`;
+        expect(salvageJsonText(leading)?.value).toEqual([kept]);
+        const items = `[${JSON.stringify(kept)},{"relevantFile":"x","existingCode":"say "hi""}]`;
+        expect(salvageJsonText(items)).toEqual({
+            value: [kept],
+            reason: 'salvaged-items',
+        });
+    });
+
+    it('still drops a trailing comma outside string values', () => {
+        const text = `[{"relevantFile":"src/cart.ts","improvedCode":"f(a, )",},{"existingCode":"say "hi""}]`;
+        expect(salvageJsonText(text)?.value).toEqual([
+            { relevantFile: 'src/cart.ts', improvedCode: 'f(a, )' },
+        ]);
+    });
+
+    it('returns undefined when the first item is already broken', () => {
+        expect(
+            salvageJsonText('[{"relevantFile":"x","existingCode":"say "hi""}]'),
+        ).toBeUndefined();
+    });
+
+    it('returns undefined for text with no array to salvage', () => {
+        expect(salvageJsonText('not json at all')).toBeUndefined();
+        expect(
+            salvageJsonText('{"reasoning":"x" "y"}', 'suggestions'),
+        ).toBeUndefined();
+    });
+
+    it('skips salvage above 1 MB', () => {
+        const big = `[${item(1)},${item(2)}]}` + ' '.repeat(1_000_001);
+        expect(salvageJsonText(big)).toBeUndefined();
+    });
+});
 
 describe('repairJsonText', () => {
     it('unwraps a ```json markdown fence', () => {
@@ -123,13 +227,17 @@ describe('reasoning written before the answer', () => {
 
     it('finds nothing when the reasoning never closes (no answer was written)', () => {
         expect(
-            extractJsonFromText('<think>Rule [1] … `const x = { a: 1 }` … still thinking'),
+            extractJsonFromText(
+                '<think>Rule [1] … `const x = { a: 1 }` … still thinking',
+            ),
         ).toBeNull();
     });
 
     it('keeps the answer when another reasoning block follows it', () => {
         expect(
-            extractJsonFromText(`${reasoning}${answer}<think>checking { x }</think>`),
+            extractJsonFromText(
+                `${reasoning}${answer}<think>checking { x }</think>`,
+            ),
         ).toBe(answer);
     });
 
@@ -141,18 +249,24 @@ describe('reasoning written before the answer', () => {
 
     it('skips several reasoning blocks in a row', () => {
         expect(
-            extractJsonFromText(`${reasoning}<think>again { "a": 1 }</think>${answer}`),
+            extractJsonFromText(
+                `${reasoning}<think>again { "a": 1 }</think>${answer}`,
+            ),
         ).toBe(answer);
     });
 
     it('skips reasoning that follows a line of prose, before the answer starts', () => {
-        expect(extractJsonFromText(`Sure.\n${reasoning}\n${answer}`)).toBe(answer);
+        expect(extractJsonFromText(`Sure.\n${reasoning}\n${answer}`)).toBe(
+            answer,
+        );
     });
 
     it('leaves reasoning after the answer alone', () => {
-        expect(extractJsonFromText(`${answer}\n<think>${'{ not the answer }'}</think>`)).toBe(
-            answer,
-        );
+        expect(
+            extractJsonFromText(
+                `${answer}\n<think>${'{ not the answer }'}</think>`,
+            ),
+        ).toBe(answer);
     });
 
     it('finds the answer after an unclosed block that is not at the start', () => {
@@ -166,7 +280,9 @@ describe('reasoning written before the answer', () => {
     it('finds the answer behind an unclosed block that follows a closed one', () => {
         // Only a block that is the first thing in the response means "no answer";
         // after a block that did close, the answer may still be there.
-        expect(extractJsonFromText(`<think>x</think><think>y ${answer}`)).toBe(answer);
+        expect(extractJsonFromText(`<think>x</think><think>y ${answer}`)).toBe(
+            answer,
+        );
     });
 
     it('does not rescan the whole text once per block', () => {
@@ -179,7 +295,8 @@ describe('reasoning written before the answer', () => {
     });
 
     it('leaves a <think> tag inside a JSON string alone', () => {
-        const json = '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
+        const json =
+            '{"violations":[{"suggestionContent":"<think> is not HTML"}]}';
         expect(extractJsonFromText(json)).toBe(json);
     });
 });
@@ -883,6 +1000,141 @@ describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
 // The verdict parser's extractor (#1937): unlike extractJsonFromText, it walks
 // to the END of the text, so a quoted code block or an example object before the
 // answer cannot be mistaken for it.
+describe('normalizeEnvelope — field-level JSON text (#2112)', () => {
+    const D = [{ id: 'a' }, { id: 'b' }];
+
+    it('parses a target key that holds the array as JSON text', () => {
+        const spy = jest.fn();
+        expect(
+            normalizeEnvelope(
+                { reasoning: 'r', suggestions: JSON.stringify(D) },
+                'suggestions',
+                [],
+                { onRecover: spy },
+            ),
+        ).toEqual({ reasoning: 'r', suggestions: D });
+        expect(spy).toHaveBeenCalledWith('parsed-field-string');
+    });
+
+    it('parses JSON text under an aliased key and reports both recoveries', () => {
+        const spy = jest.fn();
+        expect(
+            normalizeEnvelope(
+                { findings: JSON.stringify(D) },
+                'suggestions',
+                ['findings'],
+                { onRecover: spy },
+            ),
+        ).toEqual({ suggestions: D });
+        expect(spy).toHaveBeenCalledWith(
+            'aliased-findings+parsed-field-string',
+        );
+    });
+
+    it('takes the inner array when the field holds the whole envelope as text', () => {
+        expect(
+            normalizeEnvelope(
+                { suggestions: JSON.stringify({ suggestions: D }) },
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('salvages a broken JSON text field (stray } after the array)', () => {
+        const spy = jest.fn();
+        expect(
+            normalizeEnvelope(
+                { suggestions: `${JSON.stringify(D)}}` },
+                'suggestions',
+                [],
+                { onRecover: spy },
+            ),
+        ).toEqual({ suggestions: D });
+        // extractJsonFromText already drops text after the balanced value.
+        expect(spy).toHaveBeenCalledWith('parsed-field-string');
+    });
+
+    it('salvages a JSON text field with a raw newline inside code', () => {
+        const spy = jest.fn();
+        expect(
+            normalizeEnvelope(
+                { suggestions: '[{"existingCode":"a\nb"}]' },
+                'suggestions',
+                [],
+                { salvage: true, onRecover: spy },
+            ),
+        ).toEqual({ suggestions: [{ existingCode: 'a\nb' }] });
+        expect(spy).toHaveBeenCalledWith('salvaged-escaped-field');
+    });
+
+    it('leaves a field whose text is not an array untouched', () => {
+        for (const text of ['no issues found', '{"a":1}', '"just a string"']) {
+            const v = { suggestions: text };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        }
+    });
+
+    it('never parses a string-valued key in scalar mode', () => {
+        const v = { keep: '[true]' };
+        expect(normalizeEnvelope(v, 'keep', [], { scalar: true })).toBe(v);
+    });
+
+    it('salvages a broken top-level payload string', () => {
+        const text = `{"reasoning":"x","suggestions":[{"id":"a"},{"id":"say "hi""}]}`;
+        expect(
+            normalizeEnvelope(text, 'suggestions', [], { salvage: true }),
+        ).toEqual({
+            suggestions: [{ id: 'a' }],
+        });
+    });
+
+    it('leaves broken JSON text alone when the caller did not opt into salvage', () => {
+        const text = `{"reasoning":"x","suggestions":[{"id":"a"},{"id":"say "hi""}]}`;
+        expect(normalizeEnvelope(text, 'suggestions')).toBe(text);
+        const field = { suggestions: '[{"existingCode":"a\nb"}]' };
+        expect(normalizeEnvelope(field, 'suggestions')).toBe(field);
+    });
+
+    it('does not salvage a broken top-level string in scalar mode', () => {
+        const text = '[{"keep":true},{"keep":"say "x""}]';
+        expect(normalizeEnvelope(text, 'keep', [], { scalar: true })).toBe(
+            text,
+        );
+    });
+
+    it('unwraps a tool call written as data, with object or text arguments', () => {
+        const spy = jest.fn();
+        expect(
+            normalizeEnvelope(
+                { name: 'submitResult', parameters: { suggestions: D } },
+                'suggestions',
+                [],
+                { onRecover: spy },
+            ),
+        ).toEqual({ suggestions: D });
+        expect(spy).toHaveBeenCalledWith('unwrapped-tool-call');
+        expect(
+            normalizeEnvelope(
+                {
+                    name: 'submitResult',
+                    arguments: JSON.stringify({ suggestions: D }),
+                },
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('does not unwrap a tool-call wrapper in scalar mode', () => {
+        const v = { name: 'verdict', arguments: { keep: true } };
+        expect(normalizeEnvelope(v, 'keep', [], { scalar: true })).toBe(v);
+    });
+
+    it('does not unwrap {name, parameters} when the target key is present', () => {
+        const v = { name: 'x', parameters: { a: 1 }, suggestions: D };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+});
+
 describe('extractLastJsonObjectWith', () => {
     it('returns the last object carrying the key', () => {
         expect(
@@ -916,14 +1168,18 @@ describe('extractLastJsonObjectWith', () => {
 
     it('survives an unbalanced object before the answer', () => {
         expect(
-            extractLastJsonObjectWith('oops {"a": 1 \n{"keep": false}', ['keep']),
+            extractLastJsonObjectWith('oops {"a": 1 \n{"keep": false}', [
+                'keep',
+            ]),
         ).toEqual({ keep: false });
     });
 
     it('tolerates a trailing comma', () => {
-        expect(extractLastJsonObjectWith('{"keep": false,}', ['keep'])).toEqual({
-            keep: false,
-        });
+        expect(extractLastJsonObjectWith('{"keep": false,}', ['keep'])).toEqual(
+            {
+                keep: false,
+            },
+        );
     });
 
     it('returns null when nothing carries the key', () => {

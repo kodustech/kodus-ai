@@ -44,6 +44,9 @@ describe('AutomationCodeReviewService', () => {
             updateCodeReview: jest.fn(),
             updateStageLog: jest.fn(),
             findLatestExecutionByFilters: jest.fn().mockResolvedValue(null),
+            // The execution heartbeat fires on a timer; without this a slow
+            // run (the mutation gate's) crashes the test process.
+            touchInProgress: jest.fn().mockResolvedValue(undefined),
         };
         organizationService = {
             findOne: jest.fn().mockResolvedValue({ name: 'org-name' }),

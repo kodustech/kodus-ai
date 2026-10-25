@@ -139,8 +139,9 @@ async function main() {
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },
         // The scripted model answers nothing usable: this measures the local fallback.
         { name: 'format', result: 'shared', model: true, args: ['evals/format/run.js', '--model=eval-fake', '--gate'] },
-        // The stage, its MCP adapter over HTTP and production's Kodus MCP server.
+        // The stage, its MCP adapter over HTTP and a Jira MCP answering from the cases.
         { name: 'business-logic', result: 'shared', model: true, args: ['evals/business-logic/run.js', '--model=eval-fake', '--gate'] },
+        { name: 'business-logic-requirements', result: 'shared', model: true, args: ['evals/business-logic-requirements/run.js', '--model=eval-fake', '--gate'] },
         // The cases bring their repository: the scripted model reads it through the local sandbox.
         { name: 'memories', result: 'shared', model: true, args: ['evals/memories/run.js', '--model=eval-fake', '--gate'] },
         // Each team's custom agents through production's stage on a repository

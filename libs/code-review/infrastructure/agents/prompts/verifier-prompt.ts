@@ -106,28 +106,33 @@ Rules:
 - You must NOT create a new finding unrelated to the candidate.
 - Do NOT rewrite the finding text, summary, severity, or suggested fix.
 
+A finding rests on facts the cited lines do not show: what a value can be, what a caller passes, what runs before it, how a library or framework behaves. Confirming it means checking those facts where they are decided — the definition, the schema or type, the callers, the guard before it, the library's own behavior — not re-reading the cited lines. A verdict that only quotes the cited code has not checked the finding.
+
 DROP the finding ONLY if you can actively REFUTE it — concrete evidence that it is wrong or cannot happen:
 - The root cause described is factually wrong (e.g. claims something is not imported when it is; claims a value can be null when it provably cannot).
 - The failure path is impossible given the actual code: a guard upstream prevents it, the branch is unreachable, or the value is already validated before use.
+- It is pure code style, naming, documentation, or formatting — not a behavior bug.
 - It is a generic "missing X" suggestion (missing rate limit / validation / CSRF / auth) with NO concrete code path where the omission produces a wrong outcome.
+- The behavior it criticizes is a choice the repository states is intended — a code comment, docstring, README or doc beside the code, or a test that pins exactly this behavior — and the finding shows no failure that the stated intent does not already accept. Never drop a security hole, data loss or crash for this reason, whatever the verdict calls it.
 - It contradicts a decision already applied in a previous review round for this EXACT pull request (shown below as PreviousReviewDecisions evidence, outcome "implemented"/"partially_implemented"), and the current diff gives no concrete evidence that the applied change is wrong or was reverted.
 
 KEEP the finding (this is the DEFAULT) whenever you cannot refute it. Do NOT drop a finding merely because:
 - the trigger is concurrent, adversarial, or an edge condition — race conditions, SSRF, auth/FIPS bypass, and injection are REAL bugs, not "speculative" or "extreme";
 - the root cause is reached from a caller in another file — cross-file bugs are real; trace the path before judging;
-- the bug is not literally on a changed line, as long as the PR's change activates, exposes, or fails to guard it.
+- the bug is not literally on a changed line, as long as the PR's change activates, exposes, or fails to guard it;
+- you argued it cannot happen from how threads, processes or timing will behave, or from how you recall a library works, and no code you read enforces it (a lock, a guard, a check, the library's own source) — an argument that it cannot happen is not a refutation.
 
 When in doubt, KEEP — a human reviewer makes the final call. Recall of real defects matters more here than trimming the last few low-value findings.
 
 Return JSON only at the end.`,
         prompt: `${evidenceBundle}
 
-You may use up to 4 tool-call steps.
+You may use up to 6 tool-call steps.
 
 Recommended approach:
-1. Read the cited file/range if needed.
-2. Search for the key symbol or caller if the claim depends on flow.
-3. Read one relevant caller/callee file if needed.
+1. Name the facts the finding relies on that the cited code does not show.
+2. Read where each is decided: the definition, schema or type, the callers, the guard before it, the library.
+3. Look for a comment, doc or test that states the criticized behavior is intended.
 4. Return a final JSON verdict.
 
 Output JSON:
