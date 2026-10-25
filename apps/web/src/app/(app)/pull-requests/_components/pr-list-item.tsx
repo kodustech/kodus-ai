@@ -707,12 +707,13 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Badge
+                                    tabIndex={0}
                                     variant="helper"
                                     className="bg-danger/10 text-danger ring-danger/40 whitespace-nowrap ring-1">
                                     Approval note unverified
                                 </Badge>
                             </TooltipTrigger>
-                            <TooltipContent className="max-w-sm text-xs normal-case">
+                            <TooltipContent className="max-w-sm text-xs break-words normal-case">
                                 Kody could not confirm the{" "}
                                 {latest.approvalReasonDeliveryFailure
                                     .decision === "hold"

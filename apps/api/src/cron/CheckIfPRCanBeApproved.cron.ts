@@ -76,7 +76,10 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import { IPullRequestWithDeliveredSuggestions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    ApprovalReasonDeliveryFailure,
+    IPullRequestWithDeliveredSuggestions,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
     process.env.API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED;
@@ -1399,26 +1402,18 @@ export class CheckIfPRCanBeApprovedCronProvider {
             repository: { id: string; name: string };
             prNumber: number;
         },
-        failure: {
-            decision: 'hold' | 'approve';
-            reason: string;
-            occurredAt: string;
-        } | null,
+        failure: ApprovalReasonDeliveryFailure | null,
     ): Promise<void> {
         try {
-            const pullRequest =
-                await this.pullRequestService.findByNumberAndRepositoryId(
-                    request.prNumber,
+            const persisted =
+                await this.pullRequestService.setApprovalReasonDeliveryFailure(
+                    request.organizationAndTeamData.organizationId,
                     request.repository.id,
-                    request.organizationAndTeamData,
+                    request.prNumber,
+                    failure,
                 );
-            if (!pullRequest) return;
-            if (!failure && !pullRequest.approvalReasonDeliveryFailure) return;
-            const updated = await this.pullRequestService.update(pullRequest, {
-                approvalReasonDeliveryFailure: failure,
-            });
-            if (!updated) {
-                throw new Error('Pull request delivery status update returned no result');
+            if (!persisted) {
+                throw new Error('Pull request for delivery status was not found');
             }
         } catch (error) {
             this.logger.error({

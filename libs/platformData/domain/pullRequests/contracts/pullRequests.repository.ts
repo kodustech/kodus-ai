@@ -5,6 +5,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { PullRequestsEntity } from '../entities/pullRequests.entity';
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import {
+    ApprovalReasonDeliveryFailure,
     IPullRequests,
     IFile,
     ISuggestion,
@@ -61,6 +62,13 @@ export interface BulkApplyResult {
 
 export interface IPullRequestsRepository {
     getNativeCollection(): any;
+
+    setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: ApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean>;
 
     create(
         suggestion: Omit<IPullRequests, 'uuid'>,

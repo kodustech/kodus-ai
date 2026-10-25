@@ -52,8 +52,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const pullRequestService = {
-            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
-            update: jest.fn().mockResolvedValue({ uuid: 'pr-7' }),
+            setApprovalReasonDeliveryFailure: jest
+                .fn()
+                .mockResolvedValue(true),
             findPullRequestsWithDeliveredSuggestions: jest
                 .fn()
                 .mockResolvedValue([]),
@@ -482,10 +483,6 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
     it('does not create a reason comment when the provider lookup fails', async () => {
         const { cron, deps } = makeCron();
-        const savedPr = { uuid: 'pr-7', approvalReasonDeliveryFailure: null };
-        deps.pullRequestService.findByNumberAndRepositoryId.mockResolvedValue(
-            savedPr,
-        );
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
             null,
         );
@@ -519,28 +516,22 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 }),
             }),
         );
-        expect(deps.pullRequestService.update).toHaveBeenCalledWith(savedPr, {
-            approvalReasonDeliveryFailure: {
+        expect(
+            deps.pullRequestService.setApprovalReasonDeliveryFailure,
+        ).toHaveBeenCalledWith(
+            'org-1',
+            'repo-1',
+            7,
+            {
                 decision: 'hold',
                 reason: 'A person should review this.',
                 occurredAt: expect.any(String),
             },
-        });
+        );
     });
 
     it('clears a prior delivery failure when the reason is already on the PR', async () => {
         const { cron, deps } = makeCron();
-        const savedPr = {
-            uuid: 'pr-7',
-            approvalReasonDeliveryFailure: {
-                decision: 'hold',
-                reason: 'A person should review this.',
-                occurredAt: '2026-10-24T00:00:00.000Z',
-            },
-        };
-        deps.pullRequestService.findByNumberAndRepositoryId.mockResolvedValue(
-            savedPr,
-        );
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
             [
                 {
@@ -572,9 +563,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(
             deps.codeManagementService.updateIssueComment,
         ).not.toHaveBeenCalled();
-        expect(deps.pullRequestService.update).toHaveBeenCalledWith(savedPr, {
-            approvalReasonDeliveryFailure: null,
-        });
+        expect(
+            deps.pullRequestService.setApprovalReasonDeliveryFailure,
+        ).toHaveBeenCalledWith('org-1', 'repo-1', 7, null);
     });
 
     it('uses the provider numeric note ID when its primary ID is opaque', async () => {

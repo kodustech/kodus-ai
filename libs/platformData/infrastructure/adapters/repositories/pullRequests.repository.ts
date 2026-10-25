@@ -19,6 +19,7 @@ import {
     IPullRequestsRepository,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
+    ApprovalReasonDeliveryFailure,
     IFile,
     IPullRequests,
     IPullRequestUserMapping,
@@ -48,6 +49,28 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     getNativeCollection() {
         return this.pullRequestsModel.db.collection('pullRequests');
+    }
+
+    async setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: ApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                number: prNumber,
+                // Clearing a notice that does not exist should leave the PR
+                // untouched, including its updatedAt timestamp.
+                ...(failure === null
+                    ? { approvalReasonDeliveryFailure: { $ne: null } }
+                    : {}),
+            },
+            { $set: { approvalReasonDeliveryFailure: failure } },
+        );
+        return failure === null || result.matchedCount > 0;
     }
 
     //#region Create

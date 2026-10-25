@@ -7,6 +7,7 @@ import {
 import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
+    ApprovalReasonDeliveryFailure,
     ICommit,
     IFile,
     IPullRequests,
@@ -103,6 +104,20 @@ export class PullRequestsService implements IPullRequestsService {
 
     getNativeCollection() {
         throw new Error('Method not implemented.');
+    }
+
+    setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: ApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
+            organizationId,
+            repositoryId,
+            prNumber,
+            failure,
+        );
     }
 
     //#region Create

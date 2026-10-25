@@ -41,6 +41,69 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         repo = new PullRequestsRepository(model as any);
     });
 
+    describe('setApprovalReasonDeliveryFailure', () => {
+        it('writes only the targeted PR and clears only an existing notice', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
+            const failure = {
+                decision: 'hold' as const,
+                reason: 'A person must approve.',
+                occurredAt: '2026-10-24T00:00:00.000Z',
+            };
+
+            expect(
+                await repo.setApprovalReasonDeliveryFailure(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    failure,
+                ),
+            ).toBe(true);
+            expect(model.updateOne).toHaveBeenNthCalledWith(
+                1,
+                {
+                    organizationId: 'org-A',
+                    'repository.id': 'repo-alpha',
+                    number: 7,
+                },
+                { $set: { approvalReasonDeliveryFailure: failure } },
+            );
+
+            await repo.setApprovalReasonDeliveryFailure(
+                'org-A',
+                'repo-alpha',
+                7,
+                null,
+            );
+            expect(model.updateOne).toHaveBeenNthCalledWith(
+                2,
+                {
+                    organizationId: 'org-A',
+                    'repository.id': 'repo-alpha',
+                    number: 7,
+                    approvalReasonDeliveryFailure: { $ne: null },
+                },
+                { $set: { approvalReasonDeliveryFailure: null } },
+            );
+        });
+
+        it('reports a missing PR when a failed delivery cannot be recorded', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
+
+            expect(
+                await repo.setApprovalReasonDeliveryFailure(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    {
+                        decision: 'hold',
+                        reason: 'A person must approve.',
+                        occurredAt: '2026-10-24T00:00:00.000Z',
+                    },
+                ),
+            ).toBe(false);
+        });
+    });
+
     describe('findNumbersByRepositoryId (token-usage repo filter)', () => {
         const mockFind = (docs: Array<{ number: number }>) => {
             const findExec = jest.fn().mockResolvedValue(docs);
