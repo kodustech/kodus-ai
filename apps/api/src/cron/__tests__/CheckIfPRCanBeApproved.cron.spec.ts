@@ -568,6 +568,33 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).toHaveBeenCalledWith('org-1', 'repo-1', 7, null);
     });
 
+    it('logs a context-read failure without reading the failing getter twice', async () => {
+        const { cron, deps } = makeCron();
+        const contextError = new Error('context unavailable');
+        const getContext = jest.fn(() => {
+            throw contextError;
+        });
+
+        await (cron as any).recordApprovalReasonDelivery(
+            {
+                get organizationAndTeamData() {
+                    return getContext();
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 7,
+            },
+            null,
+        );
+
+        expect(getContext).toHaveBeenCalledTimes(1);
+        expect(
+            deps.pullRequestService.setApprovalReasonDeliveryFailure,
+        ).not.toHaveBeenCalled();
+        expect((cron as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({ error: contextError }),
+        );
+    });
+
     it('uses the provider numeric note ID when its primary ID is opaque', async () => {
         const { cron, deps } = makeCron();
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(

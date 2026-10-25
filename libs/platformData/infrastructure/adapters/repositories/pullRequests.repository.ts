@@ -19,7 +19,7 @@ import {
     IPullRequestsRepository,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
-    ApprovalReasonDeliveryFailure,
+    IApprovalReasonDeliveryFailure,
     IFile,
     IPullRequests,
     IPullRequestUserMapping,
@@ -55,7 +55,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        failure: ApprovalReasonDeliveryFailure | null,
+        failure: IApprovalReasonDeliveryFailure | null,
     ): Promise<boolean> {
         const result = await this.pullRequestsModel.updateOne(
             {

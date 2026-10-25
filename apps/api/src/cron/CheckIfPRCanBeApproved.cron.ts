@@ -77,7 +77,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
-    ApprovalReasonDeliveryFailure,
+    IApprovalReasonDeliveryFailure,
     IPullRequestWithDeliveredSuggestions,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
@@ -1402,14 +1402,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
             repository: { id: string; name: string };
             prNumber: number;
         },
-        failure: ApprovalReasonDeliveryFailure | null,
+        failure: IApprovalReasonDeliveryFailure | null,
     ): Promise<void> {
+        let organizationAndTeamData: OrganizationAndTeamData | undefined;
+        let repositoryId: string | undefined;
+        let prNumber: number | undefined;
         try {
+            organizationAndTeamData = request.organizationAndTeamData;
+            repositoryId = request.repository.id;
+            prNumber = request.prNumber;
             const persisted =
                 await this.pullRequestService.setApprovalReasonDeliveryFailure(
-                    request.organizationAndTeamData.organizationId,
-                    request.repository.id,
-                    request.prNumber,
+                    organizationAndTeamData.organizationId,
+                    repositoryId,
+                    prNumber,
                     failure,
                 );
             if (!persisted) {
@@ -1422,9 +1428,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 context: CheckIfPRCanBeApprovedCronProvider.name,
                 error,
                 metadata: {
-                    organizationAndTeamData: request.organizationAndTeamData,
-                    repositoryId: request.repository.id,
-                    prNumber: request.prNumber,
+                    organizationAndTeamData,
+                    repositoryId,
+                    prNumber,
                 },
             });
         }

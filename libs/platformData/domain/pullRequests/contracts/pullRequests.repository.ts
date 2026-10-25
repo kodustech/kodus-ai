@@ -5,7 +5,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { PullRequestsEntity } from '../entities/pullRequests.entity';
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import {
-    ApprovalReasonDeliveryFailure,
+    IApprovalReasonDeliveryFailure,
     IPullRequests,
     IFile,
     ISuggestion,
@@ -67,7 +67,7 @@ export interface IPullRequestsRepository {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        failure: ApprovalReasonDeliveryFailure | null,
+        failure: IApprovalReasonDeliveryFailure | null,
     ): Promise<boolean>;
 
     create(

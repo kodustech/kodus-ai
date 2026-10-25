@@ -19,7 +19,7 @@ export type SuggestionSeverityBreakdown = Record<
     number
 >;
 
-export interface ApprovalReasonDeliveryFailure {
+export interface IApprovalReasonDeliveryFailure {
     decision: 'hold' | 'approve';
     reason: string;
     occurredAt: string;
@@ -58,7 +58,7 @@ export interface SuggestionCountsBySeverity {
 
 export interface IPullRequests {
     uuid?: string;
-    approvalReasonDeliveryFailure?: ApprovalReasonDeliveryFailure | null;
+    approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
     title: string;
     status: string;
     merged: boolean;

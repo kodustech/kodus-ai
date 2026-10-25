@@ -7,7 +7,7 @@ import {
 import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
-    ApprovalReasonDeliveryFailure,
+    IApprovalReasonDeliveryFailure,
     ICommit,
     IFile,
     IPullRequests,
@@ -110,7 +110,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationId: string,
         repositoryId: string,
         prNumber: number,
-        failure: ApprovalReasonDeliveryFailure | null,
+        failure: IApprovalReasonDeliveryFailure | null,
     ): Promise<boolean> {
         return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
             organizationId,
