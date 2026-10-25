@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -65,6 +66,7 @@ describe('CommentManagerService - createLineComments retry logic', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: {},
@@ -487,6 +489,7 @@ describe('CommentManagerService - fallback suggestion logic', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: {},
@@ -920,6 +923,7 @@ describe('CommentManagerService - agent prompt wiring', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 // Real processor so the @agentPrompt handler actually runs.
                 MessageTemplateProcessor,
