@@ -162,6 +162,8 @@ export class SessionManager implements ISessionManager {
         this.cleanupTimer = setInterval(() => {
             this.cleanupExpiredSessions();
         }, SessionManager.cleanupIntervalMs);
+        // Housekeeping only: it must not keep a worker or a test process alive.
+        this.cleanupTimer.unref();
     }
 
     /**

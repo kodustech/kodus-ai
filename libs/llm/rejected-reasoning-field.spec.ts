@@ -115,6 +115,40 @@ describe('a reasoning field the upstream refuses', () => {
         expect(up.bodies[1].reasoning_effort).toBe('max');
     });
 
+    it('is dropped when Together parses it as a budget it does not get', async () => {
+        // api.together.xyz, deepseek-ai/DeepSeek-V4.1-Flash (issue #2214): the
+        // model reasons by default there, so without `thinking` it still does.
+        up = upstream({
+            respond: (body) =>
+                body.thinking
+                    ? {
+                          error: {
+                              message:
+                                  'Invalid JSON data: missing field `budget_tokens`',
+                              type: 'invalid_request_error',
+                              code: 'json_parse_error',
+                          },
+                      }
+                    : undefined,
+        });
+        const together = {
+            ...deepseek,
+            model: 'deepseek-ai/DeepSeek-V4.1-Flash',
+            baseURL: 'https://api.together.xyz/v1',
+        };
+        await run(together);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[1].thinking).toBeUndefined();
+
+        // Saving the slot runs the connection probe, where the 400 surfaced.
+        clearRefusals();
+        up.bodies.length = 0;
+        await probeSlotCall({ ...together, apiKey: 'k' } as any);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[1].thinking).toBeUndefined();
+    });
+
     it('is dropped on a structured call too', async () => {
         up = upstream({ refuses: ['thinking'] });
         OK.choices[0].message.content = '{"ok":true}';
@@ -308,6 +342,11 @@ describe('rejectedReasoningField', () => {
             'OpenAI tools-with-effort',
             "Function tools with reasoning_effort are not supported for gpt-6-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
             'reasoning_effort',
+        ],
+        [
+            'Together thinking schema',
+            'Invalid JSON data: missing field `budget_tokens`',
+            'thinking',
         ],
     ])('reads the field from a %s refusal', (_k, body, field) => {
         expect(rejectedReasoningField(apiError(400, body))).toBe(field);

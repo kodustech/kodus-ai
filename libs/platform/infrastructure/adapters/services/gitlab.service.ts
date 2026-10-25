@@ -136,6 +136,30 @@ const AWARD_EMOJI_CONCURRENCY = 5;
  */
 const GITLAB_MAX_PER_PAGE = 100;
 
+/**
+ * The auth mode of a GitLab record whose `authMode` predates the field: an
+ * OAuth record carries a refresh token and a PAT never does.
+ *
+ * Only the settings card reads this. `isSetupComplete` keeps treating a missing
+ * mode as OAuth (its TOKEN branch does not require repositories), and
+ * `getAuthDetails` keeps the same default because `instanceGitlabApi` uses the
+ * mode to tell a raw token from an encrypted one.
+ */
+export function deriveGitlabAuthMode(
+    authDetails?: { authMode?: AuthMode; refreshToken?: string } | null,
+): AuthMode {
+    if (authDetails?.authMode) {
+        return authDetails.authMode;
+    }
+    return authDetails?.refreshToken ? AuthMode.OAUTH : AuthMode.TOKEN;
+}
+
+// Overlapping reconciliations are ordered by OBSERVATION START in
+// `recordWebhookCreationFailures` (#2003 review). A module-level queue used to
+// sit here instead: it only serialised writes inside one process while the API
+// runs several instances, and it ordered by finishing time rather than by when
+// a run began observing.
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
@@ -1873,9 +1897,21 @@ export class GitlabService implements Omit<
 
             const hasRepositories = gitlabRepositories?.length > 0;
 
-            const authMode = gitlabOrg?.authIntegration?.authDetails?.authMode
-                ? gitlabOrg?.authIntegration?.authDetails?.authMode
+            const gitlabAuthDetails = gitlabOrg?.authIntegration?.authDetails;
+
+            // Unchanged for setup, and deliberately so: the TOKEN branch below
+            // does not require repositories, so letting a derived TOKEN through
+            // would stop a legacy PAT with none from being rejected as
+            // unconfigured.
+            const authMode = gitlabAuthDetails?.authMode
+                ? gitlabAuthDetails.authMode
                 : AuthMode.OAUTH;
+
+            // What the settings card reads, and only that: its
+            // `=== AuthMode.OAUTH` check is the only thing keeping an OAuth
+            // connection away from a rotation modal that saves a PAT, which
+            // REPLACES authDetails and drops the refresh token for good.
+            const cardAuthMode = deriveGitlabAuthMode(gitlabAuthDetails);
 
             const isSetupComplete =
                 (!!hasRepositories &&
@@ -1891,6 +1927,12 @@ export class GitlabService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: gitlabRepositories?.installationStatus,
+                    host: gitlabOrg?.authIntegration?.authDetails?.host ?? '',
+                    // The settings card reads this to decide whether it may
+                    // offer the token rotation, so it carries the DERIVED mode.
+                    // The setup check above keeps its own reading of a missing
+                    // mode, on purpose.
+                    authMode: cardAuthMode,
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
@@ -1947,6 +1989,12 @@ export class GitlabService implements Omit<
 
         return {
             ...gitlabAuthDetail,
+            // Not the card's derivation: `instanceGitlabApi` reads this mode to
+            // decide whether the stored token is raw (OAuth) or encrypted
+            // (PAT), so inferring TOKEN for a record that predates the field and
+            // carries a raw token would send it to `decrypt` and break the
+            // connection. A missing mode keeps the reading this path has always
+            // had; the settings card derives its own, for the UI only.
             authMode: gitlabAuthDetail?.authMode || AuthMode.OAUTH,
         };
     }
@@ -2422,7 +2470,9 @@ export class GitlabService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 
@@ -3014,41 +3064,353 @@ export class GitlabService implements Omit<
     async createMergeRequestWebhook(params: any) {
         const { organizationAndTeamData } = params;
 
-        const gitlabAuthDetail = await this.getAuthDetails(
-            organizationAndTeamData,
-        );
-
-        const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-        const repositories = <Repositories[]>(
-            await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                params?.organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            )
-        );
+        // When this run began observing. The failure record carries the moment
+        // it was written, and a run whose observation predates the stored one
+        // does not write at all — the caller fires this method without awaiting
+        // it, so two saves can finish out of order and the older one must not
+        // erase or resurrect what the newer one recorded (#2003 review).
+        const startedAt = new Date().toISOString();
 
         const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK; // Replace with your webhook URL
 
+        // Read the selection first: if auth resolution fails, the failure still
+        // has to be recorded per selected repository, and the selection is what
+        // names them (#1983 review). Reading it later also let a missing config
+        // make the loop non-iterable before anything was written.
+        //
+        // The read sits in its own try on purpose: the repository wraps ANY
+        // failure in a BadRequestException, and with the read outside every try
+        // that rejection escaped the method unlogged and unrecorded while the
+        // only caller swallows it — a transient DB failure left no
+        // reconciliation, no record and no trace. Without a selection there is
+        // nothing that can name the projects, so the log is what carries it.
+        let selection: Repositories[] = [];
+
         try {
-            for (const repo of repositories) {
-                await this.ensureSingleKodusHook(
-                    gitlabAPI,
-                    repo.id,
-                    webhookUrl,
-                    organizationAndTeamData,
-                );
-            }
+            const repositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    params?.organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
+            selection = Array.isArray(repositories) ? repositories : [];
         } catch (error) {
             this.logger.error({
-                message: 'Error creating webhook:',
+                message:
+                    'Error reading the repository selection for GitLab webhook reconciliation',
                 context: GitlabService.name,
                 serviceName: 'GitlabService createMergeRequestWebhook',
                 error: error,
+                metadata: { organizationAndTeamData },
+            });
+            return;
+        }
+
+        try {
+            // Upstream reconciles through `ensureSingleKodusHook` (one Kodus
+            // hook left on the project, duplicates removed) rather than a bare
+            // existence check: concurrent passes each added their own hook and
+            // GitLab delivers every event once per hook. A throw from it is a
+            // provider failure like any other, so it is recorded per repository
+            // below — the whole point of this PR is that a project without a
+            // hook says WHY (#1983).
+            let gitlabAPI: ReturnType<GitlabService['instanceGitlabApi']>;
+            try {
+                const gitlabAuthDetail = await this.getAuthDetails(
+                    organizationAndTeamData,
+                );
+
+                gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+            } catch (error) {
+                // An expired or revoked token means no webhook can be created
+                // for ANY selected project: record one failure per project
+                // before rethrowing, otherwise the alert this PR adds never
+                // renders and the silent failure #1983 is about survives.
+                // Through the same guard as the success path: this write
+                // replaces the stored value wholesale, so a run whose auth
+                // failed after a newer run already recorded its own state must
+                // not overwrite it with entries for repositories that are no
+                // longer selected.
+                await this.recordWebhookCreationFailuresGuarded(
+                    organizationAndTeamData,
+                    selection,
+                    this.failuresForSelection(selection, error),
+                    startedAt,
+                );
+                throw error;
+            }
+
+            const failures: Record<string, { reason: string; at: string }> = {};
+
+            // One project failing must not cost the others their hook, and it
+            // must leave a trace. The caller fires this method without awaiting
+            // it and swallows the rejection, so a 403 used to leave the
+            // selection looking saved while the project stayed without a
+            // webhook and no review ever ran (#1983).
+            for (const repo of selection) {
+                try {
+                    await this.ensureSingleKodusHook(
+                        gitlabAPI,
+                        repo.id,
+                        webhookUrl,
+                        organizationAndTeamData,
+                    );
+                    this.logger.log({
+                        message: 'Webhook added to project',
+                        context: GitlabService.name,
+                        serviceName: 'GitlabService createMergeRequestWebhook',
+                        metadata: { repositoryId: repo.id },
+                    });
+                } catch (error) {
+                    failures[String(repo.id)] = {
+                        reason: this.describeWebhookCreationFailure(error),
+                        at: new Date().toISOString(),
+                    };
+
+                    this.logger.error({
+                        message: 'Error creating webhook:',
+                        context: GitlabService.name,
+                        serviceName: 'GitlabService createMergeRequestWebhook',
+                        error: error,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryId: repo.id,
+                        },
+                    });
+                }
+            }
+
+            await this.recordWebhookCreationFailuresGuarded(
+                organizationAndTeamData,
+                selection,
+                failures,
+                startedAt,
+            );
+        } catch (error) {
+            // The caller fires this method unawaited and only swallows the
+            // rejection: auth resolution, or a missing REPOSITORIES config that
+            // makes the loop below non-iterable, used to escape the method as
+            // an unhandled rejection instead of reaching this log.
+            this.logger.error({
+                message: 'Error creating GitLab webhooks',
+                context: GitlabService.name,
+                serviceName: 'GitlabService createMergeRequestWebhook',
+                error: error,
+                metadata: { organizationAndTeamData },
+            });
+        }
+    }
+
+    /**
+     * Persist a webhook-failure set only while the selection this run
+     * reconciled is still the persisted one: overlapping reconciliations are
+     * real (two tabs, or a save followed by another selection change) and the
+     * caller fires this method unawaited, so the run that started first can
+     * finish last and replace a newer record wholesale.
+     *
+     * The guard read must never COST the record. It wraps any failure in a
+     * BadRequestException, and letting that rejection propagate would discard
+     * the per-project reasons #1983 exists to surface, on a read whose only job
+     * is to protect a wholesale replacement — a failed read therefore logs and
+     * records anyway.
+     */
+    private async recordWebhookCreationFailuresGuarded(
+        organizationAndTeamData: OrganizationAndTeamData,
+        selection: Repositories[],
+        failures: Record<string, { reason: string; at: string }>,
+        startedAt: string,
+    ): Promise<void> {
+        let currentRepositories: Repositories[];
+
+        try {
+            currentRepositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Could not re-read the repository selection before recording webhook creation failures; recording anyway',
+                context: GitlabService.name,
+                serviceName: 'GitlabService createMergeRequestWebhook',
+                error: error,
+                metadata: { organizationAndTeamData },
+            });
+
+            await this.recordWebhookCreationFailures(
+                organizationAndTeamData,
+                failures,
+                startedAt,
+            );
+            return;
+        }
+
+        if (this.sameSelection(selection, currentRepositories)) {
+            await this.recordWebhookCreationFailures(
+                organizationAndTeamData,
+                failures,
+                startedAt,
+            );
+            return;
+        }
+
+        this.logger.log({
+            message:
+                'Skipping the webhook failure record: the repository selection changed while this run was creating webhooks',
+            context: GitlabService.name,
+            serviceName: 'GitlabService createMergeRequestWebhook',
+            metadata: { organizationAndTeamData },
+        });
+    }
+
+    /** The write queue is per organization AND team: two teams of one
+     * organization reconcile different selections. */
+
+    private describeWebhookCreationFailure(error: any): string {
+        const status =
+            error?.response?.status ??
+            error?.statusCode ??
+            error?.response?.statusCode ??
+            error?.cause?.response?.status;
+
+        const detail =
+            error?.response?.statusText ??
+            error?.cause?.response?.statusText ??
+            error?.message;
+
+        const head = status
+            ? `GitLab refused the webhook (HTTP ${status})`
+            : 'GitLab refused the webhook';
+
+        const suffix = detail ? `: ${detail}` : '';
+
+        return status === 403
+            ? `${head}${suffix}. Creating a project webhook needs the Maintainer or Owner role on the project.`
+            : `${head}${suffix}.`;
+    }
+
+    /**
+     * One failure entry per selected repository, for a failure that hits all of
+     * them (auth resolution or API setup).
+     */
+    private failuresForSelection(
+        repositories: Repositories[],
+        error: unknown,
+    ): Record<string, { reason: string; at: string }> {
+        const reason = this.describeWebhookCreationFailure(error);
+        const at = new Date().toISOString();
+        const failures: Record<string, { reason: string; at: string }> = {};
+        for (const repo of repositories) {
+            failures[String(repo.id)] = { reason, at };
+        }
+        return failures;
+    }
+
+    /**
+     * Whether two persisted REPOSITORIES values name the same projects. Order is
+     * not meaningful in the config, and a null or absent value is the empty
+     * selection rather than a wildcard.
+     */
+    private sameSelection(
+        left: Repositories[] | null | undefined,
+        right: Repositories[] | null | undefined,
+    ): boolean {
+        const ids = (value: Repositories[] | null | undefined): string[] =>
+            (Array.isArray(value) ? value : [])
+                .map((repo) => String(repo?.id))
+                .sort();
+        const leftIds = ids(left);
+        const rightIds = ids(right);
+        return (
+            leftIds.length === rightIds.length &&
+            leftIds.every((id, index) => id === rightIds[index])
+        );
+    }
+
+    private async recordWebhookCreationFailures(
+        organizationAndTeamData: OrganizationAndTeamData,
+        failures: Record<string, { reason: string; at: string }>,
+        startedAt: string,
+    ): Promise<void> {
+        try {
+            const integration = await this.integrationService.findOne({
+                organization: {
+                    uuid: organizationAndTeamData.organizationId,
+                },
+                team: { uuid: organizationAndTeamData.teamId },
+                platform: PlatformType.GITLAB,
+            });
+
+            if (!integration) {
+                return;
+            }
+
+            // A run that began observing BEFORE the stored record was written
+            // must not overwrite it: the caller fires createMergeRequestWebhook
+            // without awaiting it, so a save that started earlier can finish
+            // later and would otherwise resurrect a failure a newer save just
+            // cleared, or erase the one the newer save surfaced (#2003 review).
+            // The record carries when it was written, so the stale run is a
+            // no-op instead of a blind wholesale replace.
+            const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
+                startedAt?: string;
+                recordedAt?: string;
+                failures?: Record<string, { reason: string; at: string }>;
+            }>(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                organizationAndTeamData,
+            );
+
+            // Compare observation STARTS, not write times (#2003 review): an
+            // older run that finishes while a newer one is still reconciling
+            // used to find a later `recordedAt` and step aside, leaving the
+            // older observation in place. With the record carrying when its
+            // observation began, the stale run is the one whose start is
+            // earlier, whatever the finishing order.
+            if (stored?.startedAt && stored.startedAt > startedAt) {
+                this.logger.log({
+                    message:
+                        'Skipping the webhook failure record: a newer reconciliation already wrote it',
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService recordWebhookCreationFailures',
+                    metadata: {
+                        organizationId:
+                            organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+                return;
+            }
+
+            // Replaced wholesale on every save: the loop above visits every
+            // selected project, so a project missing from `failures` has no
+            // creation failure left to report. `startedAt` is what lets a
+            // later-finishing, older-observing run recognise itself as stale;
+            // `recordedAt` stays as the moment the record was written.
+            await this.integrationConfigService.createOrUpdateConfig(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                {
+                    startedAt,
+                    recordedAt: new Date().toISOString(),
+                    failures,
+                },
+                integration.uuid,
+                organizationAndTeamData,
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error recording webhook creation failures:',
+                context: GitlabService.name,
+                serviceName: 'GitlabService recordWebhookCreationFailures',
+                error: error,
                 metadata: {
-                    ...params,
+                    organizationAndTeamData,
                 },
             });
-            throw error;
         }
     }
 
@@ -3095,7 +3457,8 @@ export class GitlabService implements Omit<
         const isExecutable = (hook) =>
             (hook?.alert_status ?? 'executable') === 'executable';
         const hasEvents = (hook) =>
-            hook?.note_events !== false && hook?.merge_requests_events !== false;
+            hook?.note_events !== false &&
+            hook?.merge_requests_events !== false;
 
         // Executable first: GitLab never calls a disabled hook, while missing
         // events on an executable one are fixed by the edit below.
@@ -3108,10 +3471,15 @@ export class GitlabService implements Omit<
 
         if (!hasEvents(kept)) {
             try {
-                await gitlabAPI.ProjectHooks.edit(projectId, kept.id, webhookUrl, {
-                    noteEvents: true,
-                    mergeRequestsEvents: true,
-                });
+                await gitlabAPI.ProjectHooks.edit(
+                    projectId,
+                    kept.id,
+                    webhookUrl,
+                    {
+                        noteEvents: true,
+                        mergeRequestsEvents: true,
+                    },
+                );
             } catch (error) {
                 this.logger.warn({
                     message: `Could not enable events on Kodus webhook ${kept.id} in GitLab project ${projectId}`,
@@ -4770,6 +5138,31 @@ export class GitlabService implements Omit<
             });
 
             return false;
+        }
+    }
+
+    /** Developer (30) or above, on the project or inherited from its group. */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        userId: string | number;
+    }): Promise<boolean | undefined> {
+        const authDetails = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetails) {
+            return undefined;
+        }
+        try {
+            const member = await this.instanceGitlabApi(
+                authDetails,
+            ).ProjectMembers.show(params.repository.id, Number(params.userId), {
+                includeInherited: true,
+            });
+            return (member?.access_level ?? 0) >= 30;
+        } catch (error) {
+            // Not a member answers 404; a credential that can't look, 401/403.
+            return isDeniedStatus(error) ? false : undefined;
         }
     }
 

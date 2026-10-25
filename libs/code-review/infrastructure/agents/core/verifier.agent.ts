@@ -126,12 +126,16 @@ export function buildVerifierAgentSpec(
             new BudgetPolicy(),
             // Without this the verify run can spend every step investigating and
             // be cut off with NO verdict — 20% of production runs (154 sampled,
-            // 2026-09-19), which fails open and keeps the candidate unverified.
+            // 2026-09-19); a run cut off at the step cap discards the candidate.
             // Force TEXT, not the tool: this prompt asks for a JSON verdict in
             // the reply and never mentions submitVerdict, and constraining the
             // output is measured harm (see model-strictness.ts).
             new ForceTextFinalizePolicy({
                 answerDescription: 'your final JSON verdict',
+                // Some models (Kimi, DeepSeek) ignore the note and call tools
+                // until the budget ends with no verdict, which production
+                // discards; on the last step they can only answer.
+                noToolsOnLastStep: true,
             }),
         ],
         maxSteps: params.maxSteps ?? 6,
@@ -316,7 +320,8 @@ export interface LlmVerifierParams {
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 5. */
+    /** Depth for high-confidence findings (light verify). Default 7: six
+     *  tool steps to reach where the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
     /** Depth for low-confidence findings (full verify). Default 10. */
     fullMaxSteps?: number;
@@ -388,7 +393,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             runName: verifyRunName,
             agentName: params.agentName,
             tools: params.tools,
-            maxSteps: params.lightMaxSteps ?? 5,
+            maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
         });
         this.fullSpec = buildVerifierAgentSpec({

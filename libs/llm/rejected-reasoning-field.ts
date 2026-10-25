@@ -38,7 +38,8 @@ const FIELD = '(thinking|reasoning_effort)';
 // ("reasoning_effort 'max' is not supported", or an error envelope's `param`)
 // is a configuration the user has to see, so it is not matched.
 // `off`: the upstream wants the field set to its off value rather than removed.
-const REFUSALS: { re: RegExp; off: boolean }[] = [
+// `field`: the field refused, for a wording that does not name it.
+const REFUSALS: { re: RegExp; off: boolean; field?: ReasoningField }[] = [
     // Go's encoding/json with DisallowUnknownFields (OpenCode Go upstreams).
     { re: new RegExp(`unknown field\\W{1,4}${FIELD}\\b`, 'i'), off: false },
     // pydantic extra="forbid".
@@ -72,6 +73,15 @@ const REFUSALS: { re: RegExp; off: boolean }[] = [
             'i',
         ),
         off: true,
+    },
+    // Together's chat completions parse `thinking` with Anthropic's shape and
+    // refuse DeepSeek's `{type:'enabled'}` for lacking a budget (2026-10-22,
+    // issue #2214). A budget's VALUE ("budget_tokens: Input should be...") is
+    // not this wording.
+    {
+        re: /missing field\W{1,4}budget_tokens\b/i,
+        off: false,
+        field: 'thinking',
     },
 ];
 
@@ -112,10 +122,10 @@ export function rejectedReasoning(
     const body = sentBody(err);
     if (!body) return undefined;
     const text = extractErrorText(err);
-    for (const { re, off } of REFUSALS) {
+    for (const { re, off, field: named } of REFUSALS) {
         const m = text.match(re);
         if (!m) continue;
-        const field = m[1].toLowerCase() as ReasoningField;
+        const field = named ?? (m[1].toLowerCase() as ReasoningField);
         // Defined, not merely present: the SDK keeps `reasoning_effort:
         // undefined` in the recorded values, and JSON leaves it off the wire.
         return body[field] !== undefined ? { field, off } : undefined;

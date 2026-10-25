@@ -177,6 +177,52 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBe('truncated');
     });
 
+    // #2112: a cut after the first item is salvaged into that item. The run
+    // still ships it, but the result is cut, not whole.
+    it('reports truncated when the cut submitResult was salvaged to its first items', async () => {
+        const text = JSON.stringify(findings);
+        const second = text.indexOf('{"relevantFile":"b.ts"');
+        const cut = text.slice(0, second + 30);
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: `submitResult-${Math.random()}`,
+                    toolName: 'submitResult',
+                    input: cut,
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(second).toBeGreaterThan(0);
+        expect(out.incompleteReason).toBe('truncated');
+        expect(out.submittedResult).toBe(false);
+    });
+
+    // #2112: a whole array followed by stray text lost nothing — submitted.
+    it('reports submitted when the result array arrived whole with stray text after it', async () => {
+        useModel(async () =>
+            toolCall(
+                'submitResult',
+                {
+                    reasoning: findings.reasoning,
+                    suggestions: `${JSON.stringify(findings.suggestions)}}`,
+                },
+                { unified: 'length', raw: 'max_tokens' },
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(true);
+        expect(out.incompleteReason).toBeUndefined();
+    });
+
     // PR #2173 review: `{}` parses as an object but is not a findings result
     // (sanitizeFindingsResult rejects it), so it is not a submission either.
     it('reports truncated when the cut submitResult holds no findings result', async () => {

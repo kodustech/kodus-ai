@@ -66,7 +66,6 @@ import {
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { LLM } from '@libs/llm/llm';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
-import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
@@ -74,12 +73,6 @@ import { z } from 'zod';
 export const FINDER_DONE_TOOL = 'submitResult' as const;
 
 const finderLogger = createLogger('finder');
-
-/** HEAVY mode: extra finder re-runs on top of the base pass (resampling for
- *  recall). 2 → 3 total runs, the offline+self-hosted-validated saturation point.
- *  The one heavy knob likely worth surfacing in a future web "advanced" config;
- *  everything else (dedup, threshold, temperature) is a fixed engine decision. */
-const HEAVY_RESAMPLE_EXTRA_RUNS = 2;
 
 /** A single finding as produced by the finder (matches the legacy
  *  FindingsOutput.suggestions item shape). */
@@ -337,7 +330,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
 function earlierSubmittedFindings(
     state: RunState,
     latest: RunState['artifacts'][number],
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): FinderSuggestion[] {
     return state.artifacts
         .filter((a) => a.type === FINDER_DONE_TOOL && a !== latest)
@@ -353,7 +346,7 @@ export function extractFindings(
     // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
     // that function's own doc comment for why this is an untyped inline
     // shape rather than LangfuseTelemetryMetadata.
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): {
     reasoning: string;
     suggestions: FinderSuggestion[];
@@ -366,16 +359,16 @@ export function extractFindings(
     // era registrada — artefato valido com lista vazia, artefato inutilizavel
     // (submitResult({}) vazio ou prosa), e artefato ausente. Sem isto, o numero
     // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
+    // Validated ONCE: a second pass logged every failure twice (#2112).
+    const clean = artifact
+        ? sanitizeFindingsResult(artifact.payload, telemetryMetadata)
+        : null;
     (state as any).__findingsOutcome = !artifact
         ? 'no-artifact'
-        : sanitizeFindingsResult(artifact.payload as any, telemetryMetadata)
+        : clean
           ? 'structured'
           : 'artifact-unusable';
     if (artifact) {
-        const clean = sanitizeFindingsResult(
-            artifact.payload as any,
-            telemetryMetadata,
-        );
         if (clean) {
             const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
             // A model that submits its findings and then submits again with
@@ -399,11 +392,21 @@ export function extractFindings(
         // PROSE in `reasoning` and omitted `suggestions`. Preserve that prose so
         // a downstream fallback-LLM can re-structure it into findings; otherwise
         // those (real) findings are silently lost.
-        const proseReasoning =
-            typeof (artifact.payload as { reasoning?: unknown })?.reasoning ===
-            'string'
-                ? ((artifact.payload as { reasoning: string }).reasoning ?? '')
-                : '';
+        // When the findings came as JSON text that could not be parsed, that
+        // text goes to the recoverer too: the findings are in it, not in
+        // `reasoning` (#2112).
+        const payload = artifact.payload as Record<string, unknown> | string;
+        const proseReasoning = [
+            typeof payload === 'object' &&
+            typeof payload?.reasoning === 'string'
+                ? payload.reasoning
+                : '',
+            typeof payload === 'string'
+                ? payload
+                : unparsedFindingsText(payload),
+        ]
+            .filter((t) => t.trim() !== '')
+            .join('\n\n');
         return (
             findingsFromText(state, telemetryMetadata) ?? {
                 reasoning: proseReasoning,
@@ -421,11 +424,39 @@ export function extractFindings(
     );
 }
 
+/** The findings a payload holds as text, under the key, an alias, or the
+ *  arguments of a tool-call wrapper — '' when there is none. */
+function unparsedFindingsText(
+    payload: Record<string, unknown> | undefined,
+    depth = 0,
+): string {
+    if (!payload || typeof payload !== 'object' || depth > 3) return '';
+    for (const k of [
+        'suggestions',
+        'findings',
+        'codeSuggestions',
+        'arguments',
+    ]) {
+        if (typeof payload[k] === 'string') return payload[k] as string;
+    }
+    for (const k of ['parameters', 'arguments', 'result', 'data', 'output']) {
+        const inner = payload[k];
+        if (inner && typeof inner === 'object') {
+            const t = unparsedFindingsText(
+                inner as Record<string, unknown>,
+                depth + 1,
+            );
+            if (t) return t;
+        }
+    }
+    return '';
+}
+
 /** Recover findings from the model's final text — covers "answered in prose/JSON
  *  instead of calling submitResult" and empty-arg submitResult. */
 function findingsFromText(
     state: RunState,
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): {
     reasoning: string;
     suggestions: FinderSuggestion[];
@@ -523,11 +554,28 @@ export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 export async function extractFindingsWithRecovery(
     state: RunState,
     recover?: ProseRecoverer,
-    telemetryMetadata?: { organizationId?: string },
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): Promise<FinderFindings> {
     const found = extractFindings(state, telemetryMetadata);
     if (found.suggestions.length > 0 || !recover) return found;
     const recovered = await recover(found.reasoning);
+    // Logged when there was something to recover: an unusable or missing
+    // result, or prose the recoverer turned into findings.
+    if (
+        (state as any).__findingsOutcome !== 'structured' ||
+        recovered.length > 0
+    ) {
+        finderLogger.log({
+            message: `[DONE-TOOL] prose recovery returned ${recovered.length} finding(s)`,
+            context: 'finder',
+            metadata: {
+                recovered: recovered.length,
+                outcome: (state as any).__findingsOutcome,
+                organizationId: telemetryMetadata?.organizationId,
+                modelId: telemetryMetadata?.modelId,
+            },
+        });
+    }
     return recovered.length > 0
         ? { reasoning: found.reasoning, suggestions: recovered }
         : found;
@@ -598,9 +646,6 @@ export async function recoverFindingsFromProse(
 export interface RunFinderWithVerifyParams {
     runner: AgentRunner;
     finderSpec: AgentSpec;
-    /** Factory for a fresh finder spec (own coverage ledger) per concurrent
-     *  heavy resample pass — see RecallPassesParams.makeResampleSpec. */
-    makeResampleSpec?: () => AgentSpec;
     /** Model id for the verifier runs. */
     modelId: string;
     /** Failover target model id — threaded to the verifier so its strict tool
@@ -627,10 +672,6 @@ export interface RunFinderWithVerifyParams {
     skipHeavyPasses?: boolean;
     /** Skip ONLY the synthesis-rescue pass. */
     skipSynthesisRescue?: boolean;
-    /** HEAVY mode: run an EXTRA "what did you miss?" critic pass (on top of the
-     *  synthesis-rescue) that re-scans for missed bugs. Opt-in per review — more
-     *  recall at ~+1 finder pass of cost. Off by default. */
-    heavy?: boolean;
     /** Langfuse telemetry context (org/team/PR/repo) — names the finder, recall
      *  and per-finding verify observations so the trace is attributable. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
@@ -784,7 +825,7 @@ export async function runFinderWithVerify(
     const base = await extractFindingsWithRecovery(
         finderState,
         params.recoverProse,
-        params.telemetryMetadata,
+        { ...params.telemetryMetadata, modelId: params.modelId },
     );
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
@@ -797,13 +838,12 @@ export async function runFinderWithVerify(
         {
             runner: params.runner,
             finderSpec: params.finderSpec,
-            makeResampleSpec: params.makeResampleSpec,
             finderState,
             userPrompt: input.prompt,
             skipHeavyPasses: params.skipHeavyPasses,
             skipSynthesisRescue: params.skipSynthesisRescue,
-            heavy: params.heavy,
             telemetryMetadata: params.telemetryMetadata,
+            modelId: params.modelId,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
             conventionGuides: params.conventionCheck?.guideFiles,
@@ -813,26 +853,7 @@ export async function runFinderWithVerify(
         ctx,
     );
     const reasoning = recall.findings.reasoning;
-    // HEAVY: collapse near-duplicate candidates BEFORE verify. The resample
-    // re-finds the same bug with different wording — those survive the exact-content
-    // merge key and would each cost a (main-model, tool-using) verify call. Collapse
-    // by CONTENT similarity (the shared primitive + the engine's calibrated
-    // DEDUP_CONTENT_THRESHOLD), NOT by location: two DIFFERENT bugs on the same line
-    // have different text → they do NOT collapse (only same-bug paraphrases do).
-    // Self-hosted A/B: 12→4 / 11→7 candidates, ~50% fewer verify calls, all distinct
-    // bugs preserved. Heavy-only — the normal path has no resample dupes to fold.
-    let suggestions = recall.findings.suggestions;
-    if (params.heavy) {
-        const before = suggestions.length;
-        suggestions = collapseNearDuplicates(suggestions);
-        if (suggestions.length < before) {
-            finderLogger.log({
-                message: `[heavy-dedup] collapsed ${before} → ${suggestions.length} candidates before verify`,
-                context: 'finder',
-                serviceName: 'finder',
-            });
-        }
-    }
+    const suggestions = recall.findings.suggestions;
     const recallUsage = recall.usage;
 
     if (suggestions.length === 0) {
@@ -1168,7 +1189,11 @@ async function routeByKind(
     );
     const bugs = [
         ...suggestions.filter((s) => s.kind !== 'convention'),
-        ...toolSourced.map((s) => ({ ...s, kind: 'bug' as const, source: undefined })),
+        ...toolSourced.map((s) => ({
+            ...s,
+            kind: 'bug' as const,
+            source: undefined,
+        })),
     ];
     const candidates = suggestions.filter(
         (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
@@ -1313,20 +1338,14 @@ type FinderFindings = { reasoning: string; suggestions: FinderSuggestion[] };
 interface RecallPassesParams {
     runner: AgentRunner;
     finderSpec: AgentSpec;
-    /** Builds a FRESH finder spec with its OWN DiffCoverageLedger. Heavy resample
-     *  passes run concurrently, so they must NOT share `finderSpec`'s ledger —
-     *  the CompletionGatePolicy mutates it per tool call, and interleaved writes
-     *  would corrupt each pass's coverage/stop decisions. Each parallel pass gets
-     *  its own spec via this factory; falls back to `finderSpec` when absent. */
-    makeResampleSpec?: () => AgentSpec;
     finderState: RunState;
     /** The original review prompt — reused by the synthesis-rescue pass. */
     userPrompt: string;
     skipHeavyPasses?: boolean;
     skipSynthesisRescue?: boolean;
-    /** HEAVY mode — one EXTRA critic pass after synthesis-rescue. */
-    heavy?: boolean;
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    /** The finder's model id, for the findings parse logs (#2112). */
+    modelId?: string;
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
@@ -1364,13 +1383,9 @@ export async function runRecallPasses(
     const toolCalls = collectToolCalls(params.finderState);
     // Re-run the finder with a focused prompt; merge its ADDITIONAL findings.
     // `label` names the observation so each pass is distinct in the trace.
-    const runPass = async (
-        prompt: string,
-        label: string,
-        spec: AgentSpec = params.finderSpec,
-    ): Promise<void> => {
+    const runPass = async (prompt: string, label: string): Promise<void> => {
         const state = await params.runner.run(
-            spec,
+            params.finderSpec,
             {
                 prompt,
                 ...toAiSdkTelemetryArgs(
@@ -1382,15 +1397,10 @@ export async function runRecallPasses(
             },
             ctx,
         );
-        // Extract BEFORE touching the shared accumulators: passes may run
-        // concurrently (heavy resample), and `mergeSuggestions(findings, await …)`
-        // would snapshot `findings` before the await — last writer would win and
-        // silently drop a concurrent pass's merge. Extract first, then merge
-        // synchronously (single-threaded, so the read-modify-write is atomic).
         const extracted = await extractFindingsWithRecovery(
             state,
             params.recoverProse,
-            params.telemetryMetadata,
+            { ...params.telemetryMetadata, modelId: params.modelId },
         );
         usage = sumVerifyUsage(usage, usageOf(state.usage));
         toolCalls.push(...collectToolCalls(state));
@@ -1415,49 +1425,6 @@ export async function runRecallPasses(
                 params.laneScoped,
             ),
             'synthesis-rescue',
-        );
-    }
-
-    // HEAVY mode — RESAMPLE. Re-run the finder HEAVY_RESAMPLE_EXTRA_RUNS more
-    // times on the ORIGINAL prompt and dedup-merge. Validated offline
-    // (evals/shard-seeder/resample.js) + on a real self-hosted A/B: a finder's
-    // stochastic variance surfaces different real bugs each run, so the union
-    // climbs recall (~2× candidates), saturating around 3 total runs — cheap
-    // self-diversity without a 2nd model. Requires temperature > 0 (at 0 the
-    // re-runs are identical); the finder omits temperature so the PROVIDER DEFAULT
-    // (~1.0; reasoning models auto-clamp to 1) applies and diversifies out of the
-    // box — no per-run override needed. The extra recall floods candidates, folded
-    // by collapseNearDuplicates above + the verify. See project_critic_heavy_mode.
-    if (params.heavy) {
-        // Fail fast: the concurrent passes below MUST each get their own
-        // DiffCoverageLedger (via makeResampleSpec). Falling back to the shared
-        // `finderSpec` would silently reintroduce the ledger race across parallel
-        // passes — refuse to run rather than corrupt coverage/stop decisions.
-        if (!params.makeResampleSpec) {
-            throw new Error(
-                'runRecallPasses: heavy mode requires makeResampleSpec (a fresh ' +
-                    'per-pass coverage ledger); refusing to run concurrent resample ' +
-                    'passes on a shared ledger.',
-            );
-        }
-        const makeSpec = params.makeResampleSpec;
-        // The extra runs are INDEPENDENT (same original prompt, no data flow
-        // between them) → run them CONCURRENTLY. Cuts heavy latency from
-        // base+synthesis+N×finder to base+synthesis+~1×finder. Cost note: the
-        // base run has already WRITTEN the Anthropic prompt cache (system prompt
-        // via systemCacheControl), so the parallel re-runs both get
-        // cache READS on the static prefix — the marginal cost of a re-run is
-        // well under a full run's input price.
-        await Promise.all(
-            Array.from({ length: HEAVY_RESAMPLE_EXTRA_RUNS }, (_, i) =>
-                // Fresh spec per pass (own DiffCoverageLedger) — these run
-                // concurrently, so sharing a ledger would race.
-                runPass(
-                    params.userPrompt,
-                    `heavy-resample-${i + 1}`,
-                    makeSpec(),
-                ),
-            ),
         );
     }
 

@@ -1,0 +1,128 @@
+{
+    "name": "linear-title-only-task",
+    "issue": "#1941",
+    "trackers": [
+        {
+            "integrationId": "linear-default",
+            "appName": "Linear",
+            "provider": "kodusmcp",
+            "category": "task-management",
+            "responseShape": "linear",
+            "tools": [
+                {
+                    "name": "get_issue",
+                    "kind": "get",
+                    "idArg": "id",
+                    "description": "Retrieve a Linear issue by its ID or identifier (e.g. ENG-123)",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["id"]
+                    }
+                },
+                {
+                    "name": "list_issues",
+                    "kind": "list",
+                    "description": "List issues in the workspace",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string"
+                            },
+                            "limit": {
+                                "type": "number"
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "list_teams",
+                    "kind": "teams",
+                    "description": "List teams",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                },
+                {
+                    "name": "create_issue",
+                    "kind": "write",
+                    "description": "Create a new Linear issue",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string"
+                            },
+                            "teamId": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["title", "teamId"]
+                    }
+                },
+                {
+                    "name": "update_issue",
+                    "kind": "write",
+                    "description": "Update an existing Linear issue",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["id"]
+                    }
+                },
+                {
+                    "name": "create_comment",
+                    "kind": "write",
+                    "description": "Create a comment on a Linear issue",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "issueId": {
+                                "type": "string"
+                            },
+                            "body": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["issueId", "body"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["create_project", "update_project"],
+            "tasks": [
+                {
+                    "id": "PLAT-44",
+                    "title": "Export recipes"
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat(PLAT-44): export recipes",
+        "body": "Adds an export button.",
+        "branch": "feat/export"
+    },
+    "expect": {
+        "outcome": "comment",
+        "commentContains": ["PLAT-44"]
+    }
+}

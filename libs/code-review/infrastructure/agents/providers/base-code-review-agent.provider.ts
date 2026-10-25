@@ -550,8 +550,7 @@ export abstract class BaseCodeReviewAgentProvider {
             // overflow is from the overhead, not the diffs. Falling
             // through to runAgentLoop on the same stack frame lets the
             // agent loop's mid-stream compressor handle marginal
-            // overflow, and the assertPromptFitsInContext preflight
-            // catches the genuine "won't fit at all" case. Without this
+            // overflow. Without this
             // check, executeChunked would recurse → execute() at depth 1
             // → same chunking decision → infinite recursion bounded by
             // MAX_RECURSION_DEPTH = an opaque user-facing failure.
@@ -579,8 +578,8 @@ export abstract class BaseCodeReviewAgentProvider {
                 // Fall through to the single-batch runAgentLoop path
                 // below by NOT entering executeChunked. The variables
                 // (estimatedPromptTokens, fileTiers, etc) are already
-                // set and runAgentLoop's own preflight + compressor
-                // will handle the rest.
+                // set and runAgentLoop's compressor will handle the
+                // rest.
             } else {
                 this.agentLogger.warn({
                     message: `[AGENT] ${identity.name} prompt exceeds context budget (${estimatedPromptTokens} tokens > ${promptBudget} budget), splitting into batches`,
@@ -732,10 +731,6 @@ export abstract class BaseCodeReviewAgentProvider {
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
-                    // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
-                    // as skipHeavyPasses above: loopParams is built field-by-field,
-                    // so without this line the resample passes never run.
-                    heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

@@ -1,141 +1,190 @@
 ---
 title: "Validación de Lógica de Negocio"
-description: "Compara tu pull request con reglas de negocio o especificaciones usando @kody -v business-logic."
+description: "Compara cada pull request con la tarea que referencia, requisito por requisito."
 ---
 
 ## Descripción General
 
-La Validación de Lógica de Negocio te permite confirmar que un pull request implementa el comportamiento esperado descrito en una especificación, documento o ticket. Kody analiza el diff del PR, incorpora el contexto de negocio referenciado y señala las discrepancias antes de que hagas el merge.
+La Validación de Lógica de Negocio comprueba que un pull request entrega lo que pide su tarea. Kody encuentra la tarea que referencia el PR, la lee de tu gestor de tareas y lista cada requisito con su estado en el código. El resultado es un único comentario en el PR, siempre actualizado, igual en GitHub, GitLab, Bitbucket, Azure Repos y Forgejo.
 
-<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Ejemplo de uso de la validación de lógica de negocio" />
+Así se ve el comentario en un PR que entrega parte de su tarea:
 
-## Requisitos Previos
-- Si deseas que Kody **obtenga automáticamente el contexto de la tarea** desde herramientas como Jira, Linear, Notion o ClickUp, el plugin correspondiente debe estar conectado en la página de [Plugins](/es/how_to_use/code_review/plugins) de tu workspace.
-- Cualquier enlace que compartas (Jira, Slack, Google Docs, etc.) debe ser accesible a través de los plugins instalados en tu workspace.
-- Siempre puedes **proporcionar la especificación en línea** sin ningún plugin — simplemente pega los requisitos directamente en el comentario del PR.
+> **Kody · Business Logic**
+>
+> **#291 · Ticket SLA badge** — Por corregir: 2 requisitos faltantes
+>
+> | | Requisito | En este PR |
+> |---|---|---|
+> | ✅ **MET** | El encabezado del ticket muestra un badge con el tiempo de SLA restante. | `TicketPanel.tsx:40` · El badge se muestra en el encabezado como "SLA Xh Ym". |
+> | ❌ **MISSING** | El badge se vuelve rojo cuando queda menos de 1 hora. | `SlaBadge.tsx:14` · El badge siempre usa el tono "info". **Do:** pasar al tono de peligro por debajo de 60 minutos. |
+> | ❌ **MISSING** | Los tickets resueltos no muestran badge. | `TicketPanel.tsx:40` · Se muestra sea cual sea el estado. **Do:** ocultarlo cuando el ticket está resuelto. |
 
-## Habilitando la Validación de Lógica de Negocio
+Tras la corrección, el mismo comentario dice "All requirements met · ✅ 3 of 3 met", y conserva debajo la verificación anterior.
 
-La Validación de Lógica de Negocio está **habilitada por defecto**. Puedes controlarla de dos formas:
+## Requisitos previos
 
-**Vía `kodus-config.yml`:**
+- Un gestor de tareas conectado en [Plugins](/es/how_to_use/code_review/plugins): Linear, Jira (Atlassian Rovo), Notion, Git Issues o un plugin personalizado.
+- Kody solo **lee** tareas por su id, y lo que enlazan (una tarea padre, subtareas, documentos adjuntos). Nunca busca tareas ni escribe en tu gestor.
+- Sin un gestor, puedes pegar el texto de la tarea en el comando (ver más abajo).
+
+## Activarla
+
+Business Logic está activada por defecto. Actívala o desactívala en **Code review → What to review**, en la fila **Business Logic**, o en `kodus-config.yml`:
 
 ```yaml
 reviewOptions:
   business_logic: true
 ```
 
-**Vía la interfaz web:**
+Haz clic en **Business Logic** en esa fila para abrir su configuración, o usa el menú **⋯** de la fila: **Edit** abre la configuración y **Try it** la abre en el panel de prueba.
 
-En la barra lateral, abre **Code review → What to review** (en **Global**, o elige un repositorio o directorio en el selector de alcance) y activa el switch **Business Logic**. Si no hay ningún plugin de gestión de tareas conectado, la fila muestra **Needs a task management plugin** mientras la categoría está activada.
+## Cómo encuentra Kody la tarea
 
-Cuando está habilitada, Kody ejecuta la validación de lógica de negocio automáticamente durante cada revisión de PR, además del comando bajo demanda.
+Kody busca referencias a tareas en el título del PR, el nombre de la rama y la descripción, en ese orden:
 
-## Ejecución Bajo Demanda
+- Claves como `PROJ-123` (Jira, Linear y la mayoría de los gestores)
+- `#123` y `owner/repo#123` (Git issues; un número que corresponde a un pull request se ignora)
+- `AB#123` (Azure Boards)
+- Enlaces a Linear, Jira, Notion, issues de GitHub/GitLab y work items de Azure
 
-También puedes activar la validación manualmente en cualquier momento:
+Una referencia solo cuenta cuando el gestor devuelve una tarea con ese id exacto, así que `UTF-8` o `gpt-5` en un título nunca se confunden con tareas. Una clave en minúsculas en el título (`feat(kod-10)`) cuenta cuando tu gestor tiene ese equipo o proyecto; un id de proyecto de Linear (`P-KOD-1`) nunca cuenta.
 
-1. Abre el cuadro de comentarios principal del PR (fuera de las sugerencias de código en línea).
-2. Menciona a Kody y agrega el comando de validación: `@kody -v business-logic ...`.
-3. Proporciona el contenido de la especificación en línea o pega un enlace que Kody pueda obtener a través de los plugins disponibles.
-4. Envía el comentario y espera la respuesta de Kody en el mismo hilo.
+Kody también lee lo que enlaza la tarea:
 
-El comando solo se activa desde el cuadro de conversación principal; las respuestas dentro de sugerencias en línea son ignoradas.
+- **Una tarea padre** (un sub-issue de Linear, una subtarea de Jira, una subtarea de ClickUp): el PR se compara con los requisitos del padre que cubre el título de esta tarea. Un sub-issue que dice "ver el padre" también se comprueba.
+- **Subtareas**: un requisito que entrega una de ellas aparece como CHECK MANUALLY ("Delivered by KOD-20"), nunca como faltante.
+- **Documentos adjuntos a la tarea** (docs de Linear): se leen como parte de la tarea, criterios incluidos.
 
-Puedes volver a ejecutar la validación en cualquier momento — simplemente publica el comando nuevamente en un nuevo comentario. Los seguimientos deben ser un comando nuevo; responder directamente al mensaje de Kody en la interfaz de Git no está soportado.
+### Cómo el PR nombra la tarea
 
-### Ejemplos
+- **"Closes PROJ-1"** o una clave en el título o la rama: el PR se compara con la tarea completa.
+- **"Part of PROJ-1"**: el PR entrega una parte. Lo que falta se lista, pero no como algo pendiente para el merge.
+- **"Refs PROJ-1"**, **"see PROJ-1"** o **"related to PROJ-1"** en la descripción: una mención. Solo se comprueba cuando el PR no nombra otra tarea, y entonces como la tarea del propio PR.
+- **Hasta tres tareas** se comprueban por PR, una sección por cada una. Un PR que menciona más (una release o un merge) se omite.
 
-- Ticket de Jira: `@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1292`
-- Issue de Linear: `@kody -v business-logic https://linear.app/your-team/issue/TEAM-123`
-- Página de Notion: `@kody -v business-logic https://www.notion.so/your-workspace/Feature-Spec-abc123`
-- Google Doc: `@kody -v business-logic https://docs.google.com/document/d/1234567890/edit`
-- Conversación de Slack: `@kody -v business-logic https://kodustech.slack.com/archives/C070E5E97DE/p1727814000000000`
-- Especificación en línea: `@kody -v business-logic Regla XYZ — los pedidos superiores a $500 deben emitir créditos de cashback.`
+## Los cinco estados
 
-## Qué Hace Kody
+| Estado | Significado | Pendiente de corregir |
+|---|---|---|
+| **MET** | El diff lo implementa. | No |
+| **PARTIAL** | Parte de lo que dice el requisito está implementado. | No, se muestra: estar a medias es una apreciación que puede cambiar entre dos ejecuciones |
+| **MISSING** | No hay evidencia en el diff de este PR, o el código del que depende el PR no lo hace. | Sí |
+| **CHECK MANUALLY** | Un requisito visual o de flujo, uno del que Kody no está seguro incluso después de leer el repositorio, o uno que puede estar en un archivo demasiado grande para leerlo. | Nunca |
+| **NOT IN TASK** | Un cambio que la tarea no pide. | No, se muestra |
 
-1. **Obtiene el diff del PR** y los metadatos del pull request.
-2. **Recupera el contexto de la tarea** — desde la herramienta de gestión de tareas vinculada (Jira, Linear, etc.) o desde el texto en línea que proporcionaste.
-3. **Clasifica la calidad del contexto de la tarea** — determina qué tan exhaustivo puede ser el análisis según la información disponible.
-4. **Compara la implementación con los requisitos** — verifica cada criterio de aceptación contra el diff del PR.
-5. **Reporta los hallazgos** con niveles de severidad y trazabilidad de requisitos.
+Cada fila cita el archivo y la línea en que se basa, y dice qué cambiar.
 
-Si Kody no puede acceder al recurso o carece de permisos, lo indicará para que puedas ajustar el acceso o proporcionar la información de otra manera.
+### Antes de mostrar una brecha
 
-## Calidad del Contexto de la Tarea
+Una brecha le dice al autor que rehaga trabajo, así que Kody contrasta cada una con el código:
 
-Kody clasifica automáticamente la calidad del contexto de la tarea antes del análisis, lo cual afecta la profundidad de la validación:
+- **El requisito tal como lo escribe la tarea.** Una entrada o un caso límite que la tarea nunca menciona (importes negativos, otra ruta de código, un formato que no menciona) nunca hace que una fila sea PARTIAL, y tampoco lo que ocurre después del cambio (que un job existente envíe el mensaje que el PR pone en cola, que una ruta use el serializador que el PR completa).
+- **El código que llama el PR, no solo el diff.** Cuando una regla vive en código que el PR llama pero no modificó (un validador, un helper, el mapper que construye una respuesta), Kody lo lee en el repositorio en el head del PR antes de mostrar nada, y hace lo mismo con cada fila MISSING, PARTIAL y CHECK MANUALLY. Una fila pasa a MET solo con un archivo y una línea que Kody leyó, e indica que ya está en el código, fuera del diff. Una fila pasa a MISSING solo cuando Kody leyó el código del que depende el PR y cita la línea a la que le falta la regla. Lo que el repositorio no resuelve se queda como estaba.
+- **Trabajo que corresponde a otro lugar.** Un requisito que entrega una subtarea, o uno que las indicaciones de tu equipo dicen que no se comprueba aquí, se queda en CHECK MANUALLY y nunca se vuelve a juzgar como faltante.
 
-| Calidad | Descripción | Comportamiento del Análisis |
-|---------|-------------|----------------------------|
-| **Completo** | Tiene título, descripción y criterios de aceptación | Análisis exhaustivo criterio por criterio |
-| **Parcial** | Tiene título y descripción pero no criterios de aceptación | Análisis de mejor esfuerzo basado en el comportamiento descrito |
-| **Mínimo** | Solo tiene un título o descripción muy corta | Conservador — solo señala brechas obvias |
-| **Vacío** | No se encontró contexto de tarea significativo | Devuelve una respuesta de "Se Necesita Información de la Tarea" |
+## En el pull request
 
-## Entendiendo el Resultado
+- Kody comprueba el PR en su **primera revisión**. Después, vuelve a comprobarlo cuando alguien comenta `@kody -v business-logic` o ejecuta `@kody review --force`. **Re-check** también se puede configurar para cada push mientras falte algo, para que una corrección actualice el comentario sin que nadie lo pida, o para cada push; cada opción suma una validación por push.
+- Vuelve a comprobar en cualquier momento con `@kody -v business-logic`. Se **edita el mismo comentario**; Kody nunca publica un segundo.
+- Un PR que cumple su tarea recibe un comentario de una línea ("✅ 4 of 4 met"), más lo que haya que comprobar a mano, para que el autor sepa que se comprobó. Desactiva **Comment when every requirement is met** para no comentar en esos casos.
+- El comentario es la señal en todas las plataformas: Kody no escribe un check ni un status, así que nunca bloquea un merge por sí solo. Su encabezado dice lo que queda por corregir.
 
-### Severidades de los Hallazgos
+### Responder al comentario
 
-Cada hallazgo incluye un nivel de severidad:
+Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita, o nombra el requisito, su estado (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
 
-- **MUST_FIX** — Una regla de negocio requerida no está implementada, es incorrecta o contradice los requisitos de la tarea
-- **SUGGESTION** — Un caso límite relevante, robustez o punto de mantenibilidad no está cubierto
-- **INFO** — Observación útil que no bloquea el cumplimiento
+- **Discrepar**: "Está cubierto en `useDrag.ts`". Kody vuelve a comprobar lo que señalaste y lo marca como MET o dice qué revisó y lo mantiene.
+- **Aceptar un hallazgo** (alguien que no es el autor del PR: en GitHub, con permiso de escritura en el repositorio; en GitLab, Developer o superior en el repositorio; en Bitbucket, Azure Repos y Forgejo, un miembro de la organización que la plataforma lista): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores, aunque Kody redacte el requisito de forma un poco distinta, mientras el texto de la tarea no cambie; si la tarea se edita, hay que aceptar el requisito de nuevo.
 
-### Hallazgos Rastreables
+Lo que responde Kody:
 
-Cada hallazgo es **rastreable a un requisito específico** del contexto de la tarea. Cada hallazgo incluye:
+| Respuesta | Kody |
+|---|---|
+| Un revisor acepta y lo mueve a SAA-102 | "Got it. SAA-102 exists, I marked AC #2 as accepted by @rafa and updated the table above." |
+| El autor del PR intenta aceptar | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
+| Alguien sin el acceso indicado arriba | "Only someone with write access to the repository can accept a requirement…" |
+| La tarea a la que se movió no existe | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
 
-- **Requisito** — La cita exacta de la tarea que establece el requisito
-- **Ausente en el código** — Lo que falta o está mal en el diff del PR
-- **Acción sugerida** — Una acción de implementación concreta
+## Cuándo Kody no comenta
 
-Kody no inventa requisitos. Si un hallazgo no puede rastrearse a una oración específica en la tarea, no se reporta.
+Kody solo comenta cuando el autor puede hacer algo al respecto:
 
-### Detección de Desajuste de Alcance
+| Situación | En el PR |
+|---|---|
+| La tarea solo tiene título | Un comentario pidiendo criterios de aceptación |
+| `SAA-999` no existe, pero SAA es un equipo en tu gestor | Un comentario diciendo que parece un error tipográfico, con las tareas reales más cercanas. Con **Ask for a task** activado, permanece abierto hasta que se corrija |
+| No se referencia ninguna tarea, o solo ids que ningún gestor tiene (`UTF-8` en un título) | Nada. Con **Ask for a task** activado, un comentario pidiendo una (nunca en el PR de un bot) |
+| Un issue de GitHub, pero solo Linear está conectado | Nada; los administradores ven un contador en la página de configuración. Con **Ask for a task** activado, un comentario que indica qué gestor no puede leerlo |
+| El gestor está caído o su token expiró | Nada; se notifica a los propietarios, y Kody vuelve a comprobar cuando el gestor responde, hasta un día después del primer fallo |
 
-Si el diff del PR parece estar trabajando en un dominio diferente al de la propia tarea, Kody detecta esto como un **desajuste de alcance** y lo reporta como el hallazgo principal, en lugar de producir un análisis de brechas engañoso.
+El motivo de cada omisión queda registrado y se muestra en la página de configuración de Business Logic.
 
-### Ejemplo de Resultado
+## Ejecución bajo demanda
 
-```markdown
-## Validación de Reglas de Negocio
+Comenta en el PR (no en una línea de código):
 
-**Tarea:** KC-1441 - Reglas Kody con alcance de equipo
-**Enlace de la Tarea:** https://kodustech.atlassian.net/browse/KC-1441
-**Estado:** Problemas Encontrados
-**Confianza:** alta
+- `@kody -v business-logic`: vuelve a comprobar las tareas que referencia el PR
+- `@kody -v business-logic PROJ-123` o un enlace a una tarea: compara con esa tarea
+- `@kody -v business-logic` seguido de los requisitos en texto: compara con lo que escribiste, sin necesidad de gestor
 
-### Hallazgos
+## Configuración
 
-#### MUST_FIX: Sin evidencia de resolución de reglas con alcance de equipo en este diff del PR
-**Requisito:** "Las reglas deben resolverse por organización y equipo
-para evitar discrepancias de facturación entre workspaces."
-**Ausente en el código:** Sin evidencia en este diff del PR de agregar `teamId`
-a la ruta de persistencia o búsqueda relevante.
-**Acción sugerida:** Agregar `teamId` a los filtros de persistencia y consulta de reglas.
+Abre **Code review → What to review** y haz clic en **Business Logic** (o **⋯ → Edit**). Cada opción se puede definir de forma global y sobrescribir por repositorio o directorio.
 
-#### SUGGESTION: Sin evidencia de manejo determinista de licencias mixtas
-**Requisito:** "Cuando los equipos tienen diferentes estados de suscripción,
-el comportamiento debe permanecer determinista."
-**Ausente en el código:** Sin evidencia en este diff del PR de lógica que maneje
-estados de suscripción mixtos.
-**Acción sugerida:** Agregar fallback determinista y manejo de errores
-con alcance al equipo.
+- **Task source**: todos los gestores conectados (plugins de tareas personalizados como ClickUp incluidos), o un solo plugin. Para un plugin personalizado, elige la herramienta que lee una tarea por su id; solo se ofrecen herramientas de solo lectura. Usa **Try it**, fijo a la derecha de la página (necesita permiso para editar esta configuración): una tarea sola muestra lo que Kody lee de ella, y un pull request ejecuta la comprobación completa sin publicar, con la configuración que hay en pantalla, guardada o no. **Post to the pull request** publica el resultado mostrado, sin ejecutarlo de nuevo, una vez por prueba; se rechaza si el pull request recibió un commit después de la prueba, así que vuelve a ejecutarla primero.
+- **Custom task id format** (opcional): una expresión regular para ids que Kody no encuentra por sí solo: `T(\d{4})` lee `T1234` como la tarea 1234. Claves como `SAA-96`, `#12`, `AB#8`, `CU-…` y los enlaces de gestores se encuentran sin ella, igual que una clave en minúsculas como `sc-123` en el nombre de una rama. En un título o una descripción, una clave en minúsculas solo cuenta cuando Linear o Jira tienen ese equipo o proyecto; para otro gestor, define el formato. Un número que el formato captura solo se lee como issue de Git cuando Git Issues es la fuente de tareas; con todos los gestores conectados, `T1234` nunca es la issue #1234 del repositorio.
+- **Where acceptance criteria live**: detectado automáticamente (un campo de criterios, un checklist o una lista en la descripción), bajo un encabezado en la descripción, o en un campo personalizado; una tarea sin ese campo se lee desde su descripción. Con **Under a heading** en `Acceptance criteria`, esta tarea se compara con sus tres viñetas, y el párrafo de arriba es contexto:
 
-### Requisitos Verificados
-- CA #1: "Lecturas/escrituras con alcance de equipo" — Implementado en `rules.service.ts:42`
-- CA #2: "Ruta de facturación multi-workspace" — Implementado en `billing.service.ts:118`
+  ```markdown
+  Agents should see at a glance how much time is left on a ticket's SLA.
 
----
-*Análisis realizado por el Validador de Reglas de Negocio de Kodus AI*
+  ## Acceptance criteria
+  - The ticket header shows a badge with the remaining SLA time.
+  - The badge turns red when less than 1 hour is left.
+  - Resolved tickets show no badge.
+  ```
+- **Comment when every requirement is met** (activado por defecto): un PR que cumple su tarea recibe un comentario de una línea. Desactivado, no recibe ninguno; los huecos se publican igual.
+- **Ask for a task when the PR references none**: Kody comenta preguntando para qué tarea es el PR (o señalando el error tipográfico), en lugar de omitirlo. Los PRs abiertos por bots, como Dependabot o Renovate, se dejan en paz. Un gestor caído nunca cuenta.
+- **Re-check**: solo a petición (por defecto), en cada push mientras falte algo, o en cada push. Cada verificación usa el modelo de tu organización, como una revisión, así que **en cada push** cuesta una validación por push.
+- **Skipped pull requests**: los que omite la revisión de código también se omiten aquí: títulos con una palabra clave ignorada (`ignoredTitleKeywords`, como `wip`) y borradores cuando `runOnDraft` está desactivado. Un comentario `@kody -v business-logic` siempre se ejecuta.
+- **Team guidance**: notas que Kody sigue al juzgar, por ejemplo "Los feature flags cuentan como implementados cuando el flag existe y está desactivado por defecto". No pueden cambiar el formato del veredicto ni hacer que Kody invente requisitos.
+
+### Configuraciones comunes
+
+| Equipo | Configuración |
+|---|---|
+| Quiere la verificación, no el ruido (por defecto) | Re-check a petición, **Comment when every requirement is met** activado |
+| Cada PR debe entregar una tarea | **Ask for a task** activado, re-check **mientras falte algo**: a un PR sin tarea se le pide una, y cada corrección actualiza el comentario hasta que pase |
+| Solo quiere saber de los huecos | **Comment when every requirement is met** desactivado |
+| Monorepo con un gestor por área | Define **Task source** y **Where acceptance criteria live** por directorio |
+
+La misma configuración en `kodus-config.yml`:
+
+```yaml
+businessLogic:
+  taskSource: 'auto'              # o el integration id de un plugin
+  taskSourceTool: 'get_ticket'    # solo plugin personalizado: la herramienta que lee una tarea por id
+  taskIdPattern: 'T(\d{4})'       # opcional: ids que Kody no encuentra solo
+  criteriaLocation: 'heading'     # auto | heading | field
+  criteriaHeading: 'Acceptance criteria'
+  # criteriaField: 'Acceptance Criteria'   # con criteriaLocation: 'field'
+  teamGuidance: 'Feature flags count as implemented when the flag exists and defaults to off.'
+  commentWhenMet: true
+  recheckOn: 'request'            # request | failing | push
+  requireTask: false
 ```
 
-## Consejos
+## Desde la CLI
 
-- Divide las especificaciones grandes en secciones y valídalas individualmente para mantener el feedback enfocado.
-- Al compartir enlaces privados, verifica que el plugin requerido (p. ej., Jira, Slack, Google Drive) esté instalado y autorizado para tu workspace.
-- Después de abordar los hallazgos, vuelve a ejecutar el comando para confirmar que el PR ahora se alinea con las reglas de negocio.
-- Proporciona criterios de aceptación en tu tarea para el análisis más exhaustivo — las tareas con criterios explícitos obtienen validación criterio por criterio.
+Un agente de código puede comprobar su trabajo antes de abrir el PR:
+
+```bash
+kodus pr business-validation --task-id AB#8
+kodus pr business-validation --task-id AB#8 --format json
+```
+
+Compara tus cambios locales con la tarea e imprime una línea por requisito y el estado. Con `--format json` (o `--agent`) imprime el mismo veredicto estructurado, para que un agente actúe sobre él. No se publica nada en ningún pull request.
+
+## Cockpit
+
+**Cockpit → Delivered as asked** muestra la proporción de PRs que cumplieron su tarea, los cambios que no están en la tarea, con qué frecuencia los desarrolladores estuvieron de acuerdo con Kody, y el desglose por quién escribió el código (personas o agentes de código, según los autores de los commits y los trailers `Co-Authored-By`) y por equipo. Sigue el selector de repositorio del Cockpit, y se puede ocultar en **Organization → Cockpit** como las otras pestañas.

@@ -82,10 +82,8 @@ const makeContext = (over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/user.ts' }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],
@@ -319,7 +317,6 @@ describe('agent-facing text keeps what the comment adds after formatting', () =>
         makeContext({
             codeReviewConfig: {
                 reviewOptions: {},
-                heavy: false,
                 resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
                 kodyRules: [rule],
             },

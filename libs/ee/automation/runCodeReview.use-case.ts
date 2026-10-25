@@ -231,7 +231,6 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                 action,
                 triggerCommentId: sanitizedPayload?.triggerCommentId,
                 reviewDirective: sanitizedPayload?.reviewDirective,
-                heavy: sanitizedPayload?.heavy,
                 onlyCustomAgent:
                     typeof sanitizedPayload?.onlyCustomAgent === 'string'
                         ? sanitizedPayload.onlyCustomAgent

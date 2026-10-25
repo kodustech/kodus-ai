@@ -42,6 +42,12 @@ on:
                 required: false
                 default: ""
                 type: string
+            embedder:
+                description: "The dedup's embedder on both sides: platform (the platform's OpenAI key), or none (a self-hosted install without it)"
+                required: false
+                default: "platform"
+                type: choice
+                options: ["platform", "none"]
 
 permissions:
     contents: read
@@ -92,6 +98,7 @@ jobs:
                   MODELS: ${{ inputs.models }}
                   SET: ${{ inputs.set }}
                   TEAM_CONFIG: ${{ inputs.team_config }}
+                  EMBEDDER: ${{ inputs.embedder }}
                   NAME: ${{ github.ref_name }}
                   BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
@@ -108,6 +115,7 @@ jobs:
               run: |
                   args=(--step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --models="$MODELS" --set="$SET" --name="$NAME" --if-new --out=experiment)
                   if [ -n "$TEAM_CONFIG" ]; then args+=(--team-config="$TEAM_CONFIG"); fi
+                  if [ "$EMBEDDER" = "none" ]; then args+=(--embedder=none); fi
                   node evals/experiment.js "${args[@]}"
             - uses: actions/cache/save@v4
               if: always()

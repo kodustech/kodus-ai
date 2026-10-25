@@ -1,4 +1,5 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
 import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
@@ -116,6 +117,8 @@ export type CodeReviewGlobalConfig = {
         ciChecks?: boolean;
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
+    /** How each PR is checked against the task it references. */
+    businessLogic?: BusinessLogicSettingsValue;
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
     /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
      *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */

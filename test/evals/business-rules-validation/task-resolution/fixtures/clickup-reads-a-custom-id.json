@@ -1,0 +1,53 @@
+{
+    "name": "clickup-reads-a-custom-id",
+    "issue": "#1884",
+    "trackers": [
+        {
+            "integrationId": "int-clickup",
+            "appName": "ClickUp",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "clickup",
+            "tools": [
+                {
+                    "name": "get_task",
+                    "kind": "get",
+                    "idArg": "task_id",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "task_id": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["task_id"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["create_task", "update_task"],
+            "tasks": [
+                {
+                    "id": "DEV-12",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat(DEV-12): scale servings",
+        "body": ""
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["get_task"]
+    }
+}

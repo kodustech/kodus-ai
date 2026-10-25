@@ -604,14 +604,31 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
                 validItem(),
                 {
                     relevantFile: 'b.ts',
-                    suggestionContent: 'x',
                     existingCode: 'y',
-                }, // no improvedCode
+                    improvedCode: 'z',
+                }, // no suggestionContent
             ],
         } as any);
         expect(r).not.toBeNull();
         expect(r!.suggestions).toHaveLength(1);
         expect(r!.suggestions[0].relevantFile).toBe('a.ts');
+    });
+    // #2112 FPARSE-11: the fix is optional — a finding without it is kept and
+    // the #1833 gate publishes it as a plain comment.
+    it('row 12b — an item missing only its fix is kept with empty code', () => {
+        const r = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                {
+                    relevantFile: 'b.ts',
+                    suggestionContent: 'x',
+                    existingCode: 'y',
+                },
+            ],
+        } as any);
+        expect(r!.suggestions).toHaveLength(1);
+        expect(r!.suggestions[0].improvedCode).toBe('');
+        expect(r!.suggestions[0].existingCode).toBe('y');
     });
 
     // Row 13 — Extra unknown keys are tolerated (stripped), never a crash.
@@ -787,21 +804,18 @@ describe('contract matrix — B. semantic-but-wrong', () => {
         expect(v.keep).toBe(false);
     });
 
-    // Row 24 — enum out of the allowed set (severity:"URGENT"). PROD: the whole
-    // (otherwise valid) finding is dropped because an OPTIONAL enum field is
-    // present-but-invalid (findings-schema.ts suggestionSchema). Losing a real
-    // finding over a label typo is a silent degradation → correct = keep it.
-    it.failing(
-        'row 24 — an out-of-set severity must not drop the whole finding',
-        () => {
-            const r = sanitizeFindingsResult({
-                reasoning: 'r',
-                suggestions: [validItem({ severity: 'URGENT' })],
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (dropped → 0)
-        },
-    );
+    // Row 24 — enum out of the allowed set (severity:"URGENT"). Losing a real
+    // finding over a label typo is a silent degradation → keep it with the
+    // field cleared (#2112 FPARSE-13).
+    it('row 24 — an out-of-set severity must not drop the whole finding', () => {
+        const r = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [validItem({ severity: 'URGENT' })],
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1);
+        expect(r!.suggestions[0].severity).toBeUndefined();
+    });
 
     // Row 26 — duplicate keys in the JSON object: JSON.parse is last-wins; the
     // text seam handles it without crashing.

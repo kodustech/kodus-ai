@@ -1,0 +1,63 @@
+{
+    "name": "value-azure-html-description",
+    "issue": "#1884",
+    "trackers": [
+        {
+            "integrationId": "int-custom-azure",
+            "appName": "Azure DevOps",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "azure",
+            "tools": [
+                {
+                    "name": "wit_work_item",
+                    "kind": "get",
+                    "idArg": "id",
+                    "readAction": "get",
+                    "description": "Get, create or update a work item.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["get", "create", "update"]
+                            },
+                            "id": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["action", "id"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["wit_create_work_item"],
+            "tasks": [
+                {
+                    "id": "27",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat(AB#27): scale servings",
+        "body": ""
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "taskNotContains": ["<li>", "<h2>"]
+    },
+    "settings": {
+        "taskSource": "int-custom-azure",
+        "lookupTool": "wit_work_item"
+    }
+}

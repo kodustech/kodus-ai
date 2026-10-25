@@ -20,6 +20,7 @@
 //   node evals/experiment.js --step=finder --set=<name> ...         "is it better?" on a set of the step's own (its eval's
 //                                                                  `sets` folder), or on a private one (an absolute path)
 //   node evals/experiment.js --step=finder --team-config=<file> ... one commit, the team config off against on
+//   node evals/experiment.js --step=dedup --embedder=none ...        both sides without the platform's embedder
 //   node evals/experiment.js --affected --files-dir=<wiring smoke --eval-files-dir> --changed=<file of changed paths>
 //                                               the steps whose production files a change touched (JSON), for a PR's check
 //
@@ -33,6 +34,10 @@
 // --team-config  a JSON file of the review config keys a team saves: both sides run
 //                HEAD, the base without it and the candidate with it (a capability a
 //                team turns on). Recorded with its hash.
+// --embedder     none: both sides run the evals that embed without the platform's
+//                embedder, as a self-hosted install without its OpenAI key (#2170).
+//                Each side's eval reports what it ran; a run that embedded anyway
+//                is not measured.
 // --models       several models, each its own experiment, and one decision over
 //                them: each customer runs one model, so a loss on any ships to its
 //                customers.
@@ -69,6 +74,7 @@ const ROOT = path.join(__dirname, '..');
 const { TIER0 } = require('./shared/tier0-models');
 const { sendExperimentRows, recordedExperiments, experimentsPage } = require('./shared/quality-client');
 const { readTeamConfig, canonical } = require('./shared/team-config');
+const { EMBEDDERS } = require('./shared/embedder');
 // The nightly's model (evals/README.md): an experiment's default.
 const DEFAULT_MODEL = 'deepseek-v4-flash@fireworks';
 const DEFAULT_RUNS = 2;
@@ -106,12 +112,13 @@ const STEP_EVALS = {
             id: 'dedup-groups',
             label: 'Duplicate pairs joined',
             run: ['evals/dedup-groups/run.js'],
+            embedder: true,
             question: 'Does the dedup join the suggestions that report the same problem, and only those?',
             // Read from the same cases: joining everything would score every pair, so
             // what it merged must stay right too. Not worse beyond its interval.
             derived: [{ id: 'pair-precision', label: 'Merges that were right', question: 'Of the pairs the dedup merged, how many does the gold put in one group?', hits: (c) => c.merged - c.falseMerges, total: (c) => c.merged }],
         },
-        guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
+        guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], embedder: true, question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
     },
     finder: {
         // On demand only, never a PR's check: every case is a full review, so the
@@ -409,13 +416,13 @@ function blobsAt(sha, files) {
 // these is not reused. `reuse` is what the run recorded for this (the panel
 // passes it back as written); a record from before it measured the extended
 // set with no team config.
-function measuredAlready(recorded, { phaseIds, model, runs, evalsTree, set = 'full', teamConfigHash = null, env = envHashOf({}) }, blobsOf) {
+function measuredAlready(recorded, { phaseIds, model, runs, evalsTree, set = 'full', teamConfigHash = null, env = envHashOf({}), embedder = 'platform' }, blobsOf) {
     return (recorded || []).find((x) => {
         const blobs = x.step_blobs;
         if (!blobs || !blobs.base || !blobs.candidate || !Object.keys(blobs.candidate).length) return false;
         const r = x.reuse && typeof x.reuse === 'object' ? x.reuse : { model: x.model, runs: x.runs, evals_tree: x.evals_tree, set: 'full', team_config_hash: null };
         if (r.model !== model || r.runs !== runs || !r.evals_tree || r.evals_tree !== evalsTree) return false;
-        if ((r.set ?? 'full') !== set || (r.team_config_hash ?? null) !== teamConfigHash || (r.env ?? envHashOf({})) !== env) return false;
+        if ((r.set ?? 'full') !== set || (r.team_config_hash ?? null) !== teamConfigHash || (r.env ?? envHashOf({})) !== env || (r.embedder ?? 'platform') !== embedder) return false;
         const verdicts = x.phase_verdicts || {};
         if (!phaseIds.every((p) => (x.phases || []).includes(p) && verdicts[p] && verdicts[p] !== 'not measured')) return false;
         const same = (want, side) => {
@@ -549,10 +556,10 @@ const pp = (x) => (Number.isFinite(x) ? `${x >= 0 ? '+' : ''}${(x * 100).toFixed
 // One model's experiment: every phase's evals on both sides, compared, recorded
 // and sent to the panel.
 async function measureModel(ctx) {
-    const { step, plan, phaseIds, runs, set, team, head, branch, baseSha, baseRef, baseDir, model, name, out } = ctx;
+    const { step, plan, phaseIds, runs, set, team, embedder, head, branch, baseSha, baseRef, baseDir, model, name, out } = ctx;
     const trace = path.join(out, 'trace');
     fs.mkdirSync(out, { recursive: true });
-    console.log(`experiment ${step} · ${name}: ${team ? `${head.slice(0, 9)} without the team config against with it (${team.hash})` : `base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch})`} · ${model} · ${phaseIds.join(' + ')} · ${runs} runs each · ${out}`);
+    console.log(`experiment ${step} · ${name}: ${team ? `${head.slice(0, 9)} without the team config against with it (${team.hash})` : `base ${baseSha.slice(0, 9)} (${baseRef}) vs candidate ${head.slice(0, 9)} (${branch})`} · ${model}${embedder === 'platform' ? '' : ` · embedder ${embedder}`} · ${phaseIds.join(' + ')} · ${runs} runs each · ${out}`);
 
     const traces = { base: new Set(), candidate: new Set() };
     const exits = [];
@@ -566,7 +573,7 @@ async function measureModel(ctx) {
         for (let round = 1; round <= runs; round++) {
             for (const side of ['base', 'candidate']) {
                 for (const entry of entries) {
-                    const extra = side === 'candidate' && team ? [`--team-config=${team.file}`] : [];
+                    const extra = [...(entry.embedder && embedder !== 'platform' ? [`--embedder=${embedder}`] : []), ...(side === 'candidate' && team ? [`--team-config=${team.file}`] : [])];
                     const parts = { eval: entry.id, args: [...entry.run, ...extra], model, round, evals: ctx.evalsTree, lock: ctx.lockBlob, set: set.private ? set.hash : null, env: reviewEnv() };
                     const kept = side === 'base' && !ctx.freshBase ? reusableBase(ctx.cacheDir, parts, (files) => blobsAt(baseSha, files)) : null;
                     if (kept) {
@@ -583,6 +590,15 @@ async function measureModel(ctx) {
                     if (result && entry.teamConfig && (result.teamConfig?.hash ?? null) !== want) {
                         console.warn(`  ${side} ${entry.id} run ${round}: ran team config ${result.teamConfig?.hash ?? 'none'}, not ${want ?? 'none'}: not measured`);
                         result = null;
+                    }
+                    // So is the embedder: asked for none, a run that embedded did not measure it.
+                    if (result && entry.embedder) {
+                        const ran = result.environment || {};
+                        const wrong = (ran.embedderRequested ?? 'platform') !== embedder || (embedder === 'none' && ran.embedder !== 'not called');
+                        if (wrong) {
+                            console.warn(`  ${side} ${entry.id} run ${round}: ran embedder ${ran.embedderRequested ?? 'platform'} (${ran.embedder ?? 'unknown'}), not ${embedder}: not measured`);
+                            result = null;
+                        }
                     }
                     exits.push({ phase, side, eval: entry.id, round, exit: r.exit });
                     results[entry.id][side].push(result);
@@ -660,6 +676,7 @@ async function measureModel(ctx) {
         runs,
         set: { id: set.id, private: Boolean(set.private), hash: set.hash || null },
         teamConfig: team ? { hash: team.hash, configs: team.configs } : null,
+        embedder,
         createdAt: new Date().toISOString(),
         base: { sha: baseSha, version: strip(versions.base) },
         candidate: { sha: head, version: strip(versions.candidate) },
@@ -671,7 +688,7 @@ async function measureModel(ctx) {
         exits,
     };
     fs.writeFileSync(path.join(out, 'experiment.json'), `${JSON.stringify(experiment, null, 2)}\n`);
-    const reuse = { model, runs, evals_tree: ctx.evalsTree, set: setIdentity(set), team_config_hash: team ? team.hash : null, env: envHashOf(reviewEnv()), worse: decision.worse };
+    const reuse = { model, runs, evals_tree: ctx.evalsTree, set: setIdentity(set), team_config_hash: team ? team.hash : null, env: envHashOf(reviewEnv()), ...(embedder !== 'platform' ? { embedder } : {}), worse: decision.worse };
     const rows = Object.entries(phases).flatMap(([phase, p]) =>
         p.evals.map((e) => ({
             name: `experiments.${slug(step)}.${phase}.${slug(e.id)}.${name}`,
@@ -701,6 +718,7 @@ async function measureModel(ctx) {
                 set: p.set,
                 set_private: phase === 'decision' && Boolean(set.private),
                 team_config: experiment.teamConfig,
+                embedder,
                 base: { sha: baseSha, ref: baseRef, step_version: versions.base.step },
                 candidate: { sha: head, step_version: versions.candidate.step },
                 eval_version: versions.candidate.eval,
@@ -813,6 +831,18 @@ async function main() {
         console.error(`experiment --step=${step} (models ${models.join(', ')}): ${error instanceof Error ? error.message : String(error)}`);
         return 2;
     }
+    const embedder = args.embedder === undefined ? 'platform' : String(args.embedder);
+    if (!EMBEDDERS.includes(embedder)) {
+        console.error(`unknown --embedder=${embedder}: ${EMBEDDERS.join(' or ')}`);
+        return 2;
+    }
+    if (embedder !== 'platform') {
+        const cannot = [plan.primary, ...plan.guards].filter((e) => !e.embedder).map((e) => e.id);
+        if (cannot.length) {
+            console.error(`--embedder: ${cannot.join(', ')} does not embed`);
+            return 2;
+        }
+    }
     if (team) {
         const cannot = [plan.primary, ...plan.guards].filter((e) => !e.teamConfig).map((e) => e.id);
         if (cannot.length) {
@@ -861,6 +891,7 @@ async function main() {
         runs,
         set,
         team,
+        embedder,
         head,
         branch,
         baseSha,
@@ -878,7 +909,7 @@ async function main() {
     const perModel = [];
     const pending = [];
     for (const model of models) {
-        const identity = { phaseIds, model, runs, evalsTree, set: setIdentity(set), teamConfigHash: team ? team.hash : null, env: envHashOf(reviewEnv()) };
+        const identity = { phaseIds, model, runs, evalsTree, set: setIdentity(set), teamConfigHash: team ? team.hash : null, env: envHashOf(reviewEnv()), ...(embedder !== 'platform' ? { embedder } : {}) };
         const hit = recorded && measuredAlready(recorded, identity, (side, files) => blobsAt(side === 'base' ? baseSha : head, files));
         if (hit) {
             console.log(`${model}: measured already on ${hit.ts}: ${hit.decision} — ${hit.reason}`);

@@ -89,11 +89,9 @@ const makeContext = (customAgents: any[], over: Record<string, unknown> = {}) =>
         changedFiles: [{ filename: 'src/ledger.ts', patch: PATCH }],
         codeReviewConfig: {
             reviewOptions: {},
-            heavy: false,
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             customAgents,
         },
-        heavy: false,
         validSuggestions: [],
         discardedSuggestions: [],
         errors: [],
@@ -884,7 +882,6 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
                 pullRequest: { number: 7, base: { ref: 'main' } },
                 codeReviewConfig: {
                     reviewOptions: {},
-                    heavy: false,
                     resolvedModelSlot: {
                         provider: 'openai',
                         model: 'gpt-4o-mini',

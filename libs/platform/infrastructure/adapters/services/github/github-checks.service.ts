@@ -1,3 +1,4 @@
+import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
 import {
     CheckConclusion,

@@ -1,19 +1,22 @@
 // Production's business-logic stage, run from data.
 //
-// BusinessLogicValidationStage runs BusinessRulesValidationAgentProvider, which
-// reaches its tools through production's MCPManagerService and MCP adapter,
-// over HTTP, as in a deployment. What answers on the other end:
-//   - the Kodus MCP server is production's own (McpAuthGuard, McpController,
-//     McpServerService, McpServerFactory, CodeManagementTools), its code host
-//     answering from the case's PR;
+// BusinessLogicValidationStage runs BusinessValidationService, which reads the
+// task through production's MCPManagerService and MCP adapter, over HTTP, as
+// in a deployment, and BusinessLogicPublisher, which writes the PR comment.
+// What answers on the other end:
 //   - the mcp-manager service, which lists the organization's connections, is
 //     the eval's: it answers with the two connections a team with Jira linked
-//     has (Kodus MCP and Atlassian);
-//   - the Atlassian MCP is the eval's: getAccessibleAtlassianResources and
-//     getJiraIssue answer from the case's ticket, in Atlassian's shape.
-// Everything else is production's: the skill (SKILL.md), the fetch steps, the
-// task-quality gate, the analyzer and its parser, the stage's classification
-// and the comment it publishes.
+//     has, Kodus MCP (production's own server, which reads no task) and
+//     Atlassian Rovo (the managed `atlassian-rovo-default`);
+//   - the Atlassian MCP is the eval's: getAccessibleAtlassianResources,
+//     getJiraIssue and getVisibleJiraProjects answer from the case's ticket,
+//     in Atlassian's shape;
+//   - the code host is the eval's: it answers from the case's PR and keeps
+//     the comments the publisher writes;
+//   - the validation runs are kept in memory, none before the case.
+// Everything else is production's: the reference finder, the Jira tracker,
+// the task-quality gate, the judge (SKILL.md) and its gap check, the verdict,
+// the stage's outcome and the comment it renders.
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
@@ -48,6 +51,16 @@ function filesOfDiff(diff) {
     return files;
 }
 
+// A changed file at the PR head, as far as its patch shows it: the added and
+// context lines, in order. A case's diff covers each file whole.
+function headOf(patch) {
+    return patch
+        .split('\n')
+        .filter((l) => l.startsWith('+') || l.startsWith(' '))
+        .map((l) => l.slice(1))
+        .join('\n');
+}
+
 // The PR as GitHub's adapter returns it (getPullRequest).
 function pullRequestRecord(pr) {
     const repo = { id: REPOSITORY.id, name: REPOSITORY.name, defaultBranch: 'main', fullName: REPOSITORY.fullName };
@@ -63,10 +76,22 @@ function pullRequestRecord(pr) {
 }
 
 // The ticket as Atlassian's getJiraIssue returns it, from a `# Task: <title>`
-// markdown file.
-function jiraIssue(key, markdown) {
+// markdown file, with its parent and sub-tasks when it has them.
+function jiraIssue(key, markdown, { parent, subtasks } = {}) {
     const [first, ...rest] = String(markdown).split('\n');
-    return { key, fields: { summary: first.replace(/^#\s*(Task:\s*)?/, '').trim(), description: rest.join('\n').trim(), status: { name: 'In Progress' }, issuetype: { name: 'Story' } } };
+    return {
+        key,
+        fields: {
+            summary: first.replace(/^#\s*(Task:\s*)?/, '').trim(),
+            description: rest.join('\n').trim(),
+            status: { name: 'In Progress' },
+            issuetype: { name: parent ? 'Sub-task' : 'Story' },
+            ...(parent ? { parent: { key: parent } } : {}),
+            ...(subtasks?.length
+                ? { subtasks: subtasks.map((t) => ({ key: t.key, fields: { summary: t.title, status: { name: t.status || 'To Do' } } })) }
+                : {}),
+        },
+    };
 }
 
 // One local HTTP server: production's Kodus MCP at /mcp, and the eval's
@@ -133,7 +158,7 @@ async function startServices(world) {
         res.json({
             items: [
                 item('conn-kodus', KODUS_MCP_INTEGRATION_ID, 'Kodus MCP', `${base}/mcp`, ['KODUS_GET_PULL_REQUEST', 'KODUS_GET_PULL_REQUEST_DIFF'], null),
-                item('conn-atlassian', 'atlassian', 'Atlassian', `${base}/atlassian`, ['getAccessibleAtlassianResources', 'getJiraIssue'], 'task-management'),
+                item('conn-atlassian', 'atlassian-rovo-default', 'Atlassian', `${base}/atlassian`, ['getAccessibleAtlassianResources', 'getJiraIssue', 'getVisibleJiraProjects'], 'task-management'),
             ],
         });
     });
@@ -153,10 +178,15 @@ async function startServices(world) {
                 inputSchema: { cloudId: z.string().describe('Atlassian site id (UUID) or site URL'), issueIdOrKey: z.string().describe('Issue id or key, e.g. PROJ-123') },
             },
             async ({ cloudId, issueIdOrKey }) => {
-                const ticket = world.current?.ticket;
-                const known = ticket && ticket.task && String(issueIdOrKey).toUpperCase() === ticket.key && [ATLASSIAN_SITE.id, ATLASSIAN_SITE.url].includes(String(cloudId).replace(/\/+$/, ''));
-                return known ? text(jiraIssue(ticket.key, ticket.task)) : text('Issue does not exist or you do not have permission to see it.', true);
+                const ticket = (world.current?.tickets || []).find((t) => t.key === String(issueIdOrKey).toUpperCase());
+                const known = ticket && ticket.task && [ATLASSIAN_SITE.id, ATLASSIAN_SITE.url].includes(String(cloudId).replace(/\/+$/, ''));
+                return known ? text(jiraIssue(ticket.key, ticket.task, ticket)) : text('Issue does not exist or you do not have permission to see it.', true);
             },
+        );
+        server.registerTool(
+            'getVisibleJiraProjects',
+            { description: 'List the Jira projects visible on a site.', inputSchema: { cloudId: z.string().describe('Atlassian site id (UUID) or site URL') } },
+            async () => text({ values: [{ key: 'PROJ', name: 'Project' }] }),
         );
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         // Each close on its own: a failing one neither escapes nor skips the other.
@@ -187,16 +217,15 @@ function observability() {
     return sharedObservability;
 }
 
-// The stage with its production collaborators. `verifyAnalyzerResult` is the
-// one skill-policy setting a deployment can change (off by default).
-function buildStage({ verifyAnalyzerResult = false, storedConfig = null } = {}) {
+// The stage with its production collaborators. `codeHost` keeps the comments
+// the publisher writes. `verifyAnalyzerResult` is the one skill-policy setting
+// a deployment can change (SKILL.md, off by default).
+function buildStage({ verifyAnalyzerResult = false, storedConfig = null, codeHost, judgeFailures = [], outcomes = [] }) {
     const { JwtService } = require('@nestjs/jwt');
     const { BusinessLogicValidationStage } = lib('code-review/pipeline/stages/business-logic-validation.stage.ts');
-    const { BusinessRulesValidationAgentProvider } = lib('agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts');
-    const { GenericSkillRunnerService } = lib('agents/skills/generic-skill-runner.service.ts');
+    const { BusinessValidationService } = lib('agents/business-validation/business-validation.service.ts');
+    const { BusinessLogicPublisher } = lib('platform/application/services/business-logic-publisher.service.ts');
     const { SkillLoaderService } = lib('agents/skills/skill-loader.service.ts');
-    const { CapabilityStrategyService } = lib('agents/skills/runtime/capability-strategy.service.ts');
-    const { CapabilityResourcePlanService } = lib('agents/skills/runtime/capability-resource-plan.service.ts');
     const { MCPManagerService } = lib('mcp-server/services/mcp-manager.service.ts');
     const { ParametersService } = lib('organization/infrastructure/adapters/services/parameters.service.ts');
 
@@ -204,39 +233,102 @@ function buildStage({ verifyAnalyzerResult = false, storedConfig = null } = {}) 
     // managed default, a BYOK config for any other model.
     const permission = require('../shared/model-route').evalPermissionService(storedConfig);
     const mcpManager = new MCPManagerService(new JwtService(), permission, undefined);
-    const skillRunner = new GenericSkillRunnerService(new SkillLoaderService(), observability(), mcpManager);
-    if (verifyAnalyzerResult) {
-        const policy = skillRunner.getExecutionPolicy.bind(skillRunner);
-        skillRunner.getExecutionPolicy = (name) => ({ ...policy(name), verifyAnalyzerResult: true });
-    }
     // The team's language setting, as stored.
     const parameters = new ParametersService({ findByKey: async () => ({ configValue: 'en-US' }) });
-    const provider = new BusinessRulesValidationAgentProvider(
-        permission,
-        parameters,
-        observability(),
-        skillRunner,
-        undefined,
-        new CapabilityStrategyService(),
-        new CapabilityResourcePlanService(),
-    );
-    return new BusinessLogicValidationStage(provider, mcpManager);
+    const skills = new SkillLoaderService();
+    if (verifyAnalyzerResult) {
+        const meta = skills.loadSkillMetaFromFilesystem.bind(skills);
+        skills.loadSkillMetaFromFilesystem = (name) => {
+            const m = meta(name) ?? {};
+            return { ...m, executionPolicy: { ...m.executionPolicy, verifyAnalyzerResult: true } };
+        };
+    }
+    const service = new BusinessValidationService(mcpManager, permission, parameters, skills);
+    // A task the judge could not answer: the run records only `judge_failed`,
+    // its reason and cause go to this warning (analyzer_failure: the call
+    // failed, a key, a quota or a timeout; parser_fallback: the answer).
+    const warn = service.logger.warn.bind(service.logger);
+    service.logger.warn = (entry) => {
+        const reason = String(entry?.message || '').match(/Could not judge \S+ \((\w+)\)/)?.[1];
+        if (reason) judgeFailures.push({ reason, cause: entry.metadata?.cause });
+        return warn(entry);
+    };
+    // No run of this PR before the case.
+    const runs = {
+        forPullRequest: async () => [],
+        latestForPullRequest: async () => undefined,
+        create: async () => 'eval-run',
+        clearPendingRecheck: async () => undefined,
+    };
+    const publisher = new BusinessLogicPublisher(service, codeHost, runs);
+    // What the service decided, as the publisher receives it.
+    const publish = publisher.publish.bind(publisher);
+    publisher.publish = (input) => {
+        outcomes.push(input.result.outcome);
+        return publish(input);
+    };
+    return new BusinessLogicValidationStage(service, publisher);
 }
 
-// One case through the stage: what it publishes and the outcome it records.
-async function reviewCase(world, c, opts) {
-    const dir = path.join(__dirname, 'files');
+// The code host the publisher and the gap check talk to: the case's PR, no
+// other file in the repository, and the comments written on it.
+function caseCodeHost(world, comments) {
+    return {
+        getPullRequest: async () => pullRequestRecord(world.current.pr),
+        getAllCommentsInPullRequest: async () => comments.map((body, i) => ({ id: i + 1, body })),
+        createIssueComment: async ({ body }) => {
+            comments.push(body);
+            return { id: comments.length };
+        },
+        updateIssueComment: async ({ body, commentId }) => {
+            comments[Number(commentId) - 1] = body;
+        },
+        // The repository at the PR's head: the files the diff touches and the
+        // ones the case says were already there.
+        getRepositoryAllFiles: async () => [
+            ...new Set([...filesOfDiff(world.current.diff).map((f) => f.filename), ...Object.keys(world.current.repoFiles)]),
+        ].map((p) => ({ path: p })),
+        getRepositoryContentFile: async ({ file }) => {
+            if (file?.filename in world.current.repoFiles) return { data: { content: world.current.repoFiles[file.filename] } };
+            const changed = filesOfDiff(world.current.diff).find((f) => f.filename === file?.filename);
+            return changed ? { data: { content: headOf(changed.patch) } } : null;
+        },
+    };
+}
+
+// One case through the stage: the comments it publishes and the outcome it
+// records.
+async function reviewCase(world, c, opts = {}) {
+    const dir = opts.filesDir || path.join(__dirname, 'files');
     world.current = {
         pr: c.pr,
         diff: fs.readFileSync(path.join(dir, c.diff), 'utf8'),
-        ticket: { key: c.ticket.key, task: c.ticket.task ? fs.readFileSync(path.join(dir, c.ticket.task), 'utf8') : null },
+        // The ticket the PR closes, and the ones it links to (parent, sub-tasks).
+        tickets: [c.ticket, ...(c.related || [])].map((t) => ({
+            ...t,
+            task: t.task ? fs.readFileSync(path.join(dir, t.task), 'utf8') : null,
+        })),
+        repoFiles: Object.fromEntries(
+            Object.entries(c.repoFiles || {}).map(([p, f]) => [p, fs.readFileSync(path.join(dir, f), 'utf8')]),
+        ),
     };
-    const stage = buildStage(opts);
+    const comments = [];
+    const judgeFailures = [];
+    const outcomes = [];
+    const stage = buildStage({ ...opts, codeHost: caseCodeHost(world, comments), judgeFailures, outcomes });
     const context = {
         organizationAndTeamData: ORG,
         platformType: 'GITHUB',
         repository: REPOSITORY,
-        pullRequest: { number: c.pr.number, title: c.pr.title, body: c.pr.body, head: { ref: c.pr.headRef }, base: { ref: 'main' } },
+        pullRequest: {
+            number: c.pr.number,
+            title: c.pr.title,
+            body: c.pr.body,
+            head: { ref: c.pr.headRef, sha: 'eval-head' },
+            base: { ref: 'main' },
+            user: { login: 'dev' },
+        },
+        changedFiles: filesOfDiff(world.current.diff),
         codeReviewConfig: { reviewOptions: { business_logic: true } },
         pipelineMetadata: {},
         statusInfo: {},
@@ -244,7 +336,7 @@ async function reviewCase(world, c, opts) {
     };
     try {
         const out = await stage.execute(context);
-        return { outcome: out.businessLogicOutcome || null, published: out.businessLogicResults || [], errors: out.errors || [] };
+        return { outcome: out.businessLogicOutcome || null, decided: outcomes[0] || null, comments, judgeFailures, errors: out.errors || [] };
     } finally {
         world.current = null;
     }

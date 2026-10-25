@@ -1,0 +1,66 @@
+{
+    "name": "value-notion-page-content",
+    "issue": "#1941",
+    "trackers": [
+        {
+            "integrationId": "notion-default",
+            "appName": "Notion",
+            "provider": "kodusmcp",
+            "category": "task-management",
+            "responseShape": "notion",
+            "tools": [
+                {
+                    "name": "notion-fetch",
+                    "kind": "get",
+                    "idArg": "id",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["id"]
+                    }
+                },
+                {
+                    "name": "notion-search",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["notion-create-pages", "notion-update-page"],
+            "tasks": [
+                {
+                    "id": "1a2b3c4d5e6f40718293a4b5c6d7e8f9",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes https://www.notion.so/acme/Scale-servings-1a2b3c4d5e6f40718293a4b5c6d7e8f9"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["notion-fetch"]
+    }
+}

@@ -140,7 +140,7 @@ describe('ForgejoService review metadata mapping', () => {
         expect(result).toEqual([
             {
                 id: 101,
-                threadId: '11',
+                threadId: '101',
                 isResolved: true,
                 isOutdated: true,
                 body: 'Needs work',
@@ -196,7 +196,7 @@ describe('ForgejoService review metadata mapping', () => {
         expect(result).toEqual([
             {
                 id: 202,
-                threadId: '21',
+                threadId: '202',
                 isResolved: false,
                 isOutdated: false,
                 body: 'Nit',
