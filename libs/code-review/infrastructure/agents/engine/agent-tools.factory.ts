@@ -1636,57 +1636,126 @@ fi
     }
 
     // ── Call Graph lookup tool (EXP: stance + graph) ────────────────
-    // On-demand caller/callee lookup, backed by the runtime callGraph string
-    // (kodus-graph). The STANCE prompt gives the agent a REASON to pull it:
-    // proving a change fulfills its intent "everywhere it touches" requires
-    // checking callers/implementations. New graph versions render XML; legacy
-    // graph context remains supported while older reviews are in flight.
-    if (callGraph && callGraph.trim().length > 0) {
-        const blocks = callGraph.includes('<ChangedFunction')
-            ? parseXmlCallGraph(callGraph)
-            : parseLegacyCallGraph(callGraph);
-        if (blocks.length > 0) {
-            const names = blocks.map((b) => b.header);
-            tools.getCallers = mkTool(
-                'CROSS-FILE tool: look up who CALLS a changed function and what it CALLS ' +
-                    '(callers ← and callees →) from the precomputed AST call graph. ' +
-                    'Use this for EVERY changed function to check cross-file impact — ' +
-                    'who breaks if the signature/behavior changes, and which dependencies it relies on. ' +
-                    'Then readFile each caller to confirm. More precise than grep for caller lookup.',
-                {
-                    type: 'object',
-                    properties: {
-                        functionName: {
-                            type: 'string',
-                            description:
-                                'Function or method name to look up (e.g. "get_item_key")',
-                        },
+    // EXPERIMENT: graph navigation tools over the full base graph the review
+    // built (.kodus-graph/base-graph.json). Answers what the finder otherwise
+    // pages through files or greps for: where a symbol is, who calls it, what it
+    // calls, which tests cover it, and the shape of a file before reading it.
+    const GRAPH_JSON = '.kodus-graph/base-graph.json';
+    const KG = 'export PATH="$HOME/.bun/bin:$PATH" 2>/dev/null; kodus-graph';
+    if (remoteCommands?.exec) {
+        const run = async (cmd: string, max = 8000): Promise<string> => {
+            try {
+                const { stdout } = await remoteCommands.exec!(
+                    `${cmd} 2>/dev/null`,
+                );
+                const out = (stdout || '').trim();
+                return out.length > max
+                    ? `${out.slice(0, max)}\n... (truncated)`
+                    : out;
+            } catch (error) {
+                return `Error: ${error instanceof Error ? error.message : String(error)}`;
+            }
+        };
+        tools.outline = mkTool(
+            'Structure of a file before you read it: every class, function and method with its signature and line range (Lxx-yy). Use it to read ONLY the lines you need with readFile, instead of paging through the file.',
+            {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Repository-relative file path',
                     },
-                    required: ['functionName'],
                 },
-                async (args: any) => {
-                    const q = (args?.functionName || '').toString().trim();
-                    if (!q) return 'Error: functionName is required';
-                    const hits = blocks.filter((b) =>
-                        b.header.toLowerCase().includes(q.toLowerCase()),
+                required: ['path'],
+            },
+            async (args: any) => {
+                const path = normalizeRepoPath(String(args?.path || ''));
+                if (!path) return 'Error: path is required';
+                const out = await run(
+                    `${KG} outline --files ${shellQuote(path)} --repo-dir .`,
+                );
+                return (
+                    out ||
+                    `No outline for ${path} (unsupported language or file not found).`
+                );
+            },
+        );
+        tools.getCallers = mkTool(
+            'Code graph lookup for ANY symbol (not only changed ones): its definition (file, lines, signature), who CALLS it (callers, with file:line), what it CALLS (callees), and the tests that cover it. Resolved statically across files, including calls through injected interfaces. Prefer this over grep to find definitions, usages and callers; then readFile only the lines that matter.',
+            {
+                type: 'object',
+                properties: {
+                    functionName: {
+                        type: 'string',
+                        description:
+                            'Function, method or class name, e.g. "findOne" or "IntegrationService.findOne"',
+                    },
+                },
+                required: ['functionName'],
+            },
+            async (args: any) => {
+                const q = String(args?.functionName || '').trim();
+                if (!q) return 'Error: functionName is required';
+                const short = q.split(/[.:#]/).filter(Boolean).pop() || q;
+                const owner = q.includes('.')
+                    ? q.split('.').slice(-2, -1)[0]
+                    : '';
+                const raw = await run(
+                    `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(short)} --limit 20`,
+                    200000,
+                );
+                let results: any[] = [];
+                try {
+                    results = JSON.parse(raw).results || [];
+                } catch {
+                    return `No graph available for "${q}". Use grep.`;
+                }
+                results = results.filter(
+                    (r) =>
+                        r.name === short ||
+                        r.qualified_name.endsWith(`.${short}`) ||
+                        r.qualified_name.endsWith(`::${short}`),
+                );
+                if (owner)
+                    results.sort(
+                        (a, b) =>
+                            Number(b.parent_name === owner) -
+                            Number(a.parent_name === owner),
                     );
-                    if (hits.length === 0) {
-                        return (
-                            `No call-graph entry for "${q}". ` +
-                            `Changed functions in the graph: ${names.join(', ')}`
-                        );
+                results = results.filter((r) => !r.is_test).slice(0, 3);
+                if (results.length === 0)
+                    return `"${q}" not found in the code graph. Use grep.`;
+                const parts: string[] = [];
+                for (const r of results) {
+                    const ctxRaw = await run(
+                        `${KG} context-of --graph ${GRAPH_JSON} --symbol ${shellQuote(r.qualified_name)} --limit 8 --out -`,
+                        200000,
+                    );
+                    let c: any;
+                    try {
+                        c = JSON.parse(ctxRaw);
+                    } catch {
+                        continue;
                     }
-                    return hits
-                        .slice(0, 3)
-                        .map((b) =>
-                            b.lines.length > 0
-                                ? `${b.header}\n${b.lines.map((l) => '  ' + l).join('\n')}`
-                                : `${b.header}\n  (no callers/callees recorded)`,
-                        )
-                        .join('\n\n');
-                },
-            );
-        }
+                    if (!c?.found) continue;
+                    const fmt = (xs: any[] | undefined) =>
+                        (xs || [])
+                            .map((x) =>
+                                typeof x === 'string'
+                                    ? `    ${x}`
+                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line ? `:${x.line}` : ''}`,
+                            )
+                            .join('\n') || '    (none found)';
+                    parts.push(
+                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start}-${c.symbol.line_end}\n  signature: ${c.symbol.signature || ''}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
+                    );
+                }
+                return (
+                    parts.join('\n\n') ||
+                    `"${q}" not found in the code graph. Use grep.`
+                );
+            },
+        );
     }
 
     // ── External documentation lookup (Exa) ─────────────────────────
