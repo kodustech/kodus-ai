@@ -1798,7 +1798,10 @@ fi
                 );
                 let symbols: any[] = [];
                 try {
-                    symbols = JSON.parse(raw)?.[0]?.symbols || [];
+                    // Methods sit under their class (`members`).
+                    const flat = (xs: any[]): any[] =>
+                        xs.flatMap((x) => [x, ...flat(x.members || [])]);
+                    symbols = flat(JSON.parse(raw)?.[0]?.symbols || []);
                 } catch {
                     return result;
                 }
