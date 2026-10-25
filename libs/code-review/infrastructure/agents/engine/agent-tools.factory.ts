@@ -260,6 +260,9 @@ function parseLegacyCallGraph(callGraph: string): CallGraphBlock[] {
     return blocks;
 }
 
+// EXPERIMENT: serializes the finder's code-graph queries (see `run`).
+let graphQueryQueue: Promise<void> = Promise.resolve();
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -1640,7 +1643,7 @@ fi
     // built (.kodus-graph/base-graph.json). Answers what the finder otherwise
     // pages through files or greps for: where a symbol is, who calls it, what it
     // calls, which tests cover it, and the shape of a file before reading it.
-    const GRAPH_JSON = '.kodus-graph/base-graph.json';
+    const GRAPH_JSON = '.kodus-graph/lean-graph.json';
     const isTestPath = (p: string) =>
         /(^|\/)(tests?|__tests__|spec)\/|[._-](spec|test)s?\.[a-z]+$|Tests?\.java$|(^|\/)test_[^/]+\.py$/i.test(
             p || '',
@@ -1654,6 +1657,12 @@ fi
     const KG = 'kodus-graph';
     if (remoteCommands?.exec) {
         const run = async (cmd: string, max = 8000): Promise<string> => {
+            // One graph query at a time per process: each loads the whole
+            // graph, and parallel cases loading it together took the runner down.
+            const previous = graphQueryQueue;
+            let release!: () => void;
+            graphQueryQueue = new Promise<void>((r) => (release = r));
+            await previous;
             try {
                 const { stdout } = await remoteCommands.exec!(cmd);
                 const out = (stdout || '').trim();
@@ -1662,6 +1671,8 @@ fi
                     : out;
             } catch (error) {
                 return `Error: ${error instanceof Error ? error.message : String(error)}`;
+            } finally {
+                release();
             }
         };
         tools.outline = mkTool(

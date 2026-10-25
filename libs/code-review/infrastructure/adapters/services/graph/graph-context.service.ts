@@ -14,6 +14,14 @@ const GRAPH_DIR = '.kodus-graph';
 const GRAPH_PATH = `${GRAPH_DIR}/graph.json`;
 const CONTEXT_OUTPUT_PATH = `${GRAPH_DIR}/context.xml`;
 const BASE_GRAPH_PATH = `${GRAPH_DIR}/base-graph.json`;
+// EXPERIMENT: strip the base graph down to what the finder's lookups read.
+const LEAN_GRAPH_SCRIPT =
+    'const fs=require("fs");const g=JSON.parse(fs.readFileSync(process.env.IN,"utf8"));' +
+    'for(const e of g.edges){delete e.alternatives}' +
+    'for(const n of g.nodes){delete n.file_hash;delete n.content_hash}' +
+    'g.edges=g.edges.filter(e=>e.kind!=="CONTAINS");' +
+    'fs.writeFileSync(process.env.OUT,JSON.stringify(g))';
+const shDoubleQuoteJs = (js: string) => `"${js.replace(/(["\\$`])/g, '\\$1')}"`;
 
 /**
  * Generates per-PR graph context for code review. Reads the indexed baseline
@@ -308,7 +316,12 @@ export class GraphContextService {
                     `flock /tmp/kodus-graph-full-parse.lock sh -c ${shSingleQuote(
                         `git archive ${safeBaseRef} | tar -x -C ${BASE_FILES_DIR} && ` +
                             `kodus-graph parse --all --no-gitignore --max-memory 3072 --repo-dir ${BASE_FILES_DIR} --out ${BASE_GRAPH_PATH}; ` +
-                            `code=$?; rm -rf ${BASE_FILES_DIR}; exit $code`,
+                            `code=$?; rm -rf ${BASE_FILES_DIR}; ` +
+                            // The finder's graph lookups load a copy without
+                            // what they never read: 60% of a large graph is the
+                            // candidate list of ambiguous calls.
+                            `[ $code -eq 0 ] && IN=${BASE_GRAPH_PATH} OUT=${GRAPH_DIR}/lean-graph.json bun -e ${shDoubleQuoteJs(LEAN_GRAPH_SCRIPT)}; ` +
+                            `exit $code`,
                     )}`,
                 ].join(' && '),
                 // Queued behind the lock: allow for the parses ahead of it.
