@@ -48,15 +48,29 @@ describe('rebaseInterdiff', () => {
         expect(result.hunksKept).toBe(0);
     });
 
-    it('treats a hunk whose line numbers and later context moved as unchanged', () => {
-        const previous = [file('src/a.ts', hunkA)];
+    it('treats a hunk whose line numbers and farther context moved as unchanged', () => {
+        const previous = [
+            file(
+                'src/a.ts',
+                hunk(
+                    '@@ -10,5 +10,6 @@ function a()',
+                    ' const x = 1;',
+                    '-return x;',
+                    '+const y = 2;',
+                    '+return x + y;',
+                    ' }',
+                    ' const after = 1;',
+                ),
+            ),
+        ];
         const shifted = hunk(
-            '@@ -25,4 +25,5 @@ function a()',
+            '@@ -25,5 +25,6 @@ function a()',
             ' const x = 1;',
             '-return x;',
             '+const y = 2;',
             '+return x + y;',
-            ' } // edited on main',
+            ' }',
+            ' const after = 2; // edited on main',
         );
 
         const result = rebaseInterdiff([file('src/a.ts', shifted)], previous);
@@ -168,10 +182,11 @@ describe('rebaseInterdiff', () => {
 
     it('keeps an empty context line at the end of a hunk', () => {
         const after = hunk('@@ -1,2 +1,4 @@', ' a', '+b', '+c', ' ');
+        // b was reviewed under the same lines; c is new.
 
         const result = rebaseInterdiff(
             [file('src/a.ts', `${after}\n`)],
-            [file('src/a.ts', hunk('@@ -1,1 +1,2 @@', ' a', '+b'))],
+            [file('src/a.ts', hunk('@@ -1,2 +1,3 @@', ' a', '+b', ' '))],
         );
 
         expect(result.files[0].patch).toBe(
@@ -276,6 +291,140 @@ describe('rebaseInterdiff', () => {
         ];
 
         expect(rebaseInterdiff(current, previous).unchangedFiles).toEqual([]);
+    });
+
+    it('reviews a change moved to another function when only the hunk names the function', () => {
+        // No section in the header (Azure, Bitbucket DC): the function line
+        // inside the hunk tells the two places apart.
+        const before = hunk(
+            '@@ -1,4 +1,5 @@',
+            ' export function f3(arg) {',
+            '     validate(arg);',
+            '+    // TODO',
+            '     return x;',
+        );
+        const after = hunk(
+            '@@ -9,4 +9,5 @@',
+            ' export function f2(arg) {',
+            '     validate(arg);',
+            '+    // TODO',
+            '     return x;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.unchangedFiles).toEqual([]);
+    });
+
+    it('reviews a change moved within its function past a line like the one above it', () => {
+        const before = hunk(
+            '@@ -10,4 +10,4 @@ export function f1(arg) {',
+            '     await flush();',
+            '-    const input = parse(arg);',
+            '+    assertOwner(arg);',
+            ' }',
+        );
+        const after = hunk(
+            '@@ -9,5 +9,5 @@ export function f1(arg) {',
+            '     await flush();',
+            '+    assertOwner(arg);',
+            '     return save(input);',
+            '     await flush();',
+            '-    const input = parse(arg);',
+            ' }',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.files).toHaveLength(1);
+        expect(result.files[0].patch).toContain('+    assertOwner(arg);');
+    });
+
+    it('takes the function a change sits in, not the one the hunk header names', () => {
+        // Git names a hunk after the last function line before its first
+        // line; a function that starts inside the hunk is the one that counts.
+        const before = hunk(
+            '@@ -4,7 +4,8 @@ export function a() {',
+            ' }',
+            ' ',
+            ' export function b() {',
+            '   const y = 1;',
+            '+  log(y);',
+            '   return y;',
+        );
+        const after = hunk(
+            '@@ -4,7 +4,8 @@ export function a() {',
+            ' }',
+            ' ',
+            ' export function c() {',
+            '   const y = 1;',
+            '+  log(y);',
+            '   return y;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.unchangedFiles).toEqual([]);
+    });
+
+    it('reviews a block moved between two methods of one class', () => {
+        // Methods are indented, so the enclosing scope is the nearest line
+        // above with less indentation, not the class line at column 0.
+        const before = hunk(
+            '@@ -13,6 +13,6 @@ export class Service {',
+            '     m2(arg) {',
+            '         ',
+            '-        count++;',
+            '+        await flush();',
+            '     }',
+        );
+        const after = hunk(
+            '@@ -1,6 +1,7 @@ export class Service {',
+            '     m0(arg) {',
+            '         ',
+            '+        await flush();',
+            '     }',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.unchangedFiles).toEqual([]);
+    });
+
+    it('still matches a change in the same method under the same lines', () => {
+        const before = hunk(
+            '@@ -13,6 +13,6 @@ export class Service {',
+            '     m2(arg) {',
+            '         ',
+            '+        await flush();',
+            '     }',
+        );
+        const after = hunk(
+            '@@ -40,6 +40,6 @@ export class Service {',
+            '     m2(arg) {',
+            '         ',
+            '+        await flush();',
+            '     }',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.unchangedFiles).toEqual(['src/a.ts']);
     });
 
     it('still matches a change whose hunk header carries no section', () => {

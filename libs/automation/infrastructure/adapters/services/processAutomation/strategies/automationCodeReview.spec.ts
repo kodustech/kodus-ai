@@ -343,6 +343,35 @@ describe('AutomationCodeReviewService', () => {
 
     // A commit pushed while the review ran was checked before the review
     // stored its suggestions, so they stayed not_implemented (#2182).
+    // #2037: after a rebase the PR diff at the reviewed commit is read against
+    // the base branch; a PR retargeted since then must not use the new one.
+    describe('the stored execution', () => {
+        const build = (result: Record<string, unknown>) =>
+            (service as any)._buildExecutionData(
+                makePayload({
+                    pullRequest: { number: 42, base: { ref: 'develop' } },
+                }),
+                result,
+            );
+
+        it('records the base branch the reviewed commit was compared against', () => {
+            expect(
+                build({ lastAnalyzedCommit: { sha: 'reviewed-sha' } }),
+            ).toEqual(
+                expect.objectContaining({
+                    lastAnalyzedCommit: { sha: 'reviewed-sha' },
+                    reviewedBaseBranch: 'develop',
+                }),
+            );
+        });
+
+        it('records no base branch when no commit was reviewed', () => {
+            expect(build({ lastAnalyzedCommit: undefined })).not.toHaveProperty(
+                'reviewedBaseBranch',
+            );
+        });
+    });
+
     describe('when the review finishes', () => {
         const reviewResult = (overrides: Record<string, unknown> = {}) => ({
             statusInfo: { status: 'success' },

@@ -7,9 +7,10 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
  * there is no `compare(last...head)` to say what is new. This gives the same
  * answer from the PR diff before and after the rebase. A changed line (`-` or
  * `+`) of the current diff is already reviewed when the previous diff of the
- * same file has it in the same order (their longest common subsequence), under
- * the same hunk section and context line. Line numbers and the rest of the
- * context are not compared, because the rebase moves them.
+ * same file has it in the same order (their longest common subsequence), in
+ * the same place: the same scope and the same context lines around its run of
+ * changes. Line numbers and the rest of the context are not compared, because
+ * the rebase moves them.
  *
  * What is left reads like a normal push: an already reviewed `+` line stays
  * as context, an already reviewed `-` line is left out, and a hunk with
@@ -61,18 +62,83 @@ function splitHunks(patch: string): Hunk[] {
     return hunks;
 }
 
-/** Each change line with its hunk's section (the enclosing function, where
- *  the host gives one) and the context line right above it, so a change the
- *  rebase moved elsewhere in the file does not read as reviewed. */
+interface Scope {
+    indent: number;
+    text: string;
+}
+
+const indentOf = (content: string) =>
+    content.length - content.trimStart().length;
+
+/**
+ * Tracks, for one side of a hunk (new: context and `+`; old: context and `-`),
+ * the lines that open the scopes around the current line: each kept line is
+ * less indented than the one after it.
+ */
+class ScopeStack {
+    private readonly stack: Scope[] = [];
+
+    constructor(private readonly outer: string) {}
+
+    /** The scope enclosing `content`, which then becomes a candidate itself. */
+    enter(content: string): string {
+        if (!content.trim()) return this.top();
+        const indent = indentOf(content);
+        while (
+            this.stack.length &&
+            this.stack[this.stack.length - 1].indent >= indent
+        ) {
+            this.stack.pop();
+        }
+        const scope = this.top();
+        this.stack.push({ indent, text: content.trim() });
+        return scope;
+    }
+
+    private top(): string {
+        return this.stack.length
+            ? this.stack[this.stack.length - 1].text
+            : this.outer;
+    }
+}
+
+/** Each change line keyed on where it sits: the scope it is in (the nearest
+ *  line of the hunk above it that is less indented, else the header's
+ *  section, which Git takes from before the hunk), and the context lines
+ *  right above and below its run of changes. A change the rebase moved
+ *  elsewhere in the file then does not read as reviewed. */
 function changesOf(hunks: Hunk[]): string[] {
     const changes: string[] = [];
     for (const hunk of hunks) {
+        const { lines } = hunk;
         const section = hunk.header.match(HUNK_HEADER)?.[3]?.trim() ?? '';
+        const added = new ScopeStack(section);
+        const removed = new ScopeStack(section);
         let above = '';
-        for (const line of hunk.lines) {
-            if (isChange(line))
-                changes.push(`${section}\u0000${above}\u0000${line}`);
-            else if (!line.startsWith('\\')) above = line;
+        for (let i = 0; i < lines.length; i++) {
+            if (!isChange(lines[i])) {
+                if (lines[i].startsWith('\\')) continue;
+                above = lines[i];
+                added.enter(above.slice(1));
+                removed.enter(above.slice(1));
+                continue;
+            }
+            let end = i;
+            while (
+                end < lines.length &&
+                (isChange(lines[end]) || lines[end].startsWith('\\'))
+            ) {
+                end++;
+            }
+            const below = lines[end] ?? '';
+            for (let k = i; k < end; k++) {
+                const line = lines[k];
+                if (!isChange(line)) continue;
+                const side = line.startsWith('+') ? added : removed;
+                const scope = side.enter(line.slice(1));
+                changes.push([scope, above, below, line].join('\u0000'));
+            }
+            i = end - 1;
         }
     }
     return changes;

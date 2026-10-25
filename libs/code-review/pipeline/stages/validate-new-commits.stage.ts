@@ -178,19 +178,27 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                     },
                 });
 
-                // `--force` and `-v <agent>` ask for the whole PR.
+                // `--force` and `-v <agent>` ask for the whole PR. A PR retargeted
+                // since the last review cannot be compared: its earlier diff
+                // would be read against the new base branch.
+                const reviewedBaseBranch =
+                    lastExecution?.dataExecution?.reviewedBaseBranch;
+                const retargeted =
+                    !!reviewedBaseBranch &&
+                    reviewedBaseBranch !== context.pullRequest?.base?.ref;
                 let interdiff: Awaited<
                     ReturnType<IPullRequestManagerService['getRebaseInterdiff']>
                 > = null;
                 try {
-                    interdiff = forceFullRerun
-                        ? null
-                        : await this.pullRequestHandlerService.getRebaseInterdiff(
-                              context.organizationAndTeamData,
-                              context.repository,
-                              context.pullRequest,
-                              lastCommitSha,
-                          );
+                    interdiff =
+                        forceFullRerun || retargeted
+                            ? null
+                            : await this.pullRequestHandlerService.getRebaseInterdiff(
+                                  context.organizationAndTeamData,
+                                  context.repository,
+                                  context.pullRequest,
+                                  lastCommitSha,
+                              );
                 } catch (error) {
                     // A full review would hit the throttled host harder; skip
                     // like a rate-limited commit fetch does.
@@ -221,6 +229,11 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 if (forceFullRerun) {
                     orphanedBaseCommit.interdiff = {
                         fallback: 'full_review_requested',
+                    };
+                } else if (retargeted) {
+                    forceFullRerun = true;
+                    orphanedBaseCommit.interdiff = {
+                        fallback: 'base_branch_changed',
                     };
                 } else if (!interdiff) {
                     forceFullRerun = true;

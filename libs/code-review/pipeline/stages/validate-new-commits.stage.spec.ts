@@ -508,6 +508,62 @@ describe('ValidateNewCommitsStage', () => {
                 expect(result.pipelineMetadata?.forceFullRerun).not.toBe(true);
             });
 
+            it('reviews the whole PR when it was retargeted since the last review', async () => {
+                // The earlier diff would be read against the new base branch,
+                // and commits only the old base had would read as reviewed.
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                            reviewedBaseBranch: 'develop',
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+                context.pullRequest = {
+                    ...context.pullRequest,
+                    base: { ref: 'main' },
+                } as any;
+
+                const result = await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).not.toHaveBeenCalled();
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+                expect(result.orphanedBaseCommit?.interdiff).toEqual({
+                    fallback: 'base_branch_changed',
+                });
+            });
+
+            it('compares as usual when the base branch is the one last reviewed', async () => {
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                            reviewedBaseBranch: 'main',
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+                context.pullRequest = {
+                    ...context.pullRequest,
+                    base: { ref: 'main' },
+                } as any;
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).toHaveBeenCalled();
+            });
+
             it('records the fallback on orphanedBaseCommit when the earlier diff is unreadable', async () => {
                 orphan();
 
