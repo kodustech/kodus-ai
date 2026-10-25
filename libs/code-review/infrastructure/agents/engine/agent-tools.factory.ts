@@ -1847,6 +1847,32 @@ fi
         );
     }
 
+    // EXPERIMENT: one log line per tool call (name, a short argument, result
+    // size, duration) so an eval run shows how the finder navigates.
+    for (const [name, tool] of Object.entries(tools) as Array<[string, any]>) {
+        const original = tool.execute;
+        tool.execute = async (args: any, ...rest: any[]) => {
+            const started = Date.now();
+            const result = await original(args, ...rest);
+            const text =
+                typeof result === 'string'
+                    ? result
+                    : JSON.stringify(result ?? '');
+            const arg = String(
+                args?.path ??
+                    args?.functionName ??
+                    args?.pattern ??
+                    args?.query ??
+                    '',
+            ).slice(0, 80);
+            logger.log({
+                message: `[TOOL-TRACE] ${name} ms=${Date.now() - started} chars=${text.length} range=${args?.startLine ?? ''}-${args?.endLine ?? ''} arg=${JSON.stringify(arg)} empty=${/not found|No outline|No graph|Error:/.test(text.slice(0, 120))}`,
+                context: 'agent-tools.factory',
+            });
+            return result;
+        };
+    }
+
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
         context: 'agent-tools.factory',
