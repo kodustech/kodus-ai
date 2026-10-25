@@ -1641,13 +1641,11 @@ fi
     // pages through files or greps for: where a symbol is, who calls it, what it
     // calls, which tests cover it, and the shape of a file before reading it.
     const GRAPH_JSON = '.kodus-graph/base-graph.json';
-    const KG = 'export PATH="$HOME/.bun/bin:$PATH" 2>/dev/null; kodus-graph';
+    const KG = 'kodus-graph';
     if (remoteCommands?.exec) {
         const run = async (cmd: string, max = 8000): Promise<string> => {
             try {
-                const { stdout } = await remoteCommands.exec!(
-                    `${cmd} 2>/dev/null`,
-                );
+                const { stdout } = await remoteCommands.exec!(cmd);
                 const out = (stdout || '').trim();
                 return out.length > max
                     ? `${out.slice(0, max)}\n... (truncated)`
@@ -1747,7 +1745,7 @@ fi
                             )
                             .join('\n') || '    (none found)';
                     parts.push(
-                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start}-${c.symbol.line_end}\n  signature: ${c.symbol.signature || ''}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
+                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start}-${c.symbol.line_end}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
                     );
                 }
                 return (
