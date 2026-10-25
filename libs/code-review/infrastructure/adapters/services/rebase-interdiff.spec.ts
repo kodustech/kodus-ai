@@ -90,7 +90,7 @@ describe('rebaseInterdiff', () => {
 
     it('shows lines already reviewed as context, like a normal push, when new lines join their block', () => {
         const before = hunk(
-            '@@ -7,3 +7,9 @@',
+            '@@ -7,3 +7,9 @@ export function available()',
             ' }',
             '+',
             '+function reserve() {',
@@ -244,6 +244,50 @@ describe('rebaseInterdiff', () => {
 
         expect(result.files).toHaveLength(1);
         expect(result.files[0].patch).toBe(after);
+    });
+
+    it('reviews a change moved to another function under the same blank line', () => {
+        // The context line above is blank in both places; the hunk header's
+        // section (the enclosing function, on GitHub and GitLab) tells them
+        // apart.
+        const previous = [
+            file(
+                'src/auth.ts',
+                hunk(
+                    '@@ -10,4 +10,5 @@ export function updateProfile(user) {',
+                    '   const input = parse(user);',
+                    ' ',
+                    '+  assertOwner(user);',
+                    '   return save(input);',
+                ),
+            ),
+        ];
+        const current = [
+            file(
+                'src/auth.ts',
+                hunk(
+                    '@@ -40,4 +40,5 @@ export function deleteAccount(user) {',
+                    '   const input = parse(user);',
+                    ' ',
+                    '+  assertOwner(user);',
+                    '   return remove(input);',
+                ),
+            ),
+        ];
+
+        expect(rebaseInterdiff(current, previous).unchangedFiles).toEqual([]);
+    });
+
+    it('still matches a change whose hunk header carries no section', () => {
+        const before = hunk('@@ -1,2 +1,3 @@', ' a', '+b');
+        const after = hunk('@@ -30,2 +30,3 @@', ' a', '+b');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.unchangedFiles).toEqual(['src/a.ts']);
     });
 
     it('reviews a change again when the line right above it changed', () => {
