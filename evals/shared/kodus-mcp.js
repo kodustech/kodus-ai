@@ -106,7 +106,7 @@ async function startKodusMcp({ storedConfig = null } = {}) {
             return entity(saved, IssuesEntity);
         },
         findById: async (uuid) => entity(db.issues.find((d) => d._id === uuid), IssuesEntity),
-        findByFilters: async (filter) => mapSimpleModelsToEntities(db.issues.filter((d) => matches(d, filter)).map(copy), IssuesEntity),
+        findByFilters: async (filter) => mapSimpleModelsToEntities(db.issues.filter((d) => matches(d, filter)).map(copy), IssuesEntity) ?? [],
         updateStatus: async (uuid, status) => {
             const saved = db.issues.find((d) => d._id === uuid);
             if (!saved) return null;
