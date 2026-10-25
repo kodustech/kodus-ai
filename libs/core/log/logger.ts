@@ -324,9 +324,6 @@ const SENSITIVE_SUFFIXES = [
 /** Names that end with a stem but carry no credential. */
 const NON_SECRET_SUFFIX_NAMES = new Set([
     'cancellationtoken',
-    'hastoken',
-    'pertoken',
-    'missingtoken',
     'keywordtoken',
     'colontoken',
     'equalsgreaterthantoken',
@@ -334,11 +331,29 @@ const NON_SECRET_SUFFIX_NAMES = new Set([
     'tstoken',
 ]);
 
+/**
+ * A flag about a credential, not the credential: `hasAuthToken`,
+ * `has_access_token`, `isSecret`, `requiresApiKey`, `usesToken`. The prefix
+ * must end at a word boundary (a capital or `_` / `-`), so `issuerToken` or
+ * `userToken` still count as credentials.
+ */
+const FLAG_PREFIX = /^(?:has|is|missing|requires|uses)(?:[A-Z]|[_-])/;
+const FLAG_PREFIX_SEPARATED = /^(?:has|is|missing|requires|uses)[_-]/i;
+
+/** Prices such as `inputCostPerToken` end with a stem but are numbers. */
+const PER_TOKEN_SUFFIX = 'pertoken';
+
 function isSensitiveName(name: string): boolean {
     const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (SENSITIVE_KEYS.has(normalized)) return true;
     if (NON_SECRET_SUFFIX_NAMES.has(normalized)) return false;
-    return SENSITIVE_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+    if (!SENSITIVE_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) {
+        return false;
+    }
+    if (FLAG_PREFIX.test(name) || FLAG_PREFIX_SEPARATED.test(name)) {
+        return false;
+    }
+    return !normalized.endsWith(PER_TOKEN_SUFFIX);
 }
 
 /**

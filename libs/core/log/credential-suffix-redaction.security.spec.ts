@@ -27,6 +27,8 @@ describe('log redaction — credential names by suffix', () => {
         'GITHUB_TOKEN',
         'API_GITHUB_PRIVATE_KEY',
         'API_GITHUB_CLIENT_SECRET',
+        'issuerToken',
+        'userToken',
     ];
 
     it.each(leakedBefore)('redacts %s at any depth', (key) => {
@@ -49,6 +51,22 @@ describe('log redaction — credential names by suffix', () => {
         };
 
         expect(deepSanitize({ usage })).toEqual({ usage });
+    });
+
+    it.each([
+        ['hasAuthToken', true],
+        ['has_access_token', true],
+        ['hasValidToken', false],
+        ['isSecret', true],
+        ['requiresApiKey', true],
+        ['usesToken', false],
+        ['missingToken', true],
+        ['inputCostPerToken', 0.000003],
+        ['outputCostPerToken', 0.000015],
+    ])('keeps the flag or price %s visible', (key, value) => {
+        expect(deepSanitize({ diagnostics: { [key]: value } })).toEqual({
+            diagnostics: { [key]: value },
+        });
     });
 
     it('redacts suffix-matched names inside strings too', () => {
