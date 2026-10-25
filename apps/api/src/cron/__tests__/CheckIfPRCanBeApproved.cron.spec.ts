@@ -1532,6 +1532,44 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         }
     });
 
+    it.each([
+        ['empty', []],
+        ['missing', null],
+    ])('explains why approval is held when the provider returns %s files', async (_label, files) => {
+        const { cron, deps } = makeCron();
+        deps.parametersService.findOne.mockResolvedValue({
+            team: { uuid: 'team-1' },
+            configValue: {
+                repositories: [
+                    {
+                        id: 'repo-a',
+                        name: 'Repo A',
+                        directories: [{ path: 'src/auth', configs: {} }],
+                    },
+                ],
+            },
+        });
+        deps.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId.mockResolvedValue(
+            [{ repositoryId: 'repo-a', pullRequestNumber: 1 }],
+        );
+        deps.pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [makeOpenPr(1, 'repo-a')],
+        );
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(files);
+        const shouldApprove = jest.spyOn(cron as any, 'shouldApprovePR');
+
+        await cron.handleCron();
+
+        expect(shouldApprove).not.toHaveBeenCalled();
+        expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('returned no changed files'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
     it("approves none of a repository's PRs when its config turns approval off", async () => {
         const { cron, deps } = makeCron();
 

@@ -687,7 +687,24 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 );
                                             }
                                         }
-                                        if (!files?.length) return;
+                                        if (!files?.length) {
+                                            await this.postConditionalApprovalReason(
+                                                {
+                                                    organizationAndTeamData,
+                                                    repository: {
+                                                        id: repository.id,
+                                                        name: repository.name,
+                                                    },
+                                                    prNumber: pr.number,
+                                                },
+                                                pr.provider as PlatformType,
+                                                {
+                                                    kind: 'hold',
+                                                    reason: 'The Git provider returned no changed files for this PR. Automatic approval is on hold until the file list can be verified.',
+                                                },
+                                            );
+                                            return;
+                                        }
                                         resolvedConfig =
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
