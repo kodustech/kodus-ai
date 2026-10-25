@@ -1332,26 +1332,27 @@ export class CheckIfPRCanBeApprovedCronProvider {
             if (typeof commentId === 'number') {
                 const previous =
                     existing?.body ?? existing?.note ?? existing?.content;
-                if (previous === body) return;
-                operation = 'updateIssueComment';
-                const updatedComment = await runWithBoundedTimeout(
-                    this.codeManagementService.updateIssueComment(
-                        {
-                            ...request,
-                            body,
-                            commentId,
-                            noteId: commentId,
-                            threadId: existing?.threadId,
-                        },
-                        platformType,
-                    ),
-                    APPROVAL_REASON_WRITE_TIMEOUT_MS,
-                    'conditional approval comment update',
-                );
-                if (updatedComment === null) {
-                    throw new Error(
-                        'Conditional approval comment update returned null',
+                if (previous !== body) {
+                    operation = 'updateIssueComment';
+                    const updatedComment = await runWithBoundedTimeout(
+                        this.codeManagementService.updateIssueComment(
+                            {
+                                ...request,
+                                body,
+                                commentId,
+                                noteId: commentId,
+                                threadId: existing?.threadId,
+                            },
+                            platformType,
+                        ),
+                        APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                        'conditional approval comment update',
                     );
+                    if (updatedComment === null) {
+                        throw new Error(
+                            'Conditional approval comment update returned null',
+                        );
+                    }
                 }
             } else {
                 operation = 'createIssueComment';
@@ -1369,6 +1370,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                 }
             }
+            await this.recordApprovalReasonDelivery(request, null);
         } catch (error) {
             this.logger.warn({
                 message: 'Could not post conditional approval reason',
@@ -1381,6 +1383,53 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     operation,
                     lookupTimeoutMs: APPROVAL_REASON_LOOKUP_TIMEOUT_MS,
                     writeTimeoutMs: APPROVAL_REASON_WRITE_TIMEOUT_MS,
+                },
+            });
+            await this.recordApprovalReasonDelivery(request, {
+                decision: decision.kind === 'approve' ? 'approve' : 'hold',
+                reason: decision.reason,
+                occurredAt: new Date().toISOString(),
+            });
+        }
+    }
+
+    private async recordApprovalReasonDelivery(
+        request: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id: string; name: string };
+            prNumber: number;
+        },
+        failure: {
+            decision: 'hold' | 'approve';
+            reason: string;
+            occurredAt: string;
+        } | null,
+    ): Promise<void> {
+        try {
+            const pullRequest =
+                await this.pullRequestService.findByNumberAndRepositoryId(
+                    request.prNumber,
+                    request.repository.id,
+                    request.organizationAndTeamData,
+                );
+            if (!pullRequest) return;
+            if (!failure && !pullRequest.approvalReasonDeliveryFailure) return;
+            const updated = await this.pullRequestService.update(pullRequest, {
+                approvalReasonDeliveryFailure: failure,
+            });
+            if (!updated) {
+                throw new Error('Pull request delivery status update returned no result');
+            }
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Could not persist conditional approval delivery status',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: request.organizationAndTeamData,
+                    repositoryId: request.repository.id,
+                    prNumber: request.prNumber,
                 },
             });
         }

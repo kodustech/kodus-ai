@@ -52,6 +52,11 @@ export interface SuggestionCountsBySeverity {
 
 export interface IPullRequests {
     uuid?: string;
+    approvalReasonDeliveryFailure?: {
+        decision: 'hold' | 'approve';
+        reason: string;
+        occurredAt: string;
+    } | null;
     title: string;
     status: string;
     merged: boolean;

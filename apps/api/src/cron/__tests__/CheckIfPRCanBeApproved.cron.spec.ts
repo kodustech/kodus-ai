@@ -3,6 +3,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { formatApprovalReasonComment } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -51,6 +52,8 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         } as any;
 
         const pullRequestService = {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+            update: jest.fn().mockResolvedValue({ uuid: 'pr-7' }),
             findPullRequestsWithDeliveredSuggestions: jest
                 .fn()
                 .mockResolvedValue([]),
@@ -479,6 +482,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
     it('does not create a reason comment when the provider lookup fails', async () => {
         const { cron, deps } = makeCron();
+        const savedPr = { uuid: 'pr-7', approvalReasonDeliveryFailure: null };
+        deps.pullRequestService.findByNumberAndRepositoryId.mockResolvedValue(
+            savedPr,
+        );
         deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
             null,
         );
@@ -512,6 +519,62 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 }),
             }),
         );
+        expect(deps.pullRequestService.update).toHaveBeenCalledWith(savedPr, {
+            approvalReasonDeliveryFailure: {
+                decision: 'hold',
+                reason: 'A person should review this.',
+                occurredAt: expect.any(String),
+            },
+        });
+    });
+
+    it('clears a prior delivery failure when the reason is already on the PR', async () => {
+        const { cron, deps } = makeCron();
+        const savedPr = {
+            uuid: 'pr-7',
+            approvalReasonDeliveryFailure: {
+                decision: 'hold',
+                reason: 'A person should review this.',
+                occurredAt: '2026-10-24T00:00:00.000Z',
+            },
+        };
+        deps.pullRequestService.findByNumberAndRepositoryId.mockResolvedValue(
+            savedPr,
+        );
+        deps.codeManagementService.getAllCommentsInPullRequest.mockResolvedValue(
+            [
+                {
+                    id: 42,
+                    body: formatApprovalReasonComment(
+                        'hold',
+                        'A person should review this.',
+                    ),
+                },
+            ],
+        );
+
+        await (cron as any).postConditionalApprovalReason(
+            {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'api' },
+                prNumber: 7,
+            },
+            PlatformType.GITHUB,
+            { kind: 'hold', reason: 'A person should review this.' },
+        );
+
+        expect(
+            deps.codeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.updateIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(deps.pullRequestService.update).toHaveBeenCalledWith(savedPr, {
+            approvalReasonDeliveryFailure: null,
+        });
     });
 
     it('uses the provider numeric note ID when its primary ID is opaque', async () => {
