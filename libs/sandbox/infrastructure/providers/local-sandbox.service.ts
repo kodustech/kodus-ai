@@ -697,10 +697,12 @@ export class LocalSandboxService implements ISandboxProvider {
                     // keeps POSIX absolute paths blocked even when running on
                     // Windows (defense in depth).
                     const hasTraversal = args.some(
-                        (a) =>
-                            isAbsolute(a) ||
+                        (a, i) =>
+                            // A graph search pattern (`/^name$/`) is not a path.
+                            !(program === 'kodus-graph' && args[i - 1] === '--query') &&
+                            (isAbsolute(a) ||
                             a.startsWith('/') ||
-                            /(^|[/\\])\.\.($|[/\\])/.test(a),
+                            /(^|[/\\])\.\.($|[/\\])/.test(a)),
                     );
                     if (hasTraversal) {
                         return {
