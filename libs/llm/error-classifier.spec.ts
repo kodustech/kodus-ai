@@ -133,6 +133,32 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Google AI Studio words a per-minute token limit like a spent quota:
+        // "You exceeded your current quota". Only the quota id says which.
+        const googleQuota = (quotaId: string) =>
+            'You exceeded your current quota, please check your plan and billing details. ' +
+            `Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count, limit: 2000000, model: gemini-3.8-flash quotaId: ${quotaId} Please retry in 41s.`;
+
+        it('reads a Google per-minute token quota on a 429 as RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                googleQuota('GenerateContentPaidTierInputTokensPerModelPerMinute'),
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
+        it('keeps a Google daily quota on a 429 as QUOTA_EXCEEDED', () => {
+            const err = errorWithStatus(
+                googleQuota('GenerateRequestsPerDayPerProjectPerModel-FreeTier'),
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
         it.each([500, 502, 503, 504])('maps %i → TRANSIENT', (status) => {
             const err = errorWithStatus('upstream error', status);
             expect(classifyLLMError(err).category).toBe(
