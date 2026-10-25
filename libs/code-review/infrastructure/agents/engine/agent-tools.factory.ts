@@ -1709,7 +1709,7 @@ fi
                     ? q.split('.').slice(-2, -1)[0]
                     : '';
                 const raw = await run(
-                    `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(short)} --limit 20`,
+                    `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(`/^${short.replace(/[^\w$]/g, '')}$/`)} --limit 50`,
                     200000,
                 );
                 let results: any[] = [];
@@ -1832,7 +1832,7 @@ fi
         }
         async function graphNote(name: string): Promise<string> {
             const raw = await run(
-                `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(name)} --limit 20`,
+                `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(`/^${name}$/`)} --limit 50`,
                 200000,
             );
             let defs: any[] = [];
