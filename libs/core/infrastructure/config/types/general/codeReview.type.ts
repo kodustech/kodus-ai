@@ -37,7 +37,6 @@ import {
     ReviewModeResponse,
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
-import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
@@ -96,9 +95,7 @@ export type AnalysisContext<TPullRequest = any> = {
     baseDir?: string;
     correlationId?: string;
     reviewModeResponse?: ReviewModeResponse;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
     fileChangeContext?: FileChangeContext;
-    clusterizedSuggestions?: IClusterizedSuggestion[];
     validCrossFileSuggestions?: CodeSuggestion[];
     /** External file content and metadata loaded by PromptContextLoader. */
     externalPromptContext?: any;
@@ -663,13 +660,43 @@ export type ImplementedSuggestionsToAnalyze = {
     existingCode: string;
 };
 
+/**
+ * Business Logic settings as stored. Primitives and arrays only, so the
+ * settings form tracks the level (global, repository, directory) per field.
+ */
+export type BusinessLogicConfig = {
+    /** `auto`, or the integration id of the connected plugin to read tasks from. */
+    taskSource?: string;
+    /** For a custom plugin: the tool that reads one task by its id. */
+    taskSourceTool?: string;
+    /**
+     * How the team writes a task id the built-in shapes miss (`sc-123`,
+     * `T1234`). A regex; its first group, when it has one, is the id.
+     */
+    taskIdPattern?: string;
+    criteriaLocation?: 'auto' | 'heading' | 'field';
+    /** The heading the criteria sit under, when `criteriaLocation` is `heading`. */
+    criteriaHeading?: string;
+    /** The field the criteria live in, when `criteriaLocation` is `field`. */
+    criteriaField?: string;
+    teamGuidance?: string;
+    commentWhenMet?: boolean;
+    /**
+     * When the automatic review checks a PR again after a push: while the
+     * last check failed (default), on every push, or only on request.
+     */
+    recheckOn?: 'failing' | 'push' | 'request';
+    /** A PR that references no task fails instead of being skipped. */
+    requireTask?: boolean;
+};
+
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
-    /** HEAVY mode — extra critic pass in the finder for more recall. Opt-in per
-     *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
-    heavy?: boolean;
     reviewOptions: ReviewOptions;
+
+    /** How the PR is checked against the task it references (Business Logic). */
+    businessLogic?: BusinessLogicConfig;
 
     /**
      * Deterministic evidence sources. Off by default: reading a customer's CI
@@ -703,13 +730,16 @@ export type CodeReviewConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    // Pause rules Cockpit labels ignored or noisy (daily analytics cron).
+    kodyRulesAutoPauseEnabled?: boolean;
     // Provider-native user ids whose review comments are EXCLUDED when learning
     // Kody Rules from past reviews. Denylist: empty/absent = learn from everyone.
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: KodyKnowledgeApprovalConfig;
     reviewModeConfig?: ReviewModeConfig;
-    ideRulesSyncEnabled?: boolean;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
+    // Reviews read the repo's coding-agent instructions (CLAUDE.md, AGENTS.md,
+    // .cursor/rules, ...). It never imports those files as Kody Rules.
+    repoInstructionsEnabled?: boolean;
     configLevel?: ConfigLevel;
     directoryId?: string;
     directoryPath?: string;
@@ -860,10 +890,6 @@ export type KodusConfigFile = DeepPartial<
         | 'errorReviewMessage'
         | 'globalSettings'
     >;
-};
-
-export type KodyFineTuningConfig = {
-    enabled: boolean;
 };
 
 export type ReviewCadence = {

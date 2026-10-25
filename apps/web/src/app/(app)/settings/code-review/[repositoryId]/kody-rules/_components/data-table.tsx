@@ -72,8 +72,6 @@ type KodyRulesDataTableProps = {
     rules: KodyRuleWithInheritanceDetails[];
     variant: KodyRulesTableVariant;
     context: KodyRuleRowContext;
-    /** Repo's `ideRulesSyncEnabled`; forwarded to each row. */
-    syncEnabledForRepo?: boolean;
     /** Rule open in the detail sheet (highlighted row). */
     activeRuleId?: string | null;
     /** Row click → open in the detail sheet. */
@@ -99,7 +97,6 @@ export const KodyRulesDataTable = ({
     rules,
     variant,
     context,
-    syncEnabledForRepo,
     activeRuleId,
     onSelectRule,
     sortOption,
@@ -275,7 +272,6 @@ export const KodyRulesDataTable = ({
                                           }
                                         : undefined
                                 }
-                                syncEnabledForRepo={syncEnabledForRepo}
                                 active={
                                     !!rule.uuid && rule.uuid === activeRuleId
                                 }

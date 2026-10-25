@@ -694,7 +694,10 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
     }
 
     async disconnect(): Promise<void> {
-        if (!this.connected) return;
+        if (!this.connected) {
+            this.sessionManager.destroy();
+            return;
+        }
 
         try {
             await this.client.close();
@@ -1753,6 +1756,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             clearInterval(this.metricsIntervalId);
             this.metricsIntervalId = undefined;
         }
+        this.sessionManager.destroy();
 
         this.sessionManager?.destroy();
         this.sessionManager = undefined;

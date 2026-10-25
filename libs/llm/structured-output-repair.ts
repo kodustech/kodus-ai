@@ -256,6 +256,162 @@ export function repairJsonText(text: string): string | null {
     return candidate;
 }
 
+/** Above this size a broken payload is not worth a character scan (#2112). */
+const SALVAGE_MAX_CHARS = 1_000_000;
+
+/**
+ * Make the string literals of almost-JSON legal: raw control characters
+ * (a newline inside code) become escapes, `\'` becomes `'`, and any other
+ * backslash that does not start a JSON escape is doubled. Text outside string
+ * literals is left as is.
+ */
+function escapeStringLiterals(s: string): string {
+    let out = '';
+    let inStr = false;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (!inStr) {
+            if (ch === '"') inStr = true;
+            out += ch;
+            continue;
+        }
+        if (ch === '"') {
+            inStr = false;
+            out += ch;
+        } else if (ch === '\\') {
+            const next = s[i + 1];
+            if (next === "'") {
+                out += "'";
+                i++;
+            } else if (
+                next !== undefined &&
+                ('"\\/bfnrt'.includes(next) ||
+                    (next === 'u' &&
+                        /^[0-9a-fA-F]{4}$/.test(s.slice(i + 2, i + 6))))
+            ) {
+                out += ch + next;
+                i++;
+            } else {
+                out += '\\\\';
+            }
+        } else if (ch < ' ') {
+            out +=
+                ch === '\n'
+                    ? '\\n'
+                    : ch === '\r'
+                      ? '\\r'
+                      : ch === '\t'
+                        ? '\\t'
+                        : `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+
+function tryParse(s: string): { ok: true; value: unknown } | { ok: false } {
+    try {
+        return { ok: true, value: JSON.parse(s) };
+    } catch {
+        return { ok: false };
+    }
+}
+
+/**
+ * {@link tryParse}, then once more without the commas that sit before a `}` or
+ * `]` outside string literals. A comma inside a string (code such as
+ * `f(a, )`) is the value itself and stays.
+ */
+function tryParseLenient(
+    s: string,
+): { ok: true; value: unknown } | { ok: false } {
+    const exact = tryParse(s);
+    if (exact.ok) return exact;
+    let out = '';
+    let inStr = false;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (ch === '\\') {
+                out += ch + (s[i + 1] ?? '');
+                i++;
+                continue;
+            }
+            if (ch === '"') inStr = false;
+        } else if (ch === '"') {
+            inStr = true;
+        } else if (ch === ',' && /^\s*[}\]]/.test(s.slice(i + 1))) {
+            continue;
+        }
+        out += ch;
+    }
+    return out === s ? exact : tryParse(out);
+}
+
+/**
+ * Model-free salvage of a payload `JSON.parse` rejected (#2112). Non-strict
+ * models send findings as JSON text with unescaped characters inside code, a
+ * stray `}` after the array, or a break halfway through. Tried in order:
+ *
+ *  1. escape the string literals ({@link escapeStringLiterals});
+ *  2. keep the leading complete value and drop the text after it;
+ *  3. keep the complete array items before the break — the array is the text
+ *     itself when it starts with `[`, else the one under `"<arrayKey>": [`.
+ *
+ * Only values that parse whole are kept; a half-written item is never patched.
+ * Returns the value and the step that produced it, or undefined.
+ */
+export function salvageJsonText(
+    text: string,
+    arrayKey?: string,
+): { value: unknown; reason: string } | undefined {
+    if (typeof text !== 'string' || text.length > SALVAGE_MAX_CHARS) {
+        return undefined;
+    }
+    const raw = text.trim();
+    const s = escapeStringLiterals(raw);
+
+    if (s !== raw) {
+        const whole = tryParse(s);
+        if (whole.ok) return { value: whole.value, reason: 'salvaged-escaped' };
+    }
+
+    const leading = sliceBalancedJson(s);
+    if (leading && leading !== s) {
+        const head = tryParseLenient(leading);
+        if (head.ok) {
+            return { value: head.value, reason: 'salvaged-leading-value' };
+        }
+    }
+
+    let start = -1;
+    if (s.startsWith('[')) {
+        start = 0;
+    } else if (arrayKey) {
+        const m = new RegExp(`"${arrayKey}"\\s*:\\s*\\[`).exec(s);
+        if (m) start = m.index + m[0].length - 1;
+    }
+    if (start < 0) return undefined;
+    const items: unknown[] = [];
+    let i = start + 1;
+    while (i < s.length) {
+        while (i < s.length && /[\s,]/.test(s[i])) i++;
+        if (s[i] !== '{') break;
+        const slice = sliceBalancedJson(s.slice(i));
+        if (!slice) break;
+        const item = tryParseLenient(slice);
+        if (!item.ok) break;
+        items.push(item.value);
+        i += slice.length;
+    }
+    if (items.length === 0) return undefined;
+    return {
+        value: start === 0 ? items : { [arrayKey as string]: items },
+        reason: 'salvaged-items',
+    };
+}
+
 /**
  * Extract the JSON out of `rawText` (clean, fenced, or prose-wrapped), then
  * validate it against `wire` (the same schema `Output.object` used). Returns the
@@ -340,6 +496,37 @@ function locateKey(
 }
 
 /**
+ * The array a string-valued target key holds as JSON text, or undefined when
+ * the text is not one. A parsed object that carries the key itself (the model
+ * stringified the whole envelope into the field) yields that inner array.
+ */
+function parseFieldText(
+    text: string,
+    key: string,
+    aliases: string[],
+    salvage: boolean,
+): { value: unknown[]; reason: string } | undefined {
+    const candidate = extractJsonFromText(text);
+    const direct = candidate != null ? tryParse(candidate) : null;
+    let out: unknown;
+    let reason: string;
+    if (direct?.ok) {
+        out = direct.value;
+        reason = 'parsed-field-string';
+    } else {
+        const salvaged = salvage ? salvageJsonText(text, key) : undefined;
+        if (!salvaged) return undefined;
+        out = salvaged.value;
+        reason = `${salvaged.reason}-field`;
+    }
+    if (out && typeof out === 'object' && !Array.isArray(out)) {
+        const inner = locateKey(out as Record<string, unknown>, key, aliases);
+        out = inner ? (out as Record<string, unknown>)[inner] : undefined;
+    }
+    return Array.isArray(out) ? { value: out, reason } : undefined;
+}
+
+/**
  * Coerce a parsed LLM value into the canonical `{ [key]: … }` shape when a
  * non-strict model wrapped, renamed, bare-arrayed, case-mangled, or stringified
  * it — the SHAPE mismatch layer {@link repairJsonText} explicitly does not touch
@@ -362,10 +549,16 @@ function locateKey(
  * so callers can log which model shape #1786 fired on. Not called on a no-op.
  *
  * `opts.liftEmptyArray` — by default a bare EMPTY array is a no-op (it carries
- * no data, so the finder path lets the caller's empty outcome stand). Set this
- * for a schema-envelope target where `{ [key]: [] }` is a VALID answer — e.g.
+ * no data). Set this for a target where `{ [key]: [] }` is a VALID answer — e.g.
  * the kody-rules shard's `[]` means "no violations", which must become
- * `{violations:[]}` (a clean pass) rather than fail the wire schema.
+ * `{violations:[]}` (a clean pass) rather than fail the wire schema, and the
+ * finder's `[]` means it found nothing (#2112).
+ *
+ * `opts.salvage` — when the payload or the target key is JSON text that does
+ * not parse, keep what {@link salvageJsonText} can read whole (#2112). Off by
+ * default: a caller that treats a broken response as a failure keeps doing so.
+ * The reason it reports starts with `salvaged-`, so a caller can tell a cut
+ * payload from a whole one.
  */
 export function normalizeEnvelope(
     value: unknown,
@@ -374,6 +567,7 @@ export function normalizeEnvelope(
     opts: {
         scalar?: boolean;
         liftEmptyArray?: boolean;
+        salvage?: boolean;
         onRecover?: (reason: string) => void;
     } = {},
 ): unknown {
@@ -381,17 +575,19 @@ export function normalizeEnvelope(
     let reason = '';
 
     // 0. stringified JSON — parse it, then normalize the result.
+    //    Text JSON.parse rejects goes through the salvage (#2112) when the
+    //    caller opts in; everyone else keeps the original.
     if (typeof v === 'string') {
         const candidate = extractJsonFromText(v);
-        if (candidate != null) {
-            try {
-                v = JSON.parse(candidate);
-                reason = 'parsed-stringified-json';
-            } catch {
-                return value; // not JSON after all → hand back the original.
-            }
+        const parsed = candidate != null ? tryParse(candidate) : null;
+        if (parsed?.ok) {
+            v = parsed.value;
+            reason = 'parsed-stringified-json';
         } else {
-            return value;
+            const salvaged = opts.salvage ? salvageJsonText(v, key) : undefined;
+            if (!salvaged) return value; // not JSON after all → hand back the original.
+            v = salvaged.value;
+            reason = salvaged.reason;
         }
     }
 
@@ -406,6 +602,25 @@ export function normalizeEnvelope(
         if (locateKey(obj, key, aliases)) {
             break;
         } // already canonical-ish.
+        // A tool call written out as data — `{name, parameters}` or
+        // `{name, arguments}`, the arguments possibly as JSON text (#2112).
+        const argsKey =
+            !opts.scalar && typeof obj.name === 'string'
+                ? ['parameters', 'arguments'].find((k) => k in obj)
+                : undefined;
+        if (argsKey !== undefined) {
+            let args = obj[argsKey];
+            if (typeof args === 'string') {
+                const p = tryParse(args);
+                args = p.ok ? p.value : undefined;
+            }
+            if (!args || typeof args !== 'object') {
+                break;
+            }
+            v = args;
+            reason = 'unwrapped-tool-call';
+            continue;
+        }
         // Only descend into a KNOWN, named wrapper key — never guess by "the
         // object has a single key", which would falsely unwrap real payloads
         // (e.g. a provider envelope `{choices:[{message:{content}}]}` is NOT the
@@ -452,10 +667,24 @@ export function normalizeEnvelope(
     if (v && typeof v === 'object') {
         const obj = v as Record<string, unknown>;
         const found = locateKey(obj, key, aliases);
-        if (found && found !== key) {
-            const { [found]: hit, ...rest } = obj;
-            opts.onRecover?.(`aliased-${found}`);
-            return { ...rest, [key]: hit };
+        if (found) {
+            let hit = obj[found];
+            // The located key holds the payload as JSON text (#2112): parse
+            // it, for an array-valued target only.
+            const fromText =
+                !opts.scalar && typeof hit === 'string'
+                    ? parseFieldText(hit, key, aliases, !!opts.salvage)
+                    : undefined;
+            if (fromText) hit = fromText.value;
+            if (found !== key || fromText) {
+                const { [found]: _drop, ...rest } = obj;
+                opts.onRecover?.(
+                    [found !== key && `aliased-${found}`, fromText?.reason]
+                        .filter(Boolean)
+                        .join('+'),
+                );
+                return { ...rest, [key]: hit };
+            }
         }
     }
 

@@ -112,16 +112,12 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
 
     it('persists when the context (incl. pullRequest) is Immer-frozen (regression)', async () => {
         // In production the pipeline context is Immer-frozen (auto-freeze)
-        // after any earlier stage's produce(). The stage stamped the resolved
-        // heavy flag via direct mutation — `pullRequest.heavy = …` — which
-        // threw "Cannot assign to read only property 'heavy'" BEFORE
-        // aggregateAndSaveDataStructure on every review: comments were
-        // posted, but no suggestion was ever persisted (found live in QA,
-        // broken env-wide since the heavy-mode rollout). Same failure class
-        // as the context.heavy write fixed in agent-review.stage (#1522).
-        // baseContext() is frozen now, so this reads like every other test —
-        // which is the point: the guard is the default, not this one case.
-        await stage.execute(baseContext({ heavy: true } as any));
+        // after any earlier stage's produce(). A direct write to it (once
+        // `pullRequest.heavy = …`, c886e369a) threw before
+        // aggregateAndSaveDataStructure: comments were posted, but no
+        // suggestion was persisted. baseContext() is frozen, so the guard is
+        // the default, not this one case.
+        await stage.execute(baseContext());
 
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,
@@ -130,7 +126,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             mockPullRequestService.aggregateAndSaveDataStructure.mock
                 .calls[0][0];
         expect(savedPullRequest.number).toBe(99);
-        expect(savedPullRequest.heavy).toBe(true);
     });
 
     it('still persists when validSuggestions=0 but discardedSuggestions has items (regression for the prior happy path)', async () => {

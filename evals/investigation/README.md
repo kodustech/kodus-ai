@@ -54,7 +54,14 @@ PR, which trip when the engine breaks rather than when recall wobbles.
 - `RECALL_CATEGORIES=bug,security`: the team's category toggles.
 - `RECALL_REASONING_EFFORT=<effort>`: the model through a stored BYOK config with
   that effort.
-- `RECALL_DUMP=<dir>`: the agent's raw output per case.
+- `RECALL_DUMP=<dir>`: the agent's raw output per case, including the findings
+  the verifier refuted (`trace.droppedByVerify`).
+- `RECALL_REPO_INSTRUCTIONS=<file>`: each case's target branch holds the
+  coding-agent instruction files listed for it in `<file>`
+  (`build-repo-instructions.ts` writes it: `--at=base` each PR's base commit,
+  `--at=pinned` the commits in `repo-instructions-pins.json`). The review reads
+  them only with the setting on:
+  `--team-config=evals/repo-instructions/team-config.json`.
 - `--no-judge`: run the review and save its findings (`.submission.json`) for
   `rejudge.js` or `evals/scorer`.
 

@@ -449,6 +449,100 @@ describe('AgentReviewStage — dedup LLM.run contract (#1786)', () => {
             expect(runSpy).not.toHaveBeenCalled();
         });
     });
+
+    /**
+     * A first answer that leaves suggestions out sends them back in a second
+     * call (DEDUP_FOLLOWUP_SCHEMA). Run through dedupSuggestionStreams, the
+     * path the review and the dedup evals take.
+     */
+    describe('follow-up for left-out suggestions', () => {
+        const streams = (stage: AgentReviewStage, suggestions: any[]) =>
+            (stage as any).dedupSuggestionStreams(
+                suggestions,
+                7,
+                { codeReviewConfig: { resolvedModelSlot: slot } },
+                telemetryMeta,
+            ) as Promise<{ deduped: any[]; dedupTrace: any }>;
+
+        // [1] is left out of the first answer; the follow-up joins it with [0].
+        const firstAnswer = { groups: [], unique: [0, 2] };
+        const joined = { assignments: [{ index: 1, joinWith: 0 }] };
+
+        it('joins a left-out duplicate the follow-up assigns', async () => {
+            runSpy = jest
+                .spyOn(LLM, 'run')
+                .mockResolvedValueOnce(firstAnswer as any)
+                .mockResolvedValueOnce(joined as any);
+
+            const out = await streams(makeStage(), [
+                dupA(),
+                dupB(),
+                distinctX(),
+            ]);
+
+            expect(runSpy).toHaveBeenCalledTimes(2);
+            expect(runSpy.mock.calls[1][0].runName).toBe(
+                'code-review-dedup-followup',
+            );
+            expect(out.deduped).toHaveLength(2);
+            expect(out.dedupTrace.followupError).toBeUndefined();
+        });
+
+        it.each([
+            ['{result:{assignments}} wrapper', { result: joined }],
+            ['bare array', joined.assignments],
+            ['stringified JSON', JSON.stringify(joined)],
+        ])(
+            'recovers an off-schema follow-up answer: %s',
+            async (_label, answer) => {
+                runSpy = jest
+                    .spyOn(LLM, 'run')
+                    .mockResolvedValueOnce(firstAnswer as any)
+                    .mockResolvedValueOnce(answer as any);
+
+                const out = await streams(makeStage(), [
+                    dupA(),
+                    dupB(),
+                    distinctX(),
+                ]);
+
+                expect(out.deduped).toHaveLength(2);
+                expect(out.dedupTrace.followupError).toBeUndefined();
+            },
+        );
+
+        it.each([
+            [
+                'the call fails',
+                (spy: jest.SpyInstance) =>
+                    spy.mockRejectedValueOnce(new Error('provider boom')),
+                'provider boom',
+            ],
+            [
+                'the answer has no assignments',
+                (spy: jest.SpyInstance) => spy.mockResolvedValueOnce({} as any),
+                'no assignments',
+            ],
+        ])(
+            'keeps the left-out suggestions and traces the failure when %s',
+            async (_label, second, message) => {
+                runSpy = jest
+                    .spyOn(LLM, 'run')
+                    .mockResolvedValueOnce(firstAnswer as any);
+                second(runSpy);
+
+                const out = await streams(makeStage(), [
+                    dupA(),
+                    dupB(),
+                    distinctX(),
+                ]);
+
+                expect(out.deduped).toHaveLength(3);
+                expect(out.dedupTrace.status).toBe('success');
+                expect(out.dedupTrace.followupError).toContain(message);
+            },
+        );
+    });
 });
 
 /**
@@ -511,10 +605,8 @@ describe('AgentReviewStage.executeStage — dedup assembly + fail-safe (#1786)',
             changedFiles: [{ filename: 'src/user.ts' }],
             codeReviewConfig: {
                 reviewOptions: {},
-                heavy: false,
                 resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
             },
-            heavy: false,
             validSuggestions: [],
             discardedSuggestions: [],
             errors: [],

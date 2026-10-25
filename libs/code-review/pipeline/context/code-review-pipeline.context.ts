@@ -36,7 +36,6 @@ import {
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PipelineContext } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
-import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 export type PullRequestType = {
@@ -81,13 +80,6 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * as a high-priority focus block. Empty/undefined = a normal review.
      */
     reviewDirective?: string;
-
-    /**
-     * HEAVY mode — opt-in per review (CLI `--heavy` or PR `@kody review
-     * --heavy`). Runs an extra "what did you miss?" critic pass in the finder
-     * for higher recall, at ~+1 finder pass of cost. Off by default.
-     */
-    heavy?: boolean;
 
     codeReviewConfig?: CodeReviewConfig;
     automaticReviewStatus?: AutomaticReviewStatus;
@@ -151,8 +143,6 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     };
 
     pullRequestMessagesConfig?: IPullRequestMessages;
-
-    clusterizedSuggestions?: IClusterizedSuggestion[];
 
     preparedFileContexts: AnalysisContext<PullRequestType>[];
 
@@ -384,6 +374,8 @@ export interface DedupTraceSummary {
     groupsCount: number;
     removedCount: number;
     errorMessage?: string;
+    /** The follow-up for left-out suggestions failed; the stage kept them as they were. */
+    followupError?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
 }

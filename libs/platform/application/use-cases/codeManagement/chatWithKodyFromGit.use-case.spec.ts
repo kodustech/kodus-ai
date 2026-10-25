@@ -9,6 +9,12 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 
+const skippedWith = (reason: string, message: string) => ({
+    outcome: { kind: 'skipped', reason, message },
+    references: [],
+    attempts: [],
+});
+
 describe('ChatWithKodyFromGitUseCase', () => {
     let useCase: ChatWithKodyFromGitUseCase;
     let codeManagementService: {
@@ -25,8 +31,8 @@ describe('ChatWithKodyFromGitUseCase', () => {
     let conversationAgentUseCase: {
         execute: jest.Mock;
     };
-    let businessRulesValidationAgentUseCase: {
-        execute: jest.Mock;
+    let businessValidationService: {
+        validate: jest.Mock;
     };
     let permissionValidationService: {
         validateExecutionPermissions: jest.Mock;
@@ -61,8 +67,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
         conversationAgentUseCase = {
             execute: jest.fn().mockResolvedValue('an answer'),
         };
-        businessRulesValidationAgentUseCase = {
-            execute: jest.fn().mockResolvedValue(undefined),
+        businessValidationService = {
+            validate: jest
+                .fn()
+                .mockResolvedValue(
+                    skippedWith('no_reference', 'No task found'),
+                ),
         };
         permissionValidationService = {
             validateExecutionPermissions: jest
@@ -87,7 +97,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         useCase = new ChatWithKodyFromGitUseCase(
             codeManagementService as any,
             conversationAgentUseCase as any,
-            businessRulesValidationAgentUseCase as any,
+            businessValidationService as any,
             permissionValidationService as any,
             leaseManager as any,
             pullRequestsService as any,
@@ -130,30 +140,114 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
+                door: 'command',
                 organizationAndTeamData: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
                 },
-                prepareContext: expect.objectContaining({
-                    userQuestion:
-                        '@kody -v business-logic validate this change',
-                    pullRequestDescription: 'PR description body',
-                    platformType: PlatformType.GITHUB,
-                    repository: expect.objectContaining({
-                        id: 'repo-1',
-                        name: 'kodus-extension',
-                        owner: 'kodus',
-                    }),
-                    pullRequest: {
-                        pullRequestNumber: 132,
-                        headRef: 'feature/improve-refs',
-                        baseRef: 'main',
-                    },
+                taskInput: 'validate this change',
+                platformType: PlatformType.GITHUB,
+                repository: expect.objectContaining({
+                    id: 'repo-1',
+                    name: 'kodus-extension',
                 }),
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
+                    headRef: 'feature/improve-refs',
+                    baseRef: 'main',
+                }),
+            }),
+        );
+    });
+
+    it('reads the branch from the PR when the GitHub comment webhook leaves it out', async () => {
+        (codeManagementService as any).getPullRequest = jest
+            .fn()
+            .mockResolvedValue({
+                head: { ref: 'feature/CU-86a1b2c3d-archive' },
+            });
+
+        await useCase.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    headRef: 'feature/CU-86a1b2c3d-archive',
+                }),
+            }),
+        );
+    });
+
+    it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
+                teamAutomationId: 'automation-2',
+            }),
+        };
+        const twoOrgs = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await twoOrgs.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITHUB,
+            'repo-1',
+        );
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
             }),
         );
     });
@@ -197,72 +291,252 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
-                prepareContext: expect.objectContaining({
-                    userQuestion: `@kody -v business-logic ${jiraUrl}`,
-                    pullRequestDescription: 'PR description body',
-                    repository: expect.objectContaining({
-                        name: 'kodus-extension',
-                        owner: 'kodus',
-                    }),
-                    pullRequest: expect.objectContaining({
-                        pullRequestNumber: 132,
-                    }),
+                taskInput: jiraUrl,
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
                 }),
             }),
         );
     });
 
-    // Regression: __NO_TASK_MCP__ is an internal marker the agent returns
-    // when no task-management MCP is connected — it must NEVER reach a PR
-    // comment verbatim. The pipeline path already guards it; this is the
-    // explicit @kody -v business-logic command path, which had no guard.
-    // Exercises the private handler directly — the full webhook dispatch
-    // (ack/reaction/posting branching) is covered by the other tests in this
-    // file; this one isolates the translation itself.
-    it('translates the NO_TASK_MCP sentinel into a readable message instead of returning it raw', async () => {
-        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
-            '__NO_TASK_MCP__',
+    // An explicit ask always gets an answer: when nothing was validated the
+    // reply says why, in place of the old internal __NO_TASK_MCP__ marker.
+    it('replies with the reason when nothing was validated', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
         );
 
-        const response = await (useCase as any).handleBusinessLogicValidation(
-            {
-                prepareContext: { userQuestion: '@kody -v business-logic' },
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
-                thread: undefined,
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: { userQuestion: '@kody -v business-logic' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
             },
-        );
+            thread: undefined,
+        });
 
-        expect(response).not.toBe('__NO_TASK_MCP__');
-        expect(response).not.toContain('__NO_TASK_MCP__');
         expect(response).toMatch(/no task-management mcp/i);
     });
 
-    it('passes through a real business-logic result unchanged', async () => {
-        businessRulesValidationAgentUseCase.execute.mockResolvedValueOnce(
-            '## Business Rules Validation\n\nStatus: Issues Found',
-        );
-
-        const response = await (useCase as any).handleBusinessLogicValidation(
-            {
-                prepareContext: { userQuestion: '@kody -v business-logic' },
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
+    it('lets only people with write access waive a requirement on GitHub', async () => {
+        const access = (association?: string) =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITHUB,
+                    payload: {
+                        sender: { login: 'nina' },
+                        issue: { user: { login: 'rafa' } },
+                        comment: { author_association: association },
+                    },
                 },
-                thread: undefined,
+                { organizationId: 'org-1' },
+            );
+        await expect(access('MEMBER')).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        await expect(access('COLLABORATOR')).resolves.toMatchObject({
+            canWrite: true,
+        });
+        await expect(access('CONTRIBUTOR')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        await expect(access('NONE')).resolves.toMatchObject({
+            canWrite: false,
+        });
+    });
+
+    it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
+        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        (useCase as any).codeManagementService = { getListMembers };
+        const access = (userId: number, authorId = 9) =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: userId, display_name: 'someone' },
+                        pullrequest: { author: { account_id: authorId } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            );
+        await expect(access(7)).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        await expect(access(8)).resolves.toMatchObject({ canWrite: false });
+        await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
+        getListMembers.mockRejectedValueOnce(new Error('403'));
+        await expect(access(7)).resolves.toMatchObject({ canWrite: false });
+    });
+
+    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+        const getListMembers = jest.fn();
+        const userCanWrite = jest.fn(async () => false);
+        (useCase as any).codeManagementService = {
+            getListMembers,
+            userCanWrite,
+        };
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITLAB,
+                    payload: {
+                        user: { id: 7, name: 'guest' },
+                        merge_request: { author_id: 9 },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        expect(userCanWrite).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 7,
+                repository: { id: 'repo-1' },
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
+
+        // A failed or empty level lookup is a no, never "unknown".
+        const gitlab = {
+            platformType: PlatformType.GITLAB,
+            payload: {
+                user: { id: 7, name: 'guest' },
+                merge_request: { author_id: 9 },
             },
+        };
+        const logged = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
+        userCanWrite.mockRejectedValueOnce(new Error('502'));
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    repositoryId: 'repo-1',
+                    senderId: 7,
+                }),
+            }),
+        );
+        userCanWrite.mockResolvedValueOnce(undefined as any);
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+
+        getListMembers.mockResolvedValueOnce([]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.FORGEJO,
+                    payload: {
+                        sender: { id: 5, login: 'ana' },
+                        comment: { user: { id: 5, login: 'ana' } },
+                        pull_request: { user: { id: 5, login: 'ana' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toMatchObject({ isAuthor: true });
+    });
+
+    // A bare `#12` is read from the PR's repository, which needs its owner.
+    it('passes the repository owner to the validation', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
         );
 
-        expect(response).toBe(
-            '## Business Rules Validation\n\nStatus: Issues Found',
+        await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic #12',
+                repository: { id: 'repo-1', name: 'web', owner: 'acme' },
+                pullRequestNumber: 7,
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({ owner: 'acme' }),
+            }),
         );
+    });
+
+    it('publishes a verdict through the publisher and points to the edited comment', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: false,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: false,
+            unseenFiles: [],
+        };
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        const publisher = {
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'updated' }),
+        };
+        (useCase as any).businessLogicPublisher = publisher;
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({
+                trigger: 'command',
+                headSha: 'abc1234',
+                request: expect.objectContaining({ door: 'command' }),
+            }),
+        );
+        expect(response).toContain('comment on this pull request is updated');
     });
 
     describe('conversation plan gate', () => {

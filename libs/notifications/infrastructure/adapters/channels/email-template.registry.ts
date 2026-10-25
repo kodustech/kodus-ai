@@ -26,6 +26,9 @@ import IdeRulesSyncFailedEmail, {
 import InviteEmail, {
     inviteEmailMeta,
 } from '@libs/common/email/templates/invite';
+import KodyRulesAutoPauseDigestEmail, {
+    kodyRulesAutoPauseDigestEmailMeta,
+} from '@libs/common/email/templates/kody-rules-auto-pause-digest';
 import KodyRulesEmail, {
     kodyRulesEmailMeta,
 } from '@libs/common/email/templates/kody-rules';
@@ -63,7 +66,13 @@ import ReviewSkippedNoLicenseEmail, {
     reviewSkippedNoLicenseEmailMeta,
 } from '@libs/common/email/templates/review-skipped-no-license';
 
+import { rulesPageLink } from '../../../domain/catalog/app-links';
 import { NotificationEvent } from '../../../domain/catalog/events';
+import {
+    autoPausedRuleLink,
+    describeAutoPauseReason,
+    normaliseAutoPauseEntries,
+} from '../../../domain/catalog/kody-rule-auto-pause';
 
 export interface ResolvedEmailTemplate {
     from: EmailFrom;
@@ -511,6 +520,25 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
                     filePath,
                     reason,
                 })),
+            }),
+        };
+    },
+
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: (metadata, { webUrl }) => {
+        const rules = normaliseAutoPauseEntries(metadata.rules);
+        return {
+            ...kodyRulesAutoPauseDigestEmailMeta({ count: rules.length }),
+            react: KodyRulesAutoPauseDigestEmail({
+                rules: rules.map((rule) => ({
+                    title: rule.title,
+                    scopeLabel: rule.repositoryId
+                        ? (rule.repositoryName ?? 'Repository rule')
+                        : 'All repositories',
+                    reason: describeAutoPauseReason(rule),
+                    url: `${webUrl}${autoPausedRuleLink(rule)}`,
+                    resumed: rule.resumed === true,
+                })),
+                settingsUrl: `${webUrl}${rulesPageLink()}`,
             }),
         };
     },

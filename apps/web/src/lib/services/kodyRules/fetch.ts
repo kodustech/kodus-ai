@@ -28,18 +28,6 @@ export type FastSyncIDERulesResponse = {
     errors?: unknown[];
 };
 
-export type ReviewFastIDERulesPayload = {
-    teamId: string;
-    activateRuleIds?: string[];
-    deleteRuleIds?: string[];
-};
-
-export type ReviewFastIDERulesResponse = {
-    activatedRules?: KodyRule[];
-    deletedRules?: KodyRule[];
-    errors?: unknown[];
-};
-
 export type KodyRuleMutationResponse = KodyRule | CentralizedPrResponse;
 
 export const createOrUpdateKodyRule = async (
@@ -168,6 +156,24 @@ export const fastSyncIDERules = async (
     return response;
 };
 
+export type AgentInstructionFilesByRepository = {
+    repositoryId: string;
+    repositoryName: string;
+    files: string[];
+    /** The git host could not list this repository. */
+    unavailable?: true;
+};
+
+/** Coding-agent instruction files (CLAUDE.md, AGENTS.md, ...) per selected
+ * repository, shown before a team turns on reading them in reviews. */
+export const getAgentInstructionFiles = async (params: { teamId: string }) => {
+    const result = await authorizedFetch<AgentInstructionFilesByRepository[]>(
+        KODY_RULES_PATHS.AGENT_INSTRUCTION_FILES,
+        { params },
+    );
+    return result ?? [];
+};
+
 export const getKodyRulesByRepositoryId = async (
     repositoryId: string,
     directoryId?: string,
@@ -190,18 +196,6 @@ export const getAllOrganizationKodyRules = async (type?: KodyRulesType) => {
         KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
         { params: { type } },
     );
-    return rules;
-};
-
-export const getPendingIDERules = async (params: {
-    teamId: string;
-    repositoryId?: string;
-}) => {
-    const rules = await authorizedFetch<Array<KodyRule>>(
-        KODY_RULES_PATHS.PENDING_IDE_RULES,
-        { params },
-    );
-
     return rules;
 };
 
@@ -285,12 +279,11 @@ export const generateKodyRules = async (
     return response.data;
 };
 
+/** Imports a repository's Kody rule files (.kody/rules) now. */
 export const syncIDERules = (params: {
     teamId: string;
     repositoryId: string;
-}) => {
-    axiosAuthorized.post(KODY_RULES_PATHS.SYNC_IDE_RULES, params);
-};
+}) => axiosAuthorized.post(KODY_RULES_PATHS.SYNC_IDE_RULES, params);
 
 export type GlobalRulesSourceRepository = {
     id: string;
@@ -328,17 +321,6 @@ export const resyncGlobalRules = async (params: {
     return response;
 };
 
-export const reviewFastIDERules = async (
-    payload: ReviewFastIDERulesPayload,
-): Promise<ReviewFastIDERulesResponse> => {
-    const response = await axiosAuthorized.post<ReviewFastIDERulesResponse>(
-        KODY_RULES_PATHS.REVIEW_FAST_IDE_RULES,
-        payload,
-    );
-
-    return response;
-};
-
 export const getKodyRuleSuggestions = async (ruleId: string) => {
     const url = `${KODY_RULES_PATHS.GET_KODY_RULE_SUGGESTIONS}?ruleId=${ruleId}`;
     const suggestions = await authorizedFetch<KodyRuleSuggestion[]>(url);
@@ -359,18 +341,11 @@ export const getRecommendedKodyRules = async (params?: { limit?: number }) => {
     return rules || [];
 };
 
-/** Auto-synced ("imported") rules counted per status for a repository. Used by
- * the IDE auto-sync toggle-off modal and the orphan-rules banner.
- *
- * `pinned` counts ACTIVE+PAUSED rules whose source file carries `@kody-sync`.
- * The bulk pause/delete actions skip those, so the modal copy uses this to
- * tell the user "M pinned rules will be preserved" before they pick an
- * action and get a surprising result. */
+/** Rules imported from coding-agent files, counted per status. */
 export type ImportedKodyRulesCounts = {
     active: number;
     paused: number;
     deleted: number;
-    pinned: number;
 };
 
 export const getImportedKodyRulesCount = async (params: {
@@ -383,7 +358,7 @@ export const getImportedKodyRulesCount = async (params: {
     });
     const url = `${KODY_RULES_PATHS.COUNT_IMPORTED_KODY_RULES}?${query.toString()}`;
     const result = await authorizedFetch<ImportedKodyRulesCounts>(url);
-    return result ?? { active: 0, paused: 0, deleted: 0, pinned: 0 };
+    return result ?? { active: 0, paused: 0, deleted: 0 };
 };
 
 export type ManageImportedKodyRulesAction = 'pause' | 'resume' | 'delete';

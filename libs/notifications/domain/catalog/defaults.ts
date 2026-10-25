@@ -9,11 +9,7 @@ import { NotificationEvent } from './events';
  * without React on the API side.
  */
 export type CatalogIcon =
-    | 'bell'
-    | 'shield-alert'
-    | 'zap'
-    | 'info'
-    | 'credit-card';
+    'bell' | 'shield-alert' | 'zap' | 'info' | 'credit-card';
 
 /**
  * Static metadata for each event in the catalog.
@@ -314,6 +310,17 @@ export const EVENT_DEFAULTS: Readonly<
         defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
     },
 
+    // ── Business Logic ─────────────────────────────────────────
+
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: {
+        criticality: Criticality.TRANSACTIONAL,
+        category: 'review',
+        label: 'Business Logic Task Source Unavailable',
+        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        icon: 'shield-alert',
+        defaultRoles: [Role.OWNER],
+    },
+
     // ── Kody Rules (file reference validation) ────────────────
 
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: {
@@ -325,6 +332,23 @@ export const EVENT_DEFAULTS: Readonly<
             NotificationChannel.IN_APP,
         ]),
         icon: 'shield-alert',
+    },
+    [NotificationEvent.KODY_RULES_AUTO_PAUSED]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'kody_rules',
+        label: 'Kody Rules Paused Automatically',
+        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        icon: 'bell',
+        actionLabel: 'Review',
+        defaultRoles: [Role.OWNER],
+    },
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'kody_rules',
+        label: 'Weekly Digest of Paused Kody Rules',
+        defaultChannels: new Set([NotificationChannel.EMAIL]),
+        icon: 'bell',
+        defaultRoles: [Role.OWNER],
     },
 };
 

@@ -54,6 +54,11 @@ export enum NotificationEvent {
 
     // ── Kody Rules (continued) ─────────────────────────────────
     RULE_FILE_REFERENCES_INVALID = 'rule.file_references_invalid',
+    KODY_RULES_AUTO_PAUSED = 'kody_rules.auto_paused',
+    KODY_RULES_AUTO_PAUSE_DIGEST = 'kody_rules.auto_pause_digest',
+
+    // ── Business Logic ─────────────────────────────────────────
+    BUSINESS_LOGIC_SOURCE_UNAVAILABLE = 'business_logic.source_unavailable',
 
     // ── Security (future — critical) ───────────────────────────
     // SECURITY_API_KEY_LEAKED = 'security.api_key_leaked',
@@ -64,6 +69,29 @@ export enum NotificationEvent {
 // The emitter generic `emit<E>()` infers the payload type at
 // compile time, so a wrong payload is a build error.
 // ────────────────────────────────────────────────────────────────
+
+/** One auto-paused rule, as listed in its notifications. */
+export interface KodyRuleAutoPauseEntry {
+    ruleId: string;
+    title: string;
+    /** `null` or absent for a global rule. */
+    repositoryId?: string | null;
+    repositoryName?: string | null;
+    directoryId?: string | null;
+    state: 'ignored' | 'noisy';
+    triggers: number;
+    implemented: number;
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+    /** Length of the usage window the rule was judged on. */
+    windowDays: number;
+    /** The window started at the rule's last resume, not a full look-back. */
+    sinceResume?: boolean;
+    pausedAt: string;
+    /** Digest only: the rule was resumed before the digest went out. */
+    resumed?: boolean;
+}
 
 export interface NotificationPayloadMap {
     [NotificationEvent.AUTH_EMAIL_CONFIRMATION]: {
@@ -187,6 +215,16 @@ export interface NotificationPayloadMap {
         upgradeUrl?: string;
     };
 
+    // ── Business Logic ─────────────────────────────────────────
+
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: {
+        /** The task tracker that stopped answering. */
+        tracker: string;
+        /** What it answered, when it answered anything. */
+        error?: string;
+        repositoryId?: string;
+    };
+
     // ── BYOK ───────────────────────────────────────────────────
 
     [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: {
@@ -251,5 +289,17 @@ export interface NotificationPayloadMap {
             filePath: string;
             reason: string;
         }>;
+    };
+
+    /** Rules one run of the auto-pause cron paused. */
+    [NotificationEvent.KODY_RULES_AUTO_PAUSED]: {
+        rules: KodyRuleAutoPauseEntry[];
+    };
+
+    /** Weekly email of the rules auto-paused since the last digest. */
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+        rules: KodyRuleAutoPauseEntry[];
+        periodStart: string;
+        periodEnd: string;
     };
 }

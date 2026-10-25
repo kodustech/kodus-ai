@@ -4,23 +4,28 @@ description: "使用结构化的 markdown 文件直接在代码库中创建自�
 ---
 
 <Info>
-代码库规则使用与 IDE 规则文件检测相同的自动同步机制。启用 **Auto-sync rules from repo**(在代码库范围下 **Code review → Kody Rules** 的 **Configuration** 中)以激活这两个功能。请参阅<a href="/zh/how_to_use/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
+代码库规则始终保持同步:无需开启任何设置。它们是代码库中唯一会变成 Kody 规则的文件。为编码代理编写的指令(`CLAUDE.md`、`AGENTS.md`、`.cursor/rules`)会单独处理,请参阅<a href="/zh/how_to_use/code_review/configs/rules_file_detection">编码代理指令</a>。
 </Info>
 
 ## 如何使用
 您可以通过将结构化的 markdown 文件放置在特定目录中,直接在代码库中创建自定义 Kody 规则。这允许您对规则进行版本控制并与团队共享。
 
+<Info>
+代码库规则文件会被**逐字**导入 —— 不经过 LLM 转换。frontmatter 按原样解析,markdown 正文会原封不动地成为规则的指令(标识符、格式和措辞都会保留),Bad/Good 示例按结构导入。每个文件生成一条规则。不符合模板的文件(缺少 frontmatter、`title` 或正文)会被跳过,同步会记录该文件;不会从中生成任何内容。
+</Info>
+
 ### 同步
-- **自动检测**:启用后自动检测和同步代码库规则
-- **手动同步**:在任何规则文件中添加 `@kody-sync` 以单独同步(即使禁用自动同步也有效)
-- **Web 应用程序**:同步的规则显示在该代码库的 **Code review → Kody Rules** 页面上,来源标记为 **Auto-sync**
-- **实时更新**:当拉取请求关闭时同步规则文件的更改
+- **自动检测**:每个已连接的代码库都会自动检测和同步代码库规则;无需开启任何设置
+- **立即导入**:在该代码库的 **Kody Rules → Configuration** 面板中,**Import rule files now** 会读取默认分支上的所有规则文件
+- **Web 应用程序**:同步的规则显示在该代码库的 **Code review → Kody Rules** 页面上,来源标记为 **Auto-sync**(在编码代理文件停止转换之前从这些文件导入的规则则显示 **Agent file**)
+- **实时更新**:当拉取请求合并时同步规则文件的更改
 
 ## 文件位置
 
-将您的规则文件放在以下目录之一:
+将您的规则文件放在以下目录之一,可位于代码库根目录或任意子目录:
 - `.kody/rules/**/*.md`
 - `rules/**/*.md`
+- `.rules/**` 和 `docs/coding-standards/**`(仅限遵循模板的文件)
 
 ## 规则模板
 
@@ -153,18 +158,30 @@ enabled: true
 
 ## 设置要求
 
-要使用代码库规则,您有两个选项:
+1. **创建规则文件**:将遵循模板的 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 中。`.rules/**` 和 `docs/coding-standards/**` 中遵循模板的文件也会被导入。
+2. **合并它们**:当新增、修改、重命名或删除某个规则文件的拉取请求被合并时,该文件会同步。删除文件会删除其对应的规则。
+3. **已有文件**:要导入默认分支上已有的规则文件,请使用该代码库 **Kody Rules → Configuration** 面板中的 **Import rule files now**。
 
-### 选项 1:启用自动同步(推荐)
-1. **启用规则文件检测**:在 **Code review** 范围选择器中选择该代码库,打开 **Kody Rules → Configuration**,并开启 **Auto-sync rules from repo**
-2. **创建规则文件**:将 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 目录中
-3. **自动同步**:当 PR 关闭时所有规则文件同步
-
-### 选项 2:手动同步(选择性)
-1. **创建规则文件**:将 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 目录中
-2. **添加同步标记**:在规则文件中的任何位置包含 `@kody-sync`
-3. **提交更改**:仅标记的文件将同步(自动同步切换保持关闭)
+新规则会直接启用;如果开启了 **Kody knowledge approval**,则进入 **Pending review**。
 
 <Tip>
-代码库规则使用与<a href="/zh/how_to_use/code_review/configs/rules_file_detection">规则文件检测</a>相同的同步机制。使用手动同步(`@kody-sync`)可以选择性地同步特定规则,而无需启用自动同步。
+在规则文件的任意位置添加 `@kody-ignore`,即可把它保留在代码库中而不进行同步。下次同步时,它已有的规则会被移除。
 </Tip>
+
+## 验证同步与规则评估(自托管)
+
+在自托管部署中,API 日志会输出便于 grep 的标记:
+
+- `[kody-rules-sync]` —— 每次同步的汇总:哪些文件被导入、被跳过(含原因)或被移除。
+- `[kody-rules-eval]` —— 审查过程中按文件的评估轨迹:每个被审查文件究竟有哪些规则(uuid + 标题)被选入提示词。
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+如果某条规则在 UI 中显示为启用,却从未在你预期文件的 `[kody-rules-eval]` 中出现,请检查它的 **Path** glob —— 规则只会在匹配其路径的文件上运行。
+
+## 规则数量上限
+
+使用云端 **Free** 套餐(或订阅已取消或过期)的组织,以及**没有有效许可证**运行的自托管实例(Community Edition),每次审查最多评估 **10 条启用的规则**(按最早创建优先)。超出上限的规则会以 **Locked** 状态保留在列表中,并在每个 PR 上被跳过;**Code review → Kody Rules** 上的横幅会显示有多少条被跳过。付费云端套餐和已授权的自托管实例没有此限制。如果第 10 条之后的规则不触发,原因就是这个上限。

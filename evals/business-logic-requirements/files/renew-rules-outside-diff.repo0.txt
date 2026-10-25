@@ -1,0 +1,6 @@
+import { db } from '../db';
+export async function assertRenewable(loan: { id: string; bookId: string; dueDate: Date }) {
+  if (loan.dueDate.getTime() < Date.now()) throw new Error('Overdue loans cannot be renewed');
+  const reservation = await db.reservations.findFirst({ bookId: loan.bookId, active: true });
+  if (reservation) throw new Error('Another member reserved this book');
+}

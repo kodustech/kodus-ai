@@ -1,0 +1,20 @@
+diff --git a/src/loans/errors.ts b/src/loans/errors.ts
+new file mode 100644
+--- /dev/null
++++ b/src/loans/errors.ts
+@@ -0,0 +1,3 @@
++export class LoanLimitError extends Error {
++  constructor() { super('Loan limit reached'); }
++}
+diff --git a/src/loans/borrow.ts b/src/loans/borrow.ts
+--- a/src/loans/borrow.ts
++++ b/src/loans/borrow.ts
+@@ -1,4 +1,8 @@
+ import { db } from '../db';
++import { LoanLimitError } from './errors';
++const MAX_ACTIVE_LOANS = 5;
+ export async function borrow(memberId: string, bookId: string) {
++  const active = await db.loans.count({ memberId, returnedAt: null });
++  if (active > MAX_ACTIVE_LOANS) throw new LoanLimitError();
+   return db.loans.create({ memberId, bookId, borrowedAt: new Date() });
+ }

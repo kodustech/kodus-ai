@@ -29,10 +29,6 @@ export type OrchestratorInputComputed = Pick<
     | 'gitHubToken'
     | 'callGraph'
     | 'adaptiveProfile'
-    // heavy is resolved by the stage (requested flag AND the feature-gate
-    // release check) rather than read straight off the context, so the alpha
-    // gate is applied in exactly one place.
-    | 'heavy'
     | 'linkedRepoAccess'
 > & {
     // Review-ready kody rules computed by the stage: long rules swapped for
@@ -40,6 +36,9 @@ export type OrchestratorInputComputed = Pick<
     // without the service (specs, degraded paths) fall back to the raw config
     // rules — the context itself is never mutated (it is frozen).
     kodyRules?: OrchestratorInput['kodyRules'];
+    // The repository's coding-agent instructions that govern the changed
+    // files, collected by the stage when the repository opted in.
+    repoInstructions?: OrchestratorInput['repoInstructions'];
 };
 
 /**
@@ -120,6 +119,7 @@ export function buildOrchestratorInput(
         ciEvidence: context.ciEvidence,
         analyzerFindings: context.analyzerFindings,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
+        repoInstructions: computed.repoInstructions,
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,
         gitHubToken: computed.gitHubToken,
@@ -131,11 +131,6 @@ export function buildOrchestratorInput(
         callGraph: computed.callGraph,
         callGraphJson: context.callGraphJson,
         reviewMode: context.codeReviewConfig?.reviewMode || 'normal',
-        // HEAVY mode — opt-in per review (CLI `--heavy` / PR `@kody review
-        // --heavy`), gated to the alpha release track by the stage. The stage
-        // resolves the requested flag AND the feature gate into `computed.heavy`;
-        // this reads only that so the gate can't be bypassed here.
-        heavy: computed.heavy || undefined,
         // Trial-only forced model (ignored when a BYOK config is present — the
         // resolver prefers BYOK). Both the subscription trial and the anonymous
         // public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks. The

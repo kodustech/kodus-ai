@@ -26,6 +26,7 @@ import {
 import {
     buildSystemPrompt as buildSystemPromptFor,
     buildUserPrompt as buildUserPromptFor,
+    listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -42,6 +43,7 @@ import {
     type ReviewAgentInput,
     type ReviewAgentOutput,
     type AgentProgressEvent,
+    type ReviewFindingLabel,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import {
@@ -150,7 +152,7 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
-    ): Array<'bug' | 'security' | 'performance'> {
+    ): ReviewFindingLabel[] {
         const category = this.getCategoryLabel();
         if (
             category === 'bug' ||
@@ -548,8 +550,7 @@ export abstract class BaseCodeReviewAgentProvider {
             // overflow is from the overhead, not the diffs. Falling
             // through to runAgentLoop on the same stack frame lets the
             // agent loop's mid-stream compressor handle marginal
-            // overflow, and the assertPromptFitsInContext preflight
-            // catches the genuine "won't fit at all" case. Without this
+            // overflow. Without this
             // check, executeChunked would recurse → execute() at depth 1
             // → same chunking decision → infinite recursion bounded by
             // MAX_RECURSION_DEPTH = an opaque user-facing failure.
@@ -577,8 +578,8 @@ export abstract class BaseCodeReviewAgentProvider {
                 // Fall through to the single-batch runAgentLoop path
                 // below by NOT entering executeChunked. The variables
                 // (estimatedPromptTokens, fileTiers, etc) are already
-                // set and runAgentLoop's own preflight + compressor
-                // will handle the rest.
+                // set and runAgentLoop's compressor will handle the
+                // rest.
             } else {
                 this.agentLogger.warn({
                     message: `[AGENT] ${identity.name} prompt exceeds context budget (${estimatedPromptTokens} tokens > ${promptBudget} budget), splitting into batches`,
@@ -714,16 +715,22 @@ export abstract class BaseCodeReviewAgentProvider {
                     // built field-by-field, so without this line the verifier
                     // never sees prior-round decisions.
                     previousDecisions: input.previousDecisions,
+                    // Same reason: the verifier judges repo_instruction
+                    // findings against these.
+                    repoInstructions: input.repoInstructions,
+                    // The finder reads the listed files through
+                    // readRepoInstruction; only an agent whose prompt lists
+                    // them gets it.
+                    listsRepoInstructions: listsRepoInstructions(
+                        input.repoInstructions,
+                        this.getAllowedSuggestionLabels(input),
+                    ),
                     conventionGuides: this.getConventionGuides(input),
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
-                    // HEAVY opt-in (`--heavy`) — forwarded explicitly, same reason
-                    // as skipHeavyPasses above: loopParams is built field-by-field,
-                    // so without this line the resample passes never run.
-                    heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

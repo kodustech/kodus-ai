@@ -10,8 +10,12 @@ import {
     DEDUP_EMBEDDING_LOW,
     DEDUP_EMBEDDING_HIGH,
     DEDUP_TIEBREAK_SCHEMA,
+    DEDUP_FOLLOWUP_SCHEMA,
+    applyDedupFollowup,
+    buildDedupFollowupPrompt,
     buildDedupPrompt,
     buildTiebreakPrompt,
+    unclassifiedDedupIndices,
     contentSimilarity,
     cosineSimilarity,
     dedupEmbeddingText,
@@ -58,7 +62,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/knowledge/review-knowledge';
 import { resolveAgentReviewSettings } from './agent-review-settings';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import { FeatureGateService } from '@libs/feature-gate';
 import {
     ORGANIZATION_SERVICE_TOKEN,
     IOrganizationService,
@@ -133,6 +137,12 @@ import {
     SeverityLevel,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
+import {
+    collectRepoInstructions,
+    shouldCollectRepoInstructions,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS } from '@libs/common/utils/kody-rules/file-patterns';
 import {
     CodeReviewPipelineContext,
     resolvedModel,
@@ -383,6 +393,148 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * The repository's coding-agent instructions (CLAUDE.md, AGENTS.md,
+     * .cursor/rules, ...) that govern the changed files, read from the PR's
+     * target branch when the repository opted in (`repoInstructionsEnabled`). Never fails
+     * the review: a git host error just means the review runs without them.
+     */
+    private async resolveRepoInstructions(
+        context: CodeReviewPipelineContext,
+        changedFiles: Array<{ filename: string }>,
+        adaptiveProfile: { kind?: string; dropCallGraph?: boolean },
+        prNumber: number,
+    ): Promise<RepoInstructionsContext | undefined> {
+        const enabled =
+            context.codeReviewConfig?.repoInstructionsEnabled === true;
+        const logMetadata = {
+            organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            repositoryId: context.repository?.id,
+            prNumber,
+        };
+
+        if (
+            !shouldCollectRepoInstructions(
+                context.codeReviewConfig,
+                adaptiveProfile,
+            )
+        ) {
+            if (enabled) {
+                this.logger.log({
+                    message: `[repo-instructions] skipped for PR#${prNumber}: adaptive-fit profile ${adaptiveProfile.kind} drops optional context`,
+                    context: this.stageName,
+                    metadata: { ...logMetadata, profile: adaptiveProfile.kind },
+                });
+            }
+            return undefined;
+        }
+
+        // Deep mode dispatches only the category agents, which never render
+        // the instructions block.
+        if (context.codeReviewConfig?.reviewMode === 'deep') {
+            this.logger.log({
+                message: `[repo-instructions] skipped for PR#${prNumber}: deep review mode does not read them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
+        // The generalist, the only agent that reads them, runs only when at
+        // least one of these categories is on.
+        const options = context.codeReviewConfig?.reviewOptions;
+        if (
+            options?.bug === false &&
+            options?.security === false &&
+            options?.performance === false
+        ) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+
+        const organizationAndTeamData = context.organizationAndTeamData;
+        const repository = {
+            id: String(context.repository?.id ?? ''),
+            name: context.repository?.name,
+        };
+        // The target branch, never the head: what a PR is checked against is
+        // what the team merged, not text the PR itself adds or edits.
+        const ref = context.pullRequest?.base?.ref;
+        if (!ref) {
+            this.logger.warn({
+                message: `[repo-instructions] skipped for PR#${prNumber}: target branch unknown`,
+                context: this.stageName,
+                metadata: logMetadata,
+            });
+            return undefined;
+        }
+        const startedAt = Date.now();
+
+        const result = await collectRepoInstructions({
+            changedFiles: changedFiles.map((f) => f.filename),
+            listFiles: async () => {
+                const files =
+                    (await this.codeManagementService.getRepositoryAllFiles({
+                        organizationAndTeamData,
+                        repository,
+                        filters: {
+                            branch: ref,
+                            filePatterns: [
+                                ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
+                            ],
+                        },
+                    })) ?? [];
+                return files.map((f: { path: string }) => f.path);
+            },
+            readFile: async (path) => {
+                const response =
+                    await this.codeManagementService.getRepositoryContentFile({
+                        organizationAndTeamData,
+                        repository,
+                        file: { filename: path },
+                        pullRequest: { head: { ref }, base: { ref } },
+                    });
+                // Forgejo returns the file flat and already decoded; the
+                // other providers wrap it in `data`.
+                const file = response?.data ?? response;
+                const raw = file?.content;
+                if (typeof raw !== 'string' || !raw) return null;
+                return file?.encoding === 'base64'
+                    ? Buffer.from(raw, 'base64').toString('utf-8')
+                    : raw;
+            },
+        });
+
+        const bytes = result.files.reduce(
+            (sum, f) => sum + Buffer.byteLength(f.content),
+            0,
+        );
+        const unreadable = result.unreadable ?? [];
+        this.logger[result.error || unreadable.length ? 'warn' : 'log']({
+            message: `[repo-instructions] PR#${prNumber}: indexed=${result.indexedCount} listed=${result.files.length} dropped=${result.dropped.length} unreadable=${unreadable.length} bytes=${bytes} truncated=${result.truncated}${result.error ? ` error=${result.error}` : ''}`,
+            context: this.stageName,
+            metadata: {
+                ...logMetadata,
+                ref,
+                durationMs: Date.now() - startedAt,
+                indexed: result.indexedCount,
+                listed: result.files.map((f) => f.path),
+                dropped: result.dropped,
+                unreadable,
+                bytes,
+                truncated: result.truncated,
+                error: result.error,
+            },
+        });
+
+        return result.files.length ? result : undefined;
+    }
+
+    /**
      * Review-ready kody rules: lazy-backfill summaries for long rules that
      * lack a valid one (covers rules created before the summary feature), then
      * swap each long rule's text for its summary (sourceHash-guarded — see
@@ -532,54 +684,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             logContext: this.stageName,
             prNumber: context.pullRequest?.number,
         });
-    }
-
-    /**
-     * Resolve whether HEAVY mode actually runs: the per-review opt-in (CLI
-     * `--heavy` / `@kody review --heavy`) AND the `heavy-review` feature gate,
-     * which is an ALPHA feature — cloud gates it by the org's release track +
-     * PostHog allowlist, self-hosted keeps it off until it's promoted to beta.
-     * A denied request degrades silently to a normal review.
-     */
-    private async resolveHeavy(
-        context: CodeReviewPipelineContext,
-    ): Promise<boolean> {
-        const requested =
-            context.heavy || context.codeReviewConfig?.heavy || false;
-        if (!requested) {
-            return false;
-        }
-        const org = context.organizationAndTeamData;
-        try {
-            const releaseTrack = await this.organizationService.getReleaseTrack(
-                org.organizationId,
-            );
-            const enabled = await this.featureGate.isEnabled(
-                FEATURE_KEYS.heavyReview,
-                {
-                    identifier: org.organizationId,
-                    organizationAndTeamData: org,
-                    releaseTrack,
-                },
-            );
-            if (!enabled) {
-                this.logger.log({
-                    message: `[AGENT] Heavy review requested but not enabled for org (alpha feature) — running normal review`,
-                    context: this.stageName,
-                    metadata: { organizationId: org.organizationId },
-                });
-            }
-            return enabled;
-        } catch (err) {
-            // Fail safe: if the gate can't be evaluated, do NOT silently run the
-            // alpha path — degrade to normal.
-            this.logger.warn({
-                message: `[AGENT] Heavy feature-gate check failed; running normal review`,
-                context: this.stageName,
-                error: err,
-            });
-            return false;
-        }
     }
 
     protected async executeStage(
@@ -815,20 +919,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // dropped — is unit-testable and can't drift from a second inline
             // copy. A committed merge conflict once kept an inline builder that
             // silently dropped reviewDirective; this is the single source now.
-            // Resolve HEAVY once (opt-in AND the alpha feature gate) and write it
-            // back onto the context so the SAME gated value flows to both the
-            // finder and the persisted PR record (create-file-comments stage).
-            const resolvedHeavy = await this.resolveHeavy(context);
-            // The pipeline context is Immer-frozen (auto-freeze) once it has
-            // passed through an earlier stage's produce(), so a direct
-            // `context.heavy = …` throws "Cannot assign to read only property".
-            // Write it back through updateContext so the gated value both flows
-            // into buildOrchestratorInput below AND persists to the downstream
-            // create-file-comments stage.
-            context = this.updateContext(context, (draft) => {
-                draft.heavy = resolvedHeavy;
-            });
-
             // Deterministic boundary gate (#1576): only arm linked-repo tools
             // + prompt when the diff touches boundary surface. Config alone is
             // not enough — pure internal refactors stay single-repo.
@@ -846,6 +936,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 modelName: effectiveModelName || 'unknown',
             });
             if (crossRepoLost) stageWarnings.push(crossRepoLost);
+
+            const repoInstructions = await this.resolveRepoInstructions(
+                context,
+                changedFiles,
+                adaptiveProfile,
+                prNumber,
+            );
 
             const customAgents = await this.resolveCustomAgents(context);
             const customAgentsById: CustomAgentsById =
@@ -866,9 +963,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     gitHubToken: await this.resolveGitHubToken(context),
                     callGraph,
                     adaptiveProfile,
-                    heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
                     linkedRepoAccess,
+                    repoInstructions,
                 }),
                 customAgents,
                 onlyCustomAgent: context.onlyCustomAgent,
@@ -2323,7 +2420,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         } catch (err) {
             this.logger.warn({
-                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
                 context: this.stageName,
                 error: err,
             });
@@ -2338,9 +2435,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
      *   2. else semantic cosine of the two descriptions:
      *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
-     * Every external failure (no embed key, embedding/LLM error) falls back to a
-     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
-     * honored blindly.
+     * Without an embedding (no embedder, or the call failed) the tiebreak
+     * decides the model's proposed merges (#2170). A tiebreak failure falls
+     * back to a veto, so a low-overlap merge is never honored blindly.
      *
      * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
      * grouping to corroborate a match, so the cheap lexical-honor shortcut is
@@ -2382,17 +2479,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
-            // Without embeddings this vetoes EVERY merge, which republishes
-            // the one duplicate we are most sure about: a scanner fact the
-            // model restated. Only that pair overrides the veto — where
-            // embeddings work, the full guard still decides, so a wide agent
-            // finding that merely overlaps a scanner line is not swallowed.
+            // A scanner fact the model restated is the duplicate we are most
+            // sure about: it merges without asking. Where embeddings work, the
+            // full guard still decides, so a wide agent finding that merely
+            // overlaps a scanner line is not swallowed.
             if (restatesAnalyzerFinding(dup, keep)) {
                 return {
                     honor: true,
                     reason: 'restates-analyzer (no-embed)',
                     score: lexical,
                 };
+            }
+            // No embedding (a self-hosted install without the platform OpenAI
+            // key, or a failed call, #2170): the model proposed this merge, so
+            // the tiebreak decides it. The cross-stream pass has no such proposal and
+            // would ask once per suggestion × rule pair: it keeps the veto.
+            if (!opts?.crossStream) {
+                const sameBug = await tiebreak(dup, keep);
+                if (sameBug !== null) {
+                    return {
+                        honor: sameBug,
+                        reason: `llm-tiebreak=${sameBug} (no-embed)`,
+                        score: lexical,
+                    };
+                }
             }
             return {
                 honor: false,
@@ -2695,9 +2805,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const dedupOutput = (await LLM.run({
                 byokConfig: resolvedSlot,
                 schema: jsonSchema(DEDUP_SCHEMA as any),
-                user: buildDedupPrompt(suggestions, (sev) =>
-                    this.normalizeSeverity(sev),
-                ),
+                user: buildDedupPrompt(suggestions),
                 runName: 'code-review-dedup',
                 spanName: 'code-review::dedup',
                 organizationId: telemetryMeta?.organizationId,
@@ -2741,25 +2849,110 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // favours its own prose over a scanner's, and the longest text over
             // the one on the defective lines. Re-seat the roles so a
             // deterministic finding survives the group it was merged into, and
-            // otherwise the finding anchored on the lines at fault.
-            const groups: Array<{
+            // otherwise the finding anchored on the lines at fault. The
+            // follow-up sees the scanner re-seat; the rest runs on the final
+            // groups below.
+            let groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = keepOwnFindingsApart(
+            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
+            let unique: number[] = normalizedDedup?.unique || [];
+
+            // A model can stop partway through the list. The left-out
+            // suggestions go back in one short call that sees what was already
+            // decided; any still left out falls to the safety net below.
+            const leftOut =
+                groups.length || unique.length
+                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    : [];
+            // Kept in the dedup trace: a failed follow-up keeps those
+            // suggestions as they were (a duplicate may reach the PR), the same
+            // way a failed dedup keeps everything, without degrading the review.
+            let followupError: string | undefined;
+            if (leftOut.length > 0) {
+                try {
+                    // The same shape recovery as the first answer (#1786): a
+                    // wrapped, bare-array or stringified answer still counts,
+                    // and one with no assignments fails like a failed call.
+                    const followupOutput = await LLM.run({
+                        byokConfig: resolvedSlot,
+                        schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
+                        user: buildDedupFollowupPrompt(
+                            suggestions,
+                            groups,
+                            unique,
+                            leftOut,
+                        ),
+                        runName: 'code-review-dedup-followup',
+                        spanName: 'code-review::dedup',
+                        organizationId: telemetryMeta?.organizationId,
+                        telemetryMetadata: telemetryMeta,
+                        attrs: {
+                            type: dedupSlot ? 'byok' : 'system',
+                            prNumber,
+                            ...(telemetryMeta?.teamId
+                                ? { teamId: telemetryMeta.teamId }
+                                : {}),
+                        },
+                    });
+                    const followup = normalizeEnvelope(
+                        followupOutput,
+                        'assignments',
+                        [],
+                        {
+                            onRecover: (reason) =>
+                                this.logger.warn({
+                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
+                                    context: this.stageName,
+                                }),
+                        },
+                    ) as any;
+                    if (!Array.isArray(followup?.assignments)) {
+                        throw new Error(
+                            'the follow-up answer has no assignments',
+                        );
+                    }
+                    ({ groups, unique } = applyDedupFollowup(
+                        suggestions.length,
+                        groups,
+                        unique,
+                        leftOut,
+                        followup.assignments,
+                    ));
+                    this.logger.log({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
+                        context: this.stageName,
+                    });
+                } catch (error) {
+                    followupError =
+                        error instanceof Error ? error.message : String(error);
+                    this.logger.warn({
+                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
+                        context: this.stageName,
+                        error,
+                        metadata: {
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                            prNumber,
+                            leftOutCount: leftOut.length,
+                        },
+                    });
+                }
+            }
+
+            // After the follow-up, so a custom agent's finding taken back out
+            // of a group is not sent to it again and stays unique.
+            groups = keepOwnFindingsApart(
                 preferCustomAgentKeep(
                     preferSpecificKeep(
-                        preferAnalyzerKeep(
-                            normalizedDedup?.groups || [],
-                            suggestions,
-                        ),
+                        preferAnalyzerKeep(groups, suggestions),
                         suggestions,
-                        normalizedDedup?.unique || [],
+                        unique,
                     ),
                     suggestions,
                 ),
                 suggestions,
             );
-            const unique: number[] = normalizedDedup?.unique || [];
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
             // is inconclusive we compare description embeddings, and only escalate
@@ -3039,6 +3232,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     uniqueCount: uniqueSuggestions.length,
                     groupsCount: groupSummaries.length,
                     removedCount: totalRemoved,
+                    ...(followupError ? { followupError } : {}),
                     groups: groupSummaries,
                     unique: uniqueSuggestions,
                 },

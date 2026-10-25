@@ -42,6 +42,9 @@ export interface ForceTextFinalizePolicyOptions {
     /** Nudge within this many steps of maxSteps. Default 2 — the same boundary
      *  BudgetPolicy hands off at (`maxSteps - 2`). */
     readonly withinLastSteps?: number;
+    /** Take the tools away on the very last step, so a model that keeps
+     *  investigating after the note can only answer in text. */
+    readonly noToolsOnLastStep?: boolean;
 }
 
 export class ForceTextFinalizePolicy implements AgentPolicy {
@@ -56,8 +59,15 @@ export class ForceTextFinalizePolicy implements AgentPolicy {
         }
         // NOTE, not a tool gate: the model may still investigate if it judges it
         // necessary. The only thing this removes is the excuse for ending with
-        // nothing. Deliberately returns no `activeTools` — see the header.
+        // nothing. Returns no `activeTools` — see the header — except on the
+        // last step when `noToolsOnLastStep` is set: that step is already the
+        // final one, so it only takes away a tool call that would end the run
+        // with no verdict. It never replaces the text answer with the done tool.
+        const lastStep = view.stepNumber >= view.maxSteps - 1;
         return {
+            ...(this.opts.noToolsOnLastStep && lastStep
+                ? { activeTools: [] }
+                : {}),
             injectNote: {
                 role: 'user',
                 content: `You are on step ${view.stepNumber} of ${view.maxSteps}. Give ${this.opts.answerDescription} now, in your reply, from the evidence you already have. Do not open a new line of investigation.`,

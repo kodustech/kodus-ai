@@ -1,8 +1,5 @@
 import { extractProviderMessage } from './review-error-diagnostics';
-import {
-    AgentContextWindowTooSmallError,
-    AgentPromptTooLargeError,
-} from './errors';
+import { AgentContextWindowTooSmallError } from './errors';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -316,9 +313,25 @@ function matchByHttpStatus(
  * Please recharge." says neither quota nor credit, and four GLM scopes in
  * production were being retried against a spent balance.
  *
- * One list, both callers.
+ * Anthropic is the second shape: an organization's spend cap says "You have
+ * reached your specified API usage limits", which names neither quota nor
+ * billing either, so a cap that only clears next month was read as an unknown
+ * failure -- and UNKNOWN is deliberately never cascaded.
+ *
+ * One list, both callers. That is also why the asymmetry above applies to
+ * every entry, not just this one: whatever a false match resolves to here is
+ * what the 429 branch will resolve to as well, so a new entry is pinned in
+ * BOTH directions -- the wording it must catch, and the neighbouring
+ * temporary wording it must leave on RATE_LIMIT.
  */
 function looksLikeQuota(lower: string): boolean {
+    // A per-minute quota is a rate limit that clears on its own, not a spent
+    // balance. Google words both as "You exceeded your current quota"; only the
+    // quota id in the error body ("...InputTokensPerModelPerMinute...") tells a
+    // per-minute token limit from a daily or billing one.
+    if (looksLikePerMinuteLimit(lower)) {
+        return false;
+    }
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
@@ -332,10 +345,33 @@ function looksLikeQuota(lower: string): boolean {
         // billing-shaped status code.
         lower.includes('suspended') ||
         lower.includes('spending limit') ||
+        // Anthropic's organization spend cap (#2110), matched on its observed
+        // wording rather than a bare "usage limit". The wording is narrow
+        // because this list also decides the ambiguous 429, and the two
+        // misreadings do not cost the same:
+        //   - a false QUOTA_EXCEEDED is the expensive direction. It is a
+        //     terminal category, so it arms no slot cooldown (byok-model-
+        //     wrapper) and cascades to the fallback on every sub-call, with
+        //     copy that sends a funded customer to chase billing.
+        //   - a false RATE_LIMIT only costs a cooldown. A delay.
+        // So on ambiguity, resolve toward RATE_LIMIT: if this phrase ever has
+        // to be loosened, loosen it toward RATE_LIMIT, never away from it. The
+        // failure mode of matching the exact phrase is exactly that delay --
+        // if Anthropic rewords the cap, we wait instead of mislabelling.
+        lower.includes('specified api usage limits') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
     );
+}
+
+/**
+ * True for a quota the provider resets every minute (Google's
+ * "...PerModelPerMinute..." quota ids, "per minute" prose). A daily quota in
+ * the same text is not a per-minute limit.
+ */
+function looksLikePerMinuteLimit(lower: string): boolean {
+    return /per[\s_-]?minute/.test(lower) && !/per[\s_-]?day/.test(lower);
 }
 
 /**
@@ -371,7 +407,8 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('rate_limit') ||
         lower.includes('rate limit') ||
-        lower.includes('too many requests')
+        lower.includes('too many requests') ||
+        looksLikePerMinuteLimit(lower)
     ) {
         return LlmErrorCategory.RATE_LIMIT;
     }
@@ -481,9 +518,9 @@ function buildFriendlyMessage(
                 ? `Your Google Cloud project doesn't have access to the configured model on Vertex AI. Enable it in the project's Vertex AI Model Garden (open the model and accept the provider's terms), then comment \`@kody review\` to retry. The model id and region are fine — this is a one-time per-model enablement in Google Cloud.`
                 : `Your account doesn't have access to the configured model${providerLabel}. Enable or request access to it on the provider, then retry.`;
         case LlmErrorCategory.CONTEXT_OVERFLOW:
-            // Generic fallback only — typed AgentContextWindowTooSmallError /
-            // AgentPromptTooLargeError go through buildContextOverflowMessage
-            // with the specific numbers and actionable options.
+            // Generic fallback only — a typed AgentContextWindowTooSmallError
+            // goes through buildContextOverflowMessage with the specific
+            // numbers and actionable options.
             return `The PR exceeded the maximum context size accepted by the model${providerLabel}.`;
         case LlmErrorCategory.TRANSIENT:
             return `Transient error reaching the provider${providerLabel}. Try again.`;
@@ -524,18 +561,6 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
         const window = err.contextWindow.toLocaleString('en-US');
         return [
             `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but this review needs at least ${err.overheadTokens.toLocaleString('en-US')} tokens of context.`,
-            '',
-            '**To resolve, choose one:**',
-            `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
-            `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
-        ].join('\n');
-    }
-
-    if (err instanceof AgentPromptTooLargeError) {
-        const window = err.contextWindowTokens.toLocaleString('en-US');
-        return [
-            `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but the assembled prompt would need ${err.estimatedTokens.toLocaleString('en-US')} tokens.`,
             '',
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,

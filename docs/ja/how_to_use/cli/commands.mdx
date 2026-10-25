@@ -43,7 +43,6 @@ kodus review --prompt-only            # AI エージェント向けに最適化�
 | `--rules-only`         | —      | 設定されたルールのみを使用してレビュー（一般提案なし）      |
 | `--fast`               | —      | 高速モード: より軽いチェックによる迅速な分析                |
 | `--focus <text>`       | —      | レビューを特定の領域に向ける — [レビューの誘導](/ja/how_to_use/code_review/review_directive) を参照 |
-| `--heavy`              | —      | より深いパス: リコール向上のための追加の批評ラウンド（アルファ、下記参照） |
 | `--interactive`        | `-i`   | インタラクティブモード: 修正をナビゲートして適用            |
 | `--fix`                | —      | 修正可能な問題を全て自動適用                                |
 | `--prompt-only`        | —      | AI エージェント向けに最適化された出力                       |
@@ -52,14 +51,6 @@ kodus review --prompt-only            # AI エージェント向けに最適化�
 | `--fields <csv>`       | —      | レスポンスフィールドを選択（JSON/エージェントモード）、例: `summary,issues.file` |
 | `--github-pat <token>` | —      | プライベートリポジトリのクローンに使う GitHub トークン（`read:repo`）。トライアルユーザーのみ。`KODUS_GITHUB_PAT` でも設定可能。メモリ上のみで保持され、永続化されません。 |
 | `--no-hunk`            | —      | hunk ビューアーをスキップし、従来のインタラクティブリストを使用（インタラクティブセッションのみ） |
-
-<Warning>
-  `--heavy` は**アルファ**機能で、**申請制**です — 有効化するまでどの組織でもオフです。現時点
-  ではクラウドのみで、セルフホストでは利用できません。有効化されるまでフラグは受け付けられます
-  が、レビューは通常どおり実行され、エラーも警告も出ません。アクセスは
-  [Discord](https://discord.gg/TFZBRk9fT6) または [support@kodus.io](mailto:support@kodus.io)
-  からご依頼ください。[Heavy mode](/ja/how_to_use/code_review/review_directive#heavy-mode) を参照。
-</Warning>
 
 ### レビューモード
 

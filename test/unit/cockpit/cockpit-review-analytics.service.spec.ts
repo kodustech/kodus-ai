@@ -197,6 +197,29 @@ describe('CockpitReviewAnalyticsService', () => {
                 },
             ]);
         });
+
+        it('counts only suggestions created since the given instant', async () => {
+            await service.getKodyRulesUsage(baseQuery, {
+                suggestionsCreatedSince: '2026-05-15T12:00:00.000Z',
+            });
+
+            const [sql, params] = query.mock.calls[0];
+            expect(sql).toContain(`s."suggestionCreatedAt" >= $4::timestamptz`);
+            expect(params).toEqual([
+                'org-1',
+                '2026-03-01',
+                '2026-06-01',
+                '2026-05-15T12:00:00.000Z',
+            ]);
+        });
+
+        it('adds no creation filter by default', async () => {
+            await service.getKodyRulesUsage(baseQuery);
+
+            const [sql, params] = query.mock.calls[0];
+            expect(sql).not.toContain(`s."suggestionCreatedAt" >=`);
+            expect(params).toEqual(['org-1', '2026-03-01', '2026-06-01']);
+        });
     });
 
     describe('getReviewOperationalMetrics', () => {

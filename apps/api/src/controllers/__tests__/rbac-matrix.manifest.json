@@ -1,5 +1,93 @@
 [
   {
+    "key": "businessLogic.controller.ts#intent",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/intent",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#postTest",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test/post",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#readTools",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources/:integrationId/tools",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#runs",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#taskSources",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#test",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#tryRead",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/try",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "cli-reviews.controller.ts#detail",
     "httpMethod": "GET",
     "urlPath": "/cli-reviews/:executionUuid",
@@ -454,6 +542,17 @@
     "key": "codeManagement.controller.ts#getSelectedRepositories",
     "httpMethod": "GET",
     "urlPath": "/code-management/repositories/selected",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "codeManagement.controller.ts#getWebhookCreationFailures",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/webhook-failures",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -924,20 +1023,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#importFastIdeRules",
-    "httpMethod": "POST",
-    "urlPath": "/kody-rules/import-fast-ide-rules",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "kodyRules.controller.ts#listPastReviewers",
+    "key": "kodyRules.controller.ts#listAgentInstructionFiles",
     "httpMethod": "GET",
-    "urlPath": "/kody-rules/past-reviewers",
+    "urlPath": "/kody-rules/agent-instruction-files",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -946,9 +1034,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#listPendingIdeRules",
+    "key": "kodyRules.controller.ts#listPastReviewers",
     "httpMethod": "GET",
-    "urlPath": "/kody-rules/pending-ide-rules",
+    "urlPath": "/kody-rules/past-reviewers",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -982,17 +1070,6 @@
     "key": "kodyRules.controller.ts#resyncIdeRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/resync-ide-rules",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "kodyRules.controller.ts#reviewFastIdeRules",
-    "httpMethod": "POST",
-    "urlPath": "/kody-rules/review-fast-ide-rules",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

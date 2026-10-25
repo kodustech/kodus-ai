@@ -60,6 +60,7 @@ import { PUBLIC_PR_GROUPING_SERVICE_TOKEN } from './domain/contracts/public-pr-g
 // External dependencies
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
+import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
@@ -118,6 +119,7 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         forwardRef(() => GithubModule), // For GitHubRateLimitGateService dependency
         forwardRef(() => PlatformCoreModule), // For CodeManagementService (platform resolution)
         forwardRef(() => PermissionValidationModule), // For BYOK task-slot resolution
+        forwardRef(() => CodebaseModule), // For CODE_BASE_CONFIG_SERVICE_TOKEN (coding-agent instructions setting)
     ],
     providers: [
         // Strategy

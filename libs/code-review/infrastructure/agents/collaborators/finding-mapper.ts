@@ -16,6 +16,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { normalizeRepoPath } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import type { ReviewFindingLabel } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
 // ── Bounded Levenshtein + UUID recovery ──────────────────────────────────────
 
@@ -80,7 +81,7 @@ export interface LabelPolicy {
     /** The agent's fixed category (bug/security/performance/kody_rules/generalist). */
     categoryLabel: string;
     /** Labels this run may emit (for mixed/generalist reviewers). */
-    allowedLabels: Array<'bug' | 'security' | 'performance'>;
+    allowedLabels: ReviewFindingLabel[];
     /** Whether the agent emits per-finding labels (generalist) vs a fixed one. */
     supportsMixed: boolean;
 }
@@ -95,17 +96,12 @@ export function resolveSuggestionLabel(
     if (!policy.supportsMixed) {
         return policy.categoryLabel;
     }
-    const allowed = new Set(policy.allowedLabels);
+    const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
             ? suggestion.label.toLowerCase()
             : '';
-    if (
-        (rawLabel === 'bug' ||
-            rawLabel === 'security' ||
-            rawLabel === 'performance') &&
-        allowed.has(rawLabel as 'bug' | 'security' | 'performance')
-    ) {
+    if (allowed.has(rawLabel)) {
         return rawLabel;
     }
     return policy.allowedLabels[0] || 'bug';

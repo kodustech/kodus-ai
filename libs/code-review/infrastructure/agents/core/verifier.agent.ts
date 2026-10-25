@@ -27,9 +27,14 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 import {
     buildVerifierPrompt,
     VERIFIER_REPEAT_RULE,
+    VERIFIER_REPO_INSTRUCTION_RULE,
     verifierLaneRule,
 } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
-import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import {
+    formatPreviousDecisions,
+    renderRepoInstructionFiles,
+} from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
     recoverVerdictObject,
@@ -121,12 +126,16 @@ export function buildVerifierAgentSpec(
             new BudgetPolicy(),
             // Without this the verify run can spend every step investigating and
             // be cut off with NO verdict — 20% of production runs (154 sampled,
-            // 2026-09-19), which fails open and keeps the candidate unverified.
+            // 2026-09-19); a run cut off at the step cap discards the candidate.
             // Force TEXT, not the tool: this prompt asks for a JSON verdict in
             // the reply and never mentions submitVerdict, and constraining the
             // output is measured harm (see model-strictness.ts).
             new ForceTextFinalizePolicy({
                 answerDescription: 'your final JSON verdict',
+                // Some models (Kimi, DeepSeek) ignore the note and call tools
+                // until the budget ends with no verdict, which production
+                // discards; on the last step they can only answer.
+                noToolsOnLastStep: true,
             }),
         ],
         maxSteps: params.maxSteps ?? 6,
@@ -137,15 +146,31 @@ export function buildVerifierAgentSpec(
     };
 }
 
+function repoInstructionEvidence(
+    finding: FinderSuggestion,
+    repoInstructions?: RepoInstructionsContext,
+): string {
+    if (finding.label !== 'repo_instruction') return '';
+    const files = repoInstructions?.files ?? [];
+    const block = files.length
+        ? `<RepositoryInstructions>\n${renderRepoInstructionFiles(files).join('\n')}\n</RepositoryInstructions>`
+        : '<RepositoryInstructions>No instruction files were provided for this review.</RepositoryInstructions>';
+    return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
+}
+
 /** Format a finding into the verifier's per-run task prompt (HV2 evidence).
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
  *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
  *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
- *  unchanged. */
+ *  unchanged. `repoInstructions` is read only for a `repo_instruction`
+ *  candidate. */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
-    options: { laneFocus?: string } = {},
+    options: {
+        laneFocus?: string;
+        repoInstructions?: RepoInstructionsContext;
+    } = {},
 ): string {
     const laneFocus =
         typeof options?.laneFocus === 'string' ? options.laneFocus : '';
@@ -157,6 +182,7 @@ export function verifierPromptFor(
         `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
         finding.existingCode ? `Code:\n${finding.existingCode}` : '',
+        repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
         laneFocus.trim() ? verifierLaneRule(laneFocus) : '',
@@ -294,7 +320,8 @@ export interface LlmVerifierParams {
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 5. */
+    /** Depth for high-confidence findings (light verify). Default 7: six
+     *  tool steps to reach where the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
     /** Depth for low-confidence findings (full verify). Default 10. */
     fullMaxSteps?: number;
@@ -319,6 +346,9 @@ export interface LlmVerifierParams {
      *  NOT done here (line numbers shift across commits); the model judges
      *  whether a same-file record is "the same issue" semantically. */
     previousDecisions?: PrDecisionRecord[];
+    /** The coding-agent instructions the finder reviewed against; evidence
+     *  for `repo_instruction` candidates only. */
+    repoInstructions?: RepoInstructionsContext;
     /** A custom agent kept to its lane (#2172): its focus, against which each
      *  finding is also judged in the same run (see verifierLaneRule). */
     laneFocus?: string;
@@ -363,7 +393,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             runName: verifyRunName,
             agentName: params.agentName,
             tools: params.tools,
-            maxSteps: params.lightMaxSteps ?? 5,
+            maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
         });
         this.fullSpec = buildVerifierAgentSpec({
@@ -407,6 +437,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             {
                 prompt: verifierPromptFor(candidate, matchingDecisions, {
                     laneFocus: this.params.laneFocus,
+                    repoInstructions: this.params.repoInstructions,
                 }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),

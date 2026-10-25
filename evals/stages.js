@@ -61,14 +61,35 @@ const STAGES = [
         tests: [
             {
                 kind: 'unit',
-                name: 'The stage and its verifier',
+                name: 'The stage, the service, the judge and its verifier',
                 specs: [
                     'libs/code-review/pipeline/stages/business-logic-validation.stage.spec.ts',
-                    'test/unit/code-review/pipeline/stages/business-logic-validation.stage.spec.ts',
-                    'libs/agents/infrastructure/services/agents/business-rules-validation/business-rules-verifier.spec.ts',
+                    'libs/agents/business-validation/business-validation.service.spec.ts',
+                    'libs/agents/business-validation/judge/validation-verdict.spec.ts',
+                    'libs/agents/business-validation/judge/business-rules-verifier.spec.ts',
                 ],
             },
-            { kind: 'contract', name: 'The stage, its MCP adapter and the Kodus MCP server, end to end', wiring: ['business-logic'] },
+            {
+                kind: 'unit',
+                name: 'Which task a PR names, read through each tracker, scripted MCP servers',
+                specs: ['test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts'],
+            },
+            { kind: 'contract', name: 'The stage, its MCP adapter and the Jira MCP, end to end', wiring: ['business-logic', 'business-logic-requirements'] },
+            {
+                kind: 'contract',
+                name: 'Per requirement: done work not called a gap, and gaps caught (evals/business-logic-requirements)',
+                weekly: ['evals/business-logic-requirements/run.js', '--gate'],
+            },
+            {
+                kind: 'contract',
+                name: 'The judge, the second look and where criteria live, on a real model (evals/business-logic/live.js)',
+                weekly: ['evals/business-logic/live.js'],
+            },
+            {
+                kind: 'contract',
+                name: "A task a tracker's changed server still reads, and never another (evals/task-finder)",
+                weekly: ['evals/task-finder/run.js'],
+            },
         ],
         eval: {
             path: 'evals/business-logic',
@@ -78,7 +99,7 @@ const STAGES = [
                 full: null,
             },
             nightly: 'shared',
-            caveat: 'Three cases: a green number says the stage still reads the ticket and the diff and tells a gap from a pass, not how good its gap analysis is.',
+            caveat: 'Three cases: a green number says the stage still reads the ticket and the diff and tells a gap from a pass; how good its answer per requirement is, is requirement-accuracy.live.spec.ts.',
         },
     },
     {
@@ -163,6 +184,36 @@ const STAGES = [
         },
     },
     {
+        id: 'repo-instructions',
+        name: 'Agent instructions',
+        short: "Checks the repo's coding-agent instructions",
+        group: 'The agents, side by side',
+        does: "Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.",
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which files govern the change, the read tool, the quote check',
+                specs: [
+                    'libs/code-review/infrastructure/agents/collaborators/repo-instructions.spec.ts',
+                    'libs/code-review/infrastructure/agents/adapters/repo-instruction-tool.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-with-verify.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
+        ],
+        eval: {
+            path: 'evals/repo-instructions',
+            metric: 'of violation lines the review posts',
+            sets: {
+                controlled: 'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
+                full: 'every such PR (14)',
+            },
+            nightly: 'shared',
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+        },
+    },
+    {
         id: 'parse',
         name: 'Output parsing',
         short: "Turns the finder's output into findings",
@@ -175,6 +226,8 @@ const STAGES = [
                 name: 'The findings schema and the JSON extraction',
                 specs: [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
+                    'libs/llm/structured-output-repair.spec.ts',
                     'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],

@@ -37,12 +37,19 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { deepMerge } from '@libs/common/utils/deep';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 import { CodeReviewPipelineObserver } from '@libs/code-review/infrastructure/observers/code-review-pipeline.observer';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 interface GitContext {
     remote?: string;
@@ -105,6 +112,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly kodyRulesService: IKodyRulesService,
         private readonly kodyRulesValidationService: KodyRulesValidationService,
         private readonly pipelineObserver: CodeReviewPipelineObserver,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -176,15 +185,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: codeReviewConfig,
                 repositoryId: resolvedRepoId,
                 repositoryName: resolvedRepoName,
+                instructionsBaseRef,
             } = isTrialMode
                 ? {
                       config: this.getDefaultConfig(),
                       repositoryId: 'global',
                       repositoryName: null,
+                      instructionsBaseRef: undefined,
                   }
                 : await this.loadUserConfigWithRules(
                       organizationAndTeamData,
                       gitContext,
+                      changedFiles,
                   );
 
             // 4. Create pipeline context
@@ -215,8 +227,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
-                // Heavy mode — extra critic pass in the finder for more recall.
-                heavy: input.config?.heavy === true,
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
@@ -239,7 +249,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     title: 'CLI Review',
                     base: {
                         repo: { fullName: 'cli/cli-review' },
-                        ref: 'main',
+                        // With instructions on, an unresolved branch stays
+                        // unknown so the review skips them and logs why,
+                        // instead of reading another branch's files.
+                        ref:
+                            instructionsBaseRef ??
+                            (effectiveConfig?.repoInstructionsEnabled
+                                ? undefined
+                                : 'main'),
                     },
                     repository: {} as any,
                     isDraft: false,
@@ -371,9 +388,73 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     }
 
     /**
-     * Load user's code review configuration from database,
-     * including kody rules resolved for the repository matched by git remote.
+     * Whether coding-agent instructions are on for this CLI review, and the
+     * branch to read them from. Resolved as a PR review resolves them: the
+     * stored levels, the repository's kodus-config.yml and the directory the
+     * changed files fall in. A CLI review has no pull request, so the branch
+     * is the repository's default branch, asked of the git host. When the
+     * lookup fails the repository's stored setting stands and `baseRef` is
+     * `undefined` (instructions skipped, with the stage's log).
      */
+    private async resolveRepoInstructions(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { id: string; name?: string | null },
+        parameter: CodeReviewParameter,
+        changedFiles: FileChange[],
+    ): Promise<{ enabled: boolean; baseRef?: string }> {
+        const stored = resolveKodyLearningSettings(
+            parameter,
+            repository.id,
+        ).repoInstructionsEnabled;
+        if (!repository.id || repository.id === 'global') {
+            return { enabled: stored };
+        }
+        const metadata = {
+            organizationAndTeamData,
+            repositoryId: repository.id,
+        };
+
+        let defaultBranch: string | undefined;
+        try {
+            defaultBranch =
+                (await this.codeManagementService.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                })) || undefined;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the default branch for coding-agent instructions in the CLI review',
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata,
+            });
+        }
+        if (!defaultBranch) return { enabled: stored };
+
+        let enabled = stored;
+        try {
+            const merged =
+                await this.codeBaseConfigService.getMergedCodeReviewConfigs(
+                    organizationAndTeamData,
+                    { id: repository.id, name: repository.name ?? '' },
+                    parameter,
+                    defaultBranch,
+                    changedFiles,
+                );
+            enabled = merged?.repoInstructionsEnabled === true;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    "Could not merge kodus-config.yml and directory settings for coding-agent instructions in the CLI review; using the repository's stored setting",
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata: { ...metadata, stored },
+            });
+        }
+        return { enabled, baseRef: enabled ? defaultBranch : undefined };
+    }
+
     /**
      * Platform backing this CLI review.
      *
@@ -418,13 +499,19 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         }
     }
 
+    /**
+     * Load user's code review configuration from database,
+     * including kody rules resolved for the repository matched by git remote.
+     */
     private async loadUserConfigWithRules(
         organizationAndTeamData: OrganizationAndTeamData,
         gitContext?: GitContext,
+        changedFiles: FileChange[] = [],
     ): Promise<{
         config: CodeReviewConfig;
         repositoryId: string;
         repositoryName: string | null;
+        instructionsBaseRef?: string;
     }> {
         try {
             const [params, kodyRulesEntity] = await Promise.all([
@@ -498,6 +585,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 });
             }
 
+            const instructions = await this.resolveRepoInstructions(
+                organizationAndTeamData,
+                { id: repositoryId, name: repositoryName },
+                paramObj.configValue,
+                changedFiles,
+            );
+
             return {
                 config: {
                     ...normalizedConfig,
@@ -507,9 +601,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                             : 'en-US',
                     kodyRules: standardRules,
                     kodyMemoryRules: memoryRules,
+                    // Resolved as PR reviews resolve it; the rest of this
+                    // config is global only.
+                    repoInstructionsEnabled: instructions.enabled,
                 } as any as CodeReviewConfig,
                 repositoryId,
                 repositoryName,
+                instructionsBaseRef: instructions.baseRef,
             };
         } catch (error) {
             this.logger.warn({

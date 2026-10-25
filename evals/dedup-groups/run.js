@@ -4,10 +4,12 @@
 // gold v2 of #1821 (cases/<pool>.json): which suggestions it joined and which
 // it should have (README.md).
 //
-//   node evals/dedup-groups/run.js [--model=<id>] [--set=controlled|full] [--pool=<pool>] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
+//   node evals/dedup-groups/run.js [--model=<id>] [--set=controlled|full] [--pool=<pool>] [--embedder=platform|none] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
 //
 // --set   controlled (default): the pool of the nightly model; full: every pool
 // --pool  one pool instead (deepseek-v4.1-flash, gpt-6.1-sol, sonnet-5.5, muse-spark-1.2)
+// --embedder  platform (default): the platform's OpenAI key, as cloud; none: no
+//         embedder, as a self-hosted install without that key (shared/embedder.js)
 //
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
@@ -16,6 +18,7 @@ const { countTokens, tokensUsed, withCallErrors } = require('../shared/eval-kit'
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
 const { datasetFor } = require('../funnel/known-bugs');
 const { refusal } = require('../funnel/stage-run');
+const { parseEmbedder, applyEmbedder, watchEmbeddings } = require('../shared/embedder');
 
 const POOLS = ['deepseek-v4.1-flash', 'gpt-6.1-sol', 'sonnet-5.5', 'muse-spark-1.2'];
 const CONTROLLED_POOL = 'deepseek-v4.1-flash';
@@ -99,31 +102,6 @@ async function dedupCase(env, testCase) {
     }
 }
 
-// Whether the platform embedder answered: the dedup's semantic tier needs it
-// (libs/common/utils/document.ts), and without it the guard vetoes more merges.
-function watchEmbeddings() {
-    const seen = { calls: 0, failed: 0 };
-    const inner = globalThis.fetch;
-    globalThis.fetch = async function fetchWatchingEmbeddings(url, init) {
-        const embedding = /\/embeddings\b/.test(String(url?.url || url));
-        try {
-            const response = await inner(url, init);
-            if (embedding) {
-                seen.calls += 1;
-                if (!response.ok) seen.failed += 1;
-            }
-            return response;
-        } catch (error) {
-            if (embedding) {
-                seen.calls += 1;
-                seen.failed += 1;
-            }
-            throw error;
-        }
-    };
-    return () => ({ embedder: !seen.calls ? 'not called' : seen.failed === seen.calls ? 'failed' : seen.failed ? 'partly failed' : 'answered', embeddingCalls: seen.calls, embeddingFailures: seen.failed });
-}
-
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     const MODEL = args.model || 'deepseek-v4-flash@fireworks';
@@ -138,14 +116,22 @@ async function main() {
         console.error(`unknown --pool=${unknownPool}: ${POOLS.join(', ')}`);
         return 2;
     }
+    let EMBEDDER;
+    try {
+        EMBEDDER = parseEmbedder(args.embedder);
+    } catch (error) {
+        console.error(error.message);
+        return 2;
+    }
     const TARGET = (require('./targets.json').sets[SET]?.models || {})[MODEL] || {};
     // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
     if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
     process.env.RECALL_MODEL = MODEL;
     const { internals } = require('../investigation/agent-provider');
     countTokens();
-    const environment = watchEmbeddings();
+    const environment = watchEmbeddings(EMBEDDER);
     const route = internals.resolveRoute({ provider: 'tier0', model: MODEL });
+    applyEmbedder(EMBEDDER);
     const permissionService = internals.evalPermissionService(route.storedConfig);
 
     const only = args.cases ? new Set(String(args.cases).split(',')) : null;

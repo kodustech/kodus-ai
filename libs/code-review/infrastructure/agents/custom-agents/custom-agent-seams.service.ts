@@ -783,7 +783,6 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     gitHubToken: undefined,
                     callGraph: '',
                     adaptiveProfile,
-                    heavy: false,
                 }),
                 customAgents: [agent],
                 onlyCustomAgent: slug,

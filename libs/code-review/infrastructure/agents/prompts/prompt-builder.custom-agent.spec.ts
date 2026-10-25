@@ -145,10 +145,10 @@ describe('generalist prompts are byte-identical', () => {
             existingCode: 'i <= n',
         };
         expect(sha(buildVerifierPrompt('', 0).system)).toBe(
-            '729e28d05c1ed5b41ec346dee92540a996ee99230cb396ac55bd6f4ad1d9a428',
+            '8b281d919d78cf8125620983d883213ce2b16aef9ccc9ea3085b17dcc9c8db98',
         );
         expect(sha(verifierPromptFor(finding))).toBe(
-            'da4772491f4b1a711f9f3c38413f19acc0d60288bc6d1a7fa0a52a4a306fa568',
+            'b8bf172b6524042f9f1249952eacbba2f15aa2fb868341c7be7d873246697877',
         );
     });
 

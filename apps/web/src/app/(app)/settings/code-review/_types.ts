@@ -1,4 +1,5 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
 import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
@@ -101,6 +102,7 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyRulesAutoPauseEnabled?: boolean;
     kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: {
         enabled: boolean;
@@ -115,16 +117,16 @@ export type CodeReviewGlobalConfig = {
         ciChecks?: boolean;
         tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
     };
+    /** How each PR is checked against the task it references. */
+    businessLogic?: BusinessLogicSettingsValue;
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
+    /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
+     *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
+    repoInstructionsEnabled: boolean;
     /** Team-defined review agents (beta, behind `custom-agents`). */
     customAgents?: CustomAgent[];
     /** Skills and docs in the repository, linked to the main review or agents. */
     knowledge?: KnowledgeItem[];
-    ideRulesSyncEnabled: boolean;
-    /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
-     *  Picks what happens to the rules previously imported from IDE files.
-     *  Default on the backend is `keep` (least destructive) when omitted. */
-    ideSyncDisableAction?: "keep" | "pause" | "delete";
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {

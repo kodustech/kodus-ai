@@ -10,6 +10,7 @@ const { main, onTheStage } = require('../stage-run');
 main({
     id: 'dedup',
     usesModel: true,
+    embedder: true,
     controlInput: (candidates) => ({ candidates }),
     apply: (env, frozen) =>
         onTheStage(env, frozen, async (stage, input, context) => (await stage.dedupSuggestionStreams(input, context.pullRequest.number, context, undefined)).deduped),

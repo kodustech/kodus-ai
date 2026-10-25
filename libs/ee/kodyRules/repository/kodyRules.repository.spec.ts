@@ -154,3 +154,61 @@ describe('KodyRulesRepository.updateRule — clearing a field', () => {
         expect(findOneAndUpdate).not.toHaveBeenCalled();
     });
 });
+
+describe('KodyRulesRepository.markAutoPausesDigested', () => {
+    it('marks only the pause records that still carry the digested pausedAt', async () => {
+        const exec = jest.fn().mockResolvedValue({ modifiedCount: 1 });
+        const updateOne = jest.fn().mockReturnValue({ exec });
+        const repo = new KodyRulesRepository({ updateOne } as any, {} as any);
+        const pausedAt = new Date('2026-10-21T06:00:00Z');
+        const digestedAt = new Date('2026-10-26T09:00:00Z');
+
+        await expect(
+            repo.markAutoPausesDigested(
+                'org-1',
+                'rule-1',
+                [pausedAt],
+                digestedAt,
+            ),
+        ).resolves.toBe(true);
+
+        expect(updateOne).toHaveBeenCalledWith(
+            { organizationId: 'org-1' },
+            {
+                $set: {
+                    'rules.$[current].autoPause.digestedAt': digestedAt,
+                    'rules.$[previous].lastAutoPause.digestedAt': digestedAt,
+                },
+            },
+            {
+                arrayFilters: [
+                    {
+                        'current.uuid': 'rule-1',
+                        'current.autoPause.pausedAt': { $in: [pausedAt] },
+                    },
+                    {
+                        'previous.uuid': 'rule-1',
+                        'previous.lastAutoPause.pausedAt': { $in: [pausedAt] },
+                    },
+                ],
+            },
+        );
+    });
+
+    it('reports false when nothing matched', async () => {
+        const exec = jest.fn().mockResolvedValue({ modifiedCount: 0 });
+        const repo = new KodyRulesRepository(
+            { updateOne: jest.fn().mockReturnValue({ exec }) } as any,
+            {} as any,
+        );
+
+        await expect(
+            repo.markAutoPausesDigested(
+                'org-1',
+                'rule-1',
+                [new Date()],
+                new Date(),
+            ),
+        ).resolves.toBe(false);
+    });
+});

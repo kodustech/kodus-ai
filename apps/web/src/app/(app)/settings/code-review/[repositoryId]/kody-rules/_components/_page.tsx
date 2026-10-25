@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { planCtaTarget } from "@components/system/plan-cta-target";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GateCtaLink } from "@components/system/gate-cta-link";
@@ -36,8 +36,7 @@ import { captureGateHit } from "src/core/utils/gate-hit";
 import {
     compareRules,
     EMPTY_LIST_FILTERS,
-    isOrphanAutoSyncRule,
-    matchesKodySyncFilter,
+    isFrozenAgentFileRule,
     matchesOriginFilter,
     matchesPausedOnlyFilter,
     matchesSeverityFilter,
@@ -72,11 +71,12 @@ import { KodyRulesConfigurationSheet } from "./configuration-sheet";
 import { KodyRulesDataTable } from "./data-table";
 import { type KodyRuleRowContext } from "./data-table-row";
 import { KodyRulesEmptyState } from "./empty";
+import { FrozenRulesChip } from "./frozen-rules-chip";
 import { KodyRulesList } from "./list";
 import { KodyRulesNoMatches } from "./no-matches";
-import { OrphanRulesChip } from "./orphan-rules-chip";
 import { KodyRulesPageSkeleton } from "./page-skeleton";
 import { PendingSection } from "./pending-section";
+import { RemovedOnboardingImportsNotice } from "./removed-onboarding-imports-notice";
 import { KodyRuleDetailSheet } from "./rule-detail-sheet";
 import { useKodyRulesHealth } from "./rule-health";
 import { SeverityHeatmap } from "./severity-heatmap";
@@ -332,34 +332,11 @@ const KodyRulesPageContent = () => {
         );
     }, [hasReadUrl, filterQuery, listFilters, onlyIdeSynced, pathname]);
 
-    const ideRulesSyncEnabledForRepo =
-        !isGlobalView &&
-        // `configs.ideRulesSyncEnabled` is a FormattedConfigProperty
-        // ({ value, level, ... }), not a raw boolean. `Boolean(<object>)`
-        // is always true, which made `ideRulesSyncEnabledForRepo` look
-        // permanently `true` and suppressed the OrphanRulesBanner from
-        // ever rendering. Read `.value` explicitly.
-        config.repositories?.find((r) => r.id === repositoryId)?.configs
-            ?.ideRulesSyncEnabled?.value === true;
-
-    // Orphan auto-sync rules: anything imported from IDE rule files
-    // (.cursorrules, .cursor/rules/**, CLAUDE.md, …) that survived the
-    // sync-off event, regardless of whether the user kept them ACTIVE or
-    // parked them as PAUSED. PAUSED rules are still "in the user's lap" —
-    // a one-click Resume puts them back in PR review, so they belong in
-    // the count. Onboarding / Kody-generated rules share the
-    // "sourcePath is set" shape but come from unrelated flows and don't
-    // count here.
-    //
-    // Rules with `pinnedSync=true` are EXCLUDED: their source file
-    // carries `@kody-sync`, so the backend keeps syncing them even
-    // when the repo toggle is off. They're actively maintained, not
-    // orphans. See `kodyRulesSync.service.ts:shouldForceSync`.
-    // Orphan auto-sync count is derived from the rules ACTUALLY ON SCREEN
+    // Rules imported from coding-agent files (CLAUDE.md, .cursor/rules, …)
+    // before those files stopped becoming rules are frozen: nothing syncs
+    // them any more. Their count is derived from the rules ACTUALLY ON SCREEN
     // (self + inherited, per visibleScopes) inside getRulesViewState as
-    // `orphanCount`, then gated for the chip after reviewRulesState below.
-    // This keeps the banner number equal to the cards showing the "Orphan"
-    // badge — including inherited ones — instead of a separate scope-fetch.
+    // `orphanCount`, so the chip number equals the highlighted rows.
 
     const getRulesViewState = (ruleType: KodyRulesType) => {
         const activeRulesByType = kodyRules.filter(
@@ -428,7 +405,7 @@ const KodyRulesPageContent = () => {
 
         const orphanCount =
             ruleType === KodyRulesType.STANDARD
-                ? uniqueRules.filter(isOrphanAutoSyncRule).length
+                ? uniqueRules.filter(isFrozenAgentFileRule).length
                 : 0;
 
         const pendingCentralizedCount = activeRulesByType.filter((rule) =>
@@ -444,7 +421,7 @@ const KodyRulesPageContent = () => {
 
         const bannerFilteredRules =
             onlyIdeSynced && ruleType === KodyRulesType.STANDARD
-                ? statusFilteredRules.filter(isOrphanAutoSyncRule)
+                ? statusFilteredRules.filter(isFrozenAgentFileRule)
                 : statusFilteredRules;
 
         // Popover filters: origin (Auto-sync / Onboarding / Kody-generated /
@@ -462,15 +439,7 @@ const KodyRulesPageContent = () => {
             const passesPausedOnly =
                 ruleType !== KodyRulesType.STANDARD ||
                 matchesPausedOnlyFilter(rule as KodyRule, listFilters);
-            const passesKodySync =
-                ruleType !== KodyRulesType.STANDARD ||
-                matchesKodySyncFilter(rule as KodyRule, listFilters);
-            return (
-                passesOrigin &&
-                passesSyncErrors &&
-                passesPausedOnly &&
-                passesKodySync
-            );
+            return passesOrigin && passesSyncErrors && passesPausedOnly;
         });
 
         const filterQueryLowercase = filterQuery.toLowerCase();
@@ -544,13 +513,9 @@ const KodyRulesPageContent = () => {
         ],
     );
 
-    // The chip is meaningful only inside a repo/dir scope with sync off; the
-    // value itself counts every orphan-badged rule currently on screen
-    // (self + inherited), so the banner number matches the cards exactly.
-    const orphanRulesCount =
-        !isGlobalView && !ideRulesSyncEnabledForRepo
-            ? reviewRulesState.orphanCount
-            : 0;
+    // Counts every frozen agent-file rule currently on screen (self +
+    // inherited), so the chip number matches the highlighted rows exactly.
+    const frozenRulesCount = reviewRulesState.orphanCount;
 
     const memoriesState = useMemo(
         () => getRulesViewState(KodyRulesType.MEMORY),
@@ -1035,6 +1000,11 @@ const KodyRulesPageContent = () => {
                         />
                     </Card>
                 )}
+                {(isRepoView || isGlobalView) && (
+                    <Suspense fallback={null}>
+                        <RemovedOnboardingImportsNotice />
+                    </Suspense>
+                )}
                 <PendingSection
                     pendingRules={pendingRules}
                     activeRules={kodyRules}
@@ -1101,8 +1071,8 @@ const KodyRulesPageContent = () => {
                                     isGlobalView={isGlobalView}
                                 />
                             )}
-                            <OrphanRulesChip
-                                count={orphanRulesCount}
+                            <FrozenRulesChip
+                                count={frozenRulesCount}
                                 isFiltering={onlyIdeSynced}
                                 onApply={() => setOnlyIdeSynced(true)}
                                 onClear={() => setOnlyIdeSynced(false)}
@@ -1156,11 +1126,6 @@ const KodyRulesPageContent = () => {
                                             onSelectRule={selectRule}
                                             sortOption={sortOption}
                                             onSortOptionChange={setSortOption}
-                                            syncEnabledForRepo={
-                                                isGlobalView
-                                                    ? undefined
-                                                    : ideRulesSyncEnabledForRepo
-                                            }
                                             bulkSelection={
                                                 canEdit
                                                     ? {
@@ -1238,11 +1203,6 @@ const KodyRulesPageContent = () => {
                                                               isBulkEligible,
                                                       }
                                                     : undefined
-                                            }
-                                            syncEnabledForRepo={
-                                                isGlobalView
-                                                    ? undefined
-                                                    : ideRulesSyncEnabledForRepo
                                             }
                                         />
                                     );
@@ -1359,9 +1319,6 @@ const KodyRulesPageContent = () => {
                 <KodyRuleDetailSheet
                     rule={detailRule}
                     variant={activeTab === "memories" ? "memories" : "rules"}
-                    syncEnabledForRepo={
-                        isGlobalView ? undefined : ideRulesSyncEnabledForRepo
-                    }
                     context={rowContext}
                     onClose={() => {
                         setDetailRuleId(null);

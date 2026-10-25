@@ -157,18 +157,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
         getFreshCloneParams?: () => Promise<CreateSandboxParams>,
         documentationContext?: DocumentationContextItem[],
     ): Promise<ISafeguardResponse> {
-        suggestions?.forEach((suggestion) => {
-            if (
-                suggestion &&
-                Object.prototype.hasOwnProperty.call(
-                    suggestion,
-                    'suggestionEmbedded',
-                )
-            ) {
-                delete suggestion?.suggestionEmbedded;
-            }
-        });
-
         try {
             return await this.safeguardPipeline.execute({
                 organizationAndTeamData,

@@ -20,8 +20,6 @@ export interface EnrichedPullRequestResponse {
     title: string;
     status: string;
     merged: boolean;
-    /** Whether the last review ran in HEAVY mode (resolved post feature-gate). */
-    heavy?: boolean;
     url: string;
     baseBranchRef: string;
     headBranchRef: string;

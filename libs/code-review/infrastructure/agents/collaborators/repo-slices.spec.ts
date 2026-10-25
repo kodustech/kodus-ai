@@ -8,10 +8,8 @@ import {
 } from './repo-slices';
 
 /**
- * Direct coverage for the four primitives extracted out of call-graph.helper.ts
- * (T14). The helper's own spec still exercises them through its exported entry
- * points and remains the byte-identity regression guard; these tests pin each
- * primitive on its own so the Kody Rules retriever can build on them.
+ * Coverage for the four repository-slice primitives the Kody Rules retriever
+ * builds on.
  */
 
 function commands(overrides: Partial<RemoteCommands> = {}): RemoteCommands {
