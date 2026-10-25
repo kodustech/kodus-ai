@@ -33,6 +33,7 @@ import {
     verifierPromptFor,
     extractVerdict,
     LlmVerifier,
+    bundleFor,
 } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
 import { openRouterHonorsJsonSchema } from '@libs/llm/structured-output-gate';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
@@ -218,19 +219,37 @@ describe('verifier contract — LAYER 1 happy path', () => {
         expect(input.prompt).toContain('src/pay.ts');
     });
 
-    it('LlmVerifier.verify honours the confidence depth split (light vs full spec)', async () => {
+    it('LlmVerifier.verify uses the light depth whatever the confidence, the full one only when forced', async () => {
         const { runner, run } = fakeRunner(async () =>
             makeState({ keep: true, rationale: 'r' }),
         );
-        const v = new LlmVerifier(runner, {
-            ...inertParams(),
-            lightMaxSteps: 5,
-            fullMaxSteps: 10,
-        });
-        await v.verify(candidate({ confidence: 8 }), {} as ToolContext); // high → light
-        await v.verify(candidate({ confidence: 2 }), {} as ToolContext); // low  → full
-        expect(run.mock.calls[0][0].maxSteps).toBe(5);
-        expect(run.mock.calls[1][0].maxSteps).toBe(10);
+        const params = { ...inertParams(), lightMaxSteps: 5, fullMaxSteps: 10 };
+        const v = new LlmVerifier(runner, params);
+        await v.verify(candidate({ confidence: 8 }), {} as ToolContext);
+        await v.verify(candidate({ confidence: 2 }), {} as ToolContext);
+        await new LlmVerifier(runner, { ...params, forceFull: true }).verify(
+            candidate(),
+            {} as ToolContext,
+        );
+        expect(run.mock.calls.map((c) => c[0].maxSteps)).toEqual([5, 5, 10]);
+    });
+});
+
+describe('verifier contract — lean input (#1821)', () => {
+    it('the evidence bundle carries the claim and its location, no severity or code', () => {
+        const bundle = bundleFor({
+            relevantFile: 'src/a.ts',
+            relevantLinesStart: 3,
+            relevantLinesEnd: 4,
+            suggestionContent: 'off by one',
+            severity: 'high',
+            existingCode: 'i <= n',
+        } as FinderSuggestion);
+        expect(bundle).toContain('File: src/a.ts');
+        expect(bundle).toContain('Lines: 3-4');
+        expect(bundle).toContain('Claim: off by one');
+        expect(bundle).not.toContain('Severity');
+        expect(bundle).not.toContain('i <= n');
     });
 });
 

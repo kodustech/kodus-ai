@@ -151,7 +151,7 @@ describe('generalist prompts are byte-identical', () => {
             '8b281d919d78cf8125620983d883213ce2b16aef9ccc9ea3085b17dcc9c8db98',
         );
         expect(sha(verifierPromptFor(finding))).toBe(
-            'dc6d2fdb9009f10e08afb0170d92856ca6e56d4045713a33046801b44a63804c',
+            '1d1a59eb0fd05cc959af1e6962cbb484d0c8290c62b9990e929dd336586dd934',
         );
     });
 

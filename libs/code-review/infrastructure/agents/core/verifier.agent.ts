@@ -221,7 +221,6 @@ export function bundleFor(
             : '',
         `Claim: ${finding.suggestionContent}`,
         walk ? `Walk that produced it (the finder's own trace — verify it, do not assume it is right):\n${walk}` : '',
-        finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         outrosDoGrupo?.length
             ? [
                   `<OtherReportsOfTheSameDefect count="${outrosDoGrupo.length}">`,
@@ -470,13 +469,13 @@ export interface LlmVerifierParams {
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 7: six
-     *  tool steps to reach where the finding's facts are decided, and the verdict. */
+    /** Depth of every verify (light). Default 7: six tool steps to reach where
+     *  the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
-    /** Depth for low-confidence findings (full verify). Default 10. */
+    /** Depth of the full verify. Default 10. */
     fullMaxSteps?: number;
-    /** When true, ALWAYS use full depth regardless of confidence. Used by the
-     *  evidence-gate re-verify, which forces a thorough second look. */
+    /** When true, use the full depth. Used by the evidence-gate re-verify,
+     *  which forces a thorough second look. */
     forceFull?: boolean;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
@@ -521,10 +520,9 @@ export interface LlmVerifierParams {
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
  *  the shared runner. ONE implementation of the Verifier port.
  *
- *  CONFIDENCE SPLIT (ported from the legacy loop): confidence decides DEPTH, not
- *  whether to run — high-confidence (>= 5) findings get a LIGHT verify (fewer
- *  steps), low-confidence get a FULL verify (more steps). `forceFull` overrides
- *  to full (the evidence-gate uses it).
+ *  Every finding gets the LIGHT verify; `forceFull` gives the FULL one (the
+ *  evidence gate uses it). The lean finder output (#1821) carries no
+ *  confidence, so depth no longer reads it.
  *
  *  It accumulates token usage across every verify() call so the caller can
  *  report the verify sub-step's cost. */
@@ -586,10 +584,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         candidate: FinderSuggestion,
         ctx: ToolContext,
     ): Promise<Verdict> {
-        // Confidence decides DEPTH (legacy rule): >= 5 → light, < 5 → full.
-        const useFull =
-            this.params.forceFull || (candidate.confidence ?? 5) < 5;
-        const spec = useFull ? this.fullSpec : this.lightSpec;
+        const spec = this.params.forceFull ? this.fullSpec : this.lightSpec;
 
         // Per-finding observation name so the trace shows which finding each
         // verdict judged (e.g. "finder/verify:src/x.ts#42").
