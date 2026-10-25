@@ -1641,6 +1641,16 @@ fi
     // pages through files or greps for: where a symbol is, who calls it, what it
     // calls, which tests cover it, and the shape of a file before reading it.
     const GRAPH_JSON = '.kodus-graph/base-graph.json';
+    const isTestPath = (p: string) =>
+        /(^|\/)(tests?|__tests__|spec)\/|[._-](spec|test)s?\.[a-z]+$|Tests?\.java$|(^|\/)test_[^/]+\.py$/i.test(
+            p || '',
+        );
+    const prodFirst = (xs: any[]) =>
+        [...xs].sort(
+            (a, b) =>
+                Number(isTestPath(a?.file ?? '')) -
+                Number(isTestPath(b?.file ?? '')),
+        );
     const KG = 'kodus-graph';
     if (remoteCommands?.exec) {
         const run = async (cmd: string, max = 8000): Promise<string> => {
@@ -1720,7 +1730,9 @@ fi
                             Number(b.parent_name === owner) -
                             Number(a.parent_name === owner),
                     );
-                results = results.filter((r) => !r.is_test).slice(0, 3);
+                results = results
+                    .filter((r) => !r.is_test && !isTestPath(r.file_path))
+                    .slice(0, 3);
                 if (results.length === 0)
                     return `"${q}" not found in the code graph. Use grep.`;
                 const parts: string[] = [];
@@ -1737,15 +1749,15 @@ fi
                     }
                     if (!c?.found) continue;
                     const fmt = (xs: any[] | undefined) =>
-                        (xs || [])
+                        prodFirst(xs || [])
                             .map((x) =>
                                 typeof x === 'string'
                                     ? `    ${x}`
-                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line ? `:${x.line}` : ''}`,
+                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line != null ? `:${x.line + 1}` : ''}`,
                             )
                             .join('\n') || '    (none found)';
                     parts.push(
-                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start}-${c.symbol.line_end}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
+                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start + 1}-${c.symbol.line_end + 1}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
                     );
                 }
                 return (
