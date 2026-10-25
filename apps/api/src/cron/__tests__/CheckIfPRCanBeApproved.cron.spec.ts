@@ -855,6 +855,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 labels: ['ready'],
                 user: { login: 'alice' },
             },
+            directoryChangedPaths: ['src/auth/login.ts'],
         });
 
         expect(result).toBe(false);
@@ -1085,6 +1086,139 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each([
+        ['missing', null],
+        ['empty', []],
+        ['pathless', [{ filename: undefined }]],
+    ])('holds and explains an %s sensitive-path file list', async (_label, files) => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            { dataExecution: { lastAnalyzedCommit: 'same-sha' } },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            user: { login: 'alice' },
+        });
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue(
+            files,
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 1 } }],
+            },
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalSensitivePaths: ['src/auth/**'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('incomplete changed-file list'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('holds and explains a sensitive-path file lookup failure', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            { dataExecution: { lastAnalyzedCommit: 'same-sha' } },
+        );
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            user: { login: 'alice' },
+        });
+        deps.codeManagementService.getFilesByPullRequestId.mockRejectedValue(
+            new Error('provider unavailable'),
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 1 } }],
+            },
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalSensitivePaths: ['src/auth/**'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('could not be verified'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('reuses the verified directory file list for sensitive-path approval', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            { dataExecution: { lastAnalyzedCommit: 'same-sha' } },
+        );
+        const currentPullRequest = {
+            head: { sha: 'same-sha' },
+            base: { sha: 'base-sha' },
+            user: { login: 'alice' },
+        };
+        deps.codeManagementService.getPullRequest.mockResolvedValue(
+            currentPullRequest,
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: {
+                ...makeOpenPr(77, 'repo-b'),
+                suggestions: [{ comment: { id: 1 } }],
+            },
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalSensitivePaths: ['src/auth/**'],
+            },
+            teamAutomationId: 'team-automation-1',
+            currentPullRequest,
+            directoryChangedPaths: ['src/auth/login.ts'],
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.getFilesByPullRequestId,
+        ).not.toHaveBeenCalled();
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('src/auth/login.ts'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
     it('does not process a PR when the same repository+PR has in-progress execution', async () => {
         const { cron, deps } = makeCron();
 
@@ -1289,7 +1423,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 { filename: `src/auth/file-${prNumber}.ts` },
             ],
         );
-        jest.spyOn(cron as any, 'shouldApprovePR').mockResolvedValue(false);
+        const shouldApprove = jest
+            .spyOn(cron as any, 'shouldApprovePR')
+            .mockResolvedValue(false);
 
         await cron.handleCron();
 
@@ -1303,6 +1439,16 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect.anything(),
             expect.objectContaining({ id: 'repo-a' }),
             [{ filename: 'src/auth/file-2.ts' }],
+        );
+        expect(shouldApprove).toHaveBeenCalledWith(
+            expect.objectContaining({
+                directoryChangedPaths: ['src/auth/file-1.ts'],
+            }),
+        );
+        expect(shouldApprove).toHaveBeenCalledWith(
+            expect.objectContaining({
+                directoryChangedPaths: ['src/auth/file-2.ts'],
+            }),
         );
     });
 
@@ -1533,9 +1679,10 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
     });
 
     it.each([
-        ['empty', []],
-        ['missing', null],
-    ])('explains why approval is held when the provider returns %s files', async (_label, files) => {
+        ['empty', [], 'returned no changed files'],
+        ['missing', null, 'returned no changed files'],
+        ['pathless', [{ filename: undefined }], 'did not return a path'],
+    ])('explains why approval is held when the provider returns %s files', async (_label, files, reason) => {
         const { cron, deps } = makeCron();
         deps.parametersService.findOne.mockResolvedValue({
             team: { uuid: 'team-1' },
@@ -1564,7 +1711,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         expect(deps.codeBaseConfigService.getConfig).not.toHaveBeenCalled();
         expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
             expect.objectContaining({
-                body: expect.stringContaining('returned no changed files'),
+                body: expect.stringContaining(reason),
             }),
             PlatformType.GITLAB,
         );

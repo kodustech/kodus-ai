@@ -96,12 +96,10 @@ const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
 // leaves 15 for request traffic.
 const TEAM_CONCURRENCY = 10;
 // PR level is a different animal and must NOT be tuned like the team
-// level. Of the five awaits in the per-PR path, exactly one hits the
-// database (automationExecutionService.findLatestExecutionByFilters);
-// the other four are git-provider HTTP calls (getPullRequest,
-// getPullRequestReviewThreads, getPullRequestReviewComments,
-// checkIfPullRequestShouldBeApproved). A task parked on an HTTP round
-// trip holds no pool connection at all, so throttling here buys almost
+// level. The per-PR path includes a database read for the latest review
+// execution and several git-provider HTTP calls, including file reads
+// when directory or sensitive-path policies apply. A task parked on an HTTP
+// round trip holds no pool connection at all, so throttling here buys almost
 // no pool safety and costs wall-clock directly.
 //
 // This limiter is created once per run, so the value is a GLOBAL cap
@@ -465,6 +463,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         CodeReviewConfig | undefined;
                                     let currentPullRequest:
                                         PullRequest | null | undefined;
+                                    let directoryChangedPaths:
+                                        string[] | undefined;
                                     if (
                                         codeReviewConfigFromRepo.directories
                                             ?.length
@@ -687,7 +687,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 );
                                             }
                                         }
-                                        if (!files?.length) {
+                                        if (
+                                            !files?.length ||
+                                            files.some((file) => !file.filename)
+                                        ) {
                                             await this.postConditionalApprovalReason(
                                                 {
                                                     organizationAndTeamData,
@@ -700,11 +703,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 pr.provider as PlatformType,
                                                 {
                                                     kind: 'hold',
-                                                    reason: 'The Git provider returned no changed files for this PR. Automatic approval is on hold until the file list can be verified.',
+                                                    reason: !files?.length
+                                                        ? 'The Git provider returned no changed files for this PR. Automatic approval is on hold until the file list can be verified.'
+                                                        : 'The Git provider did not return a path for every changed file. Automatic approval is on hold until the file list can be verified.',
                                                 },
                                             );
                                             return;
                                         }
+                                        directoryChangedPaths = files.map(
+                                            (file) => file.filename,
+                                        );
                                         resolvedConfig =
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
@@ -748,6 +756,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         codeReviewConfig: resolvedConfig,
                                         teamAutomationId: teamAutomation.uuid,
                                         currentPullRequest,
+                                        directoryChangedPaths,
                                     });
                                 }),
                             ),
@@ -785,12 +794,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
         codeReviewConfig,
         teamAutomationId,
         currentPullRequest: preloadedPullRequest,
+        directoryChangedPaths,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         pr: IPullRequestWithDeliveredSuggestions;
         codeReviewConfig?: CodeReviewConfig;
         teamAutomationId: string;
         currentPullRequest?: PullRequest | null;
+        directoryChangedPaths?: string[];
     }): Promise<boolean> {
         const repository = pr?.repository;
         const prNumber = pr?.number;
@@ -850,7 +861,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
-        let changedPaths: string[] = [];
+        let changedPaths: string[] = directoryChangedPaths ?? [];
         if (
             allowNoComments &&
             !['approve', 'out-of-scope'].includes(
@@ -924,7 +935,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                     return false;
                 }
-                if (policy.sensitivePaths?.length) {
+                if (policy.sensitivePaths?.length && !directoryChangedPaths) {
                     let files: Awaited<
                         ReturnType<
                             CodeManagementService['getFilesByPullRequestId']
@@ -955,9 +966,30 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 timeoutMs: APPROVAL_FILES_TIMEOUT_MS,
                             },
                         });
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            {
+                                kind: 'hold',
+                                reason: 'Changed files could not be verified for the sensitive-path policy. Automatic approval will be retried.',
+                            },
+                        );
                         return false;
                     }
-                    if (!files) return false;
+                    if (
+                        !files?.length ||
+                        files.some((file) => !(file.filename ?? file.path))
+                    ) {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            {
+                                kind: 'hold',
+                                reason: 'The Git provider returned an incomplete changed-file list for the sensitive-path policy. Automatic approval is on hold until the files can be verified.',
+                            },
+                        );
+                        return false;
+                    }
                     changedPaths = files
                         .map((file) => file.filename ?? file.path)
                         .filter((path): path is string => !!path);
