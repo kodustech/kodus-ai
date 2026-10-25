@@ -1641,6 +1641,16 @@ fi
     // pages through files or greps for: where a symbol is, who calls it, what it
     // calls, which tests cover it, and the shape of a file before reading it.
     const GRAPH_JSON = '.kodus-graph/base-graph.json';
+    const isTestPath = (p: string) =>
+        /(^|\/)(tests?|__tests__|spec)\/|[._-](spec|test)s?\.[a-z]+$|Tests?\.java$|(^|\/)test_[^/]+\.py$/i.test(
+            p || '',
+        );
+    const prodFirst = (xs: any[]) =>
+        [...xs].sort(
+            (a, b) =>
+                Number(isTestPath(a?.file ?? '')) -
+                Number(isTestPath(b?.file ?? '')),
+        );
     const KG = 'kodus-graph';
     if (remoteCommands?.exec) {
         const run = async (cmd: string, max = 8000): Promise<string> => {
@@ -1720,7 +1730,9 @@ fi
                             Number(b.parent_name === owner) -
                             Number(a.parent_name === owner),
                     );
-                results = results.filter((r) => !r.is_test).slice(0, 3);
+                results = results
+                    .filter((r) => !r.is_test && !isTestPath(r.file_path))
+                    .slice(0, 3);
                 if (results.length === 0)
                     return `"${q}" not found in the code graph. Use grep.`;
                 const parts: string[] = [];
@@ -1737,15 +1749,15 @@ fi
                     }
                     if (!c?.found) continue;
                     const fmt = (xs: any[] | undefined) =>
-                        (xs || [])
+                        prodFirst(xs || [])
                             .map((x) =>
                                 typeof x === 'string'
                                     ? `    ${x}`
-                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line ? `:${x.line}` : ''}`,
+                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line != null ? `:${x.line + 1}` : ''}`,
                             )
                             .join('\n') || '    (none found)';
                     parts.push(
-                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start}-${c.symbol.line_end}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
+                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start + 1}-${c.symbol.line_end + 1}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
                     );
                 }
                 return (
@@ -1754,6 +1766,119 @@ fi
                 );
             },
         );
+
+        // EXPERIMENT (embed): the finder does not pick up optional tools, so
+        // the graph answers inside the two tools it already calls. The first
+        // read of a file carries the file's symbols with their line ranges; a
+        // grep for an identifier carries its definition and callers.
+        const outlined = new Set<string>();
+        const looked = new Map<string, string>();
+        const readFile = tools.readFile;
+        if (readFile) {
+            const original = readFile.execute;
+            readFile.execute = async (args: any, ...rest: any[]) => {
+                const result = await original(args, ...rest);
+                const path = normalizeRepoPath(
+                    String(args?.path || args?.filePath || args?.file || ''),
+                );
+                if (
+                    !path ||
+                    args?.repo ||
+                    outlined.has(path) ||
+                    typeof result !== 'string' ||
+                    result.startsWith('Error') ||
+                    result.startsWith('readFile:')
+                ) {
+                    return result;
+                }
+                outlined.add(path);
+                const raw = await run(
+                    `${KG} outline --files ${shellQuote(path)} --repo-dir . --format json --graph ${GRAPH_JSON}`,
+                    200000,
+                );
+                let symbols: any[] = [];
+                try {
+                    symbols = JSON.parse(raw)?.[0]?.symbols || [];
+                } catch {
+                    return result;
+                }
+                if (symbols.length < 4) return result;
+                const lines = symbols.slice(0, 40).map(
+                    (x) =>
+                        `  ${x.qualified_name.split('::').pop()}  L${x.line_start + 1}-${x.line_end + 1}${x.callers ? `  (${x.callers} callers)` : ''}`,
+                );
+                return `${result}\n\n[code graph] symbols in ${path} — read only the range you need:\n${lines.join('\n')}${symbols.length > 40 ? `\n  … ${symbols.length - 40} more` : ''}`;
+            };
+        }
+        const grep = tools.grep;
+        if (grep) {
+            const original = grep.execute;
+            grep.execute = async (args: any, ...rest: any[]) => {
+                const result = await original(args, ...rest);
+                const pattern = String(args?.pattern || args?.regex || '');
+                const m = pattern.match(
+                    /^(?:\\b)?(?:[\w$]+\\?\.)?([A-Za-z_$][\w$]{3,})(?:\\b|\\?\(|\\s\*\\\()?$/,
+                );
+                if (!m || args?.repo || typeof result !== 'string') {
+                    return result;
+                }
+                const name = m[1];
+                if (!looked.has(name)) {
+                    looked.set(name, await graphNote(name));
+                }
+                const note = looked.get(name);
+                return note ? `${result}\n\n${note}` : result;
+            };
+        }
+        async function graphNote(name: string): Promise<string> {
+            const raw = await run(
+                `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(name)} --limit 20`,
+                200000,
+            );
+            let defs: any[] = [];
+            try {
+                defs = (JSON.parse(raw).results || []).filter(
+                    (r: any) =>
+                        r.name === name ||
+                        r.qualified_name.endsWith(`.${name}`) ||
+                        r.qualified_name.endsWith(`::${name}`),
+                );
+            } catch {
+                return '';
+            }
+            defs = defs.filter((r) => !r.is_test && !isTestPath(r.file_path));
+            // A name defined in many places (get, run, handle) is what grep is
+            // for; the graph adds noise there.
+            if (defs.length === 0 || defs.length > 3) return '';
+            const out: string[] = [];
+            for (const d of defs) {
+                const ctxRaw = await run(
+                    `${KG} context-of --graph ${GRAPH_JSON} --symbol ${shellQuote(d.qualified_name)} --limit 8 --out -`,
+                    200000,
+                );
+                let c: any;
+                try {
+                    c = JSON.parse(ctxRaw);
+                } catch {
+                    continue;
+                }
+                if (!c?.found) continue;
+                const list = (xs: any[] | undefined) =>
+                    prodFirst(xs || [])
+                        .slice(0, 6)
+                        .map(
+                            (x) =>
+                                `${x.qualified_name.split('::').pop()} ${x.file}${x.line != null ? `:${x.line + 1}` : ''}`,
+                        )
+                        .join('; ') || 'none found';
+                out.push(
+                    `  ${c.symbol.qualified_name.split('::').pop()} defined at ${c.symbol.file}:L${c.symbol.line_start + 1}-${c.symbol.line_end + 1}\n    callers: ${list(c.callers)}\n    calls: ${list(c.callees)}`,
+                );
+            }
+            return out.length
+                ? `[code graph] ${name}:\n${out.join('\n')}`
+                : '';
+        }
     }
 
     // ── External documentation lookup (Exa) ─────────────────────────
