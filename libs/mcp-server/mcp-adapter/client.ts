@@ -695,7 +695,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
 
     async disconnect(): Promise<void> {
         if (!this.connected) {
-            this.sessionManager.destroy();
+            // The session manager is created in connect(); nothing to release.
             return;
         }
 
@@ -1756,8 +1756,6 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             clearInterval(this.metricsIntervalId);
             this.metricsIntervalId = undefined;
         }
-        this.sessionManager.destroy();
-
         this.sessionManager?.destroy();
         this.sessionManager = undefined;
 
