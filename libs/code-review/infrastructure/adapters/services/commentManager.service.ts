@@ -9,6 +9,10 @@ import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-wi
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -112,6 +116,8 @@ export class CommentManagerService implements ICommentManagerService {
         private readonly observabilityService: ObservabilityService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly codeManagementService: CodeManagementService,
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequestsService: IPullRequestsService,
     ) {
         this.llmResponseProcessor = new LLMResponseProcessor();
     }
@@ -151,22 +157,23 @@ export class CommentManagerService implements ICommentManagerService {
             (candidate): candidate is number => typeof candidate === 'number',
         );
         if (typeof commentId === 'number') {
-            if ((existing.body ?? existing.note ?? existing.content) === body) {
-                return;
-            }
-            const updatedComment = await runWithBoundedTimeout(
-                this.codeManagementService.updateIssueComment({
-                    ...request,
-                    body,
-                    commentId,
-                    noteId: commentId,
-                    threadId: existing?.threadId,
-                }),
-                15_000,
-                `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
-            );
-            if (updatedComment === null) {
-                throw new Error('Approval reason comment update returned null');
+            if ((existing.body ?? existing.note ?? existing.content) !== body) {
+                const updatedComment = await runWithBoundedTimeout(
+                    this.codeManagementService.updateIssueComment({
+                        ...request,
+                        body,
+                        commentId,
+                        noteId: commentId,
+                        threadId: existing?.threadId,
+                    }),
+                    15_000,
+                    `approval hold comment update org=${organizationAndTeamData.organizationId} team=${organizationAndTeamData.teamId} repo=${repository.id} pr=${prNumber}`,
+                );
+                if (updatedComment === null) {
+                    throw new Error(
+                        'Approval reason comment update returned null',
+                    );
+                }
             }
         } else {
             const createdComment = await runWithBoundedTimeout(
@@ -180,6 +187,25 @@ export class CommentManagerService implements ICommentManagerService {
             if (createdComment === null) {
                 throw new Error('Approval reason comment create returned null');
             }
+        }
+        try {
+            await this.pullRequestsService.setApprovalReasonDeliveryFailure(
+                organizationAndTeamData.organizationId,
+                repository.id,
+                prNumber,
+                null,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not clear conditional approval delivery status',
+                context: CommentManagerService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    prNumber,
+                },
+            });
         }
     }
 
