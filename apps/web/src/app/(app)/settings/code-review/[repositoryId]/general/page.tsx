@@ -31,10 +31,7 @@ import {
 } from "src/app/(app)/settings/_components/context";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useCanFollowGateLink } from "src/core/components/system/gate-cta-link";
-import {
-    availabilityLine,
-    planCtaTarget,
-} from "src/core/components/system/plan-cta-target";
+import { planCtaTarget } from "src/core/components/system/plan-cta-target";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 import { isTeamsOrEnterprisePlan } from "src/features/ee/byok/_utils";
@@ -336,12 +333,6 @@ export default function General() {
                                                 ? "Beta access is not enabled for this workspace yet. Automatic approval without conditions remains available."
                                                 : "Choose which PRs Kody may approve using labels and authors. Require a person for sensitive paths or higher-risk changes."}
                                         </p>
-                                        {!conditionalApprovalPlanAllowed && (
-                                            <p className="text-text-tertiary mt-1.5 text-xs leading-5">
-                                                {availabilityLine()} Beta access
-                                                is also required.
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
                                 {!conditionalApprovalPlanAllowed &&

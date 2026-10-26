@@ -94,9 +94,6 @@ export function ApprovalPolicySettings() {
                     </h3>
                     <Badge>Beta</Badge>
                 </div>
-                <p className="text-text-secondary mt-1 text-xs leading-5">
-                    Available on Teams and Enterprise.
-                </p>
             </div>
             <section className="border-card-lv3/60 border-b px-5 py-6 sm:px-6">
                 <div className="mb-5">
