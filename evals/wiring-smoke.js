@@ -215,6 +215,8 @@ async function main() {
         { name: 'conversation', result: 'shared', model: true, args: ['evals/conversation/run.js', '--model=eval-fake', '--gate'] },
         { name: 'thread-rule', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=rule', '--gate'] },
         { name: 'thread-memory', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=memory', '--gate'] },
+        { name: 'thread-rule-offers', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=rule', '--metric=offers', '--gate'] },
+        { name: 'thread-memory-offers', result: 'shared', model: true, args: ['evals/thread-actions/run.js', '--model=eval-fake', '--kind=memory', '--metric=offers', '--gate'] },
         { name: 'review-rounds', result: 'shared', model: true, args: ['evals/review-rounds/run.js', '--model=eval-fake', `--cases-file=${reviewCasesFile}`, '--case=R2,K1', '--reps=1', `--output=${path.join(scratch, 'review-rounds.json')}`] },
         { name: 'review-lifecycle', result: 'own', model: true, args: ['evals/review-rounds/lifecycle.js', '--model=eval-fake', '--reps=1', '--wiring-smoke', `--output=${path.join(scratch, 'review-lifecycle.json')}`] },
     ];

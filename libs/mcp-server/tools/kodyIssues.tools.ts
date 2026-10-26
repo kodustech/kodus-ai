@@ -17,7 +17,10 @@ import {
 } from '@libs/issues/domain/contracts/issues.service.contract';
 import { IIssue } from '@libs/issues/domain/interfaces/issues.interface';
 
-import { McpToolDefinition } from '../types/mcp-tool.interface';
+import {
+    McpToolDefinition,
+    PROACTIVE_HINT_META_KEY,
+} from '../types/mcp-tool.interface';
 import { wrapToolHandler } from '../utils/mcp-protocol.utils';
 
 @Injectable()
@@ -78,7 +81,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer agrees the finding is real but out of scope for this PR — track it instead of losing it',
             },
             description: 'Create a new Kody Issue manually via MCP',
@@ -313,7 +318,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer says a tracked issue is already fixed or no longer relevant',
             },
             description: 'Update issue status',
@@ -354,7 +361,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer says a finding is filed under the wrong category',
             },
             description: 'Update issue category/label',

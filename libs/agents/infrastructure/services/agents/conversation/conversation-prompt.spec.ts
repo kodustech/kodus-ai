@@ -209,6 +209,15 @@ describe('proactive actions', () => {
         expect(prompt).toMatch(/offer/i);
     });
 
+    // A developer who accepts a finding has stated nothing to keep: offering to
+    // save Kody's own finding as a convention is noise in the thread.
+    it('offers to persist only what the developer said, never a fix they accepted', () => {
+        const prompt = userPrompt(withOrgTools);
+
+        expect(prompt).toMatch(/only what the developer said/i);
+        expect(prompt).toMatch(/accepts? the finding/i);
+    });
+
     it('keeps the write path opt-in behind the developer confirmation', () => {
         const prompt = userPrompt(withOrgTools);
 

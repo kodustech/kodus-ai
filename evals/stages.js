@@ -579,7 +579,35 @@ const STAGES = [
             metric: 'of write checks right',
             sets: { controlled: 'invented PR threads that do or do not call for a Kody Rule, in English and Portuguese', full: null },
             nightly: 'shared',
-            caveat: "Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-rule-offers stage.',
+        },
+    },
+    {
+        id: 'thread-rule-offers',
+        name: 'Rule offer',
+        short: 'Offers a rule when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a standard the team wants, or a rule that is too broad, offers to create or narrow the Kody Rule, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-rule-offers'] },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#ruleOffers',
+            metric: 'of offer checks right',
+            sets: { controlled: 'the threads of thread-rule that do not ask Kody to act', full: null },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers.',
         },
     },
     {
@@ -603,7 +631,35 @@ const STAGES = [
             metric: 'of write checks right',
             sets: { controlled: 'invented PR threads that do or do not call for a memory, in English and Portuguese', full: null },
             nightly: 'shared',
-            caveat: "Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-memory-offers stage.',
+        },
+    },
+    {
+        id: 'thread-memory-offers',
+        name: 'Memory offer',
+        short: 'Offers a memory when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a team convention, offers to save it as a memory, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-memory-offers'] },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#memoryOffers',
+            metric: 'of offer checks right',
+            sets: { controlled: 'the threads of thread-memory that do not ask Kody to act', full: null },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers.',
         },
     },
     {

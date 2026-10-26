@@ -299,6 +299,7 @@ export class MCPRegistry {
                             hasDescription: !!tool.description,
                             hasOutputSchema: !!tool.outputSchema,
                             hasAnnotations: !!tool.annotations,
+                            hasMeta: !!tool._meta,
                         },
                     });
 

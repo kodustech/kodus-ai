@@ -17,6 +17,7 @@ type RegisteredToolDefinition = {
         inputSchema: ReturnType<typeof toShape>;
         outputSchema: ReturnType<typeof toShape>;
         annotations: Record<string, unknown> | undefined;
+        _meta: Record<string, unknown> | undefined;
     };
     execute: (
         args: Record<string, unknown>,
@@ -89,6 +90,7 @@ export class KodusIssuesMcpServerFactory {
                         inputSchema,
                         outputSchema: toShape(tool.outputSchema),
                         annotations: tool?.annotations,
+                        _meta: tool?._meta,
                     },
                     execute: async (
                         args: Record<string, unknown>,

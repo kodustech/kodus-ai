@@ -1,8 +1,13 @@
+import { createLogger } from '@libs/core/log/logger';
 import {
     createMCPAdapter,
     type MCPServerConfig,
 } from '@libs/mcp-server/mcp-adapter';
+import { PROACTIVE_HINT_META_KEY } from '@libs/mcp-server/types/mcp-tool.interface';
+import { isFirstPartyMcpIntegration } from '@libs/mcp-server/utils/mcp-auth.constants';
 import { jsonSchema, tool, type Tool } from 'ai';
+
+const logger = createLogger('connectMcpTools');
 
 export type { MCPServerConfig };
 
@@ -16,7 +21,11 @@ export interface McpToolMetadata {
     readOnlyHint?: boolean;
     /** True when the effect is irreversible. */
     destructiveHint?: boolean;
-    /** When an agent should offer this action, if it may offer it at all. */
+    /**
+     * When an agent should offer this action, if it may offer it at all. Read
+     * from the tool's `_meta`, and only from a first-party server: the line
+     * goes into the agent's prompt.
+     */
     proactiveHint?: string;
 }
 
@@ -79,11 +88,37 @@ export async function connectMcpTools(
     const tools: Record<string, Tool> = {};
     const metadata: Record<string, McpToolMetadata> = {};
 
+    // Tools are attributed to servers by name, so a name any other server
+    // also uses is not trusted.
+    const otherServers = new Set(
+        servers
+            .filter((s) => !isFirstPartyMcpIntegration(s.integrationId))
+            .map((s) => s.name),
+    );
+    const firstPartyServers = new Set(
+        servers
+            .filter((s) => isFirstPartyMcpIntegration(s.integrationId))
+            .map((s) => s.name)
+            .filter((name) => !otherServers.has(name)),
+    );
+    const ignoredHints: { tool: string; serverName?: string }[] = [];
+
     try {
         const mcpTools = await adapter.getTools();
 
         for (const mcpTool of mcpTools) {
-            metadata[mcpTool.name] = readAnnotations(mcpTool.annotations);
+            const hint = readProactiveHint(mcpTool._meta);
+            const trusted = firstPartyServers.has(mcpTool.serverName ?? '');
+            if (hint && !trusted) {
+                ignoredHints.push({
+                    tool: mcpTool.name,
+                    serverName: mcpTool.serverName,
+                });
+            }
+            metadata[mcpTool.name] = {
+                ...readAnnotations(mcpTool.annotations),
+                ...(hint && trusted ? { proactiveHint: hint } : {}),
+            };
             tools[mcpTool.name] = tool({
                 description: mcpTool.description ?? '',
                 inputSchema: jsonSchema(
@@ -106,6 +141,15 @@ export async function connectMcpTools(
             error instanceof Error ? error : new Error(String(error)),
             'mcp-adapter',
         );
+    }
+
+    if (ignoredHints.length) {
+        logger.warn({
+            message:
+                'Ignored proactive hints from MCP servers that are not first-party',
+            context: 'connectMcpTools',
+            metadata: { ignoredHints },
+        });
     }
 
     return {
@@ -135,10 +179,16 @@ function readAnnotations(raw: unknown): McpToolMetadata {
         ...(typeof a.destructiveHint === 'boolean'
             ? { destructiveHint: a.destructiveHint }
             : {}),
-        ...(typeof a.proactiveHint === 'string' && a.proactiveHint
-            ? { proactiveHint: a.proactiveHint }
-            : {}),
     };
+}
+
+function readProactiveHint(meta: unknown): string | undefined {
+    if (!meta || typeof meta !== 'object') {
+        return undefined;
+    }
+
+    const hint = (meta as Record<string, unknown>)[PROACTIVE_HINT_META_KEY];
+    return typeof hint === 'string' && hint ? hint : undefined;
 }
 
 /**

@@ -193,6 +193,7 @@ export function buildProactiveBlock(
         `Before you finish, call ${CONVERSATION_DECISION_TOOL} exactly once to record what you intend: 'answer' when nothing here needs persisting, 'offer' when something does but the developer has not asked you to do it, or 'act' when their latest message tells you to. The tools above only become available after you declare 'act', and to declare it you must quote the developer's own words that instruct it — so you cannot act on your own reading of the exchange.`,
         'Rules:',
         '- Offer at most one action per reply, as a single closing sentence.',
+        '- Offer to persist only what the developer said: a convention they explained, a standard they want, a reason a finding does not apply. A developer who accepts the finding ("fair point, I\'ll fix it") has stated nothing to keep — offer nothing, and never offer to save your own finding as a convention.',
         '- Default to OFFERING. Explaining a convention, disputing a finding, giving context or agreeing with you is NOT a request to act — say what you would do and stop there.',
         '- Call one of these tools ONLY when the developer\'s latest message is itself an instruction to act ("yes", "do it", "save that", "go ahead") or an explicit request ("save a memory that ..."). If you are unsure whether you were asked, you were not: offer instead.',
         '- After acting, say what you did and pass on any link or approval note the tool returned.',
