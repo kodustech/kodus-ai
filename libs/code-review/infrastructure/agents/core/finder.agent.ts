@@ -780,11 +780,24 @@ export async function recoverFindingsFromProse(
             // between this call and a 400.
             user:
                 "The following is a code reviewer's analysis written as " +
-                'prose. Extract EVERY concrete finding it describes into ' +
-                'the structured schema — one entry per distinct issue, ' +
-                'using the file paths and line numbers mentioned. Do NOT ' +
-                'invent findings; only extract what is explicitly ' +
-                `described.\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                'prose. Extract each defect the reviewer CONCLUDED is ' +
+                'present in the code into the structured schema — one ' +
+                'entry per distinct issue, using the file paths and line ' +
+                'numbers mentioned.\n\n' +
+                'Leave out everything the reviewer did not conclude is a ' +
+                'defect:\n' +
+                '- a hypothesis the analysis checked and then dismissed, ' +
+                'ruled out, or found handled elsewhere (e.g. "this would ' +
+                'race, but the lock prevents it");\n' +
+                '- descriptions of what the change does, intentional ' +
+                'changes, and code the reviewer judged correct;\n' +
+                '- remarks the reviewer itself says are not a correctness, ' +
+                'security or performance issue (missing tests, style, ' +
+                'naming);\n' +
+                '- questions the analysis raises and answers itself.\n' +
+                'If the analysis concludes there is nothing to fix, return ' +
+                'an empty suggestions list. Do NOT invent findings.' +
+                `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
                 (previousDecisions?.length
                     ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
                     : ''),

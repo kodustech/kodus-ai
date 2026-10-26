@@ -758,7 +758,8 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect(arg.schema).toBeDefined(); // RECOVERY_SCHEMA (private) present
         expect(arg.organizationId).toBe('org-9');
         expect(arg.user).toContain(prose);
-        expect(arg.user).toContain('Extract EVERY concrete finding');
+        expect(arg.user).toContain('Extract each defect the reviewer CONCLUDED');
+        expect(arg.user).toContain('checked and then dismissed');
         expect(arg.runName).toBe('code-review-recovery');
     });
 
