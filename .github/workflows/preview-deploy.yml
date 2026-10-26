@@ -67,6 +67,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            approval_diagnostics_only:
+                description: Count approval execution statuses for the GitLab QA MR
+                required: false
+                default: false
+                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -320,7 +325,7 @@ jobs:
 
             - name: Bring the environment up
               id: up
-              if: steps.env.outputs.configured == 'true'
+              if: steps.env.outputs.configured == 'true' && inputs.approval_diagnostics_only != true
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
@@ -371,8 +376,22 @@ jobs:
                   done
                   echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
 
+            - name: Count GitLab QA approval execution statuses
+              if: steps.env.outputs.configured == 'true' && inputs.approval_diagnostics_only == true
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+              run: |
+                  set -euo pipefail
+                  $RUNO up --here --branch "$HEAD_REF" --profile cloud --recipe .kodus/workspace.preview.yaml
+                  # Only grouped status counts leave the VM. No rows, payloads,
+                  # account identifiers, or credentials are printed.
+                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                    "docker exec db_postgres sh -lc 'psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -At -c \"SELECT status, count(*) FROM automation_execution WHERE \\\"pullRequestNumber\\\" = 1227 GROUP BY status ORDER BY status\"'"
+
             - name: Report container status
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true' && inputs.approval_diagnostics_only != true
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
@@ -455,7 +474,7 @@ jobs:
                   if-no-files-found: warn
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true' && inputs.approval_diagnostics_only != true
               uses: actions/github-script@v9.0.0
               env:
                   PR_NUMBER: ${{ inputs.pr_number }}
