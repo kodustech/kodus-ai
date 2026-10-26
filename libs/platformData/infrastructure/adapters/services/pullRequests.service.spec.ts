@@ -347,11 +347,26 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         ).toHaveBeenCalledWith(2, '12345', stubOrg);
     });
 
+    it('stays silent when both lookups miss, instead of warning about a foreign repository', async () => {
+        // Every new pull request takes this path: the id lookup misses and the
+        // name lookup finds nothing. The "different repository id" warning used
+        // to fire here too, with `storedRepositoryId: undefined`, which read as
+        // a cross-repository conflict on a PR that had never been stored
+        // (#2076 review).
+        const warn = jest.spyOn((service as any).logger, 'warn');
+
+        await callSave(stubRepository);
+
+        expect(warn).not.toHaveBeenCalled();
+        expect((service as any).handleInitialPullRequest).toHaveBeenCalled();
+    });
+
     it('rejects a name hit that belongs to another repository, creating instead of updating', async () => {
         // Two repositories of one organization share a name: the id lookup
         // misses and the name lookup returns the OTHER repository's document.
         // Updating it would rewrite its `repository.id` from this payload and
         // take this save's suggestions (#2076 review).
+        const warn = jest.spyOn((service as any).logger, 'warn');
         pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
             null,
         );
@@ -368,6 +383,14 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect((service as any).handleInitialPullRequest).toHaveBeenCalled();
         expect((service as any).update).not.toHaveBeenCalled();
+        // The genuine conflict is still named, and now only for a hit.
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    storedRepositoryId: 'other-repo-uuid',
+                }),
+            }),
+        );
     });
 
     it('appends pr-level suggestions to the id-resolved record, never a name lookup', async () => {

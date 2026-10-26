@@ -1139,6 +1139,15 @@ export class PullRequestsService implements IPullRequestsService {
                     organizationAndTeamData,
                 );
 
+            // No name hit: this pull request has not been stored yet, which is
+            // the normal case, so there is nothing to name. Returning here also
+            // keeps the warning below honest - it used to fire on every new
+            // pull request, with `storedRepositoryId: undefined`, because a
+            // missed name lookup fell through to it (#2076 review).
+            if (!byName) {
+                return undefined;
+            }
+
             // A name hit is this pull request's document only when the stored
             // row carries no id (a legacy document) or carries THIS repository's
             // id. A non-empty, different id means the row belongs to another
@@ -1146,11 +1155,11 @@ export class PullRequestsService implements IPullRequestsService {
             // its `repository.id` from this payload and hand it this save's
             // suggestions — the cross-repository contamination of #2059
             // (#2076 review).
-            const storedId = byName?.repository?.id;
+            const storedId = byName.repository?.id;
             const sameRepository =
                 !repositoryId || !storedId || String(storedId) === repositoryId;
 
-            if (byName && sameRepository) {
+            if (sameRepository) {
                 return byName;
             }
 
