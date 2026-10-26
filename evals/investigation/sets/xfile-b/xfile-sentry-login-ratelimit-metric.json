@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-sentry-login-ratelimit-metric",
+  "vars": {
+   "caseId": "xfile-sentry-login-ratelimit-metric",
+   "mode": "planner",
+   "prTitle": "feat(auth): split rate-limited logins from bad credentials in login metrics",
+   "prBody": "The API login endpoint records every invalid form as `login.attempt` with `instance=failure`, including attempts rejected by the form's IP/username rate limits. This tags those as `rate_limited` instead, so the failure metric reflects actual credential failures and we can alert on rate limiting separately.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-login-ratelimit-metric"
+   },
+   "injectPatch": "diff --git a/src/sentry/api/endpoints/auth_login.py b/src/sentry/api/endpoints/auth_login.py\nindex 56fd968..fa8cbc7 100644\n--- a/src/sentry/api/endpoints/auth_login.py\n+++ b/src/sentry/api/endpoints/auth_login.py\n@@ -54,7 +54,10 @@ class AuthLoginEndpoint(Endpoint, OrganizationMixin):\n             return self.respond_with_error(errors)\n \n         if not login_form.is_valid():\n-            metrics.incr(\"login.attempt\", instance=\"failure\", skip_internal=True, sample_rate=1.0)\n+            # Distinguish failures caused by the IP/username rate limits enforced by the\n+            # form from plain bad credentials, so the two show up separately in metrics.\n+            instance = \"rate_limited\" if login_form.is_rate_limited() else \"failure\"\n+            metrics.incr(\"login.attempt\", instance=instance, skip_internal=True, sample_rate=1.0)\n             return self.respond_with_error(login_form.errors)\n \n         user = login_form.get_user()\n",
+   "goldenComments": "[{\"comment\": \"`AuthenticationForm.is_rate_limited()` (src/sentry/web/forms/accounts.py) is not a read-only predicate: `_is_ip_rate_limited` and `_is_user_rate_limited` call `ratelimiter.backend.is_limited(...)`, and the Redis limiter increments the counter on every check (`pipe.incr(redis_key)` in src/sentry/ratelimits/redis.py, \\\"the counter is incremented when the check is done\\\"). `form.clean()` already calls `is_rate_limited()` during `is_valid()`, so calling it again in the failure branch of AuthLoginEndpoint.post double-counts every failed login against both `auth:ip:<ip>` and `auth:username:<user>`, halving the effective `auth.ip-rate-limit`/`auth.user-rate-limit` and locking users and shared IPs out after half the configured attempts. Also, every non-limited failure now increments the counters even when clean() bailed out before its own check.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

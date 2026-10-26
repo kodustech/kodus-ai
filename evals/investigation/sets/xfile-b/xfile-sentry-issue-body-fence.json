@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-sentry-issue-body-fence",
+  "vars": {
+   "caseId": "xfile-sentry-issue-body-fence",
+   "mode": "planner",
+   "prTitle": "fix(integrations): fence issue bodies safely when they contain backticks",
+   "prBody": "Issue descriptions wrap the event body in a fixed ``` fence. When the stack trace or message itself contains backticks (markdown in exception messages is common), the fence is closed early and the rest of the description renders as garbage. `get_group_body` now returns the body already fenced, using a fence longer than any backtick run in it, and `get_group_description` just appends it.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-issue-body-fence"
+   },
+   "injectPatch": "diff --git a/src/sentry/integrations/mixins/issues.py b/src/sentry/integrations/mixins/issues.py\nindex 9a77dd4..efd1e87 100644\n--- a/src/sentry/integrations/mixins/issues.py\n+++ b/src/sentry/integrations/mixins/issues.py\n@@ -2,6 +2,7 @@ from __future__ import annotations\n \n import enum\n import logging\n+import re\n from abc import ABC, abstractmethod\n from collections import defaultdict\n from collections.abc import Mapping, Sequence\n@@ -81,7 +82,15 @@ class IssueBasicIntegration(IntegrationInstallation, ABC):\n             output = safe_execute(interface.to_string, event)\n             if output:\n                 result.append(output)\n-        return \"\\n\\n\".join(result)\n+        if not result:\n+            return \"\"\n+        body = \"\\n\\n\".join(result)\n+        # Stack traces and messages can themselves contain backtick runs (e.g. markdown\n+        # in exception messages), which would close a fixed ``` fence early and break\n+        # the rest of the description. Use a fence longer than any run in the body.\n+        longest_run = max((len(run) for run in re.findall(r\"`+\", body)), default=0)\n+        fence = \"`\" * max(3, longest_run + 1)\n+        return f\"{fence}\\n{body}\\n{fence}\"\n \n     def get_feedback_issue_body(self, event: GroupEvent) -> str:\n         messages = []\n@@ -137,7 +146,7 @@ class IssueBasicIntegration(IntegrationInstallation, ABC):\n         else:\n             body = self.get_group_body(group, event)\n             if body:\n-                output.extend([\"\", \"```\", body, \"```\"])\n+                output.extend([\"\", body])\n         return \"\\n\".join(output)\n \n     @all_silo_function\n",
+   "goldenComments": "[{\"comment\": \"The change moves the code fence into `IssueBasicIntegration.get_group_body`, changing its contract from raw text to an already-fenced markdown block, but three overrides of `get_group_description` call `get_group_body` and add their own wrapping. `GitHubIssueBasic.get_group_description` (src/sentry/integrations/github/issues.py) still does `output.extend([\\\"\\\", \\\"```\\\", body, \\\"```\\\"])`, so GitHub issues get a nested fence: the outer ``` is closed by the inner fence line, leaving the stack trace unformatted and stray ``` lines. `JiraIntegration.get_group_description` (src/sentry/integrations/jira/integration.py) and `JiraServerIntegration.get_group_description` (src/sentry/integrations/jira_server/integration.py) wrap the body in Jira `{code}...{code}`, so Jira tickets now show literal ``` lines inside the code block. Only integrations that use the base get_group_description (GitLab, Bitbucket, VSTS) get the intended result.\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-grafana-dashboard-save-fullurl",
+  "vars": {
+   "caseId": "xfile-grafana-dashboard-save-fullurl",
+   "mode": "planner",
+   "prTitle": "Dashboards: return absolute URL in save dashboard response",
+   "prBody": "API clients (CI pipelines, Terraform, scripts) that save dashboards get only a relative `url` back and have to know Grafana's root_url to build a link. POST /api/dashboards/db now also returns `fullUrl`, the absolute URL of the saved dashboard. Swagger model updated.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-dashboard-save-fullurl"
+   },
+   "injectPatch": "diff --git a/pkg/api/dashboard.go b/pkg/api/dashboard.go\nindex bff3ffad..bc9e4a3e 100644\n--- a/pkg/api/dashboard.go\n+++ b/pkg/api/dashboard.go\n@@ -36,6 +36,7 @@ import (\n \tpublicdashboardModels \"github.com/grafana/grafana/pkg/services/publicdashboards/models\"\n \t\"github.com/grafana/grafana/pkg/services/star\"\n \t\"github.com/grafana/grafana/pkg/services/user\"\n+\t\"github.com/grafana/grafana/pkg/setting\"\n \t\"github.com/grafana/grafana/pkg/util\"\n \t\"github.com/grafana/grafana/pkg/web\"\n )\n@@ -550,6 +551,7 @@ func (hs *HTTPServer) postDashboard(c *contextmodel.ReqContext, cmd dashboards.S\n \t\t\"id\":        dashboard.ID,\n \t\t\"uid\":       dashboard.UID,\n \t\t\"url\":       dashboard.GetURL(),\n+\t\t\"fullUrl\":   setting.ToAbsUrl(dashboard.GetURL()),\n \t\t\"folderUid\": dashboard.FolderUID,\n \t})\n }\n@@ -1265,6 +1267,12 @@ type PostDashboardResponse struct {\n \t\t// example: /d/nHz3SXiiz/my-dashboard\n \t\tURL string `json:\"url\"`\n \n+\t\t// FullURL The absolute URL for accessing the created/updated dashboard,\n+\t\t// so API clients (CI pipelines, Terraform, scripts) can link to it directly.\n+\t\t// required: true\n+\t\t// example: https://grafana.example.com/d/nHz3SXiiz/my-dashboard\n+\t\tFullURL string `json:\"fullUrl\"`\n+\n \t\t// FolderUID The unique identifier (uid) of the folder the dashboard belongs to.\n \t\t// required: false\n \t\tFolderUID string `json:\"folderUid\"`\n",
+   "goldenComments": "[{\"comment\": \"fullUrl is built as setting.ToAbsUrl(dashboard.GetURL()), but the two helpers use different bases: Dashboard.GetURL -> GetDashboardURL (pkg/services/dashboards/models.go) returns a host-root path that already starts with setting.AppSubUrl and a leading slash (\\\"/grafana/d/uid/slug\\\"), while setting.ToAbsUrl (pkg/setting/setting.go) blindly prefixes setting.AppUrl, which is root_url including the sub path and always ending in \\\"/\\\". The result is \\\"https://host/grafana//grafana/d/uid/slug\\\" behind a sub path (a 404) and \\\"http://host:3000//d/uid/slug\\\" otherwise. ToAbsUrl expects a path relative to root_url without leading slash (see its callers, e.g. ToAbsUrl(\\\"invite/\\\"+code)); the existing dashboards.GetFullDashboardURL(uid, slug) is the correct helper.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

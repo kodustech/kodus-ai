@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-keycloak-find-valid-session-null",
+  "vars": {
+   "caseId": "xfile-keycloak-find-valid-session-null",
+   "mode": "planner",
+   "prTitle": "UserSessionUtil.findValidSession: report missing/expired session via null",
+   "prBody": "findValidSession threw an invalid_token WebApplicationException when the session was missing or expired, which makes it awkward to use from code that just wants to check for a session (e.g. admin permission evaluation for lightweight tokens already null-checks the result). The event error is still recorded; the method now returns null in those two cases and documents it. Stale-token and transient-user failures keep throwing.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-find-valid-session-null"
+   },
+   "injectPatch": "diff --git a/services/src/main/java/org/keycloak/services/util/UserSessionUtil.java b/services/src/main/java/org/keycloak/services/util/UserSessionUtil.java\nindex fbeb72b..0071de3 100644\n--- a/services/src/main/java/org/keycloak/services/util/UserSessionUtil.java\n+++ b/services/src/main/java/org/keycloak/services/util/UserSessionUtil.java\n@@ -34,6 +34,13 @@ public class UserSessionUtil {\n         return findValidSession(session, realm, token, event, client, error);\n     }\n \n+    /**\n+     * Resolves the (online or offline) user session referenced by the given token.\n+     *\n+     * @return the valid user session, or {@code null} if the session does not exist or is expired. In that case the\n+     * error is already recorded in the given {@code event}.\n+     * @throws jakarta.ws.rs.WebApplicationException if the token is stale or the transient user cannot be resolved\n+     */\n     public static UserSessionModel findValidSession(KeycloakSession session, RealmModel realm,\n             AccessToken token, EventBuilder event, ClientModel client, OAuth2Error error) {\n         if (token.getSessionId() == null) {\n@@ -64,14 +71,14 @@ public class UserSessionUtil {\n         if (userSession == null && offlineUserSession == null) {\n             logger.debug(\"User session not found or doesn't have client attached on it\");\n             event.error(Errors.USER_SESSION_NOT_FOUND);\n-            throw error.invalidToken(\"User session not found or doesn't have client attached on it\");\n+            return null;\n         }\n \n         event.session(Objects.requireNonNullElse(userSession, offlineUserSession));\n \n         logger.debug(\"Session expired\");\n         event.error(Errors.SESSION_EXPIRED);\n-        throw error.invalidToken(\"Session expired\");\n+        return null;\n     }\n \n     private static UserSessionModel createTransientSessionForClient(KeycloakSession session, RealmModel realm, AccessToken token, ClientModel client, EventBuilder event) {\n",
+   "goldenComments": "[{\"comment\": \"UserSessionUtil.findValidSession now returns null for a missing or expired session instead of throwing error.invalidToken(...). Existing callers rely on the throw: UserInfoEndpoint.issueUserInfo (services/.../oidc/endpoints/UserInfoEndpoint.java:232) immediately dereferences userSession.getUser(), so a userinfo call with a token whose session was logged out/expired now fails with a NullPointerException (HTTP 500) instead of 401 invalid_token. TokenManager.getValidUserSessionIfTokenIsValid (TokenManager.java:298-305) only catches exceptions around the call and then calls userSession.getUser() outside the try, so token introspection of such tokens throws an NPE instead of returning active=false. Only MgmtPermissions handles null.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

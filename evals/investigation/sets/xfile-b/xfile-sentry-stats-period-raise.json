@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-sentry-stats-period-raise",
+  "vars": {
+   "caseId": "xfile-sentry-stats-period-raise",
+   "mode": "planner",
+   "prTitle": "ref(dates): raise a descriptive error for malformed stats periods",
+   "prBody": "`parse_stats_period` returned `None` both when no period was passed and when the period was malformed (`1y`, `14 days`), which made typos indistinguishable from a missing value. Malformed periods now raise a `ValueError` describing the accepted format; empty input still returns `None`. Also tolerates surrounding whitespace.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-stats-period-raise"
+   },
+   "injectPatch": "diff --git a/src/sentry/utils/dates.py b/src/sentry/utils/dates.py\nindex f5170cf..8a0afaa 100644\n--- a/src/sentry/utils/dates.py\n+++ b/src/sentry/utils/dates.py\n@@ -97,10 +97,21 @@ def parse_timestamp(value: datetime | int | float | str | bytes | None) -> datet\n \n \n def parse_stats_period(period: str) -> timedelta | None:\n-    \"\"\"Convert a value such as 1h into a proper timedelta.\"\"\"\n-    m = re.match(r\"^(\\d+)([hdmsw]?)$\", period)\n-    if not m:\n+    \"\"\"\n+    Convert a value such as 1h into a proper timedelta.\n+\n+    Returns ``None`` when no period was given at all. A period that was given\n+    but cannot be understood (e.g. ``\"1y\"`` or ``\"14 days\"``) raises a\n+    ``ValueError`` describing the accepted format, instead of being silently\n+    treated the same as a missing value.\n+    \"\"\"\n+    if not period:\n         return None\n+    m = re.match(r\"^(\\d+)([hdmsw]?)$\", period.strip())\n+    if not m:\n+        raise ValueError(\n+            f\"Invalid period {period!r}: expected an integer followed by one of s, m, h, d, w\"\n+        )\n     value, unit = m.groups()\n     value = int(value)\n     if not unit:\n",
+   "goldenComments": "[{\"comment\": \"parse_stats_period now raises ValueError for malformed input instead of returning None, but every caller implements its validation as a None check. `get_datetime_from_stats_period` in src/sentry/api/utils.py does `if parsed_stats_period is None: raise InvalidParams(...)`; `get_date_range_from_params` documents that it raises InvalidParams and endpoints translate that into a 400, so `?statsPeriod=1y` now produces an unhandled ValueError (500) across every events/stats endpoint. Likewise `DashboardWidgetSerializer.validate_interval` in src/sentry/api/serializers/rest_framework/dashboard.py only raises serializers.ValidationError on None, so a bad widget interval becomes a 500 (DRF does not catch ValueError), and the Slack discover unfurl (src/sentry/integrations/slack/unfurl/discover.py) crashes on a bad statsPeriod in a shared link instead of falling back to 90 days.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

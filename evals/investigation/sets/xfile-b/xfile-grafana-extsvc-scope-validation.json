@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-grafana-extsvc-scope-validation",
+  "vars": {
+   "caseId": "xfile-grafana-extsvc-scope-validation",
+   "mode": "planner",
+   "prTitle": "Access control: reject malformed scopes in external service role registration",
+   "prBody": "External services (plugins with an `iam` section) can request permissions with malformed scopes such as `users:*:1`. Those are accepted today and silently never match at evaluation time. SaveExternalServiceRoleCommand.Validate now rejects them with a clear error. Added a test case.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-extsvc-scope-validation"
+   },
+   "injectPatch": "diff --git a/pkg/services/accesscontrol/models.go b/pkg/services/accesscontrol/models.go\nindex dc12171e..6ec1b518 100644\n--- a/pkg/services/accesscontrol/models.go\n+++ b/pkg/services/accesscontrol/models.go\n@@ -306,6 +306,10 @@ func (cmd *SaveExternalServiceRoleCommand) Validate() error {\n \t\tif len(cmd.Permissions[i].Action) == 0 {\n \t\t\treturn fmt.Errorf(\"external service %v requests a permission with no Action\", cmd.ExternalServiceID)\n \t\t}\n+\t\t// Reject malformed scopes early (e.g. \"dashboards:*:uid\"), they would never match at evaluation time\n+\t\tif !ValidateScope(cmd.Permissions[i].Scope) {\n+\t\t\treturn fmt.Errorf(\"external service %v requests a permission with an invalid scope %q\", cmd.ExternalServiceID, cmd.Permissions[i].Scope)\n+\t\t}\n \t\tif dedupMap[cmd.Permissions[i]] {\n \t\t\tcontinue\n \t\t}\ndiff --git a/pkg/services/accesscontrol/models_test.go b/pkg/services/accesscontrol/models_test.go\nindex c46dd455..51fce2c8 100644\n--- a/pkg/services/accesscontrol/models_test.go\n+++ b/pkg/services/accesscontrol/models_test.go\n@@ -66,6 +66,17 @@ func TestSaveExternalServiceRoleCommand_Validate(t *testing.T) {\n \t\t\twantID:  \"app-1\",\n \t\t\twantErr: true,\n \t\t},\n+\t\t{\n+\t\t\tname: \"invalid malformed Scope\",\n+\t\t\tcmd: SaveExternalServiceRoleCommand{\n+\t\t\t\tAssignmentOrgID:   1,\n+\t\t\t\tExternalServiceID: \"app 1\",\n+\t\t\t\tServiceAccountID:  2,\n+\t\t\t\tPermissions:       []Permission{{Action: \"users:read\", Scope: \"users:*:1\"}},\n+\t\t\t},\n+\t\t\twantID:  \"app-1\",\n+\t\t\twantErr: true,\n+\t\t},\n \t\t{\n \t\t\tname: \"permission deduplication\",\n \t\t\tcmd: SaveExternalServiceRoleCommand{\n",
+   "goldenComments": "[{\"comment\": \"The new check calls ValidateScope on every requested permission, but ValidateScope (pkg/services/accesscontrol/accesscontrol.go:319) indexes `scope[:len(scope)-1], scope[len(scope)-1]` unconditionally and panics with an index out of range on an empty scope. Scopeless permissions are legitimate: plugin IAM permissions have an optional `scope` (pkg/plugins/auth/models.go Scope string, plugin.schema.json does not require it), Reduce handles Scope == \\\"\\\" explicitly, and the only existing caller, match() in evaluator.go, guards `if scope == \\\"\\\" { return false }` before calling ValidateScope. So any plugin that registers an action without a scope now makes SaveExternalServiceRole (acimpl/service.go:721, called from extsvcaccounts.ManageExtSvcAccount) panic during plugin registration. The validation must skip empty scopes.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

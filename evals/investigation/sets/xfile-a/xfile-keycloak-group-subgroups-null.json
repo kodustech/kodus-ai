@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-keycloak-group-subgroups-null",
+  "vars": {
+   "caseId": "xfile-keycloak-group-subgroups-null",
+   "mode": "planner",
+   "prTitle": "GroupRepresentation: don't allocate subGroups on read",
+   "prBody": "getSubGroups() lazily created an empty list, so every serialized group (including brief listings) came out with \"subGroups\": [] even when subGroupCount > 0, which makes clients think the group has no children. The getter now returns null when subgroups were not populated, and merge() handles groups without populated children.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-group-subgroups-null"
+   },
+   "injectPatch": "diff --git a/core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java b/core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java\nindex d55129a..7d97b48 100755\n--- a/core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java\n+++ b/core/src/main/java/org/keycloak/representations/idm/GroupRepresentation.java\n@@ -117,10 +117,11 @@ public class GroupRepresentation {\n         return this;\n     }\n \n+    /**\n+     * @return the subgroups included in this representation, or {@code null} if they were not populated\n+     * (e.g. brief listings, where only {@link #getSubGroupCount()} is available)\n+     */\n     public List<GroupRepresentation> getSubGroups() {\n-        if(subGroups == null) {\n-            subGroups = new ArrayList<>();\n-        }\n         return subGroups;\n     }\n \n@@ -142,8 +143,8 @@ public class GroupRepresentation {\n \n     private void merge(GroupRepresentation g1, GroupRepresentation g2) {\n         if(g1.equals(g2)) {\n-            Map<String, GroupRepresentation> g1Children = g1.getSubGroups().stream().collect(Collectors.toMap(GroupRepresentation::getId, g -> g));\n-            Map<String, GroupRepresentation> g2Children = g2.getSubGroups().stream().collect(Collectors.toMap(GroupRepresentation::getId, g -> g));\n+            Map<String, GroupRepresentation> g1Children = childrenById(g1);\n+            Map<String, GroupRepresentation> g2Children = childrenById(g2);\n \n             g2Children.forEach((key, value) -> {\n                 if (g1Children.containsKey(key)) {\n@@ -156,6 +157,13 @@ public class GroupRepresentation {\n         }\n     }\n \n+    private static Map<String, GroupRepresentation> childrenById(GroupRepresentation group) {\n+        if (group.getSubGroups() == null) {\n+            return new HashMap<>();\n+        }\n+        return group.getSubGroups().stream().collect(Collectors.toMap(GroupRepresentation::getId, g -> g));\n+    }\n+\n     @Override\n     public boolean equals(Object o) {\n         if (this == o) {\n",
+   "goldenComments": "[{\"comment\": \"GroupRepresentation.getSubGroups() used to lazily allocate a mutable ArrayList and callers append to it. GroupUtils.populateGroupHierarchyFromSubGroups (services/src/main/java/org/keycloak/utils/GroupUtils.java:57) builds parent representations with toRepresentation(...) (which never sets subGroups) and then does parent.getSubGroups().add(currGroup) unconditionally (the null check on line 52 only guards the duplicate lookup). With the change getSubGroups() returns null there, so GET /admin/realms/{realm}/groups?search=... (populateHierarchy defaults to true) throws a NullPointerException (500) as soon as a matching group is not top-level.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]
