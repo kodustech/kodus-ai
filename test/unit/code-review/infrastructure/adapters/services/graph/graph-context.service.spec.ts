@@ -215,6 +215,56 @@ describe('GraphContextService', () => {
 
             expect(result).toBeDefined();
         });
+
+        it('should pass baseBranch to the legacy fallback on error', async () => {
+            mockAstGraphRepo.exportSubgraphJsonString.mockRejectedValue(
+                new Error('DB connection lost'),
+            );
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await service.generateContext(
+                mockSandbox,
+                changedFiles,
+                REPO_ID,
+                'main',
+            );
+
+            const allRunCalls = mockSandbox.run.mock.calls.map(
+                (call) => call[0] as string,
+            );
+            expect(
+                allRunCalls.some(
+                    (cmd) =>
+                        cmd.includes('git show') && cmd.includes('origin/main'),
+                ),
+            ).toBe(true);
+        });
+
+        it('should pass baseBranch to the legacy fallback when repo not found', async () => {
+            mockRepositoryRepo.findById.mockResolvedValue(null);
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await service.generateContext(
+                mockSandbox,
+                changedFiles,
+                REPO_ID,
+                'main',
+            );
+
+            const allRunCalls = mockSandbox.run.mock.calls.map(
+                (call) => call[0] as string,
+            );
+            expect(
+                allRunCalls.some(
+                    (cmd) =>
+                        cmd.includes('git show') && cmd.includes('origin/main'),
+                ),
+            ).toBe(true);
+        });
     });
 
     describe('generateContextLegacy', () => {
@@ -272,16 +322,13 @@ describe('GraphContextService', () => {
             expect(result).toBe(promptContent);
         });
 
-        it('should return empty string on failure (non-blocking)', async () => {
+        it('should rethrow on failure so the stage can record CALLGRAPH_FAILED', async () => {
             mockSandbox.run.mockRejectedValue(new Error('sandbox crashed'));
             const changedFiles = createChangedFiles(['src/handler.ts']);
 
-            const result = await service.generateContextLegacy(
-                mockSandbox,
-                changedFiles,
-            );
-
-            expect(result).toBe('');
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).rejects.toThrow('sandbox crashed');
         });
 
         it('should pass baseBranch to buildBaseGraphFromGit when provided', async () => {

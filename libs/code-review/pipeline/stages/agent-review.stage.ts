@@ -874,20 +874,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 String(context.repository?.id || ''),
                             );
 
+                        const baseBranch =
+                            context.sandboxHandle?.baseBranch ||
+                            context.pullRequest?.base?.ref ||
+                            context.repository?.defaultBranch;
+
                         if (repo?.astGraphStatus === AstGraphStatus.READY) {
                             callGraph = await this.graphContext.generateContext(
                                 context.sandboxHandle,
                                 changedFiles,
                                 repo.uuid,
+                                baseBranch,
                             );
                         } else {
                             callGraph =
                                 await this.graphContext.generateContextLegacy(
                                     context.sandboxHandle,
                                     changedFiles,
-                                    context.sandboxHandle?.baseBranch ||
-                                        context.pullRequest?.base?.ref ||
-                                        context.repository?.defaultBranch,
+                                    baseBranch,
                                 );
                         }
                     }
