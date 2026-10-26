@@ -383,11 +383,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 automationExecutionsPRs,
                                 PullRequestState.OPENED,
                             );
-                        // A repository's kodus-config.yml may define the
-                        // label scope even when the stored team config does
-                        // not. An execution with that policy records approve
-                        // or out-of-scope, so only those refs can pass the
-                        // later no-comment guard after a label is added.
+                        // Conditional policies can finish with no suggestions,
+                        // including a sensitive-path hold. Only executions
+                        // with a saved decision enter the later no-comment
+                        // guard; that guard still rejects unclean reviews.
                         const noSuggestionRefs = eligiblePullRequestRefs.filter(
                             (ref) => ref.mayAllowNoComments,
                         );
@@ -847,7 +846,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         let conditionalDecision: ApprovalDecision | undefined;
         const noSuggestions =
             Array.isArray(pr?.suggestions) && pr.suggestions.length === 0;
-        const allowNoComments = !!policy?.labels?.length && noSuggestions;
+        const allowNoComments = policyActive && noSuggestions;
         if (noSuggestions && !allowNoComments) {
             return false;
         }
@@ -862,11 +861,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
         let changedPaths: string[] = directoryChangedPaths ?? [];
+        const reviewedDecision = lastExecution?.dataExecution?.approvalDecision;
         if (
             allowNoComments &&
-            !['approve', 'out-of-scope'].includes(
-                lastExecution?.dataExecution?.approvalDecision?.kind,
-            )
+            (!['approve', 'hold', 'out-of-scope'].includes(
+                reviewedDecision?.kind,
+            ) ||
+                reviewedDecision?.reason === 'The review is not clean.')
         ) {
             return false;
         }
@@ -1022,6 +1023,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         message: `Holding cron approval for PR#${prNumber}: ${decision.reason}`,
                         context: CheckIfPRCanBeApprovedCronProvider.name,
                     });
+                    return false;
+                }
+                // A prior hold can become an approval only after another
+                // review confirms that the now-changed policy is safe.
+                if (allowNoComments && reviewedDecision?.kind === 'hold') {
                     return false;
                 }
             }

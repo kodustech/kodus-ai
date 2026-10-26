@@ -67,11 +67,6 @@ on:
                 required: false
                 default: false
                 type: boolean
-            provider_smoke_only:
-                description: Reuse the existing cloud preview without redeploying it
-                required: false
-                default: false
-                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -325,7 +320,7 @@ jobs:
 
             - name: Bring the environment up
               id: up
-              if: steps.env.outputs.configured == 'true' && inputs.provider_smoke_only != true
+              if: steps.env.outputs.configured == 'true'
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
@@ -376,26 +371,8 @@ jobs:
                   done
                   echo "urls=${urls% }" >> "$GITHUB_OUTPUT"
 
-            - name: Resolve existing cloud preview
-              id: existing
-              if: steps.env.outputs.configured == 'true' && inputs.provider_smoke_only == true
-              env:
-                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
-                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
-                  HEAD_REF: ${{ steps.target.outputs.branch }}
-              run: |
-                  set -euo pipefail
-                  # This VM was created by the successful run 40317782310, but
-                  # the registry entry disappeared when later deploys were
-                  # cancelled. Reuse its verified URL for this QA run only.
-                  url=$($RUNO url --branch "$HEAD_REF" --profile cloud --recipe .kodus/workspace.preview.yaml 2>/dev/null | head -1) || url=""
-                  if [ -z "$url" ]; then url=https://3-14-252-88.sslip.io; fi
-                  : "${url:?no existing cloud preview URL}"
-                  curl --fail --silent --show-error --max-time 20 "$url/api/proxy/api/health" >/dev/null
-                  echo "urls=cloud=$url" >> "$GITHUB_OUTPUT"
-
             - name: Report container status
-              if: always() && steps.env.outputs.configured == 'true' && inputs.provider_smoke_only != true
+              if: always() && steps.env.outputs.configured == 'true'
               env:
                   RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
                   RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
@@ -435,9 +412,9 @@ jobs:
                   done
 
             - name: Smoke conditional approval on real providers
-              if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && (steps.up.outcome == 'success' || steps.existing.outcome == 'success')
+              if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'
               env:
-                  URLS: ${{ steps.existing.outputs.urls || steps.up.outputs.urls }}
+                  URLS: ${{ steps.up.outputs.urls }}
                   CLOUD_TENANT_PAID_EMAIL: preview@kodus.io
                   CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
                   GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
@@ -478,7 +455,7 @@ jobs:
                   if-no-files-found: warn
 
             - name: Comment the preview link
-              if: always() && steps.env.outputs.configured == 'true' && inputs.provider_smoke_only != true
+              if: always() && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
                   PR_NUMBER: ${{ inputs.pr_number }}

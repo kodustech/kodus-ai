@@ -104,7 +104,7 @@ describe('AutomationExecutionRepository.findEligiblePullRequestRefsForApprovalBy
         );
         expect(queryBuilder.setParameters).toHaveBeenCalledWith(
             expect.objectContaining({
-                allowNoCommentKinds: ['approve', 'out-of-scope'],
+                allowNoCommentKinds: ['approve', 'hold', 'out-of-scope'],
             }),
         );
     });

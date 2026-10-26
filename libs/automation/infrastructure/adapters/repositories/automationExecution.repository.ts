@@ -986,7 +986,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                     teamAutomationId,
                     successStatus: AutomationStatus.SUCCESS,
                     inProgressStatus: AutomationStatus.IN_PROGRESS,
-                    allowNoCommentKinds: ['approve', 'out-of-scope'],
+                    allowNoCommentKinds: ['approve', 'hold', 'out-of-scope'],
                 })
                 .getRawMany<{
                     repositoryId: string;

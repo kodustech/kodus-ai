@@ -397,6 +397,87 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         );
     });
 
+    it('holds a clean zero-comment PR that changes a sensitive path without requiring labels', async () => {
+        const { cron, deps } = makeCron();
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue({
+            dataExecution: {
+                lastAnalyzedCommit: 'same-sha',
+                approvalDecision: { kind: 'hold' },
+            },
+        });
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            user: { login: 'alice' },
+        });
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            { filename: 'src/qa-approval/smoke.ts' },
+        ]);
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalSensitivePaths: ['src/qa-approval/**'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('src/qa-approval/smoke.ts'),
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(deps.codeManagementService.checkIfPullRequestShouldBeApproved).not.toHaveBeenCalled();
+    });
+
+    it('approves a clean zero-comment PR outside sensitive paths without requiring labels', async () => {
+        const { cron, deps } = makeCron();
+        deps.codeManagementService.getReviewStatusByPullRequest
+            .mockResolvedValueOnce(PullRequestReviewState.NONE)
+            .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+        deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue({
+            dataExecution: {
+                lastAnalyzedCommit: 'same-sha',
+                approvalDecision: { kind: 'approve' },
+            },
+        });
+        deps.codeManagementService.getPullRequest.mockResolvedValue({
+            head: { sha: 'same-sha' },
+            user: { login: 'alice' },
+        });
+        deps.codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            { filename: 'src/qa-approval-clean/smoke.ts' },
+        ]);
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(78, 'repo-b'),
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalSensitivePaths: ['src/qa-approval/**'],
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(true);
+        expect(deps.codeManagementService.checkIfPullRequestShouldBeApproved).toHaveBeenCalled();
+        expect(deps.codeManagementService.createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                body: expect.stringContaining('Automatic approval completed'),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
     it('repairs a missing reason comment for an already approved PR', async () => {
         const { cron, deps } = makeCron();
         deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
