@@ -40,6 +40,7 @@ export function useLLMProviderModelsPreview({
     baseURL,
     awsBearerToken,
     awsRegion,
+    credentialId,
     enabled,
 }: {
     provider: string;
@@ -48,6 +49,8 @@ export function useLLMProviderModelsPreview({
     /** Amazon Bedrock's equivalent of `apiKey` — see fetch.ts. */
     awsBearerToken?: string;
     awsRegion?: string;
+    /** The saved credential to list with — see fetch.ts. */
+    credentialId?: string;
     enabled: boolean;
 }) {
     return useQuery({
@@ -61,6 +64,7 @@ export function useLLMProviderModelsPreview({
             baseURL,
             awsBearerToken,
             awsRegion,
+            credentialId,
         ],
         queryFn: () =>
             previewLLMProviderModels({
@@ -69,6 +73,7 @@ export function useLLMProviderModelsPreview({
                 baseURL,
                 awsBearerToken,
                 awsRegion,
+                credentialId,
             }),
         enabled,
         staleTime: 5 * 60 * 1000,

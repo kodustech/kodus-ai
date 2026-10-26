@@ -133,6 +133,9 @@ export const testBYOKModel = async (params: {
     // caller-supplied host. Changing the endpoint requires re-entering the key.
     awsRegion?: string;
     vertexLocation?: string;
+    /** Which saved credential to probe when the provider has several (two
+     *  OpenAI-compatible gateways). Omit for the provider's only one. */
+    credentialId?: string;
 }): Promise<TestBYOKResult> => {
     const envelope = await axiosAuthorized.post<{ data: TestBYOKResult }>(
         ORGANIZATION_PARAMETERS_PATHS.TEST_BYOK_MODEL,
@@ -324,6 +327,9 @@ export const previewLLMProviderModels = async (input: {
      *  the connect form with a plain apiKey. */
     awsBearerToken?: string;
     awsRegion?: string;
+    /** List with this saved credential when the provider has several (two
+     *  OpenAI-compatible gateways) and no key was typed. */
+    credentialId?: string;
 }): Promise<LLMProviderModel[]> => {
     const envelope = await axiosAuthorized.post<{
         data: { models: LLMProviderModel[] };

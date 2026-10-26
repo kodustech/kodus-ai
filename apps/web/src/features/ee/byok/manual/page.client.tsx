@@ -79,6 +79,9 @@ import type { BYOKConfig, BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
 import { planAccountChanged } from "./plan-account";
 
+const ENDPOINT_NEEDS_KEY_MESSAGE =
+    "No key is stored for this endpoint — paste its API key.";
+
 const confirmEnvOverride = (): Promise<boolean> =>
     new Promise((resolve) => {
         magicModal.show(() => (
@@ -104,11 +107,13 @@ export function ByokManualPageClient({
     existing,
     editModelId,
     presetProvider,
+    presetCredentialId,
     llmConfigStatus,
 }: {
     existing: BYOKConfig | null | undefined;
     editModelId?: string;
     presetProvider?: string;
+    presetCredentialId?: string;
     llmConfigStatus: LLMConfigStatus | null;
 }) {
     const router = useRouter();
@@ -145,20 +150,45 @@ export function ByokManualPageClient({
             routing.fallbackModelId === editModelId ||
             Object.values(routing.taskOverrides ?? {}).includes(editModelId));
 
+    // "Add a model" under one credential of a provider that has several
+    // (?credential=). Ignored when it names a managed credential or disagrees
+    // with ?provider=.
+    const presetCred = presetCredentialId
+        ? existing?.credentials.find(
+              (c) =>
+                  c.id === presetCredentialId &&
+                  !c.managed &&
+                  (!presetProvider || c.provider === presetProvider),
+          )
+        : undefined;
     // The provider is FIXED when we know it up front — editing a model, or an
     // "Add a model to <provider>" (?provider=). We lock it (no re-picking, no
     // "Select a provider" placeholder, no chance to mis-pick Anthropic-compatible
     // for e.g. Moonshot) and, if that provider already has a stored key, reuse it.
-    const lockedProvider = editCredential?.provider ?? presetProvider;
-    const storedCred = lockedProvider
-        ? existing?.credentials.find(
-              (c) => !c.managed && c.provider === lockedProvider,
-          )
-        : undefined;
-    // The endpoint the stored credential already points at — so ADDING a model
-    // to a connected custom-endpoint provider shows the URL its models actually
-    // hit (mirroring the reused key), instead of a blank Base URL field.
-    const storedSettings = (storedCred?.settings ?? {}) as Record<
+    const lockedProvider =
+        editCredential?.provider ?? presetCred?.provider ?? presetProvider;
+    // Whether the locked provider has any key to reuse. Two gateways of one
+    // provider are two credentials, so this alone does not say WHICH key —
+    // `targetCred` below does, once the endpoint is known.
+    const providerHasStoredKey =
+        !!lockedProvider &&
+        (existing?.credentials ?? []).some(
+            (c) => !c.managed && c.provider === lockedProvider,
+        );
+    // The credential an ADD opens on: the one named by ?credential=, else the
+    // provider's only credential. With several and none named, none — the user
+    // types the endpoint, and the key follows from it.
+    const initialCred =
+        !isEditing && lockedProvider
+            ? (presetCred ??
+              findReusableCredential(existing?.credentials, {
+                  provider: lockedProvider,
+              }))
+            : undefined;
+    // The endpoint that credential already points at — so ADDING a model to a
+    // connected custom-endpoint provider shows the URL its models actually hit,
+    // instead of a blank Base URL field.
+    const storedSettings = (initialCred?.settings ?? {}) as Record<
         string,
         unknown
     >;
@@ -166,9 +196,6 @@ export function ByokManualPageClient({
         typeof storedSettings.baseURL === "string"
             ? storedSettings.baseURL
             : undefined;
-    // The key counts as "already stored" when editing, or when adding a model to
-    // a provider that already has a non-managed credential.
-    const keyIsStored = isEditing || !!storedCred;
     const lockedProviderLabel = lockedProvider
         ? (PROVIDER_LABELS[lockedProvider] ?? lockedProvider)
         : undefined;
@@ -241,20 +268,9 @@ export function ByokManualPageClient({
     // Models already enabled on this provider — hidden from the "Add model"
     // dropdown so it never offers a duplicate. The currently-edited model stays
     // visible (ByokModelSelect keeps the selected value regardless).
-    const configuredModelIds = lockedProvider
-        ? (existing?.models ?? [])
-              .filter((m) => {
-                  const cred = existing?.credentials.find(
-                      (c) => c.id === m.credentialId,
-                  );
-                  return (
-                      cred && !cred.managed && cred.provider === lockedProvider
-                  );
-              })
-              .map((m) => m.model)
-        : [];
-
-    const [showKeyInput, setShowKeyInput] = useState(!keyIsStored);
+    // Set by picking a provider in the unlocked flow. Every other case derives
+    // the key field from `keyIsStored` below.
+    const [showKeyInput, setShowKeyInput] = useState(false);
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
@@ -274,9 +290,10 @@ export function ByokManualPageClient({
         mode: "onChange",
         // A stored key (edit OR add-to-existing-provider) uses the edit schema,
         // which allows a blank key (keep the stored ciphertext). Only a brand-new
-        // provider connection must require the key up front.
+        // provider connection must require the key up front. An endpoint with no
+        // stored key on an already-connected provider is caught in `runTest`.
         resolver: zodResolver(
-            keyIsStored ? editKeySchema : createKeySchema,
+            isEditing || providerHasStoredKey ? editKeySchema : createKeySchema,
         ) as any,
         defaultValues: {
             provider: existingConfig?.provider ?? lockedProvider,
@@ -407,6 +424,34 @@ export function ByokManualPageClient({
         watchedBaseURL,
     );
 
+    // The stored credential this add writes into and tests against, read from
+    // the endpoint on screen — the same rule the save uses, so the key shown is
+    // always the key the save will keep. A different endpoint is a different
+    // credential with its own key.
+    const targetCred = isEditing
+        ? editCredential
+        : lockedProvider
+          ? findReusableCredential(existing?.credentials, {
+                provider: lockedProvider,
+                settings: { baseURL: watchedBaseURL },
+            })
+          : undefined;
+    const keyIsStored = !!targetCred;
+    // A connected provider, but no credential on this endpoint: its key has to
+    // be pasted here.
+    const endpointNeedsKey = !isEditing && providerHasStoredKey && !targetCred;
+
+    // Models already enabled on this credential — hidden from the "Add model"
+    // dropdown so it never offers a duplicate. Another gateway of the same
+    // provider may serve the same id, so the scope is the credential. The
+    // currently-edited model stays visible (ByokModelSelect keeps the selected
+    // value regardless).
+    const configuredModelIds = targetCred
+        ? (existing?.models ?? [])
+              .filter((m) => m.credentialId === targetCred.id)
+              .map((m) => m.model)
+        : [];
+
     // Bedrock has no apiKey field; "creds entered" means either a bearer
     // token or the IAM access key + secret pair. Used to gate the "Test"
     // button — without this, the button stays disabled forever on Bedrock
@@ -444,7 +489,19 @@ export function ByokManualPageClient({
             });
             return null;
         }
-        const hasNewCredentials = providerHasCredentials(data);
+        // A key typed while the endpoint had none stored stops counting once the
+        // endpoint lands on a stored credential: the field is hidden and the
+        // save keeps that credential's key, so the test must use it too.
+        const hasNewCredentials =
+            (!keyIsStored || planNeedsNewKey || showKeyInput) &&
+            providerHasCredentials(data);
+        if (endpointNeedsKey && !hasNewCredentials) {
+            form.setError("apiKey", {
+                type: "manual",
+                message: ENDPOINT_NEEDS_KEY_MESSAGE,
+            });
+            return null;
+        }
 
         // If the user changed the base URL on an openai_compatible config
         // without re-entering credentials, we can't skip the test: the
@@ -455,7 +512,10 @@ export function ByokManualPageClient({
         const urlChanged =
             (data.provider === "openai_compatible" ||
                 data.provider === "anthropic_compatible") &&
-            (data.baseURL ?? undefined) !== currentBaseURL;
+            (data.baseURL ?? undefined) !== currentBaseURL &&
+            // An add that lands on a stored gateway tests it with its own
+            // stored key; one that lands on no credential needs a typed key.
+            (isEditing || !targetCred);
 
         if (!hasNewCredentials && !urlChanged) {
             // No NEW key typed. If a key is already stored (edit, or adding a
@@ -468,6 +528,7 @@ export function ByokManualPageClient({
                     const result = await testBYOKModel({
                         provider: data.provider,
                         model: data.model,
+                        credentialId: targetCred?.id,
                     });
                     setTestState(
                         result.ok
@@ -643,6 +704,7 @@ export function ByokManualPageClient({
             provider: newConfig.provider,
             settings: credentialSettingsFromConfig(newConfig),
         });
+
         // The credential this save actually writes to, resolved HERE rather than
         // at mount: in the unlocked flow the provider is chosen inside the form,
         // so mount-time state knows nothing about it.
@@ -837,10 +899,17 @@ export function ByokManualPageClient({
                                     plan moved to a different account. Derived (not
                                     sticky state) so switching back to the stored
                                     account restores the "using stored key" view. */}
-                                    {showKeyInput || planNeedsNewKey ? (
+                                    {showKeyInput ||
+                                    planNeedsNewKey ||
+                                    !keyIsStored ? (
                                         <ErrorBoundary
                                             resetKeys={[provider, model]}
                                             fallbackRender={() => null}>
+                                            {endpointNeedsKey && (
+                                                <p className="text-text-secondary mb-1 text-xs text-pretty">
+                                                    {ENDPOINT_NEEDS_KEY_MESSAGE}
+                                                </p>
+                                            )}
                                             {planNeedsNewKey && (
                                                 <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
                                                     This plan runs on a
@@ -859,10 +928,7 @@ export function ByokManualPageClient({
                                                 Key
                                             </FormControl.Label>
                                             <span className="text-text-secondary font-mono text-sm">
-                                                {maskKey(
-                                                    editCredential?.apiKey ??
-                                                        storedCred?.apiKey,
-                                                )}
+                                                {maskKey(targetCred?.apiKey)}
                                             </span>
                                             {/* The key is provider-level — changing it
                                             belongs to "Edit provider", not to
@@ -988,6 +1054,9 @@ export function ByokManualPageClient({
                                                     }
                                                     credentialStored={
                                                         keyIsStored
+                                                    }
+                                                    credentialId={
+                                                        targetCred?.id
                                                     }
                                                     lockedInUse={modelInUse}
                                                 />

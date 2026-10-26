@@ -40,6 +40,7 @@ const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
 export const ByokModelSelect = ({
     excludeIds = [],
     credentialStored = false,
+    credentialId,
     lockedInUse = false,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
@@ -49,6 +50,9 @@ export const ByokModelSelect = ({
      *  a connected provider). For a live-listing provider this lets the picker
      *  fetch the real list from the saved slot even before the user types a key. */
     credentialStored?: boolean;
+    /** Which saved credential to list with when the provider has several (two
+     *  OpenAI-compatible gateways). */
+    credentialId?: string;
     /** True when the model being edited is referenced by Routing (default /
      *  fallback / a per-agent override). Swapping its id would silently change
      *  what runs, so the model field is read-only — tuning stays editable. */
@@ -102,6 +106,7 @@ export const ByokModelSelect = ({
             <ModelSelectLive
                 excludeIds={excludeIds}
                 credentialStored={credentialStored}
+                credentialId={credentialId}
                 requiresBaseUrl={foundProvider.requiresBaseUrl ?? false}
                 onUseManual={() => setManual(true)}
             />
@@ -426,11 +431,13 @@ const ModelSelectLive = ({
     onUseManual,
     excludeIds = [],
     credentialStored,
+    credentialId,
     requiresBaseUrl = false,
 }: {
     onUseManual?: () => void;
     excludeIds?: string[];
     credentialStored: boolean;
+    credentialId?: string;
     /** A custom endpoint: nothing to ask until its base URL is typed. */
     requiresBaseUrl?: boolean;
 }) => {
@@ -478,6 +485,9 @@ const ModelSelectLive = ({
         baseURL: typedBaseURL,
         awsBearerToken: hasAwsBearer ? typedAwsBearer : undefined,
         awsRegion: isBedrock ? typedAwsRegion || undefined : undefined,
+        // A typed key lists with itself; otherwise the server lists with the
+        // stored credential the page targets.
+        credentialId: hasKey ? undefined : credentialId,
         enabled,
     });
 

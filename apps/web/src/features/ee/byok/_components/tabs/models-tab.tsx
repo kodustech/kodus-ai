@@ -182,7 +182,7 @@ export const ModelsTab = ({
                                     // another provider"), where discovery guidance
                                     // earns its place.
                                     router.push(
-                                        `/byok/manual?provider=${encodeURIComponent(credential.provider)}`,
+                                        `/byok/manual?provider=${encodeURIComponent(credential.provider)}&credential=${encodeURIComponent(credential.id)}`,
                                     )
                                 }>
                                 Add model

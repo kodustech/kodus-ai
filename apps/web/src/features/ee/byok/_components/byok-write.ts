@@ -94,21 +94,26 @@ export type BuildV2Edit =
  *
  * The endpoint only enters the comparison when the incoming save carries one.
  * A provider whose endpoint is fixed sends no `baseURL` and keeps reusing its
- * single credential, exactly as before.
+ * single credential, exactly as before. Without an endpoint, two credentials
+ * of the provider are ambiguous and neither is reused.
  */
 export const findReusableCredential = (
     credentials: BYOKCredential[] | undefined,
     next: { provider: string; settings?: Record<string, unknown> },
 ): BYOKCredential | undefined => {
     const wanted = normalizeEndpoint(next.settings?.baseURL);
+    const sameProvider = (credentials ?? []).filter(
+        (credential) =>
+            !credential.managed && credential.provider === next.provider,
+    );
 
-    return (credentials ?? []).find((credential) => {
-        if (credential.managed || credential.provider !== next.provider) {
-            return false;
-        }
-        if (!wanted) return true;
-        return normalizeEndpoint(credential.settings?.baseURL) === wanted;
-    });
+    if (!wanted) {
+        return sameProvider.length === 1 ? sameProvider[0] : undefined;
+    }
+    return sameProvider.find(
+        (credential) =>
+            normalizeEndpoint(credential.settings?.baseURL) === wanted,
+    );
 };
 
 /**
