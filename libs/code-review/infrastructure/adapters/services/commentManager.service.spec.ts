@@ -2315,4 +2315,46 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
         expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
         expect(result.lastAnalyzedCommit).toBe(PUSHED);
     });
+
+    it('pins a short reviewed sha to its full commit (#2037)', async () => {
+        // Bitbucket's webhook carries a 12-character sha while the commit list
+        // has full ones. Rebased commits share one committer date, so the list
+        // can end on the oldest commit: without the pin, the next push would
+        // be compared from it and re-review what was already reviewed.
+        const head = { sha: 'abcdef123456' + '0'.repeat(28), message: 'head' };
+        const oldest = { sha: 'f'.repeat(40), message: 'oldest' };
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                getCommitsForPullRequestForCodeReview: jest
+                    .fn()
+                    .mockResolvedValue([head, oldest]),
+                createReviewComment,
+            } as any,
+        );
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'abcdef123456',
+        );
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: head.sha });
+        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
+            sha: head.sha,
+        });
+    });
 });

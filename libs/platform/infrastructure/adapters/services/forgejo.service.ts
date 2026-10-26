@@ -35,6 +35,7 @@ import {
 } from '@libs/core/domain/enums';
 import {
     CommentResult,
+    FileChange,
     Repository,
     ReviewComment,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -2187,6 +2188,28 @@ export class ForgejoService implements Omit<
     }): Promise<any | null> {
         // For simplicity, return all files - Forgejo doesn't have easy diff between commits
         return this.getFilesByPullRequestId(params);
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        // The compare API lists files without patches, and the web
+        // `compare/{base}...{head}.diff` route doesn't take an API token on a
+        // private repo (404), so the caller falls back to the full review.
+        this.logger.log({
+            message: `No diff at an earlier head for PR#${params.prNumber} on Forgejo`,
+            context: ForgejoService.name,
+            metadata: {
+                organizationId: params.organizationAndTeamData?.organizationId,
+                repository: params.repository?.name,
+                prNumber: params.prNumber,
+                headSha: params.headSha,
+                reason: 'not_supported',
+            },
+        });
+        return null;
     }
 
     async isDraftPullRequest(params: {

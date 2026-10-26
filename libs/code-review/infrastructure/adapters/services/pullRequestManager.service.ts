@@ -10,6 +10,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CacheService } from '@libs/core/cache/cache.service';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import { PullRequestAuthor } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { RebaseInterdiffResult, rebaseInterdiff } from './rebase-interdiff';
 
 @Injectable()
 export class PullRequestHandlerService implements IPullRequestManagerService {
@@ -341,6 +342,33 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         }
     }
 
+    async getRebaseInterdiff(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: any; project?: { id: any } },
+        pullRequest: any,
+        previousHeadSha: string,
+    ): Promise<RebaseInterdiffResult | null> {
+        const previous =
+            await this.codeManagementService.getPullRequestFilesAtCommit({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+                baseBranch: pullRequest?.base?.ref,
+                headSha: previousHeadSha,
+            });
+        if (!previous) return null;
+
+        const current = await this.getChangedFilesMetadata(
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+        );
+        // An empty current diff is a failed read, not a PR with nothing in it.
+        if (!current.length) return null;
+
+        return rebaseInterdiff(current, previous);
+    }
+
     /**
      * Enriquece arquivos com conteúdo.
      * Usado para buscar conteúdo apenas dos arquivos que passaram pelo filtro ignorePaths.
@@ -383,14 +411,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             let batchMap: Map<string, any> | null | undefined;
             try {
                 batchMap =
-                    await this.codeManagementService.getRepositoryContentBatch(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            files,
-                            pullRequest,
-                        },
-                    );
+                    await this.codeManagementService.getRepositoryContentBatch({
+                        organizationAndTeamData,
+                        repository,
+                        files,
+                        pullRequest,
+                    });
             } catch (batchErr) {
                 this.logger.warn({
                     message:

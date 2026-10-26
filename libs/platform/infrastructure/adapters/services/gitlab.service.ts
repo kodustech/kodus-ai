@@ -5,6 +5,7 @@ import {
     MergeRequestSchemaWithBasicLabels,
     RepositoryTreeSchema,
 } from '@gitbeaker/rest';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -30,6 +31,7 @@ import {
 } from '@libs/core/domain/enums';
 import {
     CommentResult,
+    FileChange,
     Repository,
     ReviewComment,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -2393,6 +2395,68 @@ export class GitlabService implements Omit<
                     patch: file.diff,
                 };
             });
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(
+                await this.getAuthDetails(organizationAndTeamData),
+            );
+
+            // Not straight: from the merge base, so only the MR's own changes.
+            const comparison = await gitlabAPI.Repositories.compare(
+                repository.id,
+                baseBranch,
+                headSha,
+                { straight: false },
+            );
+
+            return (comparison.diffs || []).map((file) => {
+                const changeCount = this.countChanges(file.diff || '');
+                return {
+                    filename: file.new_path,
+                    previous_filename:
+                        file.old_path !== file.new_path
+                            ? file.old_path
+                            : undefined,
+                    status: this.mapGitlabStatus(file),
+                    additions: changeCount.adds,
+                    deletions: changeCount.deletes,
+                    changes: changeCount.adds + changeCount.deletes,
+                    patch: file.diff,
+                } as FileChange;
+            });
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of MR!${prNumber} at ${headSha}`,
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
+            });
+            return null;
+        }
     }
 
     /*************  ✨ Codeium Command ⭐  *************/
