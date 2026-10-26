@@ -385,10 +385,25 @@ jobs:
               run: |
                   set -euo pipefail
                   $RUNO up --here --branch "$HEAD_REF" --profile cloud --recipe .kodus/workspace.preview.yaml
+                  # Aggregate on the VM. Never export application log lines to
+                  # Actions; even filtered lines may contain request metadata.
+                  counters="docker logs --since 45m --tail 5000 kodus_api 2>&1 | awk '{
+                    if (index(\$0, \"Check if PR can be approved cron started\")) starts++;
+                    if (index(\$0, \"Open pull requests found\")) open_checks++;
+                    if (index(\$0, \"PR#1227\")) pr_mentions++;
+                    if (index(\$0, \"Skipping approval for PR#1227\")) stale_head++;
+                    if (index(\$0, \"Holding cron approval for PR#1227\")) holds++;
+                    if (index(\$0, \"Error in shouldApprovePR\")) approval_errors++;
+                  } END {
+                    print \"cron_starts=\" (starts+0);
+                    print \"open_pr_checks=\" (open_checks+0);
+                    print \"target_pr_mentions=\" (pr_mentions+0);
+                    print \"target_stale_head=\" (stale_head+0);
+                    print \"target_holds=\" (holds+0);
+                    print \"approval_errors=\" (approval_errors+0);
+                  }'"
                   $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
-                    "docker logs --since 45m --tail 5000 kodus_api 2>&1" |
-                    rg 'CheckIfPRCanBeApprovedCronProvider|PR#1227|pull request #1227' |
-                    tail -200 || true
+                    "$counters"
 
             - name: Report container status
               if: always() && steps.env.outputs.configured == 'true' && inputs.approval_diagnostics_only != true
