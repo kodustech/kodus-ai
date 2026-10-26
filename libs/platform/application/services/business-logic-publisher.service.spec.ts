@@ -134,6 +134,7 @@ describe('BusinessLogicPublisher', () => {
         await first.publisher.publish({ request, result });
         expect(first.pullRequests.addPrLevelSuggestions).toHaveBeenCalledWith(
             47,
+            'repo-1',
             'notes',
             [
                 expect.objectContaining({
