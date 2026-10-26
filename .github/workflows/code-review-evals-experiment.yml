@@ -21,7 +21,7 @@ on:
                 required: false
                 default: "regression,decision"
                 type: choice
-                options: ["regression,decision", "regression"]
+                options: ["regression,decision", "regression", "decision"]
             runs:
                 description: "Runs per side"
                 required: false
@@ -110,7 +110,7 @@ jobs:
                   # already measured (from a laptop or an earlier push) is not run again.
                   KODUS_QUALITY_INGEST_TOKEN: ${{ secrets.KODUS_QUALITY_INGEST_TOKEN }}
               run: |
-                  args=(--step="$STEP" --base=origin/main --phases="$PHASES" --runs="$RUNS" --models="$MODELS" --set="$SET" --name="$NAME" --if-new --out=experiment)
+                  args=(--step="$STEP" --base=origin/exp/xfile-base --phases="$PHASES" --runs="$RUNS" --models="$MODELS" --set="$SET" --name="$NAME" --if-new --out=experiment)
                   if [ -n "$TEAM_CONFIG" ]; then args+=(--team-config="$TEAM_CONFIG"); fi
                   node evals/experiment.js "${args[@]}"
             - uses: actions/cache/save@v4
