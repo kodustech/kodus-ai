@@ -184,6 +184,82 @@ function answersNothing(result: string): boolean {
     );
 }
 
+interface CallGraphBlock {
+    header: string;
+    lines: string[];
+}
+
+function decodeXmlAttribute(value: string): string {
+    return value
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+}
+
+function xmlAttributes(input: string): Record<string, string> {
+    const attrs: Record<string, string> = {};
+    for (const match of input.matchAll(/([\w-]+)="([^"]*)"/g)) {
+        attrs[match[1]] = decodeXmlAttribute(match[2]);
+    }
+    return attrs;
+}
+
+function parseXmlCallGraph(callGraph: string): CallGraphBlock[] {
+    const blocks: CallGraphBlock[] = [];
+
+    for (const changed of callGraph.matchAll(
+        /<ChangedFunction\b([^>]*)>([\s\S]*?)<\/ChangedFunction>/g,
+    )) {
+        const attrs = xmlAttributes(changed[1]);
+        if (!attrs.name || !attrs.file) {
+            continue;
+        }
+
+        const lines: string[] = [];
+        for (const caller of changed[2].matchAll(/<Caller\b([^>]*)\/>/g)) {
+            const ref = xmlAttributes(caller[1]);
+            if (!ref.name || !ref.file || !ref.line) {
+                continue;
+            }
+            const confidence = ref.confidence
+                ? `, confidence ${ref.confidence}`
+                : '';
+            lines.push(`← ${ref.name} (${ref.file}:${ref.line}${confidence})`);
+        }
+        for (const callee of changed[2].matchAll(/<Callee\b([^>]*)\/>/g)) {
+            const ref = xmlAttributes(callee[1]);
+            if (!ref.name || !ref.file) {
+                continue;
+            }
+            const confidence = ref.confidence
+                ? `, confidence ${ref.confidence}`
+                : '';
+            lines.push(`→ ${ref.name} (${ref.file}${confidence})`);
+        }
+
+        blocks.push({ header: `${attrs.name} (${attrs.file})`, lines });
+    }
+
+    return blocks;
+}
+
+function parseLegacyCallGraph(callGraph: string): CallGraphBlock[] {
+    const blocks: CallGraphBlock[] = [];
+    for (const raw of callGraph.split('\n')) {
+        const line = raw.replace(/\s+$/, '');
+        if (!line.trim()) continue;
+        const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
+        if (isChild && blocks.length > 0) {
+            blocks[blocks.length - 1].lines.push(line.trim());
+        } else if (!/^Changed functions/i.test(line) && !line.startsWith(' ')) {
+            blocks.push({ header: line.trim(), lines: [] });
+        }
+    }
+    return blocks;
+}
+
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
     gitHubToken?: string,
@@ -1560,67 +1636,136 @@ fi
     }
 
     // ── Call Graph lookup tool (EXP: stance + graph) ────────────────
-    // On-demand caller/callee lookup, backed by the runtime callGraph string
-    // (kodus-graph). The STANCE prompt gives the agent a REASON to pull it:
-    // proving a change fulfills its intent "everywhere it touches" requires
-    // checking callers/implementations. Parsed by ←/→ markers.
-    if (callGraph && callGraph.trim().length > 0) {
-        const blocks: Array<{ header: string; lines: string[] }> = [];
-        for (const raw of callGraph.split('\n')) {
-            const line = raw.replace(/\s+$/, '');
-            if (!line.trim()) continue;
-            const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
-            if (isChild && blocks.length > 0) {
-                blocks[blocks.length - 1].lines.push(line.trim());
-            } else if (
-                !/^Changed functions/i.test(line) &&
-                !line.startsWith(' ')
-            ) {
-                blocks.push({ header: line.trim(), lines: [] });
+    // EXPERIMENT: graph navigation tools over the full base graph the review
+    // built (.kodus-graph/base-graph.json). Answers what the finder otherwise
+    // pages through files or greps for: where a symbol is, who calls it, what it
+    // calls, which tests cover it, and the shape of a file before reading it.
+    const GRAPH_JSON = '.kodus-graph/base-graph.json';
+    const isTestPath = (p: string) =>
+        /(^|\/)(tests?|__tests__|spec)\/|[._-](spec|test)s?\.[a-z]+$|Tests?\.java$|(^|\/)test_[^/]+\.py$/i.test(
+            p || '',
+        );
+    const prodFirst = (xs: any[]) =>
+        [...xs].sort(
+            (a, b) =>
+                Number(isTestPath(a?.file ?? '')) -
+                Number(isTestPath(b?.file ?? '')),
+        );
+    const KG = 'kodus-graph';
+    if (remoteCommands?.exec) {
+        const run = async (cmd: string, max = 8000): Promise<string> => {
+            try {
+                const { stdout } = await remoteCommands.exec!(cmd);
+                const out = (stdout || '').trim();
+                return out.length > max
+                    ? `${out.slice(0, max)}\n... (truncated)`
+                    : out;
+            } catch (error) {
+                return `Error: ${error instanceof Error ? error.message : String(error)}`;
             }
-        }
-        if (blocks.length > 0) {
-            const names = blocks.map((b) => b.header);
-            tools.getCallers = mkTool(
-                'CROSS-FILE tool: look up who CALLS a changed function and what it CALLS ' +
-                    '(callers ← and callees →) from the precomputed AST call graph. ' +
-                    'Use this for EVERY changed function to check cross-file impact — ' +
-                    'who breaks if the signature/behavior changes, and which dependencies it relies on. ' +
-                    'Then readFile each caller to confirm. More precise than grep for caller lookup.',
-                {
-                    type: 'object',
-                    properties: {
-                        functionName: {
-                            type: 'string',
-                            description:
-                                'Function or method name to look up (e.g. "get_item_key")',
-                        },
+        };
+        tools.outline = mkTool(
+            'Structure of a file before you read it: every class, function and method with its signature and line range (Lxx-yy). Use it to read ONLY the lines you need with readFile, instead of paging through the file.',
+            {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'Repository-relative file path',
                     },
-                    required: ['functionName'],
                 },
-                async (args: any) => {
-                    const q = (args?.functionName || '').toString().trim();
-                    if (!q) return 'Error: functionName is required';
-                    const hits = blocks.filter((b) =>
-                        b.header.toLowerCase().includes(q.toLowerCase()),
+                required: ['path'],
+            },
+            async (args: any) => {
+                const path = normalizeRepoPath(String(args?.path || ''));
+                if (!path) return 'Error: path is required';
+                const out = await run(
+                    `${KG} outline --files ${shellQuote(path)} --repo-dir .`,
+                );
+                return (
+                    out ||
+                    `No outline for ${path} (unsupported language or file not found).`
+                );
+            },
+        );
+        tools.getCallers = mkTool(
+            'Code graph lookup for ANY symbol (not only changed ones): its definition (file, lines, signature), who CALLS it (callers, with file:line), what it CALLS (callees), and the tests that cover it. Resolved statically across files, including calls through injected interfaces. Prefer this over grep to find definitions, usages and callers; then readFile only the lines that matter.',
+            {
+                type: 'object',
+                properties: {
+                    functionName: {
+                        type: 'string',
+                        description:
+                            'Function, method or class name, e.g. "findOne" or "IntegrationService.findOne"',
+                    },
+                },
+                required: ['functionName'],
+            },
+            async (args: any) => {
+                const q = String(args?.functionName || '').trim();
+                if (!q) return 'Error: functionName is required';
+                const short = q.split(/[.:#]/).filter(Boolean).pop() || q;
+                const owner = q.includes('.')
+                    ? q.split('.').slice(-2, -1)[0]
+                    : '';
+                const raw = await run(
+                    `${KG} search --graph ${GRAPH_JSON} --query ${shellQuote(`/^${short.replace(/[^\w$]/g, '')}$/`)} --limit 50`,
+                    200000,
+                );
+                let results: any[] = [];
+                try {
+                    results = JSON.parse(raw).results || [];
+                } catch {
+                    return `No graph available for "${q}". Use grep.`;
+                }
+                results = results.filter(
+                    (r) =>
+                        r.name === short ||
+                        r.qualified_name.endsWith(`.${short}`) ||
+                        r.qualified_name.endsWith(`::${short}`),
+                );
+                if (owner)
+                    results.sort(
+                        (a, b) =>
+                            Number(b.parent_name === owner) -
+                            Number(a.parent_name === owner),
                     );
-                    if (hits.length === 0) {
-                        return (
-                            `No call-graph entry for "${q}". ` +
-                            `Changed functions in the graph: ${names.join(', ')}`
-                        );
+                results = results
+                    .filter((r) => !r.is_test && !isTestPath(r.file_path))
+                    .slice(0, 3);
+                if (results.length === 0)
+                    return `"${q}" not found in the code graph. Use grep.`;
+                const parts: string[] = [];
+                for (const r of results) {
+                    const ctxRaw = await run(
+                        `${KG} context-of --graph ${GRAPH_JSON} --symbol ${shellQuote(r.qualified_name)} --limit 8 --out -`,
+                        200000,
+                    );
+                    let c: any;
+                    try {
+                        c = JSON.parse(ctxRaw);
+                    } catch {
+                        continue;
                     }
-                    return hits
-                        .slice(0, 3)
-                        .map((b) =>
-                            b.lines.length > 0
-                                ? `${b.header}\n${b.lines.map((l) => '  ' + l).join('\n')}`
-                                : `${b.header}\n  (no callers/callees recorded)`,
-                        )
-                        .join('\n\n');
-                },
-            );
-        }
+                    if (!c?.found) continue;
+                    const fmt = (xs: any[] | undefined) =>
+                        prodFirst(xs || [])
+                            .map((x) =>
+                                typeof x === 'string'
+                                    ? `    ${x}`
+                                    : `    ${x.qualified_name.split('::').pop()}  ${x.file}${x.line != null ? `:${x.line + 1}` : ''}`,
+                            )
+                            .join('\n') || '    (none found)';
+                    parts.push(
+                        `${c.symbol.qualified_name.split('::').pop()}  ${c.symbol.file}:L${c.symbol.line_start + 1}-${c.symbol.line_end + 1}\n  signature: ${String(c.symbol.signature || '').replace(/\s+/g, ' ').slice(0, 160)}\n  callers:\n${fmt(c.callers)}\n  callees:\n${fmt(c.callees)}\n  tests:\n${fmt(c.tested_by)}`,
+                    );
+                }
+                return (
+                    parts.join('\n\n') ||
+                    `"${q}" not found in the code graph. Use grep.`
+                );
+            },
+        );
     }
 
     // ── External documentation lookup (Exa) ─────────────────────────
@@ -1710,6 +1855,32 @@ fi
                 }
             },
         );
+    }
+
+    // EXPERIMENT: one log line per tool call (name, a short argument, result
+    // size, duration) so an eval run shows how the finder navigates.
+    for (const [name, tool] of Object.entries(tools) as Array<[string, any]>) {
+        const original = tool.execute;
+        tool.execute = async (args: any, ...rest: any[]) => {
+            const started = Date.now();
+            const result = await original(args, ...rest);
+            const text =
+                typeof result === 'string'
+                    ? result
+                    : JSON.stringify(result ?? '');
+            const arg = String(
+                args?.path ??
+                    args?.functionName ??
+                    args?.pattern ??
+                    args?.query ??
+                    '',
+            ).slice(0, 80);
+            logger.log({
+                message: `[TOOL-TRACE] ${name} ms=${Date.now() - started} chars=${text.length} range=${args?.startLine ?? ''}-${args?.endLine ?? ''} arg=${JSON.stringify(arg)} empty=${/not found|No outline|No graph|Error:/.test(text.slice(0, 120))}`,
+                context: 'agent-tools.factory',
+            });
+            return result;
+        };
     }
 
     logger.log({
