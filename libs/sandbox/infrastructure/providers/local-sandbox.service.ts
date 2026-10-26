@@ -117,6 +117,8 @@ export function sandboxEnv(
     extra?: Record<string, string | undefined>,
 ): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+    // EXPERIMENT: kodus-graph is installed under bun's global bin.
+    env.PATH = `${process.env.HOME}/.bun/bin:${env.PATH ?? ''}`;
     for (const key of GIT_REPOSITORY_ENV) {
         delete env[key];
     }
@@ -601,7 +603,11 @@ export class LocalSandboxService implements ISandboxProvider {
                     'fd', // fast file finder (respects .gitignore)
                     'find', // fallback file finder
                     'grep', // text filter used in pipelines (e.g. `... | grep -v "Syntax OK"`)
+                    // EXPERIMENT: the finder's code-graph lookups. Only the
+                    // read-only queries; they parse files, never run them.
+                    'kodus-graph',
                 ]);
+                const GRAPH_QUERIES = new Set(['outline', 'search', 'context-of', 'path']);
 
                 if (!command.trim()) {
                     return { stdout: '', stderr: '', exitCode: 1 };
@@ -691,10 +697,12 @@ export class LocalSandboxService implements ISandboxProvider {
                     // keeps POSIX absolute paths blocked even when running on
                     // Windows (defense in depth).
                     const hasTraversal = args.some(
-                        (a) =>
-                            isAbsolute(a) ||
+                        (a, i) =>
+                            // A graph search pattern (`/^name$/`) is not a path.
+                            !(program === 'kodus-graph' && args[i - 1] === '--query') &&
+                            (isAbsolute(a) ||
                             a.startsWith('/') ||
-                            /(^|[/\\])\.\.($|[/\\])/.test(a),
+                            /(^|[/\\])\.\.($|[/\\])/.test(a)),
                     );
                     if (hasTraversal) {
                         return {
@@ -740,6 +748,20 @@ export class LocalSandboxService implements ISandboxProvider {
                                 exitCode: 1,
                             };
                         }
+                    }
+
+                    if (
+                        program === 'kodus-graph' &&
+                        (!GRAPH_QUERIES.has(args[0]) ||
+                            args.some(
+                                (a, i) => a === '--out' && args[i + 1] !== '-',
+                            ))
+                    ) {
+                        return {
+                            stdout: `kodus-graph ${args[0]} is not allowed in local sandbox (queries only).`,
+                            stderr: '',
+                            exitCode: 1,
+                        };
                     }
 
                     validated.push({ program, args });

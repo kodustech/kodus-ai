@@ -651,7 +651,9 @@ function resolveDecisionTypeNote(
 const MAX_DECISION_TEXT = 600;
 
 const clipDecisionText = (text: string) =>
-    text.length > MAX_DECISION_TEXT ? `${text.slice(0, MAX_DECISION_TEXT)}…` : text;
+    text.length > MAX_DECISION_TEXT
+        ? `${text.slice(0, MAX_DECISION_TEXT)}…`
+        : text;
 
 /** The finder and verifier never raise an entry's problem again; the Kody
  *  Rules judge reports what it sees, because its findings go through the
@@ -673,8 +675,8 @@ export function formatPreviousDecisions(
         const location = !entry.relevantFile
             ? 'PR-level (judges the diff as a whole, not anchored to one file)'
             : entry.relevantLinesStart != null
-                ? `${entry.relevantFile}:${entry.relevantLinesStart}-${entry.relevantLinesEnd ?? entry.relevantLinesStart}`
-                : entry.relevantFile;
+              ? `${entry.relevantFile}:${entry.relevantLinesStart}-${entry.relevantLinesEnd ?? entry.relevantLinesStart}`
+              : entry.relevantFile;
         const outcomeNote =
             entry.outcome === 'implemented' ||
             entry.outcome === 'partially_implemented'
@@ -712,9 +714,7 @@ ${rendered.join('\n')}
  * a decision from an earlier round carries no way to tell whether it predates
  * or postdates what has actually landed since.
  */
-export function formatCommits(
-    commits: ReviewAgentInput['commits'],
-): string {
+export function formatCommits(commits: ReviewAgentInput['commits']): string {
     if (!commits?.length) return '';
 
     const rendered = commits
@@ -739,47 +739,53 @@ ${rendered}
   </Commits>`;
 }
 
-export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        return withKnowledgeSection(
-            buildSystemPromptBody(input, meta),
-            meta.knowledgeSection,
-        );
+export function buildSystemPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    return withKnowledgeSection(
+        buildSystemPromptBody(input, meta),
+        meta.knowledgeSection,
+    );
 }
 
-function buildSystemPromptBody(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const isSelfContained = !input.remoteCommands;
-        if (isSelfContained) {
-            return buildSelfContainedSystemPrompt(input, meta);
-        }
+function buildSystemPromptBody(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const isSelfContained = !input.remoteCommands;
+    if (isSelfContained) {
+        return buildSelfContainedSystemPrompt(input, meta);
+    }
 
-        // Adaptive fit: when the resolved profile is `compact` or
-        // `minimal`, drop the Workflow PHASE 1/2/3 walk-through (~3K chars
-        // / ~750 tokens) and the per-category long-form prompt. Mindset
-        // and Scope stay — they're load-bearing behavioral cues. The
-        // category and language requirements collapse to one line each.
-        if (input.adaptiveProfile?.compactPrompt) {
-            return buildCompactSystemPrompt(input, meta);
-        }
+    // Adaptive fit: when the resolved profile is `compact` or
+    // `minimal`, drop the Workflow PHASE 1/2/3 walk-through (~3K chars
+    // / ~750 tokens) and the per-category long-form prompt. Mindset
+    // and Scope stay — they're load-bearing behavioral cues. The
+    // category and language requirements collapse to one line each.
+    if (input.adaptiveProfile?.compactPrompt) {
+        return buildCompactSystemPrompt(input, meta);
+    }
 
-        if (hasOwnLane(meta)) {
-            return buildCustomAgentSystemPrompt(input, meta);
-        }
+    if (hasOwnLane(meta)) {
+        return buildCustomAgentSystemPrompt(input, meta);
+    }
 
-        const identity = meta.identity;
-        const categoryPrompt = meta.categoryPrompt;
-        const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
-        const repoInstructionsSection = formatRepoInstructions(
-            input.repoInstructions,
-            meta,
-        );
+    const identity = meta.identity;
+    const categoryPrompt = meta.categoryPrompt;
+    const overridesSection = formatOverrides(input, meta);
+    const memoryRulesSection = formatMemoryRules(input.memoryRules);
+    const repoInstructionsSection = formatRepoInstructions(
+        input.repoInstructions,
+        meta,
+    );
 
-        const langLabel = resolveLanguageLabel(input.languageResultPrompt);
-        const langSection = langLabel
-            ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
-            : '';
+    const langLabel = resolveLanguageLabel(input.languageResultPrompt);
+    const langSection = langLabel
+        ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
+        : '';
 
-        return `<CodeReviewAgent>
+    return `<CodeReviewAgent>
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
   <Role>
     You are ${identity.name}, ${identity.description}
@@ -797,7 +803,7 @@ ${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 ${memoryRulesSection}
 ${repoInstructionsSection}
 </CodeReviewAgent>`;
-    }
+}
 
 /**
  * A custom agent's full system prompt: the generalist's sections, ordered so
@@ -876,145 +882,144 @@ ${formatMemoryRules(input.memoryRules)}
 </CodeReviewAgent>`;
 }
 
-    /**
-     * Compact variant of `buildSystemPrompt` for the adaptive-fit
-     * `compact` / `minimal` profiles. Drops the Workflow walk-through
-     * (~3K chars) and the long category prompt, keeping only the
-     * behavioral spine (Role, one-line Mindset, one-line Scope) plus the
-     * user-configured override/memory blocks (those are not optional —
-     * the user wrote them). Estimated saving: ~3–3.5K tokens vs the
-     * full prompt.
-     */
-export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        if (hasOwnLane(meta)) {
-            return buildCompactCustomAgentSystemPrompt(input, meta);
-        }
-        const identity = meta.identity;
-        const categoryLabel = meta.categoryLabel;
-        const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
-        const repoInstructionsSection = formatRepoInstructions(
-            input.repoInstructions,
-            meta,
-        );
-        const crossRepoSection = formatCrossRepoBoundarySection(input, {
-            ownLane: hasOwnLane(meta),
-        });
-        const langLabel = resolveLanguageLabel(input.languageResultPrompt);
-        const langLine = langLabel
-            ? `\n  Write all review output in ${langLabel}.`
-            : '';
+/**
+ * Compact variant of `buildSystemPrompt` for the adaptive-fit
+ * `compact` / `minimal` profiles. Drops the Workflow walk-through
+ * (~3K chars) and the long category prompt, keeping only the
+ * behavioral spine (Role, one-line Mindset, one-line Scope) plus the
+ * user-configured override/memory blocks (those are not optional —
+ * the user wrote them). Estimated saving: ~3–3.5K tokens vs the
+ * full prompt.
+ */
+export function buildCompactSystemPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    if (hasOwnLane(meta)) {
+        return buildCompactCustomAgentSystemPrompt(input, meta);
+    }
+    const identity = meta.identity;
+    const categoryLabel = meta.categoryLabel;
+    const overridesSection = formatOverrides(input, meta);
+    const memoryRulesSection = formatMemoryRules(input.memoryRules);
+    const repoInstructionsSection = formatRepoInstructions(
+        input.repoInstructions,
+        meta,
+    );
+    const crossRepoSection = formatCrossRepoBoundarySection(input, {
+        ownLane: hasOwnLane(meta),
+    });
+    const langLabel = resolveLanguageLabel(input.languageResultPrompt);
+    const langLine = langLabel
+        ? `\n  Write all review output in ${langLabel}.`
+        : '';
 
-        return `<CodeReviewAgent>
+    return `<CodeReviewAgent>
   <Role>You are ${identity.name}, a ${categoryLabel} code reviewer.${langLine}</Role>
   <Mindset>Assume each change is broken until you can name the input that proves it safe. Default to reporting when you have code-backed suspicion.</Mindset>
-  <Workflow>For each changed function: grep callers and callees with the tools, read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>
+  <Workflow>For each changed function: getCallers gives its callers, callees and tests from the code graph — start there instead of grepping. Before reading a file, outline it and read only the line ranges you need. Use grep for text the graph cannot answer. Read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>
   <Scope>Root cause must be in lines added or modified by this PR. Trace impact through callers but anchor the finding to a changed line — for cross-file bugs anchor on the changed trigger line, never a placeholder or non-diff path; if you can't anchor it to a changed line, omit it.</Scope>${crossRepoSection ? `\n${crossRepoSection}` : ''}
 ${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 ${memoryRulesSection}${repoInstructionsSection}
 </CodeReviewAgent>`;
+}
+
+export function buildUserPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const isSelfContained = !input.remoteCommands;
+    if (isSelfContained) {
+        return buildSelfContainedUserPrompt(input, meta);
     }
 
-export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const isSelfContained = !input.remoteCommands;
-        if (isSelfContained) {
-            return buildSelfContainedUserPrompt(input, meta);
-        }
+    // Adaptive fit: compact user prompt cuts the OutputFormat JSON
+    // example (~1K chars; the submitResult tool schema already
+    // carries it) and trims <Rules> from ~25 bullets down to the
+    // core six that drive the reporting threshold.
+    if (input.adaptiveProfile?.compactPrompt) {
+        return buildCompactUserPrompt(input, meta);
+    }
 
-        // Adaptive fit: compact user prompt cuts the OutputFormat JSON
-        // example (~1K chars; the submitResult tool schema already
-        // carries it) and trims <Rules> from ~25 bullets down to the
-        // core six that drive the reporting threshold.
-        if (input.adaptiveProfile?.compactPrompt) {
-            return buildCompactUserPrompt(input, meta);
-        }
+    const prContextSection = formatPRContext(input.prTitle, input.prBody);
+    const traceDecisionsSection = formatTraceDecisions(input.traceDecisions);
+    const previousDecisionsSection = formatPreviousDecisions(
+        input.previousDecisions,
+    );
+    const commitsSection = formatCommits(input.commits);
+    const diffsSection = formatDiffs(input.changedFiles);
+    // The callGraph string from kodus-graph already starts with <CallGraph>
+    // and ends with </CallGraph> — wrapping it again produced nested duplicate
+    // tags in the prompt.
+    const callGraphSection = input.callGraph ? `\n  ${input.callGraph}` : '';
+    const coverageTargets = formatCoverageTargetsForPrompt(
+        input.changedFiles,
+        20,
+        input.fileTiers ? { fileTiers: input.fileTiers } : undefined,
+    );
 
-        const prContextSection = formatPRContext(
-            input.prTitle,
-            input.prBody,
-        );
-        const traceDecisionsSection = formatTraceDecisions(
-            input.traceDecisions,
-        );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
-        const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
-        // The callGraph string from kodus-graph already starts with <CallGraph>
-        // and ends with </CallGraph> — wrapping it again produced nested duplicate
-        // tags in the prompt.
-        const callGraphSection = input.callGraph
-            ? `\n  ${input.callGraph}`
-            : '';
-        const coverageTargets = formatCoverageTargetsForPrompt(
-            input.changedFiles,
-            20,
-            input.fileTiers ? { fileTiers: input.fileTiers } : undefined,
-        );
-
-        const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
-        const allowedSuggestionLabels = meta.allowedLabels;
-        const mixedLabelRules = mixedLabelMode
-            ? `- Every finding must include a "label" and it must be one of: ${allowedSuggestionLabels.join(', ')}.
+    const categoryLabel = meta.categoryLabel;
+    const mixedLabelMode = meta.supportsMixed;
+    const allowedSuggestionLabels = meta.allowedLabels;
+    const mixedLabelRules = mixedLabelMode
+        ? `- Every finding must include a "label" and it must be one of: ${allowedSuggestionLabels.join(', ')}.
     - Use bug for correctness/regression issues, security for exploit or authorization issues, and performance for material slowdowns or resource blowups.
     - If the same root cause could fit multiple categories, choose the strongest primary label once — do not duplicate the same finding under multiple labels.`
-            : '';
-        const mixedLabelTaskGuidance = mixedLabelMode
-            ? `
+        : '';
+    const mixedLabelTaskGuidance = mixedLabelMode
+        ? `
     Before finalizing, run an explicit pass for each enabled category: ${allowedSuggestionLabels.join(', ')}.
     Do not stop after finding only bug issues — you must still check whether the changed code introduces concrete security or performance problems when those categories are enabled.
     In your reasoning, explicitly note at least one concrete hypothesis you tested for each enabled category, even if that category produced no finding.`
-            : '';
-        const mixedLabelLensRules = mixedLabelMode
-            ? `
+        : '';
+    const mixedLabelLensRules = mixedLabelMode
+        ? `
     - For every enabled category (${allowedSuggestionLabels.join(', ')}), either report a concrete finding or explain in the reasoning why no concrete issue exists.
     - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
     - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.`
-            : '';
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
+        : '';
+    const outputLabelLine = mixedLabelMode
+        ? `"label": "${allowedSuggestionLabels.join('|')}",
       `
-            : '';
+        : '';
 
-        const taskDescriptions: Record<string, string> = {
-            bug: 'real bugs introduced, exposed, or made worse by these changes',
-            performance:
-                'real performance regressions introduced or worsened by these changes',
-            security:
-                'real security vulnerabilities introduced, exposed, or made worse by these changes',
-            generalist:
-                'real bugs, security vulnerabilities, and material performance regressions introduced, exposed, or made worse by these changes',
-        };
-        const taskDescription =
-            categoryLabel === 'generalist'
-                ? `real ${allowedSuggestionLabels.join(', ')} issues introduced, exposed, or made worse by these changes`
-                : (taskDescriptions[categoryLabel] ??
-                  'issues introduced by these changes');
+    const taskDescriptions: Record<string, string> = {
+        bug: 'real bugs introduced, exposed, or made worse by these changes',
+        performance:
+            'real performance regressions introduced or worsened by these changes',
+        security:
+            'real security vulnerabilities introduced, exposed, or made worse by these changes',
+        generalist:
+            'real bugs, security vulnerabilities, and material performance regressions introduced, exposed, or made worse by these changes',
+    };
+    const taskDescription =
+        categoryLabel === 'generalist'
+            ? `real ${allowedSuggestionLabels.join(', ')} issues introduced, exposed, or made worse by these changes`
+            : (taskDescriptions[categoryLabel] ??
+              'issues introduced by these changes');
 
-        // A custom agent kept to its lane gets the same task and rules scoped
-        // to its focus; every other agent gets the defect hunt verbatim.
-        const lane = hasOwnLane(meta);
-        const toolHints = `${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}${
-                input.linkedRepoAccess?.list()?.length
-                    ? '\n    When linked repositories are listed in <CrossRepoBoundary>, use grep/readFile with repo="<fullName>" to verify producer/consumer shapes across the boundary. Only report cross-repo defects with confirmed counterpart evidence.'
-                    : ''
-            }`;
-        const taskBlock = lane
-            ? LANE_TASK(toolHints)
-            : `    Review this Pull Request for ${taskDescription}.
-    For each changed function: grep callers → read context → challenge with adversarial questions.${toolHints}
+    // A custom agent kept to its lane gets the same task and rules scoped
+    // to its focus; every other agent gets the defect hunt verbatim.
+    const lane = hasOwnLane(meta);
+    const toolHints = `${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}${
+        input.linkedRepoAccess?.list()?.length
+            ? '\n    When linked repositories are listed in <CrossRepoBoundary>, use grep/readFile with repo="<fullName>" to verify producer/consumer shapes across the boundary. Only report cross-repo defects with confirmed counterpart evidence.'
+            : ''
+    }`;
+    const taskBlock = lane
+        ? LANE_TASK(toolHints)
+        : `    Review this Pull Request for ${taskDescription}.
+    For each changed function: getCallers (code graph) → outline + read only the relevant lines → challenge with adversarial questions.${toolHints}
     Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
     Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.
 `;
-        const coverageIntro = lane
-            ? LANE_COVERAGE_INTRO
-            : `    Below are the changed hunks. Go DEEP on the ones that can hide a bug — trace callers, read the surrounding logic, challenge each with adversarial questions. SKIP trivial hunks (renames, formatting, comments, config/lockfiles). You do NOT need to read every hunk: fully reasoning about the few suspicious ones beats skimming all of them. Depth of analysis over breadth of reading.
+    const coverageIntro = lane
+        ? LANE_COVERAGE_INTRO
+        : `    Below are the changed hunks. Go DEEP on the ones that can hide a bug — trace callers, read the surrounding logic, challenge each with adversarial questions. SKIP trivial hunks (renames, formatting, comments, config/lockfiles). You do NOT need to read every hunk: fully reasoning about the few suspicious ones beats skimming all of them. Depth of analysis over breadth of reading.
 `;
-        const findingRules = lane
-            ? LANE_FINDING_RULES
-            : `    - Pre-existing issues: report only if this PR makes them worse or newly reachable.
+    const findingRules = lane
+        ? LANE_FINDING_RULES
+        : `    - Pre-existing issues: report only if this PR makes them worse or newly reachable.
     - "Looks correct" is not a valid reason to dismiss — explain the specific reason it is safe.
     - Before finalizing, make sure you went DEEP on the suspicious hunks — skipping trivial ones is fine.
     - Reporting threshold (high-recall): report any defect the changed code makes you suspect, as long as you (1) anchor it to a specific changed line and (2) name the kind of failure — wrong output, crash, broken contract, wrong target or branch, lost side effect, or broken caller/callee assumption. You do NOT need to prove the exact triggering input or rule out every safe explanation; a later verifier filters unsupported claims. Only pure speculation with no anchor in the changed code is out.
@@ -1030,8 +1035,8 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
     - For security flows, challenge any value that became static, shared, or reused across requests/users when it should be per-request, per-session, or per-principal.
 `;
 
-        return (
-            `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
+    return (
+        `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
@@ -1061,8 +1066,8 @@ ${findingRules}    ${mixedLabelRules}
 
   <OutputFormat>
 ` +
-            '```' +
-            `json
+        '```' +
+        `json
 {
   "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
   "suggestions": [
@@ -1081,71 +1086,67 @@ ${findingRules}    ${mixedLabelRules}
   ]
 }
 ` +
-            '```' +
-            `
+        '```' +
+        `
   </OutputFormat>
 </ReviewTask>`
-        );
-    }
+    );
+}
 
-    /**
-     * Compact variant of `buildUserPrompt` for adaptive-fit
-     * `compact` / `minimal` profiles. Drops the OutputFormat JSON example
-     * (~1K chars — the submitResult tool schema already enforces shape)
-     * and collapses <Rules> from ~25 bullets to the 6 that actually
-     * drive the report/dismiss threshold. CoverageContract is kept but
-     * trimmed to one line. Estimated saving: ~3–4K tokens vs the full
-     * user prompt; the larger the PR, the higher the absolute savings
-     * because <Diffs> is preserved (it's the actual data the model
-     * reviews).
-     */
-export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const prContextSection = formatPRContext(
-            input.prTitle,
-            input.prBody,
-        );
-        const traceDecisionsSection = formatTraceDecisions(
-            input.traceDecisions,
-        );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
-        const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
-        const callGraphSection = input.callGraph
-            ? `\n  ${input.callGraph}`
-            : '';
-        const coverageTargets = formatCoverageTargetsForPrompt(
-            input.changedFiles,
-            20,
-            input.fileTiers ? { fileTiers: input.fileTiers } : undefined,
-        );
-        const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
-        const allowedSuggestionLabels = meta.allowedLabels;
-        const labelHint = mixedLabelMode
-            ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
-            : '';
+/**
+ * Compact variant of `buildUserPrompt` for adaptive-fit
+ * `compact` / `minimal` profiles. Drops the OutputFormat JSON example
+ * (~1K chars — the submitResult tool schema already enforces shape)
+ * and collapses <Rules> from ~25 bullets to the 6 that actually
+ * drive the report/dismiss threshold. CoverageContract is kept but
+ * trimmed to one line. Estimated saving: ~3–4K tokens vs the full
+ * user prompt; the larger the PR, the higher the absolute savings
+ * because <Diffs> is preserved (it's the actual data the model
+ * reviews).
+ */
+export function buildCompactUserPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const prContextSection = formatPRContext(input.prTitle, input.prBody);
+    const traceDecisionsSection = formatTraceDecisions(input.traceDecisions);
+    const previousDecisionsSection = formatPreviousDecisions(
+        input.previousDecisions,
+    );
+    const commitsSection = formatCommits(input.commits);
+    const diffsSection = formatDiffs(input.changedFiles);
+    const callGraphSection = input.callGraph ? `\n  ${input.callGraph}` : '';
+    const coverageTargets = formatCoverageTargetsForPrompt(
+        input.changedFiles,
+        20,
+        input.fileTiers ? { fileTiers: input.fileTiers } : undefined,
+    );
+    const categoryLabel = meta.categoryLabel;
+    const mixedLabelMode = meta.supportsMixed;
+    const allowedSuggestionLabels = meta.allowedLabels;
+    const labelHint = mixedLabelMode
+        ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
+        : '';
 
-        const lane = hasOwnLane(meta);
-        const compactTask = lane
-            ? `  <Task>Review this PR for the issues your focus covers (your <Role>); the generalist reviewer covers general correctness bugs, do not report them. For the changed code your focus applies to: investigate what your focus needs, read enough to confirm. Anchor each finding to a changed line and let the verifier filter unsupported claims.</Task>
+    const lane = hasOwnLane(meta);
+    const compactTask = lane
+        ? `  <Task>Review this PR for the issues your focus covers (your <Role>); the generalist reviewer covers general correctness bugs, do not report them. For the changed code your focus applies to: investigate what your focus needs, read enough to confirm. Anchor each finding to a changed line and let the verifier filter unsupported claims.</Task>
 `
-            : `  <Task>Review this PR for real ${categoryLabel} issues introduced by the diff. For each changed function: grep callers, read enough to confirm. Report any defect you suspect — anchor it to a changed line and let the verifier filter unsupported claims.${labelHint}</Task>
+        : `  <Task>Review this PR for real ${categoryLabel} issues introduced by the diff. For each changed function: grep callers, read enough to confirm. Report any defect you suspect — anchor it to a changed line and let the verifier filter unsupported claims.${labelHint}</Task>
 `;
-        const compactCoverage = lane
-            ? `  <CoverageContract>Go DEEP on the hunks your focus applies to; SKIP the rest and trivial ones (renames, formatting, comments, config) unless your focus is about them. Depth of reasoning over breadth of reading.
+    const compactCoverage = lane
+        ? `  <CoverageContract>Go DEEP on the hunks your focus applies to; SKIP the rest and trivial ones (renames, formatting, comments, config) unless your focus is about them. Depth of reasoning over breadth of reading.
 `
-            : `  <CoverageContract>Go DEEP on hunks that can hide a bug (trace callers, read surrounding logic); SKIP trivial ones (renames, formatting, comments, config). Depth of reasoning over breadth of reading — you need not read every hunk.
+        : `  <CoverageContract>Go DEEP on hunks that can hide a bug (trace callers, read surrounding logic); SKIP trivial ones (renames, formatting, comments, config). Depth of reasoning over breadth of reading — you need not read every hunk.
 `;
-        const compactThreshold = lane
-            ? `    - Report only findings within your focus, when the changed code gives you code-backed evidence of them — anchor to a changed line and name what it breaks; the verifier filters. A defect outside your focus is not yours to report.
+    const compactThreshold = lane
+        ? `    - Report only findings within your focus, when the changed code gives you code-backed evidence of them — anchor to a changed line and name what it breaks; the verifier filters. A defect outside your focus is not yours to report.
 `
-            : `    - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor it to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
+        : `    - Reporting threshold (high-recall): report any defect the changed code makes you suspect — anchor it to a changed line and name the failure kind (wrong output, crash, broken contract/branch, lost side effect, broken caller/callee assumption). You need not prove the exact triggering input; the verifier filters. Only pure speculation with no anchor is out.
     - Resource-exhaustion, injection, bypass, perf (O(N)/N+1), and missing-defensive (CSRF/rate-limit/validation) concerns: report when the changed code makes you suspect them — anchor + let the verifier judge; do not pre-suppress by class.
 `;
 
-        return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
+    return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
   <Diffs>
 ${diffsSection}
@@ -1159,32 +1160,35 @@ ${compactThreshold}    - "Looks correct" is not a dismissal — explain why it c
     - Submit via the submitResult tool; do not print free-form JSON.
   </Rules>
 </ReviewTask>`;
-    }
+}
 
-    /**
-     * Builds a self-contained system prompt for trial / no-sandbox flows.
-     *
-     * The tool-heavy workflow (grep callers, readFile bodies, checkTypes)
-     * from the normal system prompt does not apply — the agent has no
-     * tools. This variant keeps the role/mindset/category guidance but
-     * replaces the workflow with a single-pass analysis instruction set.
-     */
-export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const identity = meta.identity;
-        const categoryPrompt = meta.categoryPrompt;
-        const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
-        const repoInstructionsSection = formatRepoInstructions(
-            input.repoInstructions,
-            meta,
-        );
+/**
+ * Builds a self-contained system prompt for trial / no-sandbox flows.
+ *
+ * The tool-heavy workflow (grep callers, readFile bodies, checkTypes)
+ * from the normal system prompt does not apply — the agent has no
+ * tools. This variant keeps the role/mindset/category guidance but
+ * replaces the workflow with a single-pass analysis instruction set.
+ */
+export function buildSelfContainedSystemPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const identity = meta.identity;
+    const categoryPrompt = meta.categoryPrompt;
+    const overridesSection = formatOverrides(input, meta);
+    const memoryRulesSection = formatMemoryRules(input.memoryRules);
+    const repoInstructionsSection = formatRepoInstructions(
+        input.repoInstructions,
+        meta,
+    );
 
-        const langLabel = resolveLanguageLabel(input.languageResultPrompt);
-        const langSection = langLabel
-            ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
-            : '';
+    const langLabel = resolveLanguageLabel(input.languageResultPrompt);
+    const langSection = langLabel
+        ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
+        : '';
 
-        return `<CodeReviewAgent mode="self-contained">
+    return `<CodeReviewAgent mode="self-contained">
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
   <Role>
     You are ${identity.name}, ${identity.description}
@@ -1235,60 +1239,56 @@ ${overridesSection}
 ${memoryRulesSection}
 ${repoInstructionsSection}
 </CodeReviewAgent>`;
-    }
+}
 
-    /**
-     * Builds a self-contained user prompt for trial / no-sandbox flows.
-     *
-     * The agent has no tools and cannot explore the repo, so the prompt:
-     *   - Inlines file content when the CLI shipped it (fileContent field)
-     *   - Removes all tool instructions (no readFile/grep/checkTypes refs)
-     *   - Drops the CoverageContract (nothing to cover against)
-     *   - Explicitly forbids speculation about callers or cross-file behavior
-     *   - Focuses on self-evident defects in the diff
-     */
-export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const prContextSection = formatPRContext(
-            input.prTitle,
-            input.prBody,
-        );
-        const traceDecisionsSection = formatTraceDecisions(
-            input.traceDecisions,
-        );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
-        const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
-        const fileContentsSection = formatInlineFileContents(
-            input.changedFiles,
-        );
+/**
+ * Builds a self-contained user prompt for trial / no-sandbox flows.
+ *
+ * The agent has no tools and cannot explore the repo, so the prompt:
+ *   - Inlines file content when the CLI shipped it (fileContent field)
+ *   - Removes all tool instructions (no readFile/grep/checkTypes refs)
+ *   - Drops the CoverageContract (nothing to cover against)
+ *   - Explicitly forbids speculation about callers or cross-file behavior
+ *   - Focuses on self-evident defects in the diff
+ */
+export function buildSelfContainedUserPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const prContextSection = formatPRContext(input.prTitle, input.prBody);
+    const traceDecisionsSection = formatTraceDecisions(input.traceDecisions);
+    const previousDecisionsSection = formatPreviousDecisions(
+        input.previousDecisions,
+    );
+    const commitsSection = formatCommits(input.commits);
+    const diffsSection = formatDiffs(input.changedFiles);
+    const fileContentsSection = formatInlineFileContents(input.changedFiles);
 
-        const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
-        const allowedSuggestionLabels = meta.allowedLabels;
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
+    const categoryLabel = meta.categoryLabel;
+    const mixedLabelMode = meta.supportsMixed;
+    const allowedSuggestionLabels = meta.allowedLabels;
+    const outputLabelLine = mixedLabelMode
+        ? `"label": "${allowedSuggestionLabels.join('|')}",
       `
-            : '';
+        : '';
 
-        const taskDescriptions: Record<string, string> = {
-            bug: 'real bugs introduced, exposed, or made worse by these changes',
-            performance:
-                'real performance regressions introduced or worsened by these changes',
-            security:
-                'real security vulnerabilities introduced, exposed, or made worse by these changes',
-            generalist:
-                'real bugs, security vulnerabilities, and material performance regressions introduced, exposed, or made worse by these changes',
-        };
-        const taskDescription =
-            categoryLabel === 'generalist'
-                ? `real ${allowedSuggestionLabels.join(', ')} issues self-evident from these diffs`
-                : (taskDescriptions[categoryLabel] ??
-                  'issues introduced by these changes');
+    const taskDescriptions: Record<string, string> = {
+        bug: 'real bugs introduced, exposed, or made worse by these changes',
+        performance:
+            'real performance regressions introduced or worsened by these changes',
+        security:
+            'real security vulnerabilities introduced, exposed, or made worse by these changes',
+        generalist:
+            'real bugs, security vulnerabilities, and material performance regressions introduced, exposed, or made worse by these changes',
+    };
+    const taskDescription =
+        categoryLabel === 'generalist'
+            ? `real ${allowedSuggestionLabels.join(', ')} issues self-evident from these diffs`
+            : (taskDescriptions[categoryLabel] ??
+              'issues introduced by these changes');
 
-        return (
-            `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
+    return (
+        `<ReviewTask mode="self-contained">${formatReviewFocus(input.reviewDirective)}${formatCiEvidence(input.ciEvidence, input.changedFiles)}${formatDeterministicFindings(input.analyzerFindings)}
   ${prContextSection}${traceDecisionsSection}${previousDecisionsSection}${commitsSection}
 
   <Diffs>
@@ -1318,8 +1318,8 @@ ${fileContentsSection}
 
   <OutputFormat>
 ` +
-            '```' +
-            `json
+        '```' +
+        `json
 {
   "reasoning": "What you checked and why. Example: 'Looked at auth.ts line 42: new code dereferences user.email without checking if user is null. Parameter comes from an unchecked path in the same function. Reported.'",
   "suggestions": [
@@ -1338,149 +1338,150 @@ ${fileContentsSection}
   ]
 }
 ` +
-            '```' +
-            `
+        '```' +
+        `
   </OutputFormat>
 </ReviewTask>`
-        );
-    }
+    );
+}
 
-    /**
-     * Inlines full file contents for any FileChange that carries a
-     * `fileContent` field. Used only in self-contained mode: the CLI
-     * client ships the user's local file state so the agent has at least
-     * the full modified files to reason over, even without a sandbox.
-     */
+/**
+ * Inlines full file contents for any FileChange that carries a
+ * `fileContent` field. Used only in self-contained mode: the CLI
+ * client ships the user's local file state so the agent has at least
+ * the full modified files to reason over, even without a sandbox.
+ */
 function formatInlineFileContents(files: FileChange[]): string {
-        if (!files?.length) return '';
+    if (!files?.length) return '';
 
-        const withContent = files.filter(
-            (f) =>
-                typeof f.fileContent === 'string' && f.fileContent.length > 0,
-        );
-        if (withContent.length === 0) return '';
+    const withContent = files.filter(
+        (f) => typeof f.fileContent === 'string' && f.fileContent.length > 0,
+    );
+    if (withContent.length === 0) return '';
 
-        const blocks = withContent
-            .map((f) => {
-                const lang = (f as any).language || '';
-                return `### ${f.filename}\n\`\`\`${lang}\n${f.fileContent}\n\`\`\``;
-            })
-            .join('\n\n');
+    const blocks = withContent
+        .map((f) => {
+            const lang = (f as any).language || '';
+            return `### ${f.filename}\n\`\`\`${lang}\n${f.fileContent}\n\`\`\``;
+        })
+        .join('\n\n');
 
-        return `\n\n  <FileContents>\n${blocks}\n  </FileContents>`;
-    }
+    return `\n\n  <FileContents>\n${blocks}\n  </FileContents>`;
+}
 
 function formatPRContext(prTitle?: string, prBody?: string): string {
-        if (!prTitle && !prBody) return '';
+    if (!prTitle && !prBody) return '';
 
-        const parts: string[] = [];
-        if (prTitle) parts.push(`Title: ${prTitle}`);
-        if (prBody) parts.push(prBody.substring(0, 500));
+    const parts: string[] = [];
+    if (prTitle) parts.push(`Title: ${prTitle}`);
+    if (prBody) parts.push(prBody.substring(0, 500));
 
-        return `\n  <PRContext>${parts.join('\n')}</PRContext>`;
-    }
+    return `\n  <PRContext>${parts.join('\n')}</PRContext>`;
+}
 
 function formatDiffs(
-        files: FileChange[],
-        fileTiers?: Map<string, CoverageTier>,
-    ): string {
-        if (!files?.length) return 'No changed files provided.';
+    files: FileChange[],
+    fileTiers?: Map<string, CoverageTier>,
+): string {
+    if (!files?.length) return 'No changed files provided.';
 
-        return files
-            .map((file) => {
-                const diff = file.patchWithLinesStr ?? file.patch ?? '';
-                const tier = fileTiers?.get(
-                    normalizeFilenameForTier(file.filename),
-                );
-                if (tier === 'optional') {
-                    // Optional files: render filename + per-hunk headers
-                    // only. Actual content is hidden to keep the prompt
-                    // small; the agent can still readFile on demand.
-                    const additions = file.additions ?? 0;
-                    const deletions = file.deletions ?? 0;
-                    const hunkHeaders = extractHunkHeaders(diff);
-                    const headerLine = hunkHeaders.length
-                        ? hunkHeaders.join('\n')
-                        : '(no hunk headers)';
-                    return `### ${file.filename} [optional, +${additions} -${deletions}]\n\`\`\`diff\n${headerLine}\n\`\`\``;
-                }
-                const tierSuffix =
-                    tier === 'critical'
-                        ? ' [CRITICAL]'
-                        : tier === 'warm'
-                          ? ' [warm]'
-                          : '';
-                return `### ${file.filename}${tierSuffix}\n\`\`\`diff\n${diff}\n\`\`\``;
-            })
-            .join('\n\n');
-    }
+    return files
+        .map((file) => {
+            const diff = file.patchWithLinesStr ?? file.patch ?? '';
+            const tier = fileTiers?.get(
+                normalizeFilenameForTier(file.filename),
+            );
+            if (tier === 'optional') {
+                // Optional files: render filename + per-hunk headers
+                // only. Actual content is hidden to keep the prompt
+                // small; the agent can still readFile on demand.
+                const additions = file.additions ?? 0;
+                const deletions = file.deletions ?? 0;
+                const hunkHeaders = extractHunkHeaders(diff);
+                const headerLine = hunkHeaders.length
+                    ? hunkHeaders.join('\n')
+                    : '(no hunk headers)';
+                return `### ${file.filename} [optional, +${additions} -${deletions}]\n\`\`\`diff\n${headerLine}\n\`\`\``;
+            }
+            const tierSuffix =
+                tier === 'critical'
+                    ? ' [CRITICAL]'
+                    : tier === 'warm'
+                      ? ' [warm]'
+                      : '';
+            return `### ${file.filename}${tierSuffix}\n\`\`\`diff\n${diff}\n\`\`\``;
+        })
+        .join('\n\n');
+}
 
 function formatMemoryRules(rules?: Partial<IKodyRule>[]): string {
-        if (!rules?.length) return '';
+    if (!rules?.length) return '';
 
-        const formatted = rules
-            .map((r) => `- **${r.title}**: ${r.rule}`)
-            .join('\n');
+    const formatted = rules
+        .map((r) => `- **${r.title}**: ${r.rule}`)
+        .join('\n');
 
-        return `## Memory Rules (Team Conventions)\n${formatted}`;
-    }
+    return `## Memory Rules (Team Conventions)\n${formatted}`;
+}
 
-function formatOverrides(input: ReviewAgentInput, meta: PromptAgentMeta): string {
-        const parts: string[] = [];
+function formatOverrides(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const parts: string[] = [];
 
-        const descriptions = input.v2PromptOverrides?.categories?.descriptions;
-        if (descriptions) {
-            if (meta.supportsMixed) {
-                const labels = meta.allowedLabels;
+    const descriptions = input.v2PromptOverrides?.categories?.descriptions;
+    if (descriptions) {
+        if (meta.supportsMixed) {
+            const labels = meta.allowedLabels;
 
-                const mixedCategorySections = labels
-                    .map((label) => {
-                        const value = resolvePromptOverrideText(
-                            descriptions[label],
-                        );
-                        if (!value) return null;
-
-                        const header =
-                            label.charAt(0).toUpperCase() + label.slice(1);
-                        return `### ${header}\n${value}`;
-                    })
-                    .filter((section): section is string => Boolean(section));
-
-                if (mixedCategorySections.length > 0) {
-                    parts.push(
-                        `## Category Guidelines\n${mixedCategorySections.join('\n\n')}`,
+            const mixedCategorySections = labels
+                .map((label) => {
+                    const value = resolvePromptOverrideText(
+                        descriptions[label],
                     );
-                }
-            } else {
-                const categoryLabel = meta.categoryLabel;
-                const categoryDesc = resolvePromptOverrideText(
-                    descriptions[categoryLabel as keyof typeof descriptions],
+                    if (!value) return null;
+
+                    const header =
+                        label.charAt(0).toUpperCase() + label.slice(1);
+                    return `### ${header}\n${value}`;
+                })
+                .filter((section): section is string => Boolean(section));
+
+            if (mixedCategorySections.length > 0) {
+                parts.push(
+                    `## Category Guidelines\n${mixedCategorySections.join('\n\n')}`,
                 );
-                if (categoryDesc) {
-                    parts.push(`## Category Guidelines\n${categoryDesc}`);
-                }
+            }
+        } else {
+            const categoryLabel = meta.categoryLabel;
+            const categoryDesc = resolvePromptOverrideText(
+                descriptions[categoryLabel as keyof typeof descriptions],
+            );
+            if (categoryDesc) {
+                parts.push(`## Category Guidelines\n${categoryDesc}`);
             }
         }
-
-        // Severity classification is handled by a separate post-processing step (classify-severity.ts)
-        // to avoid biasing the agent's investigation. The agent assigns a rough severity but
-        // the final classification uses dedicated criteria (default or client-custom).
-
-        const savedGenerationMain = resolvePromptOverrideText(
-            input.generationMain ?? input.v2PromptOverrides?.generation?.main,
-        );
-        // A saved copy of an old default or preset reads as today's default.
-        const generationMain =
-            savedGenerationMain &&
-            isDefaultWritingGuidelines(savedGenerationMain)
-                ? currentDefaultWritingGuidelines()
-                : savedGenerationMain;
-        if (generationMain) {
-            parts.push(`## Writing Guidelines\n${generationMain}`);
-        }
-
-        return parts.join('\n\n');
     }
+
+    // Severity classification is handled by a separate post-processing step (classify-severity.ts)
+    // to avoid biasing the agent's investigation. The agent assigns a rough severity but
+    // the final classification uses dedicated criteria (default or client-custom).
+
+    const savedGenerationMain = resolvePromptOverrideText(
+        input.generationMain ?? input.v2PromptOverrides?.generation?.main,
+    );
+    // A saved copy of an old default or preset reads as today's default.
+    const generationMain =
+        savedGenerationMain && isDefaultWritingGuidelines(savedGenerationMain)
+            ? currentDefaultWritingGuidelines()
+            : savedGenerationMain;
+    if (generationMain) {
+        parts.push(`## Writing Guidelines\n${generationMain}`);
+    }
+
+    return parts.join('\n\n');
+}
 
 const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
