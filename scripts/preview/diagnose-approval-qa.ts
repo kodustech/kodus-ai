@@ -1,4 +1,5 @@
 /** Temporary, fixed-category diagnosis of the three provider QA executions. */
+import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 
 const sql = `with targets(pr) as (values (1232), (1177), (2219)), latest as (
@@ -80,3 +81,48 @@ try {
     console.log('approval-qa: unavailable');
     process.exitCode = 1;
 }
+
+// A one-token completion checks the exact managed model used by trial reviews.
+// The key and upstream response body stay in the VM; only the HTTP class leaves.
+async function probeManagedModel(): Promise<void> {
+    const key =
+        process.env.API_FIREWORKS_API_KEY || process.env.FIREWORKS_API_KEY;
+    if (!key) {
+        console.log('approval-qa: managed-model=key_missing');
+        return;
+    }
+    try {
+        const response = await fetch(
+            `${process.env.API_FIREWORKS_BASE_URL || 'https://api.fireworks.ai/inference/v1'}/chat/completions`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${key}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'accounts/fireworks/models/deepseek-v4p1-flash',
+                    messages: [{ role: 'user', content: 'ping' }],
+                    max_tokens: 1,
+                }),
+                signal: AbortSignal.timeout(15_000),
+            },
+        );
+        const category = response.ok
+            ? 'ok'
+            : response.status === 401 || response.status === 403
+              ? 'auth_rejected'
+              : response.status === 404
+                ? 'model_unavailable'
+                : response.status === 429
+                  ? 'rate_limited'
+                  : 'other_http';
+        console.log(`approval-qa: managed-model=${category}`);
+        if (category !== 'ok') process.exitCode = 1;
+    } catch {
+        console.log('approval-qa: managed-model=network_error');
+        process.exitCode = 1;
+    }
+}
+
+void probeManagedModel();

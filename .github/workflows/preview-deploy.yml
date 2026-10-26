@@ -233,6 +233,9 @@ jobs:
                   # variable also enables the managed OpenAI models, so use a
                   # key with a spending limit.
                   PREVIEW_OPENAI_EMBEDDINGS_KEY: ${{ secrets.PREVIEW_OPENAI_EMBEDDINGS_KEY }}
+                  # E2E Fireworks credential, used only for a manually dispatched
+                  # provider approval smoke; regular public previews stay neutralized.
+                  PREVIEW_FIREWORKS_QA_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
@@ -309,6 +312,16 @@ jobs:
                     echo "OpenAI: the dedup guard has embeddings"
                   else
                     echo "::notice::PREVIEW_OPENAI_EMBEDDINGS_KEY is not set — the dedup guard runs without embeddings and vetoes low-overlap merges"
+                  fi
+                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ]; then
+                    : "${PREVIEW_FIREWORKS_QA_KEY:?BYOK_FIREWORKS_API_KEY is required for managed trial review QA}"
+                    grep -v '^API_FIREWORKS_API_KEY=' .env > "$RUNNER_TEMP/env.no-fireworks"
+                    {
+                      cat "$RUNNER_TEMP/env.no-fireworks"
+                      printf 'API_FIREWORKS_API_KEY=%s\n' "$PREVIEW_FIREWORKS_QA_KEY"
+                    } > .env
+                    rm -f "$RUNNER_TEMP/env.no-fireworks"
+                    echo 'Fireworks: provider approval QA uses the E2E credential'
                   fi
                   # billing exists in the cloud shape only
                   case " $PROFILES " in *" cloud "*)
