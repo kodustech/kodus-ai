@@ -265,6 +265,26 @@ describe('GraphContextService', () => {
                 ),
             ).toBe(true);
         });
+
+        it('should run the legacy fallback once and reject when repo is not found and it fails', async () => {
+            mockRepositoryRepo.findById.mockResolvedValue(null);
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
+            mockSandbox.writeFile.mockRejectedValue(new Error('disk full'));
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).rejects.toThrow('disk full');
+
+            expect(legacySpy).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('generateContextLegacy', () => {
