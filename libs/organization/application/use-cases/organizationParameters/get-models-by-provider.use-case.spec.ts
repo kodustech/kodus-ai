@@ -489,3 +489,60 @@ describe('GetModelsByProviderUseCase — a key only goes to its own host', () =>
         expect(authHeaders()).toEqual(['Bearer sk-kodus-env']);
     });
 });
+
+describe('GetModelsByProviderUseCase — a saved credential named by id', () => {
+    beforeEach(() => {
+        mockedAxios.get.mockReset();
+        mockedAxios.get.mockResolvedValue({
+            data: { object: 'list', data: [{ id: 'm' }] },
+        } as any);
+    });
+
+    const twoGateways = {
+        version: 2,
+        credentials: [
+            {
+                id: 'cred-a',
+                provider: 'openai_compatible',
+                apiKey: 'enc-a',
+                settings: { baseURL: 'https://gateway-a.example.com/v1' },
+            },
+            {
+                id: 'cred-b',
+                provider: 'openai_compatible',
+                apiKey: 'enc-b',
+                settings: { baseURL: 'https://gateway-b.example.com/v1' },
+            },
+        ],
+        models: [],
+    };
+
+    it("lists the named credential's endpoint with its own key", async () => {
+        const useCase = buildUseCase(twoGateways);
+
+        await useCase.execute(
+            'openai_compatible',
+            { organizationId: 'org-1' },
+            undefined,
+            'cred-b',
+        );
+
+        const [url, cfg] = mockedAxios.get.mock.calls[0];
+        expect(url).toBe('https://gateway-b.example.com/v1/models');
+        expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-b');
+    });
+
+    it('sends the named key when the request repeats its endpoint', async () => {
+        const useCase = buildUseCase(twoGateways);
+
+        await useCase.execute(
+            'openai_compatible',
+            { organizationId: 'org-1' },
+            { baseURL: 'https://gateway-b.example.com/v1' },
+            'cred-b',
+        );
+
+        const [, cfg] = mockedAxios.get.mock.calls[0];
+        expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-b');
+    });
+});

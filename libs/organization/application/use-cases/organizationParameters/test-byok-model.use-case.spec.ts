@@ -38,6 +38,7 @@ function build(opts: {
     return {
         useCase: new TestByokModelUseCase(orgParams, connectionUseCase, getModels),
         connectionUseCase,
+        getModels,
     };
 }
 
@@ -260,5 +261,71 @@ describe('TestByokModelUseCase', () => {
                 baseURL: undefined, // stored key-only → TestByokConnection fills it
             }),
         );
+    });
+
+    describe('two gateways of one provider', () => {
+        const twoGateways = {
+            version: 2,
+            credentials: [
+                {
+                    id: 'cred-a',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-a',
+                    settings: { baseURL: 'https://gateway-a.example.com/v1' },
+                },
+                {
+                    id: 'cred-b',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-b',
+                    settings: { baseURL: 'https://gateway-b.example.com/v1' },
+                },
+            ],
+            models: [],
+        };
+
+        it('probes the credential named by id, not the first of its provider', async () => {
+            const { useCase, connectionUseCase, getModels } = build({
+                configValue: twoGateways,
+                catalog: [],
+            });
+
+            await useCase.execute({
+                provider: 'openai_compatible',
+                model: 'some-model',
+                credentialId: 'cred-b',
+                organizationAndTeamData: org,
+            });
+
+            expect(getModels.execute).toHaveBeenCalledWith(
+                'openai_compatible',
+                org,
+                undefined,
+                'cred-b',
+            );
+            expect(
+                (connectionUseCase.execute as jest.Mock).mock.calls[0][0],
+            ).toEqual(
+                expect.objectContaining({
+                    apiKey: 'dec:enc-b',
+                    baseURL: 'https://gateway-b.example.com/v1',
+                }),
+            );
+        });
+
+        it('refuses an id that is not saved instead of probing another gateway', async () => {
+            const { useCase, connectionUseCase } = build({
+                configValue: twoGateways,
+            });
+
+            await expect(
+                useCase.execute({
+                    provider: 'openai_compatible',
+                    model: 'some-model',
+                    credentialId: 'cred-gone',
+                    organizationAndTeamData: org,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(connectionUseCase.execute).not.toHaveBeenCalled();
+        });
     });
 });
