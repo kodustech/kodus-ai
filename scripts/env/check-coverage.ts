@@ -104,6 +104,9 @@ function grepStrongUsages(): Set<string> {
         '--exclude-dir=.claude',
         '--exclude-dir=.cursor',
         '--exclude-dir=.vscode',
+        // Local scratch space (gitignored): may hold clones of other repos or
+        // old checkouts of this one, with env names this branch never reads.
+        '--exclude-dir=.tmp',
         // Nested git worktrees (Claude Code / manual `git worktree`) hold
         // checkouts of OTHER branches — older code using since-renamed env
         // names (e.g. API_OPENROUTER_KEY → API_OPEN_ROUTER_API_KEY,
