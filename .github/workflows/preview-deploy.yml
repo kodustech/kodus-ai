@@ -418,8 +418,10 @@ jobs:
               if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'
               env:
                   URLS: ${{ steps.up.outputs.urls }}
-                  CLOUD_TENANT_PAID_EMAIL: preview@kodus.io
                   CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
                   GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
                   GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
                   GL_TEST_REPO_CLOUD: ${{ secrets.GL_TEST_REPO_CLOUD }}
@@ -445,6 +447,16 @@ jobs:
                   failed=0
                   for provider in gitlab bitbucket azure-devops; do
                     echo "Testing conditional approval on $provider"
+                    # Each provider gets a fresh Teams trial. The regular preview
+                    # login may have no seats or remaining review credits after
+                    # earlier QA runs; a trial has enough for these two PRs.
+                    export CLOUD_TENANT_PAID_EMAIL="preview-approval-${{ github.run_id }}-$provider@kodus.io"
+                    if ! $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL pnpm run seed:preview >/dev/null 2>&1"; then
+                      echo "::error::could not seed isolated $provider QA tenant"
+                      failed=1
+                      continue
+                    fi
                     (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts conditional-approval-provider --target cloud --provider "$provider" --license paid) || failed=1
                   done
                   exit "$failed"
