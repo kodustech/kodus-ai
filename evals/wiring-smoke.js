@@ -134,6 +134,8 @@ async function main() {
         { name: 'preflight', args: ['evals/engine-gate.js', '--profile=harness'] },
         // Replays recorded model output; only prose recovery reaches the model.
         { name: 'parse', result: 'shared', model: true, args: ['evals/parse/run.js', '--model=eval-fake', '--gate'] },
+        // Every case reaches the scripted model, whose answer yields no finding.
+        { name: 'prose-recovery', result: 'shared', model: true, args: ['evals/prose-recovery/run.js', '--model=eval-fake', '--gate'] },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         { name: 'shape-invariance', args: ['evals/review-chain/shape-invariance.js', '--gate'] },
         { name: 'verifier-verdict', args: ['evals/verifier-verdict/run.js', '--gate'] },

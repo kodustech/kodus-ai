@@ -238,6 +238,27 @@ const STAGES = [
         note: 'Tests only for now: they replay recorded model output through production\'s parse. An eval of this step comes later.',
     },
     {
+        id: 'prose-recovery',
+        name: 'Prose recovery',
+        short: 'Recovers findings a run wrote only as prose',
+        group: 'The agents, side by side',
+        does: 'When a finder run ends with no findings, asks the model to turn the prose it wrote into findings: the ones the prose reports, never the hypotheses it dismissed.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            { kind: 'unit', name: 'The recovery gate and its fallback parse', specs: ['libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts'] },
+            { kind: 'contract', name: 'Finder prose written for the eval goes through the recovery on the scripted model', wiring: ['prose-recovery'] },
+        ],
+        eval: {
+            path: 'evals/prose-recovery',
+            metric: 'of the checks, findings extracted and dismissed hypotheses left out',
+            sets: {
+                controlled: 'finder prose written for the eval: 18 that dismiss every hypothesis, 8 that report defects, 6 that do both',
+                full: null,
+            },
+            nightly: 'shared',
+        },
+    },
+    {
         id: 'verify',
         name: 'Verify',
         short: 'Drops findings the code does not confirm',

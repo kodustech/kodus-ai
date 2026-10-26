@@ -1,0 +1,10 @@
+{
+    "__doc": [
+        "Floors per model for the share of the checks right on cases.json (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): deterministic, the scripted model's answer yields no finding, so every dismissed check passes and every extract check fails: 24 of 40 on two runs of the same commit.",
+        "Real models get a floor once the recovery prompt of #1938 is settled. Measured on the prompt it replaces (two runs, 2026-10-26), claude-sonnet-4-6 by its API route: 32/40 and 33/40, all 16 findings extracted, 13 and 12 findings leaked from 8 and 7 of the 18 dismiss cases. That run is the deliberate break of evals/README.md rule 7."
+    ],
+    "models": {
+        "eval-fake": { "floor": 0.6, "observed": 0.6 }
+    }
+}
