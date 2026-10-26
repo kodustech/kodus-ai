@@ -1,5 +1,6 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { UpdateCommentsAndGenerateSummaryStage } from './finish-comments.stage';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 /**
@@ -359,6 +360,54 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const result = await (stage as any).executeStage(summaryFailContext());
 
         expect(result.lastReviewError?.friendlyMessage).toBeTruthy();
+    });
+
+    // The model wrote the summary, but the git platform refused to put it on
+    // the PR: a token without write access gets a 403 there. Reading that 403
+    // as an LLM failure reported "The configured API key (google_vertex)
+    // appears invalid or lacks permission" while the model worked fine and the
+    // real cause sat one stage row above.
+    it('does not report a failed write of the summary to the PR as an LLM failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockResolvedValue('summary');
+        commentManagerService.updateSummarizationInPR.mockRejectedValue(
+            Object.assign(
+                new Error('Resource not accessible by personal access token'),
+                { name: 'HttpError', status: 403 },
+            ),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError).toBeUndefined();
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0].metadata).toEqual({
+            message: 'Failed to publish summary to the pull request',
+            reason: 'summary_generation_failed',
+        });
+        expect(describePipelineError(result.errors[0]).text).toBe(
+            'Resource not accessible by personal access token',
+        );
+    });
+
+    it('still reads a failed model call of the summary as an LLM failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockRejectedValue(
+            Object.assign(new Error('Unauthorized'), {
+                name: 'AI_APICallError',
+                statusCode: 401,
+            }),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError?.category).toBe('AUTH_INVALID');
+        expect(result.errors[0].metadata.message).toBe(
+            'Failed to generate summary',
+        );
+        expect(
+            commentManagerService.updateSummarizationInPR,
+        ).not.toHaveBeenCalled();
     });
 
     it('does NOT flag reviewHasPartialErrors for a summary-only failure (#1844)', async () => {
