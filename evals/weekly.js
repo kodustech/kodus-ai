@@ -37,7 +37,7 @@ const PARTS = [
     { part: 'kody-rules', evals: ['kody-rules', 'repo-instructions'] },
     { part: 'funnel', evals: ['funnel-verify', 'funnel-dedup', 'funnel-severity', 'suggestion-enrichment'] },
     { part: 'conversation', evals: ['conversation', 'thread-rule', 'thread-memory', 'reply-addressing'] },
-    { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic', 'custom-agents'], tests: true },
+    { part: 'review', evals: ['review-rounds', 'format', 'memories', 'business-logic', 'custom-agents', 'prose-recovery'], tests: true },
 ];
 
 // The matrix: every tier-0 model on the controlled set.

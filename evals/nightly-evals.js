@@ -100,6 +100,13 @@ const NIGHTLY_EVALS = [
         files: ['evals/memories/targets.json'],
     },
     {
+        id: 'prose-recovery',
+        stage: 'prose-recovery',
+        run: ['evals/prose-recovery/run.js'],
+        sets: { controlled: [], full: null },
+        files: ['evals/prose-recovery/targets.json', 'evals/prose-recovery/cases.json'],
+    },
+    {
         id: 'custom-agents',
         stage: 'custom-agents',
         run: ['evals/custom-agents/run.js'],
