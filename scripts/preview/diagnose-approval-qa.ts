@@ -1,8 +1,8 @@
-/** Temporary, fixed-category diagnosis of the three provider QA executions. */
+/** Temporary, fixed-category diagnosis of the latest GitLab provider QA execution. */
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 
-const sql = `with targets(pr) as (values (1232), (1177), (2219)), latest as (
+const sql = `with targets(pr) as (values (1233)), latest as (
     select distinct on ("pullRequestNumber") "pullRequestNumber" as pr,
         case when status::text in ('success','error','partial_error','skipped','in_progress','pending')
             then status::text else 'other' end as status,
@@ -42,8 +42,9 @@ const sql = `with targets(pr) as (values (1232), (1177), (2219)), latest as (
             when "errorMessage" ~* 'invalid|incorrect|expired|revoked' then 'invalid'
             else 'unknown' end as auth_kind
     from automation_execution
-    where "pullRequestNumber" in (1232,1177,2219)
-      and "createdAt" >= '2026-10-26 16:50:00+00'
+    where "pullRequestNumber" = 1233
+      and "createdAt" >= '2026-10-26 18:00:00+00'
+      and "createdAt" < '2026-10-26 18:14:51+00'
     order by "pullRequestNumber", "createdAt" desc
 )
 select distinct 'status=' || coalesce(latest.status,'missing') ||
@@ -71,7 +72,7 @@ try {
         /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
     if (
         lines.length < 1 ||
-        lines.length > 3 ||
+        lines.length > 1 ||
         lines.some((line) => !allowed.test(line))
     ) {
         throw new Error('unexpected diagnostic output');
