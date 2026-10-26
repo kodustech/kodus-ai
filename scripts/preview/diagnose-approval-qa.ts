@@ -27,7 +27,19 @@ const sql = `with targets(pr) as (values (1232), (1177), (2219)), latest as (
             when "errorMessage" ~* 'closed|merged|pr.state|pull.request.state' then 'pr_state'
             when "errorMessage" ~* 'disabled|paused|manual|branch' then 'config'
             when "errorMessage" is null then 'none'
-            else 'other' end as detail
+            else 'other' end as detail,
+        case
+            when "errorMessage" ~* 'fireworks|deepseek' then 'fireworks'
+            when "errorMessage" ~* 'openai' then 'openai'
+            when "errorMessage" ~* 'anthropic|claude' then 'anthropic'
+            when "errorMessage" ~* 'google|gemini|vertex' then 'google'
+            else 'unknown' end as upstream,
+        case
+            when "errorMessage" ~* '401' then 'http_401'
+            when "errorMessage" ~* '403' then 'http_403'
+            when "errorMessage" ~* 'missing|not.configured|no.api.key' then 'missing'
+            when "errorMessage" ~* 'invalid|incorrect|expired|revoked' then 'invalid'
+            else 'unknown' end as auth_kind
     from automation_execution
     where "pullRequestNumber" in (1232,1177,2219)
       and "createdAt" >= '2026-10-26 16:50:00+00'
@@ -35,7 +47,9 @@ const sql = `with targets(pr) as (values (1232), (1177), (2219)), latest as (
 )
 select distinct 'status=' || coalesce(latest.status,'missing') ||
     ',cause=' || coalesce(latest.cause,'none') ||
-    ',detail=' || coalesce(latest.detail,'none')
+    ',detail=' || coalesce(latest.detail,'none') ||
+    ',upstream=' || coalesce(latest.upstream,'unknown') ||
+    ',auth_kind=' || coalesce(latest.auth_kind,'unknown')
 from targets left join latest using (pr) order by 1`;
 
 try {
@@ -53,7 +67,7 @@ try {
     ).trim();
     const lines = output.split('\n');
     const allowed =
-        /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other)$/;
+        /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
     if (
         lines.length < 1 ||
         lines.length > 3 ||
