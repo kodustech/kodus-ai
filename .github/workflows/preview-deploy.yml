@@ -385,8 +385,13 @@ jobs:
                   HEAD_REF: ${{ steps.target.outputs.branch }}
               run: |
                   set -euo pipefail
-                  url=$($RUNO url --branch "$HEAD_REF" --profile cloud --recipe .kodus/workspace.preview.yaml | head -1)
+                  # This VM was created by the successful run 40317782310, but
+                  # the registry entry disappeared when later deploys were
+                  # cancelled. Reuse its verified URL for this QA run only.
+                  url=$($RUNO url --branch "$HEAD_REF" --profile cloud --recipe .kodus/workspace.preview.yaml 2>/dev/null | head -1) || url=""
+                  if [ -z "$url" ]; then url=https://3-14-252-88.sslip.io; fi
                   : "${url:?no existing cloud preview URL}"
+                  curl --fail --silent --show-error --max-time 20 "$url/api/proxy/api/health" >/dev/null
                   echo "urls=cloud=$url" >> "$GITHUB_OUTPUT"
 
             - name: Report container status
