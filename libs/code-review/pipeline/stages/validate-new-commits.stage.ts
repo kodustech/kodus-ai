@@ -16,6 +16,7 @@ import {
 } from '@libs/automation/domain/automation/enum/automation-status';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
+import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/interfaces/stage-result.interface';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
@@ -61,6 +62,7 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
         let lastExecutionResult: any;
         let forceFullRerun = false;
         let orphanedBaseCommit: CodeReviewPipelineContext['orphanedBaseCommit'];
+        let rebaseInterdiffFiles: FileChange[] | undefined;
 
         if (lastExecution?.dataExecution?.lastAnalyzedCommit) {
             lastAnalyzedCommit = lastExecution.dataExecution.lastAnalyzedCommit;
@@ -148,11 +150,11 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 newCommits = allCommits.slice(lastCommitIndex + 1);
             } else {
                 // Base commit is no longer reachable from the PR branch
-                // (rebase or force-push rewrote history). Falling back to a
-                // full review is the only safe option — using compare(orphan, head)
-                // would return diff lines that came from the target branch via
-                // rebase, and Kody would comment on code the author never wrote.
-                forceFullRerun = true;
+                // (rebase or force-push rewrote history). compare(orphan, head)
+                // would return lines that came from the target branch via the
+                // rebase, so what is new is read by comparing the PR diff at
+                // the orphan with the current one (#2037). When that diff
+                // can't be read, the whole PR is reviewed again.
                 if (lastExecutionResult) {
                     lastExecutionResult.lastAnalyzedCommit = undefined;
                 }
@@ -162,7 +164,7 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                     totalCommits: allCommits.length,
                 };
                 this.logger.warn({
-                    message: `Orphaned base commit detected for PR#${context.pullRequest.number} — falling back to full review`,
+                    message: `Orphaned base commit detected for PR#${context.pullRequest.number}`,
                     context: this.stageName,
                     metadata: {
                         organizationAndTeamData:
@@ -175,6 +177,121 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                         reason: 'orphaned_base_commit',
                     },
                 });
+
+                // `--force` and `-v <agent>` ask for the whole PR. A PR retargeted
+                // since the last review cannot be compared: its earlier diff
+                // would be read against the new base branch.
+                const reviewedBaseBranch =
+                    lastExecution?.dataExecution?.reviewedBaseBranch;
+                const retargeted =
+                    !!reviewedBaseBranch &&
+                    reviewedBaseBranch !== context.pullRequest?.base?.ref;
+                let interdiff: Awaited<
+                    ReturnType<IPullRequestManagerService['getRebaseInterdiff']>
+                > = null;
+                try {
+                    interdiff =
+                        forceFullRerun || retargeted
+                            ? null
+                            : await this.pullRequestHandlerService.getRebaseInterdiff(
+                                  context.organizationAndTeamData,
+                                  context.repository,
+                                  context.pullRequest,
+                                  lastCommitSha,
+                              );
+                } catch (error) {
+                    // A full review would hit the throttled host harder; skip
+                    // like a rate-limited commit fetch does.
+                    if (!is429Error(error)) throw error;
+                    this.logger.warn({
+                        message: `Skipping code review for PR#${context.pullRequest.number} — provider rate-limited the diff fetch (HTTP 429)`,
+                        context: this.stageName,
+                        metadata: {
+                            organizationAndTeamData:
+                                context.organizationAndTeamData,
+                            repository: context.repository.name,
+                            pullRequestNumber: context.pullRequest.number,
+                            orphanedSha: lastCommitSha,
+                            reason: 'provider_rate_limited',
+                        },
+                    });
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: StageMessageHelper.skippedWithReason(
+                                PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                                'Provider rate-limited the diff fetch (HTTP 429)',
+                            ),
+                        };
+                    });
+                }
+
+                if (forceFullRerun) {
+                    orphanedBaseCommit.interdiff = {
+                        fallback: 'full_review_requested',
+                    };
+                } else if (retargeted) {
+                    forceFullRerun = true;
+                    orphanedBaseCommit.interdiff = {
+                        fallback: 'base_branch_changed',
+                    };
+                } else if (!interdiff) {
+                    forceFullRerun = true;
+                    orphanedBaseCommit.interdiff = {
+                        fallback: 'previous_diff_unavailable',
+                    };
+                } else {
+                    rebaseInterdiffFiles = interdiff.files;
+                    orphanedBaseCommit.interdiff = {
+                        filesToReview: interdiff.files.length,
+                        unchangedFiles: interdiff.unchangedFiles.length,
+                        partialFiles: interdiff.partialFiles.length,
+                        uncomparedFiles: interdiff.uncomparedFiles.length,
+                        hunksKept: interdiff.hunksKept,
+                        hunksDropped: interdiff.hunksDropped,
+                    };
+                }
+
+                this.logger.log({
+                    message: forceFullRerun
+                        ? `Rebase of PR#${context.pullRequest.number}: reviewing the whole PR`
+                        : `Rebase of PR#${context.pullRequest.number}: ${rebaseInterdiffFiles.length} file(s) changed since the last review`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repository: context.repository.name,
+                        pullRequestNumber: context.pullRequest.number,
+                        orphanedSha: lastCommitSha,
+                        currentHeadSha: context.pullRequest.head?.sha,
+                        interdiff: orphanedBaseCommit.interdiff,
+                        unchangedFiles: interdiff?.unchangedFiles,
+                        partialFiles: interdiff?.partialFiles,
+                        uncomparedFiles: interdiff?.uncomparedFiles,
+                        reason: 'rebase_interdiff',
+                    },
+                });
+
+                if (rebaseInterdiffFiles && !rebaseInterdiffFiles.length) {
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: StageMessageHelper.skippedWithReason(
+                                PipelineReasons.COMMITS.REBASE_NO_CHANGES,
+                                'The rebase changed nothing since the last review',
+                            ),
+                        };
+                        draft.prAllCommits = allCommits;
+                        if (lastExecutionResult) {
+                            draft.lastExecution = lastExecutionResult;
+                        }
+                        draft.orphanedBaseCommit = orphanedBaseCommit;
+                        draft.pipelineMetadata = {
+                            ...draft.pipelineMetadata,
+                            forceFullRerun: false,
+                        };
+                    });
+                }
             }
         }
 
@@ -242,6 +359,9 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
             }
             if (orphanedBaseCommit) {
                 draft.orphanedBaseCommit = orphanedBaseCommit;
+            }
+            if (rebaseInterdiffFiles) {
+                draft.rebaseInterdiffFiles = rebaseInterdiffFiles;
             }
             draft.pipelineMetadata = {
                 ...draft.pipelineMetadata,

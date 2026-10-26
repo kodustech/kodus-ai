@@ -155,6 +155,35 @@ describe('BusinessLogicValidationStage', () => {
         expect(diff).not.toContain('old.ts');
     });
 
+    it('judges the whole PR after a rebase, not only what the rebase changed (#2037)', async () => {
+        const { stage, service, pullRequests } = build(validated(true), [
+            { filename: 'filter.ts', status: 'added', patch: '+filter' },
+            { filename: 'a.ts', status: 'modified', patch: '+x' },
+        ]);
+
+        await stage.execute(
+            context({
+                // The orphaned-base path clears the commit and narrows the
+                // review to the lines the rebase changed.
+                lastExecution: { lastAnalyzedCommit: undefined },
+                rebaseInterdiffFiles: [
+                    { filename: 'a.ts', status: 'modified', patch: '+x' },
+                ],
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOn: 'push' },
+                },
+            } as any),
+        );
+
+        expect(pullRequests.getChangedFilesMetadata).toHaveBeenCalled();
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                diff: expect.stringContaining('filter.ts'),
+            }),
+        );
+    });
+
     it('uses the files it already has on the first review', async () => {
         const { stage, pullRequests } = build(validated(true));
 
