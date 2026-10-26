@@ -8,6 +8,7 @@
 import * as http from 'node:http';
 import { AddressInfo } from 'node:net';
 
+import { createLogger } from '@libs/core/log/logger';
 import { McpServerFactory } from '@libs/mcp-server/services/mcp-server.factory';
 import {
     CodeManagementTools,
@@ -27,6 +28,8 @@ import { connectMcpTools } from './mcp-tools';
 // The tool builders only close over their services (used inside `execute`),
 // and listing tools never executes one.
 const stub = () => ({}) as never;
+
+const logger = createLogger('mcp-tools.spec');
 
 const kodyRulesTools = new KodyRulesTools(stub(), stub(), stub());
 const kodyIssuesTools = new KodyIssuesTools(stub(), stub());
@@ -71,9 +74,22 @@ describe('connectMcpTools against the Kodus MCP server', () => {
         ) => {
             const { server: mcp, transport } = await factory.create();
             res.once('close', () => {
-                for (const closing of [transport.close(), mcp.close()]) {
+                for (const [part, closing] of [
+                    ['transport', transport.close()],
+                    ['server', mcp.close()],
+                ] as const) {
                     closing.catch((error: unknown) =>
-                        console.error('test MCP server cleanup failed', error),
+                        logger.error({
+                            message: 'Test MCP server cleanup failed',
+                            context: 'mcp-tools.spec',
+                            metadata: {
+                                part,
+                                errorMessage:
+                                    error instanceof Error
+                                        ? error.message
+                                        : 'unknown error',
+                            },
+                        }),
                     );
                 }
             });
