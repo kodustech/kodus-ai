@@ -182,6 +182,56 @@ function ensurePreviewTrialSeats(organizationId: string, teamId: string): void {
     console.log(
         `seed:preview: Teams trial seats ready (${out.trim().split('\n').pop()})`,
     );
+    if (
+        out.trim().endsWith('UPDATE 0') &&
+        process.env.PREVIEW_BILLING_DIAGNOSTIC === 'true'
+    ) {
+        diagnosePreviewBilling(organizationId, teamId);
+    }
+}
+
+/** Print only fixed categories for the explicit provider QA dispatch. */
+function diagnosePreviewBilling(organizationId: string, teamId: string): void {
+    const sql = `select concat(
+        'plan=', case
+            when "planType" = 'free_byok' then 'free'
+            when "planType"::text like 'teams_%' then 'teams'
+            when "planType"::text like 'enterprise_%' then 'enterprise'
+            else 'other' end,
+        '_', case
+            when "subscriptionStatus" = 'trial' and "trialEnd" > now() then 'trial'
+            when "subscriptionStatus" = 'trial' then 'expired_trial'
+            when "subscriptionStatus" = 'active' then 'active'
+            else 'inactive' end,
+        ',seats=', case when "totalLicenses" > "assignedLicenses" then 'available' else 'exhausted' end,
+        ',credits=', case
+            when "subscriptionStatus" <> 'trial' then 'not_applicable'
+            when "trialReviewCreditsRemaining" is null then 'unlimited'
+            when "trialReviewCreditsRemaining" > 0 then 'available'
+            else 'exhausted' end
+    ) from billing.organization_licenses where "organizationId" = '${organizationId}' and "teamId" = '${teamId}' limit 1`;
+    try {
+        const result = execFileSync(
+            'docker',
+            [
+                'exec',
+                '-i',
+                'db_postgres',
+                'sh',
+                '-c',
+                'PGPASSWORD=$POSTGRES_PASSWORD psql -tA -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"',
+            ],
+            { encoding: 'utf8', input: sql, stdio: ['pipe', 'pipe', 'pipe'] },
+        ).trim();
+        // Never forward an unexpected database value to a public workflow log.
+        const allowed =
+            /^plan=(free|teams|enterprise|other)_(trial|expired_trial|active|inactive),seats=(available|exhausted),credits=(not_applicable|unlimited|available|exhausted)$/;
+        console.log(
+            `seed:preview: billing category ${allowed.test(result) ? result : 'unavailable'}`,
+        );
+    } catch {
+        console.log('seed:preview: billing category unavailable');
+    }
 }
 
 /** The preview skips the browser onboarding step that normally creates a trial. */
