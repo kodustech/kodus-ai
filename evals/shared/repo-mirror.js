@@ -118,6 +118,53 @@ async function mirrorFor({ repo, prNumber, headSha, baseRef, baseSha }) {
 }
 
 /**
+ * A change written for an eval on a real repository: the base branch at
+ * `baseSha`, and the PR's branch one commit on top of it with `patch` (a
+ * `git diff` against `baseSha`) applied. For cases whose bug lives in code the
+ * change does not touch (evals/investigation/sets/xfile). Returns the URL and
+ * the branches, as inlineMirror does.
+ */
+async function injectedMirror({ repo, baseRef, baseSha, patch, id }) {
+    const name = repo.replace('/', '__');
+    const dir = path.join(ROOT, `${name}.git`);
+    const branch = `eval/${id}`;
+    await serial(dir, async () => {
+        await ensureBare(dir);
+        await fetchInto(dir, `https://github.com/${repo}.git`, baseSha, `refs/eval/${baseSha}`, baseSha);
+    });
+    const view = path.join(ROOT, `${name}.views`, `${id}.git`);
+    await ensureBare(view);
+    fs.writeFileSync(path.join(view, 'objects', 'info', 'alternates'), `${path.join(dir, 'objects')}\n`);
+    const shallow = path.join(dir, 'shallow');
+    if (fs.existsSync(shallow)) fs.copyFileSync(shallow, path.join(view, 'shallow'));
+    // The head commit, built in a scratch index: the view has no work tree.
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-injected-'));
+    try {
+        const patchFile = path.join(scratch, 'change.patch');
+        fs.writeFileSync(patchFile, patch.endsWith('\n') ? patch : `${patch}\n`);
+        const env = {
+            GIT_INDEX_FILE: path.join(scratch, 'index'),
+            GIT_AUTHOR_NAME: 'dev',
+            GIT_AUTHOR_EMAIL: 'dev@example.com',
+            GIT_COMMITTER_NAME: 'dev',
+            GIT_COMMITTER_EMAIL: 'dev@example.com',
+            GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z',
+            GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z',
+        };
+        const run = (args) => execFileAsync('git', ['--git-dir', view, ...args], { maxBuffer: 64 * 1024 * 1024, env: { ...gitEnv(), ...env } });
+        await run(['read-tree', baseSha]);
+        await run(['apply', '--cached', patchFile]);
+        const tree = (await run(['write-tree'])).stdout.trim();
+        const head = (await run(['commit-tree', tree, '-p', baseSha, '-m', 'head of the pull request'])).stdout.trim();
+        await git(view, ['update-ref', `refs/heads/${baseRef}`, baseSha]);
+        await git(view, ['update-ref', `refs/heads/${branch}`, head]);
+    } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+    }
+    return { cloneUrl: `file://${view}`, branch, base: baseRef, cleanup: async () => undefined };
+}
+
+/**
  * A repository written for an eval, as a mirror: `base` committed on the base
  * branch, `head` on the PR's branch on top of it (a file `head` maps to null is
  * deleted there). With `baseFiles` instead of `base`, `head` is the whole tree
@@ -253,4 +300,4 @@ async function pullRequestFiles(cloneUrl, base, head) {
     return files;
 }
 
-module.exports = { mirrorFor, inlineMirror, filesBetween, pullRequestFiles, contentAt, MIRROR_ROOT: ROOT };
+module.exports = { mirrorFor, inlineMirror, injectedMirror, filesBetween, pullRequestFiles, contentAt, MIRROR_ROOT: ROOT };

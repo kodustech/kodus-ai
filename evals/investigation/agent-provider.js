@@ -118,8 +118,10 @@ function instructionFilesOf(caseData) {
 function prOf(caseData) {
     const repoFiles = parseMaybeJson(caseData.repoFiles);
     const repoBase = parseMaybeJson(caseData.repoBase) || {};
+    // A change written for the eval on a real repository: its files come from the mirror.
+    const injectPatch = caseData.injectPatch || undefined;
     const files = repoFiles ? filesBetween(repoBase, repoFiles) : parseMaybeJson(caseData.prFiles);
-    if (!files) throw new Error(`case ${caseData.caseId} has no prFiles: run evals/investigation/fetch-pr-data.js`);
+    if (!files && !injectPatch) throw new Error(`case ${caseData.caseId} has no prFiles: run evals/investigation/fetch-pr-data.js`);
     return {
         repo: repoFiles ? undefined : caseData.repositoryFullName,
         number: caseData.prNumber ?? undefined,
@@ -129,8 +131,10 @@ function prOf(caseData) {
         headSha: caseData.prHead?.sha,
         baseRef: caseData.prBase?.ref || caseData.baseBranch || 'main',
         baseSha: caseData.prBase?.sha,
-        files,
+        files: files || undefined,
         commits: parseMaybeJson(caseData.prCommits) || [],
+        injectPatch,
+        caseId: caseData.caseId,
         repoFiles,
         repoBase: repoFiles ? repoBase : undefined,
         targetBranchFiles: instructionFilesOf(caseData),

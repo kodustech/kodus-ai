@@ -27,7 +27,7 @@
 // without changing its result.
 const path = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { mirrorFor, inlineMirror, contentAt, pullRequestFiles } = require('./repo-mirror');
+const { mirrorFor, inlineMirror, injectedMirror, contentAt, pullRequestFiles } = require('./repo-mirror');
 const { EVAL_ORG } = require('./model-route');
 
 const LIBS = path.join(__dirname, '../../libs');
@@ -386,7 +386,11 @@ async function changedFilesThroughStage(context, codeManagement) {
 
 // The repository the review reads: a mirror of the platform's refs for the PR,
 // or a repository written for the eval. `head` is the ref content is read at.
-async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles }) {
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles, injectPatch, caseId }) {
+    if (injectPatch) {
+        const injected = await injectedMirror({ repo, baseRef, baseSha, patch: injectPatch, id: caseId });
+        return { cloneUrl: injected.cloneUrl, branch: injected.branch, baseBranch: injected.base, head: injected.branch, prNumber: undefined, commit: false, cleanup: injected.cleanup };
+    }
     if (repoFiles) {
         const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles } : { base: repoBase });
         return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
@@ -478,10 +482,12 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
         repoFiles: pr.repoFiles,
         repoBase: pr.repoBase,
         baseFiles: pr.baseFiles,
+        injectPatch: pr.injectPatch,
+        caseId: pr.caseId,
     });
     try {
-        // `baseFiles`: the platform's file list between the two trees, read from the mirror.
-        const prFiles = pr.files || (pr.repoFiles && pr.baseFiles ? await pullRequestFiles(repo.cloneUrl, repo.baseBranch, repo.branch) : pr.files);
+        // `baseFiles` or `injectPatch`: the platform's file list between the two trees, read from the mirror.
+        const prFiles = pr.files || ((pr.repoFiles && pr.baseFiles) || pr.injectPatch ? await pullRequestFiles(repo.cloneUrl, repo.baseBranch, repo.branch) : pr.files);
         const codeManagement = platform({
             baseRef: pr.baseRef || repo.baseBranch || 'main',
             prFiles,
