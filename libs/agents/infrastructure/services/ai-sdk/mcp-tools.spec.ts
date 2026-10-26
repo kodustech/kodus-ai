@@ -21,6 +21,7 @@ import {
 } from '@libs/mcp-server/utils/mcp-auth.constants';
 import { PROACTIVE_HINT_META_KEY } from '@libs/mcp-server/types/mcp-tool.interface';
 
+import { buildProactiveBlock } from '../agents/conversation/conversation-prompt';
 import { connectMcpTools } from './mcp-tools';
 
 // The tool builders only close over their services (used inside `execute`),
@@ -28,6 +29,19 @@ import { connectMcpTools } from './mcp-tools';
 const stub = () => ({}) as never;
 
 const kodyRulesTools = new KodyRulesTools(stub(), stub(), stub());
+const kodyIssuesTools = new KodyIssuesTools(stub(), stub());
+
+// Every tool the server declares as offerable: a hint, and not destructive.
+const DECLARED_OFFERS = [
+    ...kodyRulesTools.getAllTools(),
+    ...kodyIssuesTools.getAllTools(),
+]
+    .filter(
+        (t) =>
+            t._meta?.[PROACTIVE_HINT_META_KEY] &&
+            t.annotations?.destructiveHint !== true,
+    )
+    .map((t) => ({ tool: t.name, hint: t._meta![PROACTIVE_HINT_META_KEY]! }));
 
 function proactiveHintOf(toolName: string): string {
     const tool = kodyRulesTools.getAllTools().find((t) => t.name === toolName);
@@ -46,9 +60,22 @@ describe('connectMcpTools against the Kodus MCP server', () => {
         const factory = new McpServerFactory(
             new CodeManagementTools(stub()),
             kodyRulesTools,
-            new KodyIssuesTools(stub(), stub()),
+            kodyIssuesTools,
             new McpToolAuthorizer(stub()),
         );
+
+        const serve = async (
+            raw: string,
+            req: http.IncomingMessage,
+            res: http.ServerResponse,
+        ) => {
+            const { server: mcp, transport } = await factory.create();
+            res.once('close', () => {
+                void transport.close();
+                void mcp.close();
+            });
+            await transport.handleRequest(req, res, JSON.parse(raw));
+        };
 
         server = http.createServer((req, res) => {
             if (req.method !== 'POST') {
@@ -57,13 +84,15 @@ describe('connectMcpTools against the Kodus MCP server', () => {
             }
             let raw = '';
             req.on('data', (chunk) => (raw += chunk));
-            req.on('end', async () => {
-                const { server: mcp, transport } = await factory.create();
-                res.once('close', () => {
-                    void transport.close();
-                    void mcp.close();
+            req.on('end', () => {
+                serve(raw, req, res).catch((error: unknown) => {
+                    // Answer instead of leaving the client waiting, so a broken
+                    // server fails the spec with its error, not a timeout.
+                    if (!res.headersSent) {
+                        res.writeHead(500, { 'content-type': 'text/plain' });
+                    }
+                    res.end(String(error));
                 });
-                await transport.handleRequest(req, res, JSON.parse(raw));
             });
         });
         await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -122,6 +151,36 @@ describe('connectMcpTools against the Kodus MCP server', () => {
                 readOnlyHint: false,
                 destructiveHint: false,
             });
+        } finally {
+            await mcp.close();
+        }
+    });
+
+    // What the issue asked for: the prompt itself, not only the metadata.
+    it("lists every offer the first-party server declares in the prompt's proactive block", async () => {
+        const mcp = await connect(KODUS_MCP_INTEGRATION_ID);
+        try {
+            const block = buildProactiveBlock(
+                Object.keys(mcp.tools),
+                mcp.metadata,
+            );
+
+            expect(DECLARED_OFFERS.length).toBeGreaterThan(0);
+            for (const { tool, hint } of DECLARED_OFFERS) {
+                expect(block).toContain(`- ${tool} — ${hint}`);
+            }
+            expect(block).not.toContain('KODUS_DELETE_KODY_RULE');
+        } finally {
+            await mcp.close();
+        }
+    });
+
+    it('renders no proactive block from the same tools on any other server', async () => {
+        const mcp = await connect('linear-default');
+        try {
+            expect(
+                buildProactiveBlock(Object.keys(mcp.tools), mcp.metadata),
+            ).toBe('');
         } finally {
             await mcp.close();
         }
