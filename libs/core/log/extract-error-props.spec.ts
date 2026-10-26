@@ -330,6 +330,86 @@ describe('boundErrorForLog (#1835 review)', () => {
         expect(bounded.data).toBeUndefined();
     });
 
+    it('keeps the diagnostics a QueryFailedError carries, instead of dropping them', () => {
+        // #1835 review: the allowlist was applied to every error, so the props
+        // that make a database failure diagnosable disappeared from `err.*`.
+        // They are capped and sanitized like any other non-scalar now.
+        class QueryFailedErrorLike extends Error {
+            constructor(
+                readonly driverError: unknown,
+                readonly parameters: unknown,
+                readonly query: string,
+            ) {
+                super('duplicate key value violates unique constraint');
+                this.name = 'QueryFailedError';
+            }
+        }
+
+        const driverError = {
+            code: '23505',
+            detail: 'Key (number, repository_id)=(2, repo-1) already exists.',
+            constraint: 'number_1_repository.id_1_organizationId_1',
+        };
+        const bounded = boundErrorForLog(
+            new QueryFailedErrorLike(
+                driverError,
+                [2, 'repo-1', 'org-1'],
+                'INSERT INTO pullrequests (number) VALUES ($1)',
+            ),
+        );
+
+        // The Postgres code/detail/constraint an operator filters on.
+        expect(bounded.driverError).toEqual(driverError);
+        expect(bounded.parameters).toEqual([2, 'repo-1', 'org-1']);
+        expect(() => JSON.stringify(bounded)).not.toThrow();
+    });
+
+    it('keeps AggregateError.errors and ZodError.issues', () => {
+        const aggregate = Object.assign(new Error('every attempt failed'), {
+            name: 'AggregateError',
+            errors: [
+                Object.assign(new Error('attempt 1'), { code: 'ETIMEDOUT' }),
+                Object.assign(new Error('attempt 2'), { code: 'ECONNRESET' }),
+            ],
+        });
+        const zod = Object.assign(new Error('invalid payload'), {
+            name: 'ZodError',
+            issues: [{ path: ['repository', 'id'], message: 'Required' }],
+        });
+
+        const aggregateBounded = boundErrorForLog(aggregate);
+        const zodBounded = boundErrorForLog(zod);
+
+        expect(aggregateBounded.errors).toHaveLength(2);
+        expect(JSON.stringify(aggregateBounded)).toContain('ETIMEDOUT');
+        expect(zodBounded.issues).toEqual([
+            { path: ['repository', 'id'], message: 'Required' },
+        ]);
+    });
+
+    it('keeps MongoServerError.errInfo and keyValue', () => {
+        const mongo = Object.assign(new Error('E11000 duplicate key error'), {
+            name: 'MongoServerError',
+            code: 11000,
+            keyValue: { 'number': 2, 'repository.id': 'repo-1' },
+            errInfo: {
+                keyPattern: { number: 1 },
+                keyValue: { number: 2 },
+            },
+        });
+
+        const bounded = boundErrorForLog(mongo);
+
+        expect(bounded.keyValue).toEqual({
+            'number': 2,
+            'repository.id': 'repo-1',
+        });
+        expect(bounded.errInfo).toEqual({
+            keyPattern: { number: 1 },
+            keyValue: { number: 2 },
+        });
+    });
+
     it('caps an allowlisted non-scalar prop and stays serializable', () => {
         class ReviewRefusalError extends Error {
             constructor(readonly target: unknown) {

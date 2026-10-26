@@ -1249,6 +1249,38 @@ const ERROR_SERIALIZER_PASSTHROUGH_KEYS = new Set([
 ]);
 
 /**
+ * Own props the `err.*` serializer never emits, whatever their shape.
+ *
+ * Logging policy, not diagnostics: `responseBody` is the raw provider body,
+ * `requestBodyValues` is the request payload (the whole prompt), `data` is an
+ * arbitrary provider object, and the two header collections carry
+ * `set-cookie` / `www-authenticate` / custom api-key names that key-name
+ * redaction cannot see once they are values under a safe key (#1829, #1835
+ * review).
+ *
+ * The two nested error holders are the same story one level down: a whole
+ * nested error carries its own URLs (query strings the provider uses to pass
+ * credentials) and payload. The failing attempt on `lastError` is still
+ * unwrapped above, but only for its status and its URL with the query dropped,
+ * which is the sanitized form an operator needs.
+ *
+ * Every OTHER non-scalar is capped and kept: `driverError` on a TypeORM
+ * `QueryFailedError`, `errInfo`/`keyValue` on `MongoServerError`, `errors` on
+ * `AggregateError` and `issues` on `ZodError` are what make those failures
+ * diagnosable, and the allowlist that dropped them was only ever needed for
+ * the payload props above.
+ */
+const ERROR_SERIALIZER_NEVER_EMIT = new Set([
+    'responseBody',
+    'requestBodyValues',
+    'data',
+    'requestHeaders',
+    'responseHeaders',
+    'lastError',
+    'cause',
+]);
+
+/**
  * Context surfaced when a non-scalar prop fails to serialize, so the warn
  * carries enough to be operational (cap + org id when the value is a
  * `target`-shaped object).
@@ -1614,8 +1646,11 @@ export function boundErrorForLog(
             bounded[key] = value;
             continue;
         }
-        // The raw provider body is never emitted, whatever shape it has.
-        if (key === 'responseBody') {
+        // The raw provider body is never emitted, whatever shape it has; same
+        // for the request payload and the header collections. Grouped here so
+        // one set says what policy keeps out, and every other non-scalar below
+        // is kept as a capped diagnostic (#1829, #1835 review).
+        if (ERROR_SERIALIZER_NEVER_EMIT.has(key)) {
             continue;
         }
         const httpContextKeys = ERROR_SERIALIZER_HTTP_CONTEXT.get(key);
@@ -1658,9 +1693,11 @@ export function boundErrorForLog(
                     : sanitized;
             continue;
         }
-        if (!ERROR_LOG_PROPS.has(key)) {
-            continue;
-        }
+        // Any other non-scalar is a diagnostic, not payload: keep it sanitized
+        // and bounded rather than dropping it. This is where a QueryFailedError
+        // keeps `driverError`/`parameters`, a MongoServerError `errInfo`/
+        // `keyValue`, an AggregateError `errors` and a ZodError `issues`
+        // (#1835 review).
         bounded[key] = capSerialized(value, maxStringLength);
     }
     const bodyLength = responseBodyLengthOf(flat.responseBody);
