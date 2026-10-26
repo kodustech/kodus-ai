@@ -71,8 +71,11 @@ describe('connectMcpTools against the Kodus MCP server', () => {
         ) => {
             const { server: mcp, transport } = await factory.create();
             res.once('close', () => {
-                void transport.close();
-                void mcp.close();
+                for (const closing of [transport.close(), mcp.close()]) {
+                    closing.catch((error: unknown) =>
+                        console.error('test MCP server cleanup failed', error),
+                    );
+                }
             });
             await transport.handleRequest(req, res, JSON.parse(raw));
         };
@@ -103,15 +106,26 @@ describe('connectMcpTools against the Kodus MCP server', () => {
         await new Promise((resolve) => server.close(resolve));
     });
 
-    const connect = (integrationId: string) =>
-        connectMcpTools([
+    // connectMcpTools never throws: it reports through onError and returns
+    // no tools, which would make the assertions below pass for a server that
+    // never answered. Fail the spec instead.
+    const connect = async (integrationId: string) => {
+        const errors: string[] = [];
+        const mcp = await connectMcpTools(
+            [{ name: 'kodus', type: 'http', url, integrationId }],
             {
-                name: 'kodus',
-                type: 'http',
-                url,
-                integrationId,
+                onError: (error, serverName) =>
+                    errors.push(`${serverName}: ${error.message}`),
             },
-        ]);
+        );
+        if (errors.length || !mcp.tools.KODUS_CREATE_MEMORY) {
+            await mcp.close();
+            throw new Error(
+                `the Kodus MCP tools did not load: ${errors.join('; ') || 'no tools listed'}`,
+            );
+        }
+        return mcp;
+    };
 
     it('carries the proactive hint from a first-party server', async () => {
         const mcp = await connect(KODUS_MCP_INTEGRATION_ID);
