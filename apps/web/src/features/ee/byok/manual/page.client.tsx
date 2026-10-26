@@ -440,6 +440,9 @@ export function ByokManualPageClient({
     // A connected provider, but no credential on this endpoint: its key has to
     // be pasted here.
     const endpointNeedsKey = !isEditing && providerHasStoredKey && !targetCred;
+    // The stored key is the one in play: the key field is hidden, so anything
+    // typed into it earlier (for another endpoint) must not be used.
+    const usingStoredKey = keyIsStored && !planNeedsNewKey && !showKeyInput;
 
     // Models already enabled on this credential — hidden from the "Add model"
     // dropdown so it never offers a duplicate. Another gateway of the same
@@ -493,8 +496,7 @@ export function ByokManualPageClient({
         // endpoint lands on a stored credential: the field is hidden and the
         // save keeps that credential's key, so the test must use it too.
         const hasNewCredentials =
-            (!keyIsStored || planNeedsNewKey || showKeyInput) &&
-            providerHasCredentials(data);
+            !usingStoredKey && providerHasCredentials(data);
         if (endpointNeedsKey && !hasNewCredentials) {
             form.setError("apiKey", {
                 type: "manual",
@@ -899,9 +901,7 @@ export function ByokManualPageClient({
                                     plan moved to a different account. Derived (not
                                     sticky state) so switching back to the stored
                                     account restores the "using stored key" view. */}
-                                    {showKeyInput ||
-                                    planNeedsNewKey ||
-                                    !keyIsStored ? (
+                                    {!usingStoredKey ? (
                                         <ErrorBoundary
                                             resetKeys={[provider, model]}
                                             fallbackRender={() => null}>
@@ -1056,7 +1056,9 @@ export function ByokManualPageClient({
                                                         keyIsStored
                                                     }
                                                     credentialId={
-                                                        targetCred?.id
+                                                        usingStoredKey
+                                                            ? targetCred?.id
+                                                            : undefined
                                                     }
                                                     lockedInUse={modelInUse}
                                                 />

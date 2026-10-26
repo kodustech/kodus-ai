@@ -50,8 +50,9 @@ export const ByokModelSelect = ({
      *  a connected provider). For a live-listing provider this lets the picker
      *  fetch the real list from the saved slot even before the user types a key. */
     credentialStored?: boolean;
-    /** Which saved credential to list with when the provider has several (two
-     *  OpenAI-compatible gateways). */
+    /** The saved credential the form is using (its key field hidden). Lists
+     *  with it, ignoring any key typed earlier — needed when the provider has
+     *  several (two OpenAI-compatible gateways). */
     credentialId?: string;
     /** True when the model being edited is referenced by Routing (default /
      *  fallback / a per-agent override). Swapping its id would silently change
@@ -451,7 +452,14 @@ const ModelSelectLive = ({
         useDebouncedValue((form.watch("baseURL") ?? "").trim(), 700) ||
         undefined;
     const typedKey = useDebouncedValue(typedKeyRaw, 700);
-    const hasKey = typedKey.length > 0;
+    // A stored credential in play wins over a key typed earlier for another
+    // endpoint: that key's field is hidden and the save will not use it.
+    const hasKey = typedKey.length > 0 && !credentialId;
+    // The credential follows the URL field at once, the URL used here only
+    // after the debounce. Wait for them to agree so a request never pairs one
+    // endpoint's credential with another endpoint's URL.
+    const rawBaseURL = (form.watch("baseURL") ?? "").trim();
+    const urlSettled = (typedBaseURL ?? "") === rawBaseURL;
 
     const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
     const typedAwsAccessKeyIdRaw = (
@@ -477,7 +485,7 @@ const ModelSelectLive = ({
     const hasCredential =
         hasKey || hasAwsBearer || hasAwsIam || credentialStored;
     const missingBaseUrl = requiresBaseUrl && !typedBaseURL;
-    const enabled = hasCredential && !missingBaseUrl;
+    const enabled = hasCredential && !missingBaseUrl && urlSettled;
 
     const { data, isFetching, isError } = useLLMProviderModelsPreview({
         provider,
@@ -487,7 +495,7 @@ const ModelSelectLive = ({
         awsRegion: isBedrock ? typedAwsRegion || undefined : undefined,
         // A typed key lists with itself; otherwise the server lists with the
         // stored credential the page targets.
-        credentialId: hasKey ? undefined : credentialId,
+        credentialId,
         enabled,
     });
 
