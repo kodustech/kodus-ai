@@ -787,8 +787,9 @@ export async function recoverFindingsFromProse(
                 'Leave out everything the reviewer did not conclude is a ' +
                 'defect:\n' +
                 '- a hypothesis the analysis checked and then dismissed, ' +
-                'ruled out, or found handled elsewhere (e.g. "this would ' +
-                'race, but the lock prevents it");\n' +
+                'ruled out, or found handled elsewhere (e.g. "summing ' +
+                'floats would lose precision, but amounts are stored as ' +
+                'integer cents");\n' +
                 '- descriptions of what the change does, intentional ' +
                 'changes, and code the reviewer judged correct;\n' +
                 '- remarks the reviewer itself says are not a correctness, ' +
