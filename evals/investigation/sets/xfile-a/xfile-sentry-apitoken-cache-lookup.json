@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-sentry-apitoken-cache-lookup",
+  "vars": {
+   "caseId": "xfile-sentry-apitoken-cache-lookup",
+   "mode": "planner",
+   "prTitle": "perf(auth): serve control-silo token lookups from the model cache",
+   "prBody": "`UserAuthTokenAuthentication` looks up the `ApiToken` by its hashed value on every bearer-authenticated request in the control silo. This switches that lookup to `get_from_cache` so repeated requests with the same token don't hit the database each time. The plaintext fallback path is unchanged.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-apitoken-cache-lookup"
+   },
+   "injectPatch": "diff --git a/src/sentry/api/authentication.py b/src/sentry/api/authentication.py\nindex 06df68b..0061ee2 100644\n--- a/src/sentry/api/authentication.py\n+++ b/src/sentry/api/authentication.py\n@@ -350,10 +350,10 @@ class UserAuthTokenAuthentication(StandardAuthentication):\n                     raise AuthenticationFailed(\"Invalid token\")\n         else:\n             try:\n-                # Try to find the token by its hashed value first\n-                return ApiToken.objects.select_related(\"user\", \"application\").get(\n-                    hashed_token=hashed_token\n-                )\n+                # Try to find the token by its hashed value first. This runs on every\n+                # bearer-authenticated request in the control silo, so serve it from\n+                # the model cache rather than hitting the database each time.\n+                return ApiToken.objects.get_from_cache(hashed_token=hashed_token)\n             except ApiToken.DoesNotExist:\n                 try:\n                     # If we can't find it by hash, use the plaintext string\n",
+   "goldenComments": "[{\"comment\": \"`ApiToken.objects.get_from_cache(hashed_token=...)` cannot work: `BaseManager.get_from_cache` (src/sentry/db/models/manager/base.py) raises `ValueError(\\\"We cannot cache this query. Just hit the database.\\\")` whenever the lookup key is not in the manager's `cache_fields` and is not the pk, and `ApiToken.objects` is declared with `cache_fields=(\\\"token\\\",)` in src/sentry/models/apitoken.py. So `_find_or_update_token_by_hash` in the control silo raises ValueError on every call; it only catches `ApiToken.DoesNotExist`, so every user-token-authenticated request to control-silo endpoints fails with a 500 (and the plaintext fallback is never reached). It also drops the `select_related(\\\"user\\\", \\\"application\\\")` that authenticate_token relies on.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

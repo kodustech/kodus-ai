@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-calcom-confirm-booking-limits",
+  "vars": {
+   "caseId": "xfile-calcom-confirm-booking-limits",
+   "mode": "planner",
+   "prTitle": "fix(bookings): enforce event type booking limits when confirming a booking",
+   "prBody": "Bookings for event types that require confirmation are created as PENDING and don't count towards the event type's booking limits until accepted. An organizer could therefore accept more bookings than the configured per-day/week/month limit allows. The confirm handler now loads the event type's `bookingLimits` and re-checks them before accepting, returning `booking_limit_reached` when the limit is hit.",
+   "repositoryFullName": "calcom/cal.com",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "b004587262e8221083bafbe9a0c515e7becaa7b3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-calcom-confirm-booking-limits"
+   },
+   "injectPatch": "diff --git a/packages/trpc/server/routers/viewer/bookings/confirm.handler.ts b/packages/trpc/server/routers/viewer/bookings/confirm.handler.ts\nindex dc33184..5c9a66a 100644\n--- a/packages/trpc/server/routers/viewer/bookings/confirm.handler.ts\n+++ b/packages/trpc/server/routers/viewer/bookings/confirm.handler.ts\n@@ -13,13 +13,13 @@ import { isPrismaObjOrUndefined, parseRecurringEvent } from \"@calcom/lib\";\n import { getBookerBaseUrl } from \"@calcom/lib/getBookerUrl/server\";\n import getOrgIdFromMemberOrTeamId from \"@calcom/lib/getOrgIdFromMemberOrTeamId\";\n import { getTeamIdFromEventType } from \"@calcom/lib/getTeamIdFromEventType\";\n-import { getTranslation } from \"@calcom/lib/server\";\n+import { checkBookingLimits, getTranslation } from \"@calcom/lib/server\";\n import { getUsersCredentials } from \"@calcom/lib/server/getUsersCredentials\";\n import { getTimeFormatStringFromUserTimeFormat } from \"@calcom/lib/timeFormat\";\n import { prisma } from \"@calcom/prisma\";\n import { BookingStatus, MembershipRole, SchedulingType, WebhookTriggerEvents } from \"@calcom/prisma/enums\";\n import type { EventTypeMetadata } from \"@calcom/prisma/zod-utils\";\n-import type { CalendarEvent } from \"@calcom/types/Calendar\";\n+import type { CalendarEvent, IntervalLimit } from \"@calcom/types/Calendar\";\n import type { IAbstractPaymentService, PaymentApp } from \"@calcom/types/PaymentService\";\n \n import { TRPCError } from \"@trpc/server\";\n@@ -69,6 +69,7 @@ export const confirmHandler = async ({ ctx, input }: ConfirmOptions) => {\n           description: true,\n           price: true,\n           bookingFields: true,\n+          bookingLimits: true,\n           disableGuests: true,\n           metadata: true,\n           locations: true,\n@@ -138,6 +139,19 @@ export const confirmHandler = async ({ ctx, input }: ConfirmOptions) => {\n     throw new TRPCError({ code: \"BAD_REQUEST\", message: \"Booking already confirmed\" });\n   }\n \n+  // Bookings that require confirmation don't count towards the limits until accepted,\n+  // so the limit has to be enforced again when the organizer confirms.\n+  if (confirmed && booking.eventType) {\n+    const isWithinBookingLimits = await checkBookingLimits(\n+      booking.eventType.bookingLimits as IntervalLimit,\n+      booking.startTime,\n+      booking.eventType.id\n+    );\n+    if (!isWithinBookingLimits) {\n+      throw new TRPCError({ code: \"BAD_REQUEST\", message: \"booking_limit_reached\" });\n+    }\n+  }\n+\n   // If booking requires payment and is not paid, we don't allow confirmation\n   if (confirmed && booking.payment.length > 0 && !booking.paid) {\n     await prisma.booking.update({\n",
+   "goldenComments": "[{\"comment\": \"The new guard treats the return value of checkBookingLimits as a 'within limits' boolean, but that is not its contract. In packages/lib/server/checkBookingLimits.ts the function returns `false` when the event type has no booking limits at all (`if (!parsedBookingLimits) return false;`, line 19; parseBookingLimit returns null for the default `bookingLimits: null`), and when a limit IS exceeded it never returns false: checkBookingLimit throws an HttpError (line 84) which is rethrown as an HttpError with statusCode 401 (line 36). So after this change confirming any booking of an event type without booking limits (the vast majority) fails with `booking_limit_reached`, while event types that actually exceed their limit surface a raw 401 HttpError instead of the intended BAD_REQUEST. The handler should call it for its side effect (catch the throw) and only when limits are configured, as handleNewBooking.ts does.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

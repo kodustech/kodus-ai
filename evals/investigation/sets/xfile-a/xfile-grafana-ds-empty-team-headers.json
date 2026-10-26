@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-grafana-ds-empty-team-headers",
+  "vars": {
+   "caseId": "xfile-grafana-ds-empty-team-headers",
+   "mode": "planner",
+   "prTitle": "Datasources: accept an empty teamHttpHeaders object on create",
+   "prBody": "Creating a datasource fails with 403 when the payload contains `teamHttpHeaders` even if it has no rules, which happens for datasources exported from another instance. We now parse the field with datasources.GetTeamHTTPHeaders: malformed rules return 400, actual header rules are still forbidden (they must go through the LBAC rules API), and an empty object is dropped before saving.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-ds-empty-team-headers"
+   },
+   "injectPatch": "diff --git a/pkg/api/datasources.go b/pkg/api/datasources.go\nindex d71e9786..beebf73e 100644\n--- a/pkg/api/datasources.go\n+++ b/pkg/api/datasources.go\n@@ -382,11 +382,18 @@ func (hs *HTTPServer) AddDataSource(c *contextmodel.ReqContext) response.Respons\n \t}\n \n \t// It's forbidden to update the rules from the datasource api.\n-\t// team HTTP headers update have to be done through `updateDatasourceLBACRules`\n+\t// team HTTP headers update have to be done through `updateDatasourceLBACRules`.\n+\t// Some clients (e.g. datasources exported from another instance) send an empty\n+\t// teamHttpHeaders object, which carries no rules and is safe to accept.\n \tif cmd.JsonData != nil {\n-\t\tif _, ok := cmd.JsonData.CheckGet(\"teamHttpHeaders\"); ok {\n+\t\tteamHTTPHeaders, err := datasources.GetTeamHTTPHeaders(cmd.JsonData)\n+\t\tif err != nil {\n+\t\t\treturn response.Error(http.StatusBadRequest, \"Invalid team HTTP headers\", err)\n+\t\t}\n+\t\tif len(teamHTTPHeaders.Headers) > 0 {\n \t\t\treturn response.Error(http.StatusForbidden, \"Cannot create datasource with team HTTP headers, need to use updateDatasourceLBACRules API\", nil)\n \t\t}\n+\t\tcmd.JsonData.Del(\"teamHttpHeaders\")\n \t}\n \n \tdataSource, err := hs.DataSourcesService.AddDataSource(c.Req.Context(), &cmd)\n",
+   "goldenComments": "[{\"comment\": \"AddDataSource now dereferences the result of datasources.GetTeamHTTPHeaders (`teamHTTPHeaders.Headers`) without a nil check, but GetTeamHTTPHeaders (pkg/services/datasources/models.go) returns (nil, nil) when jsonData has no \\\"teamHttpHeaders\\\" key. That is the normal case for virtually every datasource create request with jsonData, so POST /api/datasources now panics with a nil pointer dereference (500 via the recovery middleware) for ordinary datasources. The handler must treat a nil result as \\\"no team headers\\\".\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

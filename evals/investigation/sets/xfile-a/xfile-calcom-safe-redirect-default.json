@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-calcom-safe-redirect-default",
+  "vars": {
+   "caseId": "xfile-calcom-safe-redirect-default",
+   "mode": "planner",
+   "prTitle": "refactor(lib): getSafeRedirectUrl always resolves to a safe destination",
+   "prBody": "`getSafeRedirectUrl` already rewrites untrusted origins to the web app root. This applies the same default when no URL is given, so the helper consistently returns somewhere safe to redirect to instead of mixing a fallback URL and `null`. The default is pulled into a constant shared by both paths.",
+   "repositoryFullName": "calcom/cal.com",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "b004587262e8221083bafbe9a0c515e7becaa7b3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-calcom-safe-redirect-default"
+   },
+   "injectPatch": "diff --git a/packages/lib/getSafeRedirectUrl.ts b/packages/lib/getSafeRedirectUrl.ts\nindex 2c9688e..e359c4c 100644\n--- a/packages/lib/getSafeRedirectUrl.ts\n+++ b/packages/lib/getSafeRedirectUrl.ts\n@@ -1,9 +1,12 @@\n import { CONSOLE_URL, WEBAPP_URL, WEBSITE_URL } from \"@calcom/lib/constants\";\n \n+const DEFAULT_REDIRECT_URL = `${WEBAPP_URL}/`;\n+\n // It ensures that redirection URL safe where it is accepted through a query params or other means where user can change it.\n-export const getSafeRedirectUrl = (url = \"\") => {\n+// Missing and untrusted URLs both resolve to the web app root, so the result is always safe to redirect to.\n+export const getSafeRedirectUrl = (url = \"\"): string | null => {\n   if (!url) {\n-    return null;\n+    return DEFAULT_REDIRECT_URL;\n   }\n \n   //It is important that this fn is given absolute URL because urls that don't start with HTTP can still deceive browser into redirecting to another domain\n@@ -15,7 +18,7 @@ export const getSafeRedirectUrl = (url = \"\") => {\n \n   // Avoid open redirection security vulnerability\n   if (![CONSOLE_URL, WEBAPP_URL, WEBSITE_URL].some((u) => new URL(u).origin === urlParsed.origin)) {\n-    url = `${WEBAPP_URL}/`;\n+    url = DEFAULT_REDIRECT_URL;\n   }\n \n   return url;\n",
+   "goldenComments": "[{\"comment\": \"getSafeRedirectUrl used to return null for a missing URL, and every OAuth callback in app-store relies on that null to fall through to its own destination with `??`. Now an absent `state.returnTo` yields `${WEBAPP_URL}/`, so the right-hand side is never reached: e.g. packages/app-store/hubspot/api/callback.ts:55 `getSafeRedirectUrl(state?.returnTo) ?? getInstalledAppPath({ variant: \\\"other\\\", slug: \\\"hubspot\\\" })` and packages/app-store/googlecalendar/api/callback.ts:142 now send users to the dashboard root instead of the installed-app page after installing. Worse, the error path in packages/app-store/googlecalendar/api/callback.ts:24-27 (and office365calendar/office365video callbacks) chains `getSafeRedirectUrl(state.onErrorReturnTo) ?? getSafeRedirectUrl(state?.returnTo) ?? ...`: when only returnTo is set, onErrorReturnTo is undefined and now returns the root, so the user's returnTo is ignored. The same pattern is in ~20 callbacks (zoomvideo, salesforce, zohocrm, webex, ...).\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

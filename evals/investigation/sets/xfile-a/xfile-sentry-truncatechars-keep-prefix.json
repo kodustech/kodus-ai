@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-sentry-truncatechars-keep-prefix",
+  "vars": {
+   "caseId": "xfile-sentry-truncatechars-keep-prefix",
+   "mode": "planner",
+   "prTitle": "fix(utils): truncatechars keeps the first N characters as documented",
+   "prBody": "`truncatechars` is documented as \"truncates a string after a certain number of chars\", but it actually cut `len(ellipsis)` characters earlier, so short limits produced almost nothing (`truncatechars(\"abcdef\", 4)` returned `\"a...\"`). This makes it keep the first `arg` characters, strip trailing whitespace before the ellipsis, and drops the stale TODO.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-truncatechars-keep-prefix"
+   },
+   "injectPatch": "diff --git a/src/sentry/utils/strings.py b/src/sentry/utils/strings.py\nindex e7fd2e9..2ab762c 100644\n--- a/src/sentry/utils/strings.py\n+++ b/src/sentry/utils/strings.py\n@@ -51,11 +51,12 @@ def truncatechars(value: str, arg: int, ellipsis: str = ...) -> str:\n \n \n def truncatechars(value: str | None, arg: int, ellipsis: str = \"...\") -> str | None:\n-    # TODO (alex) could use unicode ellipsis: u'\\u2026'\n     \"\"\"\n     Truncates a string after a certain number of chars.\n \n-    Argument: Number of chars to truncate after.\n+    Argument: Number of chars to truncate after. The first ``arg`` characters\n+    of ``value`` are always kept; ``ellipsis`` is appended when anything was\n+    cut off, so short limits no longer collapse to just the ellipsis.\n     \"\"\"\n     if value is None:\n         return value\n@@ -64,7 +65,7 @@ def truncatechars(value: str | None, arg: int, ellipsis: str = \"...\") -> str | N\n     except ValueError:  # Invalid literal for int().\n         return value  # Fail silently.\n     if len(value) > length:\n-        return value[: max(0, length - len(ellipsis))] + ellipsis\n+        return value[: max(0, length)].rstrip() + ellipsis\n     return value\n \n \n",
+   "goldenComments": "[{\"comment\": \"truncatechars now returns up to `arg + len(ellipsis)` characters instead of at most `arg`. Callers use it to fit values into a hard length limit: `generate_culprit` in src/sentry/culprit.py returns `truncatechars(culprit or \\\"\\\", MAX_CULPRIT_LENGTH)` and that value becomes `Group.culprit`, a `CharField(max_length=MAX_CULPRIT_LENGTH)` (varchar(200)) in src/sentry/models/group.py. A culprit longer than 200 chars (long stacktrace module/function or request URL) now yields 203 chars and the group insert/update fails on Postgres with 'value too long for type character varying(200)', breaking event ingestion for those events. `trim` in src/sentry/utils/safe.py relies on the same bound (`truncatechars(value, max_size - _size)`) to cap payload size, which is now exceeded too.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

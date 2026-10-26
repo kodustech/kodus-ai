@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-keycloak-idp-create-debug-log",
+  "vars": {
+   "caseId": "xfile-keycloak-idp-create-debug-log",
+   "mode": "planner",
+   "prTitle": "Log identity provider creation at debug level",
+   "prBody": "Add a debug log when an identity provider is created through the admin API, including alias, providerId and the (secret-stripped) config. Helps troubleshooting misconfigured brokers without exposing the client secret in the logs.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-idp-create-debug-log"
+   },
+   "injectPatch": "diff --git a/services/src/main/java/org/keycloak/services/resources/admin/IdentityProvidersResource.java b/services/src/main/java/org/keycloak/services/resources/admin/IdentityProvidersResource.java\nindex 943db7d..dbf0d33 100755\n--- a/services/src/main/java/org/keycloak/services/resources/admin/IdentityProvidersResource.java\n+++ b/services/src/main/java/org/keycloak/services/resources/admin/IdentityProvidersResource.java\n@@ -21,6 +21,7 @@ import org.eclipse.microprofile.openapi.annotations.Operation;\n import org.eclipse.microprofile.openapi.annotations.extensions.Extension;\n import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;\n import org.eclipse.microprofile.openapi.annotations.tags.Tag;\n+import org.jboss.logging.Logger;\n import org.jboss.resteasy.reactive.NoCache;\n import org.keycloak.broker.provider.IdentityProvider;\n import org.keycloak.broker.provider.IdentityProviderFactory;\n@@ -74,6 +75,8 @@ import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;\n @Extension(name = KeycloakOpenAPI.Profiles.ADMIN, value = \"\")\n public class IdentityProvidersResource {\n \n+    private static final Logger logger = Logger.getLogger(IdentityProvidersResource.class);\n+\n     private final RealmModel realm;\n     private final KeycloakSession session;\n     private final AdminPermissionEvaluator auth;\n@@ -223,6 +226,9 @@ public class IdentityProvidersResource {\n \n         ReservedCharValidator.validateNoSpace(representation.getAlias());\n \n+        logger.debugf(\"Creating identity provider '%s' (providerId=%s) in realm '%s' with config %s\", representation.getAlias(),\n+                representation.getProviderId(), realm.getName(), StripSecretsUtils.stripSecrets(session, representation).getConfig());\n+\n         try {\n             IdentityProviderModel identityProvider = RepresentationToModel.toModel(realm, representation, session);\n             session.identityProviders().create(identityProvider);\n",
+   "goldenComments": "[{\"comment\": \"The new debug statement calls StripSecretsUtils.stripSecrets(session, representation) on the incoming request representation before RepresentationToModel.toModel(...) runs. stripSecrets does not return a sanitized copy: it mutates the passed object in place (REPRESENTATION_FORMATTER -> stripBroker -> stripFromMap(rep.getConfig(), \\\"clientSecret\\\") replaces the value with ComponentRepresentation.SECRET_VALUE '**********') and returns the same instance. The arguments are evaluated even when debug is off, so every IdP created via POST /identity-provider/instances is persisted with clientSecret='**********' (RepresentationToModel.toModel copies representation.getConfig() into the model), breaking the broker's token exchange. The existing call in create() is safe only because it runs after the model has been persisted.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

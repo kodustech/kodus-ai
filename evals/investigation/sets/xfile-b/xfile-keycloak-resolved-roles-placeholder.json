@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-keycloak-resolved-roles-placeholder",
+  "vars": {
+   "caseId": "xfile-keycloak-resolved-roles-placeholder",
+   "mode": "planner",
+   "prTitle": "Don't cache empty role placeholders in RoleResolveUtil",
+   "prBody": "When a protocol mapper asks RoleResolveUtil for realm/client roles with createIfMissing=true, an empty Access object was written into the per-request resolved-roles cache. Subsequent mappers in the same request then see an (empty) realm_access/resource_access entry instead of null, which can end up as empty claims. This keeps the placeholder local to the caller and leaves the cached resolved roles untouched. Javadoc updated accordingly.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-resolved-roles-placeholder"
+   },
+   "injectPatch": "diff --git a/services/src/main/java/org/keycloak/utils/RoleResolveUtil.java b/services/src/main/java/org/keycloak/utils/RoleResolveUtil.java\nindex ddd1cc1..1c40fe4 100644\n--- a/services/src/main/java/org/keycloak/utils/RoleResolveUtil.java\n+++ b/services/src/main/java/org/keycloak/utils/RoleResolveUtil.java\n@@ -44,15 +44,17 @@ public class RoleResolveUtil {\n      *\n      * @param session\n      * @param clientSessionCtx\n-     * @param createIfMissing\n+     * @param createIfMissing if true, an empty access is returned instead of null when the user has no realm roles.\n+     *                        The empty placeholder is not stored in the per-request cache.\n      * @return can return null (just in case that createIfMissing is false)\n      */\n     public static AccessToken.Access getResolvedRealmRoles(KeycloakSession session, ClientSessionContext clientSessionCtx, boolean createIfMissing) {\n         AccessToken rolesToken = getAndCacheResolvedRoles(session, clientSessionCtx);\n         AccessToken.Access access = rolesToken.getRealmAccess();\n         if (access == null && createIfMissing) {\n+            // do not pollute the cached resolved roles with an empty placeholder, otherwise later mappers\n+            // in the same request would see an (empty) realm_access and emit an empty claim\n             access = new AccessToken.Access();\n-            rolesToken.setRealmAccess(access);\n         }\n \n         return access;\n@@ -67,7 +69,8 @@ public class RoleResolveUtil {\n      * @param session\n      * @param clientSessionCtx\n      * @param clientId\n-     * @param createIfMissing\n+     * @param createIfMissing if true, an empty access is returned instead of null when the user has no roles of the client.\n+     *                        The empty placeholder is not stored in the per-request cache.\n      * @return can return null (just in case that createIfMissing is false)\n      */\n     public static AccessToken.Access getResolvedClientRoles(KeycloakSession session, ClientSessionContext clientSessionCtx, String clientId, boolean createIfMissing) {\n@@ -75,7 +78,8 @@ public class RoleResolveUtil {\n         AccessToken.Access access = rolesToken.getResourceAccess(clientId);\n \n         if (access == null && createIfMissing) {\n-            access = rolesToken.addAccess(clientId);\n+            // same as for realm roles: keep the cached resource_access free of empty placeholders\n+            access = new AccessToken.Access();\n         }\n \n         return access;\n",
+   "goldenComments": "[{\"comment\": \"RoleResolveUtil.getResolvedRealmRoles/getResolvedClientRoles with createIfMissing=true no longer store the new Access in the per-request cached AccessToken. The callers that pass true do so precisely to mutate the cached roles so that later role mappers emit them: HardcodedRole.setClaim (services/.../protocol/oidc/mappers/HardcodedRole.java) calls getResolvedRealmRoles(..., true).addRole(role) / getResolvedClientRoles(..., appName, true).addRole(roleName), and RoleNameMapper.setClaim does the same for the renamed role. Both run before the role mappers (PRIORITY_HARDCODED_ROLE_MAPPER=20 / PRIORITY_ROLE_NAMES_MAPPER=10 < PRIORITY_ROLE_MAPPER=40), and UserRealmRoleMappingMapper/UserClientRoleMappingMapper read the cache with createIfMissing=false. When the user has no realm role (or no role of the target client), the role is now added to a throw-away object: hardcoded roles and renamed roles silently disappear from access tokens (and RoleNameMapper also removes the original role, so the user loses it entirely).\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]
