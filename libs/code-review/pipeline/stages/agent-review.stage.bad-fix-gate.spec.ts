@@ -291,6 +291,30 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         ).toBeUndefined();
     });
 
+    it('does not count an empty improvedCode the enrichment chose as a bad fix', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({ improvedCode: '', fixStatus: 'needs-wider-change' }),
+                sugg({
+                    brokenKodyRulesIds: ['rule-gate-2'],
+                    relevantLinesStart: 20,
+                    relevantLinesEnd: 22,
+                    improvedCode: '',
+                    fixStatus: 'local',
+                }),
+            ]),
+        );
+
+        const result = await run(stage, makeContext());
+
+        expect(analyzedSuggestions(result)).toHaveLength(2);
+        const badFixWarning = (result.reviewWarnings ?? []).find(
+            (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
+        );
+        expect(badFixWarning.detail).toContain('1 suggestion(s)');
+    });
+
     it('records a BAD_FIX_DOWNGRADED review warning with the count, and publishes both suggestions', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(

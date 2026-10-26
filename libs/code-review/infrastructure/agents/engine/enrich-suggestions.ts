@@ -95,6 +95,7 @@ export function applyEnrichment(
         ...(result?.oneSentenceSummary
             ? { oneSentenceSummary: result.oneSentenceSummary }
             : {}),
+        ...(result?.fixStatus ? { fixStatus: result.fixStatus } : {}),
         ...(result?.fixStatus === 'local' && result.improvedCode
             ? { improvedCode: result.improvedCode }
             : {}),

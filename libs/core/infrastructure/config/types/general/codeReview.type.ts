@@ -8,6 +8,7 @@ import type {
     ContextPack,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import type { FixStatus } from '@libs/code-review/infrastructure/agents/engine/enrich-content';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
@@ -155,6 +156,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The enrichment's answer on the fix; anything but `local` leaves `improvedCode` empty on purpose. */
+    fixStatus?: FixStatus;
     /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
     fullExplanation?: string;
     relevantLinesStart?: number;

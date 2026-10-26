@@ -1700,6 +1700,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
                 for (const s of deduped) {
+                    // The enrichment chose no code: not an unusable fix.
+                    if (s.fixStatus && s.fixStatus !== 'local') {
+                        continue;
+                    }
                     const reason = checkFix(
                         s.existingCode,
                         s.improvedCode,

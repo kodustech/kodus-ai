@@ -82,6 +82,7 @@ describe('enrichSuggestions', () => {
         const { suggestions } = await run([finding()], enrich);
         expect(suggestions[0].improvedCode).toBeUndefined();
         expect(suggestions[0].oneSentenceSummary).toBe('Lock is never released');
+        expect(suggestions[0].fixStatus).toBe('needs-wider-change');
     });
 
     it('keeps a suggestion whose call failed, with its cited code', async () => {
