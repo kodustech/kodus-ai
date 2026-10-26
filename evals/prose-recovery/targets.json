@@ -2,9 +2,25 @@
     "__doc": [
         "Floors per model for the share of the checks right on cases.json (run.js --gate), as ratios.",
         "eval-fake (the wiring smoke, every PR): deterministic, the scripted model's answer yields no finding, so every dismissed check passes and every extract check fails: 24 of 40 on two runs of the same commit.",
-        "Real models get a floor once the recovery prompt of #1938 is settled. Measured on the prompt it replaces (two runs, 2026-10-26), claude-sonnet-4-6 by its API route: 32/40 and 33/40, all 16 findings extracted, 13 and 12 findings leaked from 8 and 7 of the 18 dismiss cases. That run is the deliberate break of evals/README.md rule 7."
+        "Measured on the prompt #1938 replaced (two runs, 2026-10-26), claude-sonnet-4-6 by its API route: 32/40 and 33/40, all 16 findings extracted, 13 and 12 findings leaked from 8 and 7 of the 18 dismiss cases. That run is the deliberate break of evals/README.md rule 7.",
+        "2026-10-26, the #1938 recovery prompt, two runs per model on the same code. claude-sonnet-4-6: 39/40 on both (dismiss-lenses-config leaks its closing note on both, paired per-case difference 0); floor = mean - 2 binomial SE over the 40 checks, rounded down: 0.975 - 0.049 = 0.92. kimi-k2.7-code and deepseek-v4.1-flash@fireworks: 40/40 on both; mean - 2 SE is 1.0 at 40/40 (SE 0), so the floor is the Wilson 95% lower bound, 40 / (40 + 1.96^2) = 0.912, rounded down: 0.91, like evals/parse/targets.json. All three set to 0.90 by decision (2026-10-26), under each computed floor."
     ],
     "models": {
-        "eval-fake": { "floor": 0.6, "observed": 0.6 }
+        "eval-fake": {
+            "floor": 0.6,
+            "observed": 0.6
+        },
+        "claude-sonnet-4-6": {
+            "floor": 0.9,
+            "observed": 0.975
+        },
+        "kimi-k2.7-code": {
+            "floor": 0.9,
+            "observed": 1
+        },
+        "deepseek-v4.1-flash@fireworks": {
+            "floor": 0.9,
+            "observed": 1
+        }
     }
 }
