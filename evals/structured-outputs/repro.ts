@@ -135,7 +135,7 @@ const SCENARIOS: Scenario[] = [
         model: 'gemini-2.5-flash',
         apiKeyEnv: 'API_GOOGLE_AI_API_KEY',
         expected: 'gemini-native',
-        why: '@ai-sdk/google emits generationConfig.responseSchema natively, unaffected by this fix',
+        why: '@ai-sdk/google emits generationConfig.responseJsonSchema natively, unaffected by this fix',
     },
 ];
 
@@ -302,6 +302,13 @@ async function probeToolLoop(
     return captured[0] ?? null;
 }
 
+/** @ai-sdk/google >= 4.0.70 sends JSON Schema in responseJsonSchema; older
+ *  builds sent an OpenAPI conversion in responseSchema. Either one counts. */
+function geminiSchema(body: any): unknown {
+    const gc = body?.generationConfig;
+    return gc?.responseJsonSchema ?? gc?.responseSchema;
+}
+
 function evaluate(
     expected: Expectation,
     body: any,
@@ -310,14 +317,12 @@ function evaluate(
         const gc = body?.generationConfig;
         const ok =
             gc?.responseMimeType === 'application/json' &&
-            gc?.responseSchema != null;
+            geminiSchema(body) != null;
         return {
             ok,
             summary: `generationConfig.responseMimeType=${JSON.stringify(
                 gc?.responseMimeType ?? null,
-            )} generationConfig.responseSchema=${
-                gc?.responseSchema ? '<set>' : 'null'
-            }`,
+            )} generationConfig schema=${geminiSchema(body) ? '<set>' : 'null'}`,
         };
     }
     const rf = body?.response_format;
@@ -342,10 +347,10 @@ function evaluateToolLoop(
     body: any,
 ): { ok: boolean; summary: string } {
     if (expected === 'gemini-native') {
-        const responseSchema = body?.generationConfig?.responseSchema;
+        const responseSchema = geminiSchema(body);
         return {
             ok: responseSchema == null,
-            summary: `generationConfig.responseSchema=${
+            summary: `generationConfig schema=${
                 responseSchema ? '<set>' : 'null'
             }`,
         };

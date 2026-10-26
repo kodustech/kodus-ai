@@ -31,7 +31,7 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV pnpm_config_verify_deps_before_run=false
 
 RUN corepack disable \
- && npm i -g pnpm@11.7.0
+ && npm i -g pnpm@11.28.8
 
 # sharing=private (not locked): the dev images build sequentially, so there is
 # never legitimate concurrent apt access. With sharing=locked, a build killed

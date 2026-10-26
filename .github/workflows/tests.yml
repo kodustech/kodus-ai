@@ -88,7 +88,7 @@ jobs:
                   node-version: "22"
 
             - name: Install pnpm
-              # Must match package.json's "packageManager" (pnpm@11.9.0).
+              # Must match package.json's "packageManager" (pnpm@11.28.8).
               # pnpm-workspace.yaml's `nodeLinker: hoisted` — the flat,
               # yarn-like node_modules layout this repo requires for
               # phantom-dependency resolution — is only read from that
@@ -100,7 +100,7 @@ jobs:
               # apps/web/package.json) and even declared-but-workspace-only
               # deps (`class-variance-authority`) stopped resolving once
               # apps/web's new component specs actually required them.
-              run: npm i -g pnpm@11.9.0
+              run: npm i -g pnpm@11.28.8
 
             - name: Cache pnpm store
               uses: actions/cache@v5.0.5

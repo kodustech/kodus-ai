@@ -42,10 +42,8 @@ function installBeforeExitFlush(): void {
 
 /**
  * Build (and cache) the `LangfuseSpanProcessor` without registering it on a
- * TracerProvider. The processor must be wired into the global provider by
- * the caller — either via `Sentry.init({ openTelemetrySpanProcessors })`
- * when Sentry's OTel setup runs, or via `registerLangfuseStandalone()`
- * when it doesn't.
+ * TracerProvider. `registerLangfuseStandalone()` wires it into the global
+ * provider; Sentry 11 runs with its OTel setup off and never claims it.
  *
  * Why split create from register: `@opentelemetry/sdk-trace-base@2.x`
  * removed `addSpanProcessor` from `BasicTracerProvider`, so processors can
@@ -74,12 +72,10 @@ export function createLangfuseSpanProcessor(): LangfuseSpanProcessor | null {
 
 /**
  * Register the Langfuse span processor on a dedicated `NodeTracerProvider`
- * and install it as the global provider. Use only when Sentry's OTel setup
- * did NOT run (no DSN configured) — otherwise the second
- * `trace.setGlobalTracerProvider` call is silently rejected by the OTel
- * ProxyTracerProvider and spans never reach Langfuse. When Sentry runs,
- * pass the processor to `Sentry.init({ openTelemetrySpanProcessors })`
- * instead so Sentry's own provider fans spans out to both.
+ * and install it as the global provider. Sentry runs with
+ * `enableOpenTelemetrySetup: false`, so this is the only provider; if a second
+ * `trace.setGlobalTracerProvider` ran first, OTel would silently reject this
+ * one and spans would never reach Langfuse.
  *
  * Idempotent.
  */
@@ -145,9 +141,9 @@ export interface LangfuseTraceAttributes {
     sessionId?: string;
     /** Whom the trace belongs to — we scope by organization, not end user. */
     userId?: string;
-    /** Langfuse keeps string values only (≤200 chars) and warns on anything
-     *  else, so absent identifiers are dropped rather than sent as "undefined"
-     *  — see `withLangfuseTrace`. */
+    /** Propagated values are capped at 200 chars after the SDK JSON-encodes
+     *  them (a string keeps 198), so absent identifiers are dropped rather than
+     *  sent as "undefined" — see `withLangfuseTrace`. */
     metadata?: Record<string, string | undefined>;
     tags?: string[];
 }
@@ -172,9 +168,20 @@ export function pullRequestSessionId(meta: {
     return `${meta.organizationId || 'unknown_org'}:${meta.repositoryId ?? 'repo'}:${meta.pullRequestId}`;
 }
 
+/** What the root observation records as the unit of work's input/output.
+ *  Langfuse v4 reads trace input/output from the root observation only, so
+ *  this is the trace I/O the UI shows and evaluators read. */
+export interface LangfuseTraceIO<T> {
+    input?: unknown;
+    /** Maps the result to what is recorded — keep it small, not the whole run state. */
+    output?: (result: T) => unknown;
+}
+
 /**
- * Run `fn` with Langfuse trace-level attributes propagated to every span it
- * opens — including the AI SDK spans the agent runner produces downstream.
+ * Run `fn` inside one root Langfuse observation named `traceName`, with the
+ * trace-level attributes propagated to every span it opens — including the AI
+ * SDK spans the agent runner produces downstream. One unit of work is one
+ * trace, and its input/output sit on the root observation.
  *
  * Pass-through no-op when tracing is disabled, so callers wrap unconditionally
  * and pay nothing when Langfuse is off.
@@ -182,6 +189,7 @@ export function pullRequestSessionId(meta: {
 export function withLangfuseTrace<T>(
     attrs: LangfuseTraceAttributes,
     fn: () => Promise<T>,
+    io?: LangfuseTraceIO<T>,
 ): Promise<T> {
     if (!shouldTrace()) {
         return fn();
@@ -201,7 +209,17 @@ export function withLangfuseTrace<T>(
                   }
                 : {}),
         },
-        fn,
+        () =>
+            startActiveObservation(attrs.traceName, async (root) => {
+                if (io?.input !== undefined) {
+                    root.update({ input: io.input });
+                }
+                const result = await fn();
+                if (io?.output) {
+                    root.update({ output: io.output(result) });
+                }
+                return result;
+            }),
     );
 }
 

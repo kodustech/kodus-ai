@@ -2,17 +2,22 @@ import * as Sentry from '@sentry/nestjs';
 
 let sentryInitialized = false;
 
+/** Headers and query params that identify the caller (Sentry's v10-parity
+ *  deny list); auth/token/key values are filtered by Sentry regardless. */
+const SENSITIVE_HEADER_TERMS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
+
 /**
- * `skipOpenTelemetrySetup` is intentional: Sentry's OTel setup installs a
- * `BasicTracerProvider` whose `SentrySampler` returns `NOT_RECORD` whenever
- * `tracesSampleRate` is unset (default), and that decision is made *before*
- * any registered span processor sees the span — so injecting Langfuse via
- * `openTelemetrySpanProcessors` resulted in the processor being attached
- * but never invoked. With `skipOpenTelemetrySetup: true` Sentry still
- * captures errors via its own API (`captureException`, etc. — what
- * `reportExceptionToSentry` uses); only the OTel side is left to us, so
- * Langfuse can register its own provider unconditionally and receive every
- * span without going through Sentry's sampler.
+ * `enableOpenTelemetrySetup: false` is intentional: Sentry's OTel setup
+ * installs a provider whose sampler returns `NOT_RECORD` whenever
+ * `tracesSampleRate` is unset (default), before any span processor sees the
+ * span. Sentry still captures errors via its own API (`captureException`,
+ * etc. — what `reportExceptionToSentry` uses); the OTel side is left to us,
+ * so Langfuse registers its own provider and receives every span.
+ *
+ * `dataCollection` keeps error events to what Sentry 10 sent without
+ * `sendDefaultPii`: Sentry 11 collects headers, cookies, every HTTP body,
+ * genAI/MCP payloads, query data and stack-frame locals when it is left
+ * unset, and those carry customer code and BYOK credentials here.
  *
  * Returns `true` when Sentry was actually initialized (DSN present and
  * `Sentry.init` succeeded). Callers don't need this today, but keeping the
@@ -46,7 +51,23 @@ export function setupSentry(
                     component: componentType,
                 },
             },
-            skipOpenTelemetrySetup: true,
+            enableOpenTelemetrySetup: false,
+            dataCollection: {
+                userInfo: false,
+                cookies: false,
+                httpHeaders: {
+                    request: { deny: SENSITIVE_HEADER_TERMS },
+                    response: { deny: SENSITIVE_HEADER_TERMS },
+                },
+                httpBodies: [],
+                urlQueryParams: { deny: SENSITIVE_HEADER_TERMS },
+                graphQL: { document: false, variables: false },
+                genAI: { inputs: false, outputs: false },
+                mcp: { inputs: false, outputs: false },
+                databaseQueryData: false,
+                queues: false,
+                stackFrameVariables: false,
+            },
         });
 
         sentryInitialized = true;

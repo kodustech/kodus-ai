@@ -2,7 +2,7 @@
 // run.js can replay, and print how often each delivery shape occurs.
 //
 //   node evals/verifier-verdict/capture.js --days 10 --limit 200
-//   node evals/verifier-verdict/capture.js --trace <id>          # one trace
+//   node evals/verifier-verdict/capture.js --trace <id>          # one trace (within --days)
 //   node evals/verifier-verdict/capture.js --out DIR             # where to write
 //   node evals/verifier-verdict/capture.js --write-observed      # refresh observed.json
 //
@@ -63,14 +63,86 @@ const arg = (n, d) => {
     return i >= 0 ? process.argv[i + 1] : d;
 };
 
+const LF_TIMEOUT_MS = 30_000;
+// 100 pages x 1000 rows is far beyond any one trace or capture window.
+const MAX_PAGES = 100;
+
 async function lf(pathname, params) {
     const u = new URL(BASE + pathname);
     for (const [k, v] of Object.entries(params || {}))
         u.searchParams.set(k, String(v));
-    const r = await fetch(u, { headers: { Authorization: AUTH } });
+    let r;
+    try {
+        r = await fetch(u, {
+            headers: { Authorization: AUTH },
+            signal: AbortSignal.timeout(LF_TIMEOUT_MS),
+        });
+    } catch (e) {
+        throw new Error(
+            `langfuse ${e.name === 'TimeoutError' ? `timeout after ${LF_TIMEOUT_MS}ms` : e.message} on ${u.pathname}${u.search}`,
+        );
+    }
     if (!r.ok)
         throw new Error(`langfuse ${r.status} on ${u.pathname}${u.search}`);
     return r.json();
+}
+
+/** The next cursor, or a thrown error when paging would never end: a cursor the
+ *  server already returned, or more pages than any real read needs. A partial
+ *  read would understate every count, so it fails instead of returning. */
+function nextCursor(r, seen, what) {
+    const cursor = r.meta?.cursor;
+    if (!cursor) return undefined;
+    if (seen.has(cursor))
+        throw new Error(`langfuse returned a repeated cursor paging ${what}`);
+    if (seen.size + 1 >= MAX_PAGES)
+        throw new Error(`more than ${MAX_PAGES} pages paging ${what}`);
+    seen.add(cursor);
+    return cursor;
+}
+
+// Observations API v2 (Langfuse v4): there is no trace object — a trace is its
+// observations, the root one carrying the trace output. Input/output come back
+// as raw strings, and a start-time window is required on every read.
+async function traceFromObservations(traceId, fromStartTime, toStartTime) {
+    const observations = [];
+    const seen = new Set();
+    let cursor;
+    do {
+        const r = await lf('/api/public/v2/observations', {
+            traceId,
+            fromStartTime,
+            toStartTime,
+            fields: 'core,basic,io,model',
+            limit: 1000,
+            ...(cursor ? { cursor } : {}),
+        });
+        observations.push(...(r.data || []).map(parseIo));
+        cursor = nextCursor(r, seen, `trace ${traceId}`);
+    } while (cursor);
+    if (!observations.length)
+        throw new Error(`trace ${traceId} has no observations in the window`);
+    const root =
+        observations.find((o) => o.isRootObservation) ||
+        observations.find((o) => !o.parentObservationId);
+    return {
+        id: traceId,
+        timestamp: root?.startTime,
+        output: root?.output,
+        observations,
+    };
+}
+
+function parseIo(o) {
+    const parse = (v) => {
+        if (typeof v !== 'string') return v;
+        try {
+            return JSON.parse(v);
+        } catch {
+            return v;
+        }
+    };
+    return { ...o, input: parse(o.input), output: parse(o.output) };
 }
 
 const S = (v) =>
@@ -176,30 +248,62 @@ const KEEP_FALSE =
 
 (async () => {
     const one = arg('trace');
+    const days = Number(arg('days', 10));
+    const fromStartTime = new Date(Date.now() - days * 864e5).toISOString();
+    const toStartTime = new Date().toISOString();
     let traces = [];
     if (one) {
-        traces = [await lf(`/api/public/traces/${one}`)];
+        traces = [await traceFromObservations(one, fromStartTime, toStartTime)];
     } else {
-        const days = Number(arg('days', 10));
         const limit = Number(arg('limit', 200));
-        const fromTimestamp = new Date(Date.now() - days * 864e5).toISOString();
         const ids = [];
-        for (let page = 1; ids.length < limit; page++) {
-            const r = await lf('/api/public/traces', {
-                name: 'kodus-generalist-review-agent',
-                fromTimestamp,
-                limit: 50,
-                page,
+        const seen = new Set();
+        let cursor;
+        do {
+            // Root observations of the review trace: one row per trace.
+            const r = await lf('/api/public/v2/observations', {
+                filter: JSON.stringify([
+                    {
+                        type: 'string',
+                        column: 'traceName',
+                        operator: '=',
+                        value: 'kodus-generalist-review-agent',
+                    },
+                    {
+                        type: 'boolean',
+                        column: 'isRootObservation',
+                        operator: '=',
+                        value: true,
+                    },
+                    {
+                        type: 'datetime',
+                        column: 'startTime',
+                        operator: '>=',
+                        value: fromStartTime,
+                    },
+                    {
+                        type: 'datetime',
+                        column: 'startTime',
+                        operator: '<',
+                        value: toStartTime,
+                    },
+                ]),
+                fields: 'core',
+                limit: Math.min(1000, limit),
+                ...(cursor ? { cursor } : {}),
             });
-            const d = r.data || [];
-            if (!d.length) break;
-            for (const t of d) if (ids.length < limit) ids.push(t.id);
-        }
+            for (const o of r.data || [])
+                if (ids.length < limit && !ids.includes(o.traceId))
+                    ids.push(o.traceId);
+            cursor = nextCursor(r, seen, 'review traces');
+        } while (cursor && ids.length < limit);
         process.stderr.write(`fetching ${ids.length} traces…\n`);
         let failed = 0;
         for (const id of ids) {
             try {
-                traces.push(await lf(`/api/public/traces/${id}`));
+                traces.push(
+                    await traceFromObservations(id, fromStartTime, toStartTime),
+                );
             } catch {
                 failed++;
             }

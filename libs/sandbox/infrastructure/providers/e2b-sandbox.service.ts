@@ -36,6 +36,9 @@ import {
 // onPipelineFinish observer calls sandbox.cleanup() on every exit path,
 // so this is a safety ceiling, not a cost floor.
 const SANDBOX_TIMEOUT_MS = 35 * 60 * 1000;
+/** The timeout a resume sets. e2b < 2.51 sent 300s on every connect by
+ *  default; newer SDKs send none unless asked, so it is pinned here. */
+export const SANDBOX_CONNECT_TIMEOUT_MS = 5 * 60 * 1000;
 
 // Every sandbox is tagged with the deployment that created it, so the orphan
 // sweep (SandboxLeaseReaperService) only ever kills its own: environments can
@@ -804,7 +807,10 @@ export class E2BSandboxService implements ISandboxProvider {
             context: E2BSandboxService.name,
             metadata: { sandboxId },
         });
-        return Sandbox.connect(sandboxId, { apiKey });
+        return Sandbox.connect(sandboxId, {
+            apiKey,
+            timeoutMs: SANDBOX_CONNECT_TIMEOUT_MS,
+        });
     }
 
     private async installDependencies(sandbox: Sandbox): Promise<void> {

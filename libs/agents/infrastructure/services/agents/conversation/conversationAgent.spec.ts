@@ -22,12 +22,17 @@ jest.mock('@libs/llm/model-invocation', () => ({
 // Captures the Langfuse TRACE-level attributes the run propagates. Real
 // `propagateAttributes` only sets OTel context, so there is nothing to assert
 // on without intercepting it here.
-const propagated: { params: any[] } = { params: [] };
+const propagated: { params: any[]; rootUpdates: any[] } = {
+    params: [],
+    rootUpdates: [],
+};
 jest.mock('@langfuse/tracing', () => ({
     propagateAttributes: (params: any, fn: () => unknown) => {
         propagated.params.push(params);
         return fn();
     },
+    startActiveObservation: (_name: string, fn: (o: unknown) => unknown) =>
+        fn({ update: (u: unknown) => propagated.rootUpdates.push(u) }),
 }));
 
 import { setLlmObservability } from '@libs/llm/llm-observability';
@@ -154,6 +159,7 @@ describe('ConversationAgentProvider (harness wiring)', () => {
         process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
         process.env.LANGFUSE_SECRET_KEY = 'sk-test';
         propagated.params = [];
+        propagated.rootUpdates = [];
         modelRef.model = makeModel('answer');
         const { provider } = build();
 
@@ -169,6 +175,12 @@ describe('ConversationAgentProvider (harness wiring)', () => {
             userId: 'org1',
             metadata: { organizationId: 'org1', teamId: 't1', threadId: 'th1' },
         });
+        // Langfuse v4 reads trace I/O from the root observation: the raw user
+        // turn in, Kody's answer out — not the prepared prompt or run state.
+        expect(propagated.rootUpdates).toEqual([
+            { input: 'hi' },
+            { output: 'answer' },
+        ]);
     });
 
     it('does not propagate trace attributes when tracing is disabled', async () => {

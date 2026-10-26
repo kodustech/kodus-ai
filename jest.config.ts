@@ -248,7 +248,9 @@ export default {
         // The `(?:.*/)?` prefix lets these ESM-only packages be transformed even
         // when NESTED (e.g. typeorm/node_modules/uuid — uuid@14 is ESM-only and
         // ships inside typeorm after the dep bump), not just at the top level.
-        'node_modules/(?!(?:.*/)?(@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path)/)',
+        // `content-type@3` (nested under @octokit/request) and
+        // `@vscode/ripgrep@1.18` (under @morphllm/morphsdk) went ESM-only too.
+        'node_modules/(?!(?:.*/)?(@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path|content-type|@vscode/ripgrep)/)',
     ],
     modulePathIgnorePatterns: [
         '<rootDir>/dist',
