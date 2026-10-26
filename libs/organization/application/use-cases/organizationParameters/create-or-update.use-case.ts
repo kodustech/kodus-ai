@@ -411,7 +411,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     /**
      * v2 encrypt/keep. For each incoming credential, encrypt/keep its secret
      * fields against the matching prior credential (matched by `id`, else by
-     * `provider`): a blank/empty field keeps the prior ciphertext, a real value
+     * `provider` on the same endpoint): a blank/empty field keeps the prior ciphertext, a real value
      * is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
      * models[] / routing / version pass through untouched — field-level encrypt
      * only, no re-encryption of untouched ciphertext.
@@ -464,11 +464,35 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 }
                 return managed;
             }
-            const prior =
-                (cred.id ? existingById.get(cred.id) : undefined) ??
-                (cred.provider
+            const byId = cred.id ? existingById.get(cred.id) : undefined;
+            const byProvider =
+                !byId && cred.provider
                     ? (existingByProvider.get(cred.provider) ?? undefined)
-                    : undefined);
+                    : undefined;
+            // A credential that names its own endpoint only inherits a key
+            // from one on the same endpoint: the org's only OpenAI-compatible
+            // gateway is still the wrong key for a second gateway saved next
+            // to it.
+            const lendable =
+                byProvider && sameEndpointOrUnset(cred, byProvider)
+                    ? byProvider
+                    : undefined;
+            if (byProvider && !lendable) {
+                this.logger.warn({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: CreateOrUpdateOrganizationParametersUseCase.name,
+                    metadata: {
+                        organizationId: this.request?.user?.organization?.uuid,
+                        provider: cred.provider,
+                        credentialId: cred.id,
+                        priorCredentialId: byProvider.id,
+                        host: hostOf(credentialBaseURL(cred)),
+                        priorHost: hostOf(credentialBaseURL(byProvider)),
+                    },
+                });
+            }
+            const prior = byId ?? lendable;
             const encrypted = this.encryptCredentialSecrets(cred, prior);
             // Auth-path integrity: after encrypt/keep, a non-managed credential
             // must carry a usable secret (a kept ciphertext counts). Bedrock
@@ -639,3 +663,30 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         return /^.{2}\.{3}.{3}$/.test(value);
     }
 }
+
+const credentialBaseURL = (cred: BYOKCredential): string | undefined => {
+    const value = (cred.settings as Record<string, unknown> | undefined)
+        ?.baseURL;
+    return typeof value === 'string' ? value : undefined;
+};
+
+/** Same rule as the web's `findReusableCredential`: the endpoint only counts
+ *  when the incoming credential carries one, compared without a trailing
+ *  slash or case. */
+const sameEndpointOrUnset = (
+    next: BYOKCredential,
+    prior: BYOKCredential,
+): boolean => {
+    const normalize = (value?: string) =>
+        (value ?? '').trim().replace(/\/+$/, '').toLowerCase();
+    const wanted = normalize(credentialBaseURL(next));
+    return !wanted || normalize(credentialBaseURL(prior)) === wanted;
+};
+
+const hostOf = (value?: string): string | undefined => {
+    try {
+        return value ? new URL(value).host : undefined;
+    } catch {
+        return undefined;
+    }
+};

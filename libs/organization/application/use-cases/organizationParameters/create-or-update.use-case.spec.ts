@@ -203,6 +203,99 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
         });
 
+        it("refuses to lend the only gateway's key to a new endpoint", async () => {
+            // Fireworks is the org's only OpenAI-compatible credential; the
+            // second endpoint arrives with a fresh id and no key. The provider
+            // fallback must not hand it the Fireworks key just because it is
+            // the single credential of that provider.
+            const fireworksCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: fireworksCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: { baseURL: 'https://api.together.ai/v1' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-together',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, createOrUpdateConfig } = buildUseCase(existing);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow(
+                'apiKey is required for the openai_compatible BYOK credential',
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('matches by provider across an id change when the endpoint is the same', async () => {
+            const priorCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-old-id',
+                        provider: 'openai_compatible',
+                        apiKey: priorCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-new-id',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        // Same upstream, spelled with a trailing slash and caps.
+                        settings: {
+                            baseURL: 'https://API.fireworks.ai/inference/v1/',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-new-id',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+        });
+
         it('refuses to borrow a key when the provider has two credentials', async () => {
             // Two OpenAI-compatible gateways (Fireworks and Together) are two
             // upstreams with two keys. Matching a blank resubmit "by provider"
