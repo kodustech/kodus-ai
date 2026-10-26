@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ensureOk, http } from '../lib/http.js';
+import { findExecutionStatus } from '../lib/execution-health.js';
 import { resetCodeReviewConfig } from '../lib/onboarding.js';
 import type {
     KodusSession,
@@ -176,7 +177,7 @@ export const conditionalApprovalProvider: Scenario = {
                 },
             });
             opened.push(sensitivePr);
-            await waitForApprovalReason(ctx, repo, sensitivePr, 'held', SENSITIVE_FILE);
+            await waitForApprovalReason(ctx, session, repo, sensitivePr, 'held', SENSITIVE_FILE);
 
             const safeBranch = `e2e/approval-safe-${randomUUID().slice(0, 8)}`;
             const safePr = await ctx.provider.openPR({
@@ -189,7 +190,7 @@ export const conditionalApprovalProvider: Scenario = {
                 },
             });
             opened.push(safePr);
-            await waitForApprovalReason(ctx, repo, safePr, 'completed');
+            await waitForApprovalReason(ctx, session, repo, safePr, 'completed');
             return {
                 provider: ctx.provider.name,
                 sensitivePr: sensitivePr.url,
@@ -214,12 +215,16 @@ export const conditionalApprovalProvider: Scenario = {
 
 async function waitForApprovalReason(
     ctx: RunContext,
+    session: KodusSession,
     repo: ProviderRepoRef,
     pr: OpenedPR,
     kind: 'held' | 'completed',
     detail?: string,
 ): Promise<void> {
     const deadline = Date.now() + 12 * 60_000;
+    let terminalFailureSince = 0;
+    let lastReviewStatus: string | null = null;
+    let lastStatusCheck = 0;
     while (Date.now() < deadline) {
         const comments = await approvalComments(ctx, repo, pr);
         if (comments.some((comment) =>
@@ -227,9 +232,33 @@ async function waitForApprovalReason(
             comment.includes(`Automatic approval ${kind}`) &&
             (!detail || comment.includes(detail)),
         )) return;
+        if (Date.now() - lastStatusCheck >= 30_000) {
+            lastStatusCheck = Date.now();
+            const executions = await http<unknown>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${pr.number}&repositoryId=${encodeURIComponent(String(repo.id))}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
+                { headers: { Authorization: `Bearer ${session.accessToken}` } },
+            );
+            if (executions.status >= 200 && executions.status < 300) {
+                lastReviewStatus = findExecutionStatus(executions.body, pr.number);
+                if (
+                    lastReviewStatus === 'skipped' ||
+                    lastReviewStatus === 'error' ||
+                    lastReviewStatus === 'partial_error'
+                ) {
+                    terminalFailureSince ||= Date.now();
+                    if (Date.now() - terminalFailureSince >= 90_000) {
+                        throw new Error(
+                            `${pr.url} review ended ${lastReviewStatus}; an approval decision requires a successful review`,
+                        );
+                    }
+                } else {
+                    terminalFailureSince = 0;
+                }
+            }
+        }
         await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
-    throw new Error(`No automatic approval ${kind} reason appeared on ${pr.url} within 12 minutes`);
+    throw new Error(`No automatic approval ${kind} reason appeared on ${pr.url} within 12 minutes (review=${lastReviewStatus ?? 'unknown'})`);
 }
 
 export default conditionalApprovalProvider;
