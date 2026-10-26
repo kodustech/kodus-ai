@@ -394,11 +394,18 @@ jobs:
                     {
                       reason = tolower($0)
                       if (reason ~ /branch/) kind = "branch"
+                      else if (reason ~ /user not licensed|user_no_license|assign seat/) kind = "author_seat"
                       else if (reason ~ /licen|subscription|seat|credit/) kind = "license"
                       else if (reason ~ /commit/) kind = "commits"
                       else if (reason ~ /file|ignor/) kind = "files"
                       else if (reason ~ /already|process/) kind = "duplicate"
                       else if (reason ~ /pause|manual/) kind = "cadence"
+                      else if (reason ~ /title/) kind = "title"
+                      else if (reason ~ /draft/) kind = "draft"
+                      else if (reason ~ /disabled/) kind = "review_disabled"
+                      else if (reason ~ /closed|locked/) kind = "pr_state"
+                      else if (reason ~ /config/) kind = "configuration"
+                      else if (reason ~ /prerequisite|context|valid/) kind = "prerequisites"
                       else kind = "other"
                       counts[kind]++
                     }
