@@ -62,6 +62,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            provider_approval_smoke:
+                description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
+                required: false
+                default: false
+                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -405,6 +410,49 @@ jobs:
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
                   done
+
+            - name: Smoke conditional approval on real providers
+              if: steps.up.outcome == 'success' && steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true
+              env:
+                  URLS: ${{ steps.up.outputs.urls }}
+                  CLOUD_TENANT_PAID_EMAIL: preview@kodus.io
+                  CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
+                  GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  GL_TEST_REPO_CLOUD: ${{ secrets.GL_TEST_REPO_CLOUD }}
+                  BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
+                  BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
+                  BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  BB_TEST_REPO_CLOUD: ${{ secrets.BB_TEST_REPO_CLOUD }}
+                  AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
+                  AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
+                  AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
+                  AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+                  AZ_TEST_REPO_CLOUD: ${{ secrets.AZ_TEST_REPO_CLOUD }}
+              run: |
+                  set -euo pipefail
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) CLOUD_WEB_BASE_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${CLOUD_WEB_BASE_URL:?cloud preview URL is required}"
+                  : "${CLOUD_TENANT_PAID_PASSWORD:?preview login is required}"
+                  export CLOUD_WEB_BASE_URL
+                  export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
+                  npm ci --prefix tests/e2e
+                  failed=0
+                  for provider in gitlab bitbucket azure-devops; do
+                    echo "Testing conditional approval on $provider"
+                    (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts conditional-approval-provider --target cloud --provider "$provider" --license paid) || failed=1
+                  done
+                  exit "$failed"
+
+            - name: Upload provider approval evidence
+              if: always() && inputs.provider_approval_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-provider-approval-evidence
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
 
             - name: Comment the preview link
               if: always() && steps.env.outputs.configured == 'true'
