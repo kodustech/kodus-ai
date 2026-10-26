@@ -315,9 +315,6 @@ jobs:
                   {
                     echo "PREVIEW_SEED_EMAIL=preview@kodus.io"
                     echo "PREVIEW_SEED_PASSWORD=$PREVIEW_SEED_PASSWORD"
-                    if [ "${{ inputs.provider_approval_smoke }}" = 'true' ]; then
-                      echo 'PREVIEW_BILLING_DIAGNOSTIC=true'
-                    fi
                   } >> .env
                   chmod 600 .env
 

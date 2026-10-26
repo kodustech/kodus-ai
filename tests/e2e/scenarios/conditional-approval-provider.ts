@@ -14,27 +14,14 @@ const SENSITIVE_FILE = 'src/qa-approval/smoke.ts';
 const SAFE_FILE = 'src/qa-approval-clean/smoke.ts';
 const REASON_MARKER = '<!-- kodus-conditional-approval -->';
 
-async function ensureCloudAuthorSeat(ctx: RunContext, session: KodusSession) {
-    if (ctx.target.target !== 'cloud' || ctx.provider.name !== 'gitlab') return;
+async function assignCloudAuthorSeat(ctx: RunContext, session: KodusSession) {
+    if (ctx.target.target !== 'cloud') return;
 
     const gitId = await ctx.provider.currentUserId();
-    const hasSeat = async () => {
-        const seats = await http<{
-            data?: Array<{ git_id: string; status?: string }>;
-        }>(`${ctx.target.apiBaseUrl}/license/users`, {
-            headers: { Authorization: `Bearer ${session.accessToken}` },
-        });
-        ensureOk(seats, 'conditional-approval-provider:listSeats');
-        return seats.body.data?.some(
-            (user) =>
-                user.git_id === gitId && user.status !== 'inactive',
-        );
-    };
-    if (await hasSeat()) return;
-
     const response = await http<{
         error?: unknown[];
         failed?: unknown[];
+        successful?: Array<{ git_id?: string }>;
     }>(`${ctx.target.webBaseUrl}/api/proxy/billing/assign-license`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -46,17 +33,17 @@ async function ensureCloudAuthorSeat(ctx: RunContext, session: KodusSession) {
                 gitTool: ctx.provider.licenseGitTool(),
                 licenseStatus: 'active',
             }],
-            userName: 'GitLab approval QA',
+            userName: `${ctx.provider.name} approval QA`,
         },
     });
     ensureOk(response, 'conditional-approval-provider:assignAuthorSeat');
     ctx.assert(
         !(response.body.error?.length || response.body.failed?.length),
-        'GitLab QA author has no review seat; billing refused to assign one',
+        `${ctx.provider.name} QA author has no review seat; billing refused to assign one`,
     );
     ctx.assert(
-        await hasSeat(),
-        'Billing accepted the GitLab QA seat but the review license list did not update',
+        response.body.successful?.some((user) => String(user.git_id) === String(gitId)),
+        `Billing did not confirm the ${ctx.provider.name} QA author seat`,
     );
 }
 
@@ -161,7 +148,7 @@ export const conditionalApprovalProvider: Scenario = {
         const repo = await ctx.kodus.registerRepo(session);
         await ctx.kodus.finishOnboarding(session, repo);
         await resetCodeReviewConfig(ctx.target, session);
-        await ensureCloudAuthorSeat(ctx, session);
+        await assignCloudAuthorSeat(ctx, session);
         await setApprovalPolicy(ctx, session.accessToken, session.teamId, true);
 
         const branch = `e2e/approval-${randomUUID().slice(0, 8)}`;
