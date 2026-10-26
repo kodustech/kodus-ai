@@ -532,6 +532,25 @@ describe('GetModelsByProviderUseCase — a saved credential named by id', () => 
         expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-b');
     });
 
+    it("never sends the named key to a host the request supplies", async () => {
+        const useCase = buildUseCase(twoGateways);
+
+        await useCase
+            .execute(
+                'openai_compatible',
+                { organizationId: 'org-1' },
+                { baseURL: 'https://other.example.com/v1' },
+                'cred-b',
+            )
+            .catch(() => undefined);
+
+        const sent = mockedAxios.get.mock.calls.map(
+            ([, cfg]) => (cfg as any)?.headers?.Authorization,
+        );
+        expect(sent).not.toContain('Bearer decrypted:enc-b');
+        expect(sent).not.toContain('Bearer decrypted:enc-a');
+    });
+
     it('sends the named key when the request repeats its endpoint', async () => {
         const useCase = buildUseCase(twoGateways);
 
