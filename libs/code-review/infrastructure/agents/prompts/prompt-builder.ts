@@ -940,7 +940,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
+        const diffsSection = formatDiffs(input.changedFiles, input.fileTiers);
         // The callGraph string from kodus-graph already starts with <CallGraph>
         // and ends with </CallGraph> — wrapping it again produced nested duplicate
         // tags in the prompt.
@@ -1111,7 +1111,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
+        const diffsSection = formatDiffs(input.changedFiles, input.fileTiers);
         const callGraphSection = input.callGraph
             ? `\n  ${input.callGraph}`
             : '';

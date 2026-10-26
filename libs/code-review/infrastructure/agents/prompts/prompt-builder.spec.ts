@@ -611,3 +611,57 @@ describe('CrossRepoBoundary lane', () => {
         expect(prompt).toContain('acme/web');
     });
 });
+
+describe('file tiers in the diffs section (#2205)', () => {
+    const hotPatch = '@@ -1,1 +1,2 @@ function hot()\n+const hotLine = 1;';
+    const coldPatch = '@@ -5,1 +5,2 @@ function cold()\n+const coldLine = 2;';
+    const warmPatch = '@@ -9,1 +9,2 @@ function warm()\n+const warmLine = 3;';
+
+    const tieredInput = (over: any = {}): any =>
+        baseInput({
+            changedFiles: [
+                file('src/hot.ts', hotPatch),
+                file('src/warm.ts', warmPatch),
+                file('src/cold.ts', coldPatch),
+            ],
+            fileTiers: new Map([
+                ['src/hot.ts', 'critical'],
+                ['src/warm.ts', 'warm'],
+                ['src/cold.ts', 'optional'],
+            ]),
+            ...over,
+        });
+
+    it.each([
+        ['full', {}],
+        ['compact', { adaptiveProfile: { compactPrompt: true } }],
+    ])('%s prompt sends optional files as hunk headers only', (_name, over) => {
+        const prompt = buildUserPrompt(tieredInput(over), meta);
+
+        expect(prompt).toContain('### src/cold.ts [optional, +0 -0]');
+        expect(prompt).toContain('@@ -5,1 +5,2 @@ function cold()');
+        expect(prompt).not.toContain('const coldLine = 2;');
+    });
+
+    it.each([
+        ['full', {}],
+        ['compact', { adaptiveProfile: { compactPrompt: true } }],
+    ])('%s prompt labels critical and warm files', (_name, over) => {
+        const prompt = buildUserPrompt(tieredInput(over), meta);
+
+        expect(prompt).toContain('### src/hot.ts [CRITICAL]');
+        expect(prompt).toContain('const hotLine = 1;');
+        expect(prompt).toContain('### src/warm.ts [warm]');
+        expect(prompt).toContain('const warmLine = 3;');
+    });
+
+    it('sends full diffs when there are no tiers', () => {
+        const prompt = buildUserPrompt(
+            tieredInput({ fileTiers: undefined }),
+            meta,
+        );
+
+        expect(prompt).toContain('const coldLine = 2;');
+        expect(prompt).not.toContain('[optional');
+    });
+});
