@@ -6,6 +6,8 @@
 import {
     buildSystemPrompt,
     buildUserPrompt,
+    buildCompactUserPrompt,
+    buildSelfContainedUserPrompt,
     formatTraceDecisions,
     formatPreviousDecisions,
     formatCommits,
@@ -590,5 +592,87 @@ describe('CrossRepoBoundary lane', () => {
             'Do not report boundary mismatches your instructions do not cover.',
         );
         expect(prompt).toContain('acme/web');
+    });
+});
+
+describe('tiered diffs (#2205)', () => {
+    // The large-PR path assigns a tier per file and its size estimate counts an
+    // optional file at hunk-header size, but the prompt builders rendered every
+    // file with its full diff: optional files were sent whole and no file
+    // carried its [CRITICAL] / [warm] label. The tiers are already on the
+    // input; the builders have to hand them to formatDiffs.
+    const tiered = (entries: Array<[string, string]>): any => new Map(entries);
+
+    const promptFile = (filename: string, marker: string): any => ({
+        filename,
+        patch: `@@ -1,1 +1,2 @@\n context line\n+const ${marker} = 1;`,
+        additions: 1,
+        deletions: 0,
+    });
+
+    it('renders an optional file as its hunk headers only', () => {
+        const prompt = buildUserPrompt(
+            baseInput({
+                changedFiles: [promptFile('src/generated.ts', 'generated')],
+                fileTiers: tiered([['src/generated.ts', 'optional']]),
+            }),
+            meta,
+        );
+
+        expect(prompt).toContain('### src/generated.ts [optional, +1 -0]');
+        expect(prompt).toContain('@@ -1,1 +1,2 @@');
+        expect(prompt).not.toContain('const generated = 1;');
+    });
+
+    it('labels critical and warm files', () => {
+        const prompt = buildUserPrompt(
+            baseInput({
+                changedFiles: [
+                    promptFile('src/critical.ts', 'criticalLine'),
+                    promptFile('src/warm.ts', 'warmLine'),
+                ],
+                fileTiers: tiered([
+                    ['src/critical.ts', 'critical'],
+                    ['src/warm.ts', 'warm'],
+                ]),
+            }),
+            meta,
+        );
+
+        expect(prompt).toContain('### src/critical.ts [CRITICAL]');
+        expect(prompt).toContain('### src/warm.ts [warm]');
+    });
+
+    it('keeps full diffs and unlabelled headers when no tiers are given', () => {
+        const prompt = buildUserPrompt(
+            baseInput({ changedFiles: [promptFile('src/a.ts', 'added')] }),
+            meta,
+        );
+
+        expect(prompt).toContain('### src/a.ts\n');
+        expect(prompt).toContain('const added = 1;');
+    });
+
+    it.each([
+        ['compact', buildCompactUserPrompt],
+        ['self-contained', buildSelfContainedUserPrompt],
+    ])('applies the same tiers in the %s prompt', (_name, build) => {
+        const prompt = (build as any)(
+            baseInput({
+                changedFiles: [
+                    promptFile('src/generated.ts', 'generated'),
+                    promptFile('src/critical.ts', 'criticalLine'),
+                ],
+                fileTiers: tiered([
+                    ['src/generated.ts', 'optional'],
+                    ['src/critical.ts', 'critical'],
+                ]),
+            }),
+            meta,
+        );
+
+        expect(prompt).toContain('### src/generated.ts [optional, +1 -0]');
+        expect(prompt).not.toContain('const generated = 1;');
+        expect(prompt).toContain('### src/critical.ts [CRITICAL]');
     });
 });
