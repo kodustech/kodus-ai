@@ -47,14 +47,14 @@ permissions:
     contents: read
 
 concurrency:
-    group: evals-experiment-${{ github.ref }}-${{ inputs.step }}
+    group: evals-experiment-${{ github.ref }}-${{ inputs.step }}-${{ inputs.set }}
     cancel-in-progress: false
 
 jobs:
     experiment:
         name: "${{ inputs.step }} · ${{ github.ref_name }}"
         runs-on: ubuntu-latest
-        timeout-minutes: 240
+        timeout-minutes: 360
         steps:
             # The whole history: the base is where the branch left main.
             - uses: actions/checkout@v6.0.2
