@@ -154,6 +154,36 @@ function activateTeam(teamId: string): void {
     );
 }
 
+/** Give the preview's Teams trial its normal minimum of five review seats. */
+function ensurePreviewTrialSeats(organizationId: string, teamId: string): void {
+    const uuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuid.test(organizationId) || !uuid.test(teamId)) {
+        throw new Error('preview trial identifiers must be UUIDs');
+    }
+
+    // Billing creates a Teams trial with totalLicenses=0. That lets the
+    // first PR through as a freebie but skips later PRs by the same author,
+    // making approval QA look broken. Touch only this seeded trial; a paid
+    // subscription keeps its Stripe-managed seat quantity.
+    const sql = `update billing.organization_licenses set "totalLicenses" = greatest("totalLicenses", 5) where "organizationId" = '${organizationId}' and "teamId" = '${teamId}' and "subscriptionStatus" = 'trial' and "stripeSubscriptionId" is null and "trialEnd" > now()`;
+    const out = execFileSync(
+        'docker',
+        [
+            'exec',
+            '-i',
+            'db_postgres',
+            'sh',
+            '-c',
+            'PGPASSWORD=$POSTGRES_PASSWORD psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"',
+        ],
+        { encoding: 'utf8', input: sql, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    console.log(
+        `seed:preview: Teams trial seats ready (${out.trim().split('\n').pop()})`,
+    );
+}
+
 /** The preview skips the browser onboarding step that normally creates a trial. */
 async function startPreviewTrial(token: string, teamId: string): Promise<void> {
     const payload = JSON.parse(
@@ -177,6 +207,7 @@ async function startPreviewTrial(token: string, teamId: string): Promise<void> {
         signal: AbortSignal.timeout(10_000),
     });
     if (billing.ok || billing.status === 409) {
+        ensurePreviewTrialSeats(payload.organizationId, teamId);
         console.log('seed:preview: billing trial available');
         return;
     }
