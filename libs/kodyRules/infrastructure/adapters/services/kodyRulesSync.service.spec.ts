@@ -1603,3 +1603,115 @@ describe('KodyRulesSyncService — repository rule files vs coding-agent files',
         });
     });
 });
+
+/**
+ * A merge that renames a rule file reaches the sync as ONE `renamed` entry
+ * carrying `previous_filename`. The old path must end with no live record:
+ * the newest one is re-keyed in place (its uuid survives) and every other
+ * record on the old path is soft-deleted.
+ */
+describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+    const OLD = '.kody/rules/old.md';
+    const NEW = '.kody/rules/new.md';
+
+    const makeService = (
+        rules: any[],
+        opts: { centralized?: boolean } = {},
+    ) => {
+        const store = rules.map((r) => ({ ...r }));
+        const write = (dto: any) => {
+            const hit = store.find((r) => r.uuid === dto.uuid);
+            if (hit) Object.assign(hit, dto);
+            else store.push({ ...dto, uuid: `new-${store.length}` });
+        };
+        const kodyRulesService = {
+            findByOrganizationId: jest.fn(async () => ({
+                uuid: 'doc-1',
+                rules: store.map((r) => ({ ...r })),
+            })),
+            createOrUpdate: jest.fn(async (_org: unknown, dto: any) =>
+                write(dto),
+            ),
+        };
+        const createOrUpdateKodyRulesUseCase = {
+            // Centralized-config mode returns PR metadata and defers the
+            // write, so the re-keyed record is still on the old path.
+            execute: jest.fn(async (dto: any) =>
+                opts.centralized ? { prUrl: 'x' } : write(dto),
+            ),
+        };
+        const deps: any[] = new Array(KodyRulesSyncService.length).fill({});
+        deps[0] = kodyRulesService;
+        deps[3] = { getPullRequestByNumber: jest.fn().mockResolvedValue({}) };
+        deps[4] = { execute: jest.fn().mockResolvedValue({}) };
+        deps[5] = createOrUpdateKodyRulesUseCase;
+        const service = new (KodyRulesSyncService as any)(...deps);
+        jest.spyOn(service, 'getMergedFileContent').mockResolvedValue('body');
+        jest.spyOn(service, 'templateFileToRule').mockResolvedValue({
+            kind: 'rule',
+            rule: { title: 't', rule: 'r', path: '**/*.ts' },
+        });
+        jest.spyOn(service, 'resolveDirectoryForFile').mockResolvedValue(null);
+        jest.spyOn(service, 'processContextReferences').mockResolvedValue(
+            undefined,
+        );
+        return { service, store };
+    };
+
+    const record = (uuid: string, createdAt: string) => ({
+        uuid,
+        repositoryId: 'repo-1',
+        sourcePath: OLD,
+        status: KodyRulesStatus.ACTIVE,
+        createdAt,
+    });
+
+    const sync = (service: any) =>
+        service.syncFromChangedFiles({
+            organizationAndTeamData: ORG,
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequestNumber: 7,
+            files: [
+                { filename: NEW, previous_filename: OLD, status: 'renamed' },
+            ],
+        });
+
+    const live = (store: any[], path: string) =>
+        store.filter(
+            (r) =>
+                r.sourcePath === path && r.status !== KodyRulesStatus.DELETED,
+        );
+
+    it('leaves 0 live records on the old path and 1 on the new one', async () => {
+        const { service, store } = makeService([
+            record('older', '2026-01-01T00:00:00Z'),
+            record('newer', '2026-01-02T00:00:00Z'),
+        ]);
+
+        await sync(service);
+
+        expect(live(store, OLD)).toEqual([]);
+        expect(live(store, NEW).map((r) => r.uuid)).toEqual(['newer']);
+        expect(store.find((r) => r.uuid === 'older').status).toBe(
+            KodyRulesStatus.DELETED,
+        );
+    });
+
+    it('spares the record being re-keyed when the write is deferred (centralized mode)', async () => {
+        const { service, store } = makeService(
+            [
+                record('older', '2026-01-01T00:00:00Z'),
+                record('newer', '2026-01-02T00:00:00Z'),
+            ],
+            { centralized: true },
+        );
+
+        await sync(service);
+
+        expect(live(store, OLD).map((r) => r.uuid)).toEqual(['newer']);
+        expect(store.find((r) => r.uuid === 'older').status).toBe(
+            KodyRulesStatus.DELETED,
+        );
+    });
+});

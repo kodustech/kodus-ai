@@ -240,6 +240,26 @@ describe('GithubService — cache layer (commit b7606bb5c)', () => {
 
             expect(cache.addToCache).not.toHaveBeenCalled();
         });
+
+        it('keeps previous_filename on renamed entries (the Kody Rules merge sync keys on it)', async () => {
+            const { service, octokit } = makeService();
+            octokit.paginate.mockResolvedValue([
+                {
+                    ...fakeFiles[0],
+                    filename: '.kody/rules/new.md',
+                    previous_filename: '.kody/rules/old.md',
+                    status: 'renamed',
+                },
+            ]);
+
+            const [file] = await service.getFilesByPullRequestId(baseParams);
+
+            expect(file).toMatchObject({
+                filename: '.kody/rules/new.md',
+                previous_filename: '.kody/rules/old.md',
+                status: 'renamed',
+            });
+        });
     });
 
     describe('getCommitsForPullRequestForCodeReview', () => {

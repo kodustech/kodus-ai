@@ -4270,6 +4270,9 @@ export class GithubService
 
         const result = files.map((file) => ({
             filename: file.filename,
+            // Set only on `renamed` entries. The Kody Rules merge sync needs
+            // it to retire the rule records keyed on the old path.
+            previous_filename: file.previous_filename,
             sha: file?.sha ?? null,
             status: file.status,
             additions: file.additions,
