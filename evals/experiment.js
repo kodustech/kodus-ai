@@ -800,7 +800,8 @@ async function main() {
         return 2;
     }
     // "Is it better?" means nothing until "did it break anything?" says no.
-    if (!phaseIds.includes('regression')) {
+    // exp/xfile: the decision phase alone, on a set whose cases the controlled set does not hold.
+    if (!phaseIds.includes('regression') && !String(args.set || '').startsWith('xfile')) {
         console.error('--phases needs regression: the decision phase runs only after it');
         return 2;
     }
