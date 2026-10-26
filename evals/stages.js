@@ -607,7 +607,7 @@ const STAGES = [
             metric: 'of offer checks right',
             sets: { controlled: 'the threads of thread-rule that do not ask Kody to act', full: null },
             nightly: 'shared',
-            caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers.',
+            caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {
@@ -659,7 +659,7 @@ const STAGES = [
             metric: 'of offer checks right',
             sets: { controlled: 'the threads of thread-memory that do not ask Kody to act', full: null },
             nightly: 'shared',
-            caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers.',
+            caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {

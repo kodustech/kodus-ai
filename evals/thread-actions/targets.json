@@ -13,8 +13,8 @@
         "[rule] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 12/12 and 10/12, mean 0.917. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 12, rounded down: 0.75.",
         "[memory] deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 7/7 and 7/7, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 7, rounded down: 0.85.",
         "Offers (--metric=offers, keys <kind>-offers), from 2026-10-26 once the conversation agent reads the tools' proactive hint from _meta: the share of offer checks right over the threads that do not ask Kody to act. eval-fake: the scripted model never offers, so only the control threads pass: rule 5 of 8, memory 3 of 5. Deterministic. floor = observed.",
-        "[rule-offers] deepseek-v4-flash@fireworks: calibrated 2026-10-26 from 2 local runs on c37c05568 plus this change, judge gpt-5.6-luna low: 8/8 and 7/8, mean 0.938. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 8, rounded down: 0.75. Before the change (the block never rendered): 6/8; with the block but before the memory hint and the block rule were tightened: 7/8 and 7/8.",
-        "[memory-offers] deepseek-v4-flash@fireworks: calibrated 2026-10-26 from 2 local runs on c37c05568 plus this change, judge gpt-5.6-luna low: 5/5 and 5/5, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 5, rounded down: 0.8. Before the change: 3/5 and 4/5; with the block but before tightening: 2/5 and 3/5, every miss an offer to save Kody's own finding in a control thread where the developer accepted it.",
+        "[rule-offers] deepseek-v4-flash@fireworks: calibrated 2026-10-26 from 4 local runs on c37c05568 plus this change, judge gpt-5.6-luna low: 8/8, 7/8, 7/8, 7/8, mean 0.906. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 8, rounded down: 0.7. Every miss is rule-create-offer: twice the agent offered a memory instead of the rule, once it offered the rule and the judge read no offer. Before the change (the block never rendered): 6/8; with the block but before the memory hint and the block rule were tightened: 7/8 and 7/8.",
+        "[memory-offers] deepseek-v4-flash@fireworks: calibrated 2026-10-26 from 4 local runs on c37c05568 plus this change, judge gpt-5.6-luna low: 5/5 in all four, mean 1. floor = min(mean - 2 binomial SE, (n - 1) / n) over n = 5, rounded down: 0.8; the nightly pools a run below it with a confirming run (10 checks) before alerting. Before the change: 3/5 and 4/5; with the block but before tightening: 2/5 and 3/5, every miss an offer to save Kody's own finding in a control thread where the developer accepted it. Held out from the tightening, 2 new control threads and 1 offer thread on code the cases do not have: 3/3 in 4 runs (PR #2248).",
         "RATCHET: a PR that adds cases, changes the judge or moves the value on purpose recalibrates here in the same PR, with its runs as evidence."
     ],
     "models": {
@@ -46,8 +46,8 @@
                 "observed": 1
             },
             "rule-offers": {
-                "floor": 0.75,
-                "observed": 0.938
+                "floor": 0.7,
+                "observed": 0.906
             },
             "memory-offers": {
                 "floor": 0.8,

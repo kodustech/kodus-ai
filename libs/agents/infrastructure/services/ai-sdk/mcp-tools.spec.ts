@@ -163,7 +163,9 @@ describe('connectMcpTools against the Kodus MCP server', () => {
         }
     });
 
-    it('trusts the Kodus issues server as first-party too', async () => {
+    // The issues server itself declares no hint; this checks only that its
+    // integration id is trusted, on the code-management server's tools.
+    it('trusts the Kodus issues integration id as first-party', async () => {
         const mcp = await connect(KODUS_ISSUES_INTEGRATION_ID);
         try {
             expect(mcp.metadata.KODUS_CREATE_MEMORY.proactiveHint).toBe(
