@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-discourse-memoizer-string",
+  "vars": {
+   "caseId": "xfile-discourse-memoizer-string",
+   "mode": "planner",
+   "prTitle": "Cache the failing email jobs count on the admin dashboard",
+   "prBody": "`failing_emails_check` walks the entire Sidekiq retry set on every call to the dashboard problems endpoint, which is slow on busy sites and is hit by every open admin dashboard. Memoize the count across processes for five minutes with DistributedMemoizer, the same helper PostsController#create already uses.",
+   "repositoryFullName": "discourse/discourse",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-discourse-memoizer-string"
+   },
+   "injectPatch": "diff --git a/app/models/admin_dashboard_data.rb b/app/models/admin_dashboard_data.rb\nindex 9f4a030..c395143 100644\n--- a/app/models/admin_dashboard_data.rb\n+++ b/app/models/admin_dashboard_data.rb\n@@ -1,4 +1,5 @@\n require_dependency 'mem_info'\n+require_dependency 'distributed_memoizer'\n \n class AdminDashboardData\n \n@@ -115,7 +116,11 @@ class AdminDashboardData\n   end\n \n   def failing_emails_check\n-    num_failed_jobs = Jobs.num_email_retry_jobs\n+    # Walking the whole Sidekiq retry set is slow on busy sites, and the\n+    # problems endpoint is polled by every open admin dashboard.\n+    num_failed_jobs = DistributedMemoizer.memoize(\"dash-data:num_email_retry_jobs\", 5.minutes.to_i) do\n+      Jobs.num_email_retry_jobs\n+    end\n     I18n.t('dashboard.failing_emails_warning', num_failed_jobs: num_failed_jobs) if num_failed_jobs > 0\n   end\n \n",
+   "goldenComments": "[{\"comment\": \"DistributedMemoizer.memoize (lib/distributed_memoizer.rb) only round-trips strings: on a miss it returns the block's raw value, but on a hit it returns `redis.get(redis_key)`, i.e. the Integer stored by setex comes back as a String. Its existing caller (PostsController#create) only memoizes strings, so it never noticed. In AdminDashboardData#failing_emails_check the first call returns an Integer and works, but every call during the next five minutes gets e.g. \\\"0\\\" and evaluates `\\\"0\\\" > 0`, raising ArgumentError (comparison of String with 0 failed), so /admin/dashboard/problems returns 500 for every admin until the key expires. The count needs `.to_i` (or the memoizer must not be used for non-string values).\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-grafana-satoken-error-reason",
+  "vars": {
+   "caseId": "xfile-grafana-satoken-error-reason",
+   "mode": "planner",
+   "prTitle": "satokengen: include the rejection reason in ErrInvalidApiKey",
+   "prBody": "When a service account token fails to decode we only log `invalid API key`, which makes it hard to tell a truncated token from a checksum mismatch. ErrInvalidApiKey now carries a short Reason (never the token itself) and includes it in Error(). Unwrap is unchanged, so errors.Is(err, apikeygen.ErrInvalidApiKey) keeps working.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-satoken-error-reason"
+   },
+   "injectPatch": "diff --git a/pkg/components/satokengen/errors.go b/pkg/components/satokengen/errors.go\nindex bd6eef8e..3071b8e8 100644\n--- a/pkg/components/satokengen/errors.go\n+++ b/pkg/components/satokengen/errors.go\n@@ -2,11 +2,17 @@ package satokengen\n \n import \"github.com/grafana/grafana/pkg/components/apikeygen\"\n \n+// ErrInvalidApiKey is returned when a service account token cannot be decoded.\n type ErrInvalidApiKey struct {\n+\t// Reason describes why the token was rejected. It never contains the token itself.\n+\tReason string\n }\n \n func (e *ErrInvalidApiKey) Error() string {\n-\treturn \"invalid API key\"\n+\tif e.Reason == \"\" {\n+\t\treturn \"invalid API key\"\n+\t}\n+\treturn \"invalid API key: \" + e.Reason\n }\n \n func (e *ErrInvalidApiKey) Unwrap() error {\ndiff --git a/pkg/components/satokengen/tokengen.go b/pkg/components/satokengen/tokengen.go\nindex 3e96e9f0..e1027e53 100644\n--- a/pkg/components/satokengen/tokengen.go\n+++ b/pkg/components/satokengen/tokengen.go\n@@ -72,12 +72,12 @@ func New(serviceID string) (KeyGenResult, error) {\n \n func Decode(keyString string) (*PrefixedKey, error) {\n \tif !strings.HasPrefix(keyString, GrafanaPrefix) {\n-\t\treturn nil, &ErrInvalidApiKey{}\n+\t\treturn nil, &ErrInvalidApiKey{Reason: \"missing prefix\"}\n \t}\n \n \tparts := strings.Split(keyString, \"_\")\n \tif len(parts) != 3 {\n-\t\treturn nil, &ErrInvalidApiKey{}\n+\t\treturn nil, &ErrInvalidApiKey{Reason: \"malformed token\"}\n \t}\n \n \tkey := &PrefixedKey{\n@@ -86,7 +86,7 @@ func Decode(keyString string) (*PrefixedKey, error) {\n \t\tChecksum:  parts[2],\n \t}\n \tif key.CalculateChecksum() != key.Checksum {\n-\t\treturn nil, &ErrInvalidApiKey{}\n+\t\treturn nil, &ErrInvalidApiKey{Reason: \"checksum mismatch\"}\n \t}\n \n \treturn key, nil\n",
+   "goldenComments": "[{\"comment\": \"Adding the Reason field makes satokengen.ErrInvalidApiKey a non-zero-size struct, which silently breaks the identity check in pkg/services/serviceaccounts/extsvcaccounts/service.go getExtSvcAccountToken: `errors.Is(err, &satokengen.ErrInvalidApiKey{})` only ever matched because pointers to a zero-size struct all point at the runtime zerobase and compare equal. Now the error returned by Decode (via GetExtSvcCredentials, line 478) and the freshly allocated target are different pointers, ErrInvalidApiKey has no Is method, and Unwrap yields apikeygen.ErrInvalidApiKey which is not the target either, so errors.Is returns false. The \\\"Invalid token found in store, recovering...\\\" path is never taken: a corrupted/invalid external service token in the secrets store is returned as a hard error, so the plugin's external service registration fails on every startup instead of the token being regenerated. The check should use errors.As or a sentinel, or ErrInvalidApiKey needs an Is method.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

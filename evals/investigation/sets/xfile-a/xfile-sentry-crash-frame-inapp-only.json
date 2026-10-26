@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-sentry-crash-frame-inapp-only",
+  "vars": {
+   "caseId": "xfile-sentry-crash-frame-inapp-only",
+   "mode": "planner",
+   "prTitle": "ref(stacktraces): only report in-app frames as the crash frame",
+   "prBody": "When an error has no in-app frame in its top stacktrace, `get_crash_frame_from_event_data` falls back to the top system/library frame, so issue locations end up pointing at framework internals (dispatch loops, `__call__` wrappers) that users can't act on. This makes it return only in-app frames and `None` otherwise, so the UI shows no location instead of a misleading one.",
+   "repositoryFullName": "getsentry/sentry",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "master",
+    "sha": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738"
+   },
+   "prHead": {
+    "ref": "eval/xfile-sentry-crash-frame-inapp-only"
+   },
+   "injectPatch": "diff --git a/src/sentry/stacktraces/processing.py b/src/sentry/stacktraces/processing.py\nindex 1029acb..d30ff12 100644\n--- a/src/sentry/stacktraces/processing.py\n+++ b/src/sentry/stacktraces/processing.py\n@@ -505,12 +505,13 @@ def get_crash_frame_from_event_data(data, frame_filter=None):\n     Return the highest (closest to the crash) in-app frame in the top stacktrace\n     which doesn't fail the given filter test.\n \n-    If no such frame is available, return the highest non-in-app frame which\n-    otherwise meets the same criteria.\n+    Frames from third-party/system code are never reported as the crash frame:\n+    pointing users at e.g. a framework's dispatch loop is more confusing than\n+    showing no location at all.\n \n     Return None if any of the following are true:\n-        - there are no frames\n-        - all frames fail the given filter test\n+        - there are no in-app frames\n+        - all in-app frames fail the given filter test\n         - we're unable to find any frames nested in either event.exception or\n           event.stacktrace, and there's anything other than exactly one thread\n           in the data\n@@ -524,20 +525,14 @@ def get_crash_frame_from_event_data(data, frame_filter=None):\n         if threads and len(threads) == 1:\n             frames = get_path(threads, 0, \"stacktrace\", \"frames\")\n \n-    default = None\n     for frame in reversed(frames or ()):\n-        if frame is None:\n+        if frame is None or not frame.get(\"in_app\"):\n             continue\n-        if frame_filter is not None:\n-            if not frame_filter(frame):\n-                continue\n-        if frame.get(\"in_app\"):\n-            return frame\n-        if default is None:\n-            default = frame\n+        if frame_filter is not None and not frame_filter(frame):\n+            continue\n+        return frame\n \n-    if default:\n-        return default\n+    return None\n \n \n def lookup_frame_cache(keys):\n",
+   "goldenComments": "[{\"comment\": \"get_crash_frame_from_event_data is not only used for the issue location: `get_fingerprint_value` in src/sentry/grouping/utils.py resolves the custom fingerprint / title-template variables `{{ function }}`, `{{ stack.abs_path }}`, `{{ stack.filename }}`, `{{ stack.module }}` and `{{ stack.package }}` through it. For any event whose top stacktrace has no in-app frame (common for native/mobile and for SDKs where in_app is not set), these variables now resolve to `<no-function>`, `<no-module>`, etc. instead of the crashing frame's values. Projects with fingerprint rules like `stack.function:... -> {{ function }}` therefore get their fingerprints changed for existing issues (regrouping into new issues) and, worse, all such events collapse into a single group with the same `<no-function>` fingerprint, merging unrelated crashes; `{{ function }}` in custom titles (expand_title_template) degrades the same way.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-grafana-authinfo-cache-ttl",
+  "vars": {
+   "caseId": "xfile-grafana-authinfo-cache-ttl",
+   "mode": "planner",
+   "prTitle": "Auth info: cache entries for 45 days",
+   "prBody": "Auth info is looked up on almost every request for OAuth users (token refresh checks) and changes rarely. All write paths already evict the cached entries, so raise the remote cache TTL from 60h to 45 days to cut user_auth reads.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-authinfo-cache-ttl"
+   },
+   "injectPatch": "diff --git a/pkg/services/login/authinfoimpl/service.go b/pkg/services/login/authinfoimpl/service.go\nindex 1d7736c2..5a3410c7 100644\n--- a/pkg/services/login/authinfoimpl/service.go\n+++ b/pkg/services/login/authinfoimpl/service.go\n@@ -23,7 +23,12 @@ type Service struct {\n }\n \n const remoteCachePrefix = \"authinfo-\"\n-const remoteCacheTTL = 60 * time.Hour\n+\n+// remoteCacheTTL is how long auth info is kept in the remote cache. Auth info rarely changes\n+// and every write path (SetAuthInfo, UpdateAuthInfo, DeleteUserAuthInfo) evicts the cached\n+// entries, so a long TTL is safe and avoids hitting the user_auth table on every OAuth\n+// token refresh check.\n+const remoteCacheTTL = 45 * 24 * time.Hour\n \n var errMissingParameters = errutil.NewBase(errutil.StatusBadRequest, \"auth-missing-parameters\", errutil.WithPublicMessage(\"Missing parameters for auth info\"))\n \n",
+   "goldenComments": "[{\"comment\": \"remotecache.CacheStorage.Set takes a time.Duration and the redis and database implementations honor any length, but memcachedStorage.Set (pkg/infra/remotecache/memcached_storage.go) passes the duration to memcached as a number of seconds in Item.Expiration. Memcached (and gomemcache's Item doc) interpret values above 30 days (2,592,000 s) as an absolute Unix timestamp; 45 days = 3,888,000 s is read as a date in February 1970, so every item expires immediately. On installations using `[remote_cache] type = memcached`, setAuthInfoInCache now writes entries that are never readable, GetAuthInfo always misses and the cache effectively stops working (every call goes to user_auth plus a useless memcached write). Either the TTL must stay below 30 days or memcachedStorage.Set must convert long durations to an absolute timestamp.\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

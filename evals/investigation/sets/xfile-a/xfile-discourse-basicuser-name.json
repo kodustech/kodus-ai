@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-discourse-basicuser-name",
+  "vars": {
+   "caseId": "xfile-discourse-basicuser-name",
+   "mode": "planner",
+   "prTitle": "Include the user's full name in BasicUserSerializer",
+   "prBody": "Avatar tooltips (posters, participants, featured users) only have the username to show. Add `name` to BasicUserSerializer so the client can show \"Full Name (username)\". The name is only sent when it adds information, i.e. it is present and not just the username in a different case.",
+   "repositoryFullName": "discourse/discourse",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-discourse-basicuser-name"
+   },
+   "injectPatch": "diff --git a/app/serializers/basic_user_serializer.rb b/app/serializers/basic_user_serializer.rb\nindex 1deede2..592a27a 100644\n--- a/app/serializers/basic_user_serializer.rb\n+++ b/app/serializers/basic_user_serializer.rb\n@@ -1,3 +1,9 @@\n class BasicUserSerializer < ApplicationSerializer\n-  attributes :id, :username, :avatar_template\n+  attributes :id, :username, :name, :avatar_template\n+\n+  # Only send the full name when it adds something over the username,\n+  # so avatar tooltips can show \"Full Name (username)\".\n+  def include_name?\n+    object.name.present? && object.name.downcase != object.username.downcase\n+  end\n end\n",
+   "goldenComments": "[{\"comment\": \"BasicUserSerializer's subclasses inherit the new `name` attribute and `include_name?`, but TopicPostCountSerializer (app/serializers/topic_post_count_serializer.rb) does not serialize a User: its object is a Hash `{user: ..., post_count: ...}` built in TopicViewSerializer#details, and it works only because it overrides id, username and avatar_template to read `object[:user]`. It does not override name/include_name?, so `object.name` is called on a Hash and raises NoMethodError while serializing participants, breaking every topic page that has posts (TopicsController#show renders details with participants). The subclass needs `def name; object[:user].name; end` and a matching include_name?, or the base contract must not assume `object` is a User. (Related: TopicPosterSerializer serializes users loaded by AvatarLookup with `select([:id, :email, :username])`, where `name` raises ActiveModel::MissingAttributeError on topic lists.)\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

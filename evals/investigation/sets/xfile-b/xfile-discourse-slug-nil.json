@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-discourse-slug-nil",
+  "vars": {
+   "caseId": "xfile-discourse-slug-nil",
+   "mode": "planner",
+   "prTitle": "Slug.for returns nil when no slug can be generated",
+   "prBody": "Slug.for used to hand back an empty string for inputs that produce no usable slug (blank strings, digit-only titles, titles that transliterate to nothing). Returning nil makes that case explicit, lets callers use `||` / `.presence` fallbacks, and avoids calling `parameterize` on blank input. Specs updated to assert nil.",
+   "repositoryFullName": "discourse/discourse",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-discourse-slug-nil"
+   },
+   "injectPatch": "diff --git a/lib/slug.rb b/lib/slug.rb\nindex d30833c..9039f1f 100644\n--- a/lib/slug.rb\n+++ b/lib/slug.rb\n@@ -2,10 +2,15 @@\n \n module Slug\n \n+  # Returns nil when no usable slug can be generated from the string\n+  # (empty after transliteration, or digits only, which would be\n+  # indistinguishable from ids).\n   def self.for(string)\n+    return nil if string.blank?\n+\n     slug = string.gsub(\"'\", \"\").parameterize\n     slug.gsub!(\"_\", \"-\")\n-    slug =~ /[^\\d]/ ? slug : '' # Reject slugs that only contain numbers, because they would be indistinguishable from id's.\n+    slug =~ /[^\\d]/ ? slug : nil\n   end\n \n end\ndiff --git a/spec/components/slug_spec.rb b/spec/components/slug_spec.rb\nindex 6491b30..52ecbf3 100644\n--- a/spec/components/slug_spec.rb\n+++ b/spec/components/slug_spec.rb\n@@ -44,13 +44,18 @@ describe Slug do\n   end\n \n   it \"doesn't generate slugs that are just numbers\" do\n-    Slug.for('123').should be_blank\n+    Slug.for('123').should be_nil\n   end\n \n   it \"doesn't generate slugs that are just numbers\" do\n     Slug.for('\u96fb\u8eca\u7537 2').should be_blank\n   end\n \n+  it \"returns nil for blank strings\" do\n+    Slug.for('').should be_nil\n+    Slug.for(nil).should be_nil\n+  end\n+\n   it \"doesn't keep single quotes within word\" do\n     Slug.for(\"Jeff hate's this\").should == \"jeff-hates-this\"\n   end\n",
+   "goldenComments": "[{\"comment\": \"Category#ensure_slug (app/models/category.rb:122-133) assigns `self.slug = Slug.for(name)` and returns early when the slug is blank, relying on Slug.for returning '' for names that cannot be slugged (digit-only names like \\\"2013\\\", or non-Latin names such as Chinese/Japanese that parameterize to nothing). With this change the slug becomes nil, and categories.slug is NOT NULL (db/migrate/20120823205956_add_slug_to_categories.rb), so creating or renaming such a category now fails with a PG NotNullViolation (500) instead of saving with an empty slug. The same nil also leaks into JSON slug fields consumed by the client (NotificationSerializer#slug, UserActionSerializer#slug), where the client builds URLs with the slug string.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

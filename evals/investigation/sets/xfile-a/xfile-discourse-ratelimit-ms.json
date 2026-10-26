@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-discourse-ratelimit-ms",
+  "vars": {
+   "caseId": "xfile-discourse-ratelimit-ms",
+   "mode": "planner",
+   "prTitle": "RateLimiter: track events with millisecond precision",
+   "prBody": "The rate limiter ring buffer stored `Time.now.to_i`, so several actions inside the same second all got the same timestamp and the sliding-window check could let a burst through or block one early around second boundaries. Store event timestamps in milliseconds and do the window comparison in milliseconds as well.",
+   "repositoryFullName": "discourse/discourse",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-discourse-ratelimit-ms"
+   },
+   "injectPatch": "diff --git a/lib/rate_limiter.rb b/lib/rate_limiter.rb\nindex f43d6e4..9bfa9aa 100644\n--- a/lib/rate_limiter.rb\n+++ b/lib/rate_limiter.rb\n@@ -28,14 +28,15 @@ class RateLimiter\n     return if rate_unlimited?\n \n     if is_under_limit?\n-      # simple ring buffer.\n-      $redis.lpush(@key, Time.now.to_i)\n+      # simple ring buffer. Events are stored in milliseconds so bursts\n+      # within the same second are still ordered correctly.\n+      $redis.lpush(@key, now_ms)\n       $redis.ltrim(@key, 0, @max - 1)\n \n       # let's ensure we expire this key at some point, otherwise we have leaks\n       $redis.expire(@key, @secs * 2)\n     else\n-      raise LimitExceeded.new(seconds_to_wait)\n+      raise LimitExceeded.new(time_to_wait)\n     end\n   end\n \n@@ -46,20 +47,28 @@ class RateLimiter\n \n   private\n \n-  def seconds_to_wait\n-    @secs - age_of_oldest\n+  def now_ms\n+    (Time.now.to_f * 1000).to_i\n+  end\n+\n+  def window_ms\n+    @secs * 1000\n+  end\n+\n+  def time_to_wait\n+    window_ms - age_of_oldest\n   end\n \n   def age_of_oldest\n-    # age of oldest event in buffer, in seconds\n-    Time.now.to_i - $redis.lrange(@key, -1, -1).first.to_i\n+    # age of oldest event in buffer, in milliseconds\n+    now_ms - $redis.lrange(@key, -1, -1).first.to_i\n   end\n \n   def is_under_limit?\n       # number of events in buffer less than max allowed? OR\n       ($redis.llen(@key) < @max) ||\n       # age bigger than silding window size?\n-      (age_of_oldest > @secs)\n+      (age_of_oldest > window_ms)\n   end\n \n   def rate_unlimited?\n",
+   "goldenComments": "[{\"comment\": \"RateLimiter#performed! now raises `LimitExceeded.new(time_to_wait)` where time_to_wait is in milliseconds, but the only consumer of LimitExceeded#available_in, the `rescue_from RateLimiter::LimitExceeded` handler in app/controllers/application_controller.rb (lines 60-72), still treats it as seconds: it compares against `1.minute.to_i` / `1.hour.to_i` and divides by them. A 30-second wait (30000) is rendered as \\\"8 hours\\\", and a 1-day edit limit (EditRateLimiter, 86_400_000 ms) as 24000 hours, so every 429 message shown to users is wrong by a factor of 1000. Either convert back to seconds when raising or update the handler.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

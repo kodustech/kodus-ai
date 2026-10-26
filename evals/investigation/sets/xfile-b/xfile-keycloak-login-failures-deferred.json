@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-keycloak-login-failures-deferred",
+  "vars": {
+   "caseId": "xfile-keycloak-login-failures-deferred",
+   "mode": "planner",
+   "prTitle": "LoginFailuresUpdater: record changes instead of mutating the read entity",
+   "prBody": "LoginFailuresUpdater applied every change both to the entity it read from the remote cache and, on commit, to the cached entity in apply(). Keep the read entity untouched and only record the changes; apply() already replays them on commit. Renamed addAndApplyChange to recordChange to reflect that.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-login-failures-deferred"
+   },
+   "injectPatch": "diff --git a/model/infinispan/src/main/java/org/keycloak/models/sessions/infinispan/changes/remote/updater/loginfailures/LoginFailuresUpdater.java b/model/infinispan/src/main/java/org/keycloak/models/sessions/infinispan/changes/remote/updater/loginfailures/LoginFailuresUpdater.java\nindex 2ad41ab..741157d 100644\n--- a/model/infinispan/src/main/java/org/keycloak/models/sessions/infinispan/changes/remote/updater/loginfailures/LoginFailuresUpdater.java\n+++ b/model/infinispan/src/main/java/org/keycloak/models/sessions/infinispan/changes/remote/updater/loginfailures/LoginFailuresUpdater.java\n@@ -118,32 +118,32 @@ public class LoginFailuresUpdater extends BaseUpdater<LoginFailureKey, LoginFail\n     @Override\n     public void clearFailures() {\n         changes.clear();\n-        addAndApplyChange(CLEAR);\n+        recordChange(CLEAR);\n     }\n \n     @Override\n     public void setFailedLoginNotBefore(int notBefore) {\n-        addAndApplyChange(e -> e.setFailedLoginNotBefore(notBefore));\n+        recordChange(e -> e.setFailedLoginNotBefore(notBefore));\n     }\n \n     @Override\n     public void incrementFailures() {\n-        addAndApplyChange(INCREMENT_FAILURES);\n+        recordChange(INCREMENT_FAILURES);\n     }\n \n     @Override\n     public void incrementTemporaryLockouts() {\n-        addAndApplyChange(INCREMENT_LOCK_OUTS);\n+        recordChange(INCREMENT_LOCK_OUTS);\n     }\n \n     @Override\n     public void setLastFailure(long lastFailure) {\n-        addAndApplyChange(e -> e.setLastFailure(lastFailure));\n+        recordChange(e -> e.setLastFailure(lastFailure));\n     }\n \n     @Override\n     public void setLastIPFailure(String ip) {\n-        addAndApplyChange(e -> e.setLastIPFailure(ip));\n+        recordChange(e -> e.setLastIPFailure(ip));\n     }\n \n     @Override\n@@ -151,9 +151,10 @@ public class LoginFailuresUpdater extends BaseUpdater<LoginFailureKey, LoginFail\n         return changes.isEmpty();\n     }\n \n-    private void addAndApplyChange(Consumer<LoginFailureEntity> change) {\n+    private void recordChange(Consumer<LoginFailureEntity> change) {\n+        // The entity read from the cache is kept as-is (it may be shared with the near-cache / other readers).\n+        // Changes are only recorded here and replayed on the cached entity in apply() when the transaction commits.\n         changes.add(change);\n-        change.accept(getValue());\n     }\n \n     private static final Consumer<LoginFailureEntity> CLEAR = LoginFailureEntity::clearFailures;\n",
+   "goldenComments": "[{\"comment\": \"LoginFailuresUpdater (the remote-cache UserLoginFailureModel implementation) no longer applies changes to getValue(). Two pieces of code outside the diff depend on getValue() being up to date: (1) RemoteChangeLogTransaction commits created entries with putIfAbsentAsync(key, updater.getValue(), ...) and read entries with replaceWithVersionAsync(key, updater.getValue(), version, ...) (lines 243/248); apply() is only used on the compute fallback. So a new login-failure record is stored with zero failures and an updated one is replaced with its unchanged value: increments, lockouts and notBefore are silently lost. (2) DefaultBruteForceProtector.failure() calls incrementFailures() and immediately reads getNumFailures()/getNumTemporaryLockouts() to compute waitSeconds and permanent lockout, which the embedded implementation (UserLoginFailureAdapter via InfinispanChangelogBasedTransaction.addTask, which runs the update immediately 'so reader in same transaction can see it') guarantees. Net effect: with the remote/multi-site login-failure provider, brute-force protection never locks users out.\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

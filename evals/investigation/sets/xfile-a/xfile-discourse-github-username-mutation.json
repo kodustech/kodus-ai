@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-discourse-github-username-mutation",
+  "vars": {
+   "caseId": "xfile-discourse-github-username-mutation",
+   "mode": "planner",
+   "prTitle": "Suggest a valid username for GitHub and Twitter signups",
+   "prBody": "GitHub logins can contain dashes (e.g. `john-doe`) and Twitter handles can start with underscores, neither of which are valid Discourse usernames, so new users coming from these providers were pre-filled with a username the signup form then rejects (or one that is already taken). Run the nickname through UserNameSuggester, as we already do for Facebook, OpenID and Persona signups, so the form starts with a valid, available username.",
+   "repositoryFullName": "discourse/discourse",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-discourse-github-username-mutation"
+   },
+   "injectPatch": "diff --git a/app/controllers/users/omniauth_callbacks_controller.rb b/app/controllers/users/omniauth_callbacks_controller.rb\nindex 168e1bc..d40f928 100644\n--- a/app/controllers/users/omniauth_callbacks_controller.rb\n+++ b/app/controllers/users/omniauth_callbacks_controller.rb\n@@ -57,7 +57,7 @@ class Users::OmniauthCallbacksController < ApplicationController\n     user_info = TwitterUserInfo.where(twitter_user_id: twitter_user_id).first\n \n     @data = {\n-      username: screen_name,\n+      username: UserNameSuggester.suggest(screen_name),\n       auth_provider: \"Twitter\"\n     }\n \n@@ -246,8 +246,10 @@ class Users::OmniauthCallbacksController < ApplicationController\n \n     user_info = GithubUserInfo.where(github_user_id: github_user_id).first\n \n+    # GitHub logins may contain dashes (and other characters) that aren't\n+    # valid in Discourse usernames, so suggest a valid, available one.\n     @data = {\n-      username: screen_name,\n+      username: UserNameSuggester.suggest(screen_name),\n       auth_provider: \"Github\"\n     }\n \n",
+   "goldenComments": "[{\"comment\": \"UserNameSuggester.suggest mutates its argument in place: for a non-email input parse_name_from_email returns the same String object and find_available_username_based_on calls sanitize_username!, which runs `name.gsub!` twice (lib/user_name_suggester.rb:35-37). In create_or_sign_on_user_using_github (and likewise create_or_sign_on_user_using_twitter) that object is `screen_name`, which was already stored in `session[:authentication][:github_screen_name]` a few lines earlier and is then passed to process_user_info, which sets `@data[:name] = screen_name`. After this change a GitHub login like `john-doe` is rewritten to `john_doe` everywhere: the sign-up form's name field shows the mangled value, and UsersController#create_third_party_auth_records persists `GithubUserInfo.screen_name` from the session as `john_doe`, i.e. the wrong GitHub handle. Twitter handles with leading underscores (`_why` -> `why`) are corrupted the same way in TwitterUserInfo.screen_name. Pass a copy (`screen_name.dup`) to the suggester.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

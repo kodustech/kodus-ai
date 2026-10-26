@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-calcom-workflow-sms-whatsapp",
+  "vars": {
+   "caseId": "xfile-calcom-workflow-sms-whatsapp",
+   "mode": "planner",
+   "prTitle": "refactor(workflows): treat WhatsApp steps as text-message actions",
+   "prBody": "WhatsApp workflow steps are sent through the same Twilio messaging service as SMS: they share the sender ID, phone number verification and the SMS rate limit. This makes `isSMSAction` cover both SMS and WhatsApp actions so the text-message handling is driven by a single predicate, and `isSMSOrWhatsappAction` now just delegates to it.",
+   "repositoryFullName": "calcom/cal.com",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "b004587262e8221083bafbe9a0c515e7becaa7b3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-calcom-workflow-sms-whatsapp"
+   },
+   "injectPatch": "diff --git a/packages/features/ee/workflows/lib/actionHelperFunctions.ts b/packages/features/ee/workflows/lib/actionHelperFunctions.ts\nindex 18b126b..61a994d 100644\n--- a/packages/features/ee/workflows/lib/actionHelperFunctions.ts\n+++ b/packages/features/ee/workflows/lib/actionHelperFunctions.ts\n@@ -18,16 +18,24 @@ export function shouldScheduleSMSReminder(action: WorkflowActions) {\n   return action === WorkflowActions.SMS_ATTENDEE || action === WorkflowActions.SMS_NUMBER;\n }\n \n-export function isSMSAction(action: WorkflowActions) {\n-  return action === WorkflowActions.SMS_ATTENDEE || action === WorkflowActions.SMS_NUMBER;\n-}\n-\n export function isWhatsappAction(action: WorkflowActions) {\n   return action === WorkflowActions.WHATSAPP_NUMBER || action === WorkflowActions.WHATSAPP_ATTENDEE;\n }\n \n+/**\n+ * Text-message actions. WhatsApp messages go out through the same Twilio messaging\n+ * service as SMS (sender ID, phone verification, rate limiting), so they count here too.\n+ */\n+export function isSMSAction(action: WorkflowActions) {\n+  return (\n+    action === WorkflowActions.SMS_ATTENDEE ||\n+    action === WorkflowActions.SMS_NUMBER ||\n+    isWhatsappAction(action)\n+  );\n+}\n+\n export function isSMSOrWhatsappAction(action: WorkflowActions) {\n-  return isSMSAction(action) || isWhatsappAction(action);\n+  return isSMSAction(action);\n }\n \n export function isAttendeeAction(action: WorkflowActions) {\n",
+   "goldenComments": "[{\"comment\": \"isSMSAction now returns true for WHATSAPP_NUMBER and WHATSAPP_ATTENDEE, but its callers use it as an exclusive SMS branch placed before the WhatsApp branch. In packages/features/ee/workflows/lib/reminders/reminderScheduler.ts processWorkflowStep, `if (isSMSAction(step.action))` (line 55) is checked before `else if (isWhatsappAction(step.action))` (line 117), so every WhatsApp step is now routed to scheduleSMSReminder: WhatsApp messages are sent as plain SMS with the SMS template via twilio.sendSMS, the WhatsApp template/scheduleWhatsappReminder path becomes dead code, and for WHATSAPP_ATTENDEE the recipient is computed as `step.action === SMS_ATTENDEE ? smsReminderNumber : step.sendTo` (line 56), i.e. step.sendTo (empty for attendee actions), so attendees receive nothing. The same ordering exists in WorkflowStepContainer.tsx (line 132 and 839), which now fills WhatsApp steps with the SMS reminder template.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]

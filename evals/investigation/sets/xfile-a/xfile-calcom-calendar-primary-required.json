@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-calcom-calendar-primary-required",
+  "vars": {
+   "caseId": "xfile-calcom-calendar-primary-required",
+   "mode": "planner",
+   "prTitle": "fix(calendars): don't guess the primary calendar of a connection",
+   "prBody": "`getConnectedCalendars` fell back to the first calendar of a connection when the provider didn't flag one as primary. That calendar is often a shared or secondary one, yet we showed it as the account's primary calendar and copied its email into `destinationCalendar.primaryEmail`. We now only use the calendar the provider marks as primary, and otherwise return the existing \"No primary calendar found\" error for the connection.",
+   "repositoryFullName": "calcom/cal.com",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "b004587262e8221083bafbe9a0c515e7becaa7b3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-calcom-calendar-primary-required"
+   },
+   "injectPatch": "diff --git a/packages/core/CalendarManager.ts b/packages/core/CalendarManager.ts\nindex 6e7c2f5..ca54a0c 100644\n--- a/packages/core/CalendarManager.ts\n+++ b/packages/core/CalendarManager.ts\n@@ -71,7 +71,10 @@ export const getConnectedCalendars = async (\n           }),\n           [\"primary\"]\n         );\n-        const primary = calendars.find((item) => item.primary) ?? calendars.find((cal) => cal !== undefined);\n+        // Only trust the provider's own notion of a primary calendar. Falling back to the first\n+        // calendar in the list made us report an arbitrary (often shared) calendar as the\n+        // account's primary one and leak its email into destinationCalendar.primaryEmail.\n+        const primary = calendars.find((item) => item.primary);\n         if (!primary) {\n           return {\n             integration,\n",
+   "goldenComments": "[{\"comment\": \"getConnectedCalendars now requires some IntegrationCalendar with `primary: true`, but several Calendar implementations never report one. The CalDAV base class used by Apple and CalDAV (packages/lib/CalendarService.ts listCalendars, line 526) sets `primary` only when it is given an event whose destinationCalendar matches, and getConnectedCalendars calls `calendar.listCalendars()` with no event (packages/core/CalendarManager.ts:60), so every calendar comes back `primary: false`; the ICS feed implementation (packages/app-store/ics-feedcalendar/lib/CalendarService.ts listCalendars, line 277) doesn't set `primary` at all. Every Apple/CalDAV/ICS connection is now returned as an error with no `calendars`, so users can no longer pick those calendars for conflict checking, and setDestinationCalendar.handler.ts (allCals is built from `cal.calendars ?? []`) throws `Could not find calendar` when they try to make one the destination calendar.\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

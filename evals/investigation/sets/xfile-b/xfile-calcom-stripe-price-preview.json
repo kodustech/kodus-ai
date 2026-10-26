@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-calcom-stripe-price-preview",
+  "vars": {
+   "caseId": "xfile-calcom-stripe-price-preview",
+   "mode": "planner",
+   "prTitle": "feat(stripe): show formatted price preview in event type payment settings",
+   "prBody": "The price field in the Stripe event type settings is a bare number input, so it is not obvious how the amount will be shown to bookers (currency symbol, separators, locale). This adds a small preview under the input using the shared `formatPrice` helper, the same one used on the booking page. The presentable amount is computed once and reused for the input value and the preview.",
+   "repositoryFullName": "calcom/cal.com",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "b004587262e8221083bafbe9a0c515e7becaa7b3"
+   },
+   "prHead": {
+    "ref": "eval/xfile-calcom-stripe-price-preview"
+   },
+   "injectPatch": "diff --git a/packages/app-store/stripepayment/components/EventTypeAppSettingsInterface.tsx b/packages/app-store/stripepayment/components/EventTypeAppSettingsInterface.tsx\nindex 0567707..ad25cb8 100644\n--- a/packages/app-store/stripepayment/components/EventTypeAppSettingsInterface.tsx\n+++ b/packages/app-store/stripepayment/components/EventTypeAppSettingsInterface.tsx\n@@ -2,6 +2,7 @@ import { useState, useEffect } from \"react\";\n \n import type { EventTypeAppSettingsComponent } from \"@calcom/app-store/types\";\n import { useLocale } from \"@calcom/lib/hooks/useLocale\";\n+import { formatPrice } from \"@calcom/lib/price\";\n import { Alert, Select, TextField } from \"@calcom/ui\";\n \n import { paymentOptions } from \"../lib/constants\";\n@@ -30,6 +31,7 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({\n   const paymentOption = getAppData(\"paymentOption\");\n   const paymentOptionSelectValue = paymentOptions.find((option) => paymentOption === option.value);\n   const requirePayment = getAppData(\"enabled\");\n+  const displayPrice = price > 0 ? convertFromSmallestToPresentableCurrencyUnit(price, currency) : undefined;\n \n   const { t } = useLocale();\n   const recurringEventDefined = eventType.recurringEvent?.count !== undefined;\n@@ -82,9 +84,14 @@ const EventTypeAppSettingsInterface: EventTypeAppSettingsComponent = ({\n               onChange={(e) => {\n                 setAppData(\"price\", convertToSmallestCurrencyUnit(Number(e.target.value), currency));\n               }}\n-              value={price > 0 ? convertFromSmallestToPresentableCurrencyUnit(price, currency) : undefined}\n+              value={displayPrice}\n             />\n           </div>\n+          {displayPrice !== undefined && (\n+            <p className=\"text-subtle mt-1 text-sm\" data-testid=\"stripe-price-preview\">\n+              {formatPrice(displayPrice, currency)}\n+            </p>\n+          )}\n           <div className=\"mt-5 w-60\">\n             <label className=\"text-default mb-1 block text-sm font-medium\" htmlFor=\"currency\">\n               {t(\"currency\")}\n",
+   "goldenComments": "[{\"comment\": \"The preview passes `displayPrice`, which is already converted to the presentable unit by convertFromSmallestToPresentableCurrencyUnit, into formatPrice. But formatPrice in packages/lib/price.ts (line 12) expects the amount in the smallest currency unit and itself calls convertFromSmallestToPresentableCurrencyUnit, which divides by 100 for every non-zero-decimal currency (packages/app-store/stripepayment/lib/currencyConversions.ts:36). The amount is therefore divided twice: a $50.00 event shows a preview of \\\"$0.50\\\", misleading organizers about what bookers will be charged. formatPrice should receive the raw `price` (smallest unit), not `displayPrice`.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

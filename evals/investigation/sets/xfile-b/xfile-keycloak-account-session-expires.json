@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLEES): xfile-keycloak-account-session-expires",
+  "vars": {
+   "caseId": "xfile-keycloak-account-session-expires",
+   "mode": "planner",
+   "prTitle": "Account sessions: compute expiration with SessionExpirationUtils",
+   "prBody": "The account console computed the session \"expires\" value by hand from ssoSessionMaxLifespan / ssoSessionMaxLifespanRememberMe, which ignores realm defaults when the lifespan is unset, the max() semantics for remember-me and offline sessions. Use the shared SessionExpirationUtils helper that the session validity checks already use.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-account-session-expires"
+   },
+   "injectPatch": "diff --git a/services/src/main/java/org/keycloak/services/resources/account/SessionResource.java b/services/src/main/java/org/keycloak/services/resources/account/SessionResource.java\nindex f520302..b04f4a0 100755\n--- a/services/src/main/java/org/keycloak/services/resources/account/SessionResource.java\n+++ b/services/src/main/java/org/keycloak/services/resources/account/SessionResource.java\n@@ -39,6 +39,7 @@ import org.keycloak.models.KeycloakSession;\n import org.keycloak.models.RealmModel;\n import org.keycloak.models.UserModel;\n import org.keycloak.models.UserSessionModel;\n+import org.keycloak.models.utils.SessionExpirationUtils;\n import org.keycloak.representations.account.ClientRepresentation;\n import org.keycloak.representations.account.DeviceRepresentation;\n import org.keycloak.representations.account.SessionRepresentation;\n@@ -158,10 +159,11 @@ public class SessionResource {\n         sessionRep.setIpAddress(s.getIpAddress());\n         sessionRep.setStarted(s.getStarted());\n         sessionRep.setLastAccess(s.getLastSessionRefresh());\n-        int maxLifespan = s.isRememberMe() && realm.getSsoSessionMaxLifespanRememberMe() > 0\n-                ? realm.getSsoSessionMaxLifespanRememberMe() : realm.getSsoSessionMaxLifespan();\n-        int expires = s.getStarted() + maxLifespan;\n-        sessionRep.setExpires(expires);\n+        // use the same calculation as the session expiration checks, so remember-me, offline sessions and\n+        // realm defaults are taken into account\n+        long expires = SessionExpirationUtils.calculateUserSessionMaxLifespanTimestamp(s.isOffline(), s.isRememberMe(),\n+                s.getStarted(), realm);\n+        sessionRep.setExpires((int) expires);\n         sessionRep.setBrowser(device.getBrowser());\n \n         if (isCurrentSession(s)) {\n",
+   "goldenComments": "[{\"comment\": \"SessionResource.createSessionRepresentation now calls SessionExpirationUtils.calculateUserSessionMaxLifespanTimestamp(offline, rememberMe, s.getStarted(), realm), but that helper works in milliseconds: it adds TimeUnit.SECONDS.toMillis(lifespan) to the 'created' argument and returns an epoch-millis timestamp (see AuthenticationManager.isSessionValid, which passes TimeUnit.SECONDS.toMillis(userSession.getStarted()) and compares with Time.currentTimeMillis()). Passing getStarted() in seconds and casting to int yields started + lifespan*1000, i.e. an expiration ~1000x the lifespan in the future (10h becomes ~416 days); with a long remember-me lifespan (e.g. 30 days) the sum exceeds Integer.MAX_VALUE and the (int) cast produces a negative value. It also returns -1 for offline sessions without max lifespan. The account REST API / console shows wrong expiry times.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLEES"
+  },
+  "assert": []
+ }
+]

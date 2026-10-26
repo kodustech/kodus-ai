@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (IMPL): xfile-keycloak-kc-action-max-age",
+  "vars": {
+   "caseId": "xfile-keycloak-kc-action-max-age",
+   "mode": "planner",
+   "prTitle": "Treat non-positive RequiredActionProvider max auth age as unset",
+   "prBody": "Custom required actions that read their max auth age from an empty/unset config ended up returning 0, which forces a re-authentication on every application-initiated action. Clarify the RequiredActionProvider#getMaxAuthAge contract (seconds; <= 0 means not defined by the action) and fall back to the default KC_ACTION_MAX_AGE in OIDCLoginProtocol.",
+   "repositoryFullName": "keycloak/keycloak",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "10aca5552314d6e5c9226f3c6d0107861c38c693"
+   },
+   "prHead": {
+    "ref": "eval/xfile-keycloak-kc-action-max-age"
+   },
+   "injectPatch": "diff --git a/server-spi-private/src/main/java/org/keycloak/authentication/RequiredActionProvider.java b/server-spi-private/src/main/java/org/keycloak/authentication/RequiredActionProvider.java\nindex 5ea665a..38ea772 100755\n--- a/server-spi-private/src/main/java/org/keycloak/authentication/RequiredActionProvider.java\n+++ b/server-spi-private/src/main/java/org/keycloak/authentication/RequiredActionProvider.java\n@@ -78,7 +78,9 @@ public interface RequiredActionProvider extends Provider {\n     void processAction(RequiredActionContext context);\n \n     /**\n-     * Defines the max time after a user login, after which re-authentication is requested for an AIA. 0 means that re-authentication is always requested.\n+     * Defines the max time (in seconds) after a user login, after which re-authentication is requested for an AIA.\n+     * A value lower than or equal to 0 means that the action does not define its own max age and the default\n+     * {@link Constants#KC_ACTION_MAX_AGE} is used.\n      *\n      */\n     default int getMaxAuthAge() { return Constants.KC_ACTION_MAX_AGE; }\ndiff --git a/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocol.java b/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocol.java\nindex 37e2407..8c29538 100755\n--- a/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocol.java\n+++ b/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocol.java\n@@ -516,6 +516,10 @@ public class OIDCLoginProtocol implements LoginProtocol {\n             String authTime = userSession.getNote(AuthenticationManager.AUTH_TIME);\n             int authTimeInt = authTime == null ? 0 : Integer.parseInt(authTime);\n             int maxAgeInt = requiredActionProvider.getMaxAuthAge();\n+            if (maxAgeInt <= 0) {\n+                // not configured by the action (e.g. empty config value), fallback to the default max age\n+                maxAgeInt = Constants.KC_ACTION_MAX_AGE;\n+            }\n             return authTimeInt + maxAgeInt < Time.currentTime();\n         } else {\n             return false;\n",
+   "goldenComments": "[{\"comment\": \"The RequiredActionProvider#getMaxAuthAge contract previously said '0 means that re-authentication is always requested', and OIDCLoginProtocol.isReAuthRequiredForKcAction now maps any value <= 0 to Constants.KC_ACTION_MAX_AGE (300s). Built-in implementations rely on 0 meaning 'always re-authenticate': DeleteAccount.getMaxAuthAge() returns 0 so that kc_action=delete_account always requires a fresh login; after this change a user who logged in within the last 5 minutes (or an attacker with a briefly unattended session) can delete the account without re-authenticating. UpdatePassword.getMaxAuthAge() also returns a configured maxAuthAge of 0 from the password policy / action config as 'always', which is now silently turned into 300s. This is a security regression in the AIA re-auth check.\", \"severity\": \"High\"}]",
+   "xfileKind": "IMPL"
+  },
+  "assert": []
+ }
+]

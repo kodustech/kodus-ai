@@ -1,0 +1,24 @@
+[
+ {
+  "description": "injected cross-file bug (CALLERS): xfile-grafana-ipv6-bracketed-host",
+  "vars": {
+   "caseId": "xfile-grafana-ipv6-bracketed-host",
+   "mode": "planner",
+   "prTitle": "util: keep IPv6 brackets in SplitHostPortDefault and add NetworkAddress.String",
+   "prBody": "SplitHostPortDefault strips the square brackets from IPv6 literals, so `addr.Host + \":\" + addr.Port` produces an invalid address like `::1:5432`. This keeps IPv6 hosts bracketed (`[::1]`) and adds a `NetworkAddress.String()` helper that returns a dialable `host:port`. Tests updated accordingly.",
+   "repositoryFullName": "grafana/grafana",
+   "reviewMode": "normal",
+   "prBase": {
+    "ref": "main",
+    "sha": "d9a8253640464014aa3662c91131278990cfb828"
+   },
+   "prHead": {
+    "ref": "eval/xfile-grafana-ipv6-bracketed-host"
+   },
+   "injectPatch": "diff --git a/pkg/util/ip_address.go b/pkg/util/ip_address.go\nindex 00aa02b3..cf05b744 100644\n--- a/pkg/util/ip_address.go\n+++ b/pkg/util/ip_address.go\n@@ -11,6 +11,11 @@ type NetworkAddress struct {\n \tPort string\n }\n \n+// String returns the address in host:port form.\n+func (a NetworkAddress) String() string {\n+\treturn a.Host + \":\" + a.Port\n+}\n+\n // SplitHostPortDefault splits ip address/hostname string by host and port. Defaults used if no match found\n func SplitHostPortDefault(input, defaultHost, defaultPort string) (NetworkAddress, error) {\n \taddr := NetworkAddress{\n@@ -45,6 +50,11 @@ func SplitHostPortDefault(input, defaultHost, defaultPort string) (NetworkAddres\n \t}\n \n \tif len(host) > 0 {\n+\t\t// Keep IPv6 literals bracketed so that the host can be safely\n+\t\t// combined with a port again (see NetworkAddress.String).\n+\t\tif strings.Contains(host, \":\") {\n+\t\t\thost = \"[\" + host + \"]\"\n+\t\t}\n \t\taddr.Host = host\n \t}\n \tif len(port) > 0 {\ndiff --git a/pkg/util/ip_address_test.go b/pkg/util/ip_address_test.go\nindex 6325fb1d..f567758e 100644\n--- a/pkg/util/ip_address_test.go\n+++ b/pkg/util/ip_address_test.go\n@@ -17,8 +17,8 @@ func TestSplitHostPortDefault_Valid(t *testing.T) {\n \t}{\n \t\t{input: \"192.168.0.140:456\", defaultHost: \"\", defaultPort: \"\", host: \"192.168.0.140\", port: \"456\"},\n \t\t{input: \"192.168.0.140\", defaultHost: \"\", defaultPort: \"123\", host: \"192.168.0.140\", port: \"123\"},\n-\t\t{input: \"[::1]:456\", defaultHost: \"\", defaultPort: \"\", host: \"::1\", port: \"456\"},\n-\t\t{input: \"[::1]\", defaultHost: \"\", defaultPort: \"123\", host: \"::1\", port: \"123\"},\n+\t\t{input: \"[::1]:456\", defaultHost: \"\", defaultPort: \"\", host: \"[::1]\", port: \"456\"},\n+\t\t{input: \"[::1]\", defaultHost: \"\", defaultPort: \"123\", host: \"[::1]\", port: \"123\"},\n \t\t{input: \":456\", defaultHost: \"1.2.3.4\", defaultPort: \"\", host: \"1.2.3.4\", port: \"456\"},\n \t\t{input: \"xyz.rds.amazonaws.com\", defaultHost: \"\", defaultPort: \"123\", host: \"xyz.rds.amazonaws.com\", port: \"123\"},\n \t\t{input: \"xyz.rds.amazonaws.com:123\", defaultHost: \"\", defaultPort: \"\", host: \"xyz.rds.amazonaws.com\", port: \"123\"},\n@@ -32,3 +32,13 @@ func TestSplitHostPortDefault_Valid(t *testing.T) {\n \t\tassert.Equal(t, testcase.port, addr.Port)\n \t}\n }\n+\n+func TestNetworkAddress_String(t *testing.T) {\n+\taddr, err := SplitHostPortDefault(\"[::1]\", \"\", \"5432\")\n+\tassert.NoError(t, err)\n+\tassert.Equal(t, \"[::1]:5432\", addr.String())\n+\n+\taddr, err = SplitHostPortDefault(\"db.local\", \"\", \"5432\")\n+\tassert.NoError(t, err)\n+\tassert.Equal(t, \"db.local:5432\", addr.String())\n+}\n",
+   "goldenComments": "[{\"comment\": \"SplitHostPortDefault now returns IPv6 hosts as \\\"[::1]\\\" instead of \\\"::1\\\", but every existing caller treats Host as a bare hostname. In pkg/middleware/csrf/csrf.go (CSRF.check) the request host from SplitHostPortDefault(r.Host, ...) is compared with originURL.Hostname(), which strips brackets (\\\"::1\\\"), so hostnameMatches is false and every non-GET request to a Grafana served on an IPv6 literal is rejected with 403 \\\"origin not allowed\\\" (same for the custom-host header comparison at line 118). In pkg/services/sqlstore/database_config.go (buildConnectionString, Postgres branch) addr.Host is written as `host=[::1]` into the libpq DSN; lib/pq then calls net.JoinHostPort(\\\"[::1]\\\", \\\"5432\\\") which yields \\\"[[::1]]:5432\\\" and the connection fails, so Grafana cannot start against a Postgres configured with an IPv6 host. The bracketing should live only in String()/JoinHostPort, not in Host.\", \"severity\": \"High\"}]",
+   "xfileKind": "CALLERS"
+  },
+  "assert": []
+ }
+]
