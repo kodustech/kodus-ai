@@ -42,10 +42,8 @@ function installBeforeExitFlush(): void {
 
 /**
  * Build (and cache) the `LangfuseSpanProcessor` without registering it on a
- * TracerProvider. The processor must be wired into the global provider by
- * the caller — either via `Sentry.init({ openTelemetrySpanProcessors })`
- * when Sentry's OTel setup runs, or via `registerLangfuseStandalone()`
- * when it doesn't.
+ * TracerProvider. `registerLangfuseStandalone()` wires it into the global
+ * provider; Sentry 11 runs with its OTel setup off and never claims it.
  *
  * Why split create from register: `@opentelemetry/sdk-trace-base@2.x`
  * removed `addSpanProcessor` from `BasicTracerProvider`, so processors can
@@ -74,12 +72,10 @@ export function createLangfuseSpanProcessor(): LangfuseSpanProcessor | null {
 
 /**
  * Register the Langfuse span processor on a dedicated `NodeTracerProvider`
- * and install it as the global provider. Use only when Sentry's OTel setup
- * did NOT run (no DSN configured) — otherwise the second
- * `trace.setGlobalTracerProvider` call is silently rejected by the OTel
- * ProxyTracerProvider and spans never reach Langfuse. When Sentry runs,
- * pass the processor to `Sentry.init({ openTelemetrySpanProcessors })`
- * instead so Sentry's own provider fans spans out to both.
+ * and install it as the global provider. Sentry runs with
+ * `enableOpenTelemetrySetup: false`, so this is the only provider; if a second
+ * `trace.setGlobalTracerProvider` ran first, OTel would silently reject this
+ * one and spans would never reach Langfuse.
  *
  * Idempotent.
  */

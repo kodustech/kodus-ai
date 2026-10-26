@@ -41,7 +41,7 @@ export const googleGeminiModule: ProviderModule = {
         return {
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
-            structuredOutput: 'json_schema', // Gemini responseSchema
+            structuredOutput: 'json_schema', // Gemini responseJsonSchema
             toolCalling: 'native',
             usageGranularity: 'reasoning_split',
             streaming: true,
@@ -101,7 +101,7 @@ export const googleGeminiModule: ProviderModule = {
     /** Gemini accepts a sampling temperature on every model, thinking or not —
      *  stated here so no caller has to fall back to guessing. */
     // The WIRE answer: Gemini carries the schema natively in
-    // `generationConfig.responseSchema`.
+    // `generationConfig.responseJsonSchema`.
     structuredOutputPolicy(): StructuredOutputMode {
         return 'json_schema';
     },

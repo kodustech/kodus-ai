@@ -266,8 +266,10 @@ describe('SandboxLeaseManager', () => {
 
         // Joiner (second acquire) connected to existing sandbox via Sandbox.connect
         // (creator path — without cloneParams — uses null sandbox for initial CREATING→READY)
+        // The resume timeout is explicit: e2b >= 2.51 sends none by default.
         expect(Sandbox.connect).toHaveBeenCalledWith('e2b-poll-sandbox', {
             apiKey: 'test-e2b-key',
+            timeoutMs: 300_000,
         });
 
         // Key invariant: createSandboxWithRepo NOT called without cloneParams
@@ -671,6 +673,7 @@ describe('SandboxLeaseManager', () => {
         // Joiner connects to the still-running sandbox
         expect(Sandbox.connect).toHaveBeenCalledWith('warm-sandbox', {
             apiKey: 'test-e2b-key',
+            timeoutMs: 300_000,
         });
     });
 
@@ -986,6 +989,7 @@ describe('SandboxLeaseManager', () => {
             const { sandbox } = await manager.acquire(prKey, 'conversation');
             expect(Sandbox.connect).toHaveBeenCalledWith('e2b-reused', {
                 apiKey: 'test-e2b-key',
+                timeoutMs: 300_000,
             });
             expect(sandbox.privilegesDropped).toBe(expected);
         },

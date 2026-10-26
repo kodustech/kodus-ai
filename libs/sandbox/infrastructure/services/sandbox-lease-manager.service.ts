@@ -25,6 +25,7 @@ import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import {
     buildE2BRemoteCommands,
     runE2BCommand,
+    SANDBOX_CONNECT_TIMEOUT_MS,
     syncE2BSandboxRepo,
 } from '../providers/e2b-sandbox.service';
 import {
@@ -845,7 +846,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         let e2bSandbox: Sandbox;
         try {
-            e2bSandbox = await Sandbox.connect(sandboxId, { apiKey });
+            e2bSandbox = await Sandbox.connect(sandboxId, {
+                apiKey,
+                timeoutMs: SANDBOX_CONNECT_TIMEOUT_MS,
+            });
         } catch (err) {
             // Sandbox no longer exists in E2B (idle-kill timer fired,
             // reaper killed it, or it hit ceiling). Clean up the stale

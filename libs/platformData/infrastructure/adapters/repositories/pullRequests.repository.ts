@@ -106,7 +106,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
         const results = await this.pullRequestsModel
             .find(filter, { 'number': 1, 'repository.id': 1 })
-            .lean()
+            // mongoose >= 9.10 narrows lean() to top-level projected keys and
+            // drops the dotted 'repository.id', so the shape is stated here.
+            .lean<Array<Pick<PullRequestsModel, 'number' | 'repository'>>>()
             .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
             .exec();
 

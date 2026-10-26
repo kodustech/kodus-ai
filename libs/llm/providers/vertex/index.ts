@@ -68,7 +68,7 @@ export const vertexModule: ProviderModule = {
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
             // Claude-on-Vertex speaks the Anthropic protocol → structured output is
-            // forced tool-use ('none'); Gemini-on-Vertex uses responseSchema
+            // forced tool-use ('none'); Gemini-on-Vertex uses responseJsonSchema
             // ('json_schema'). Must be model-aware or a structured Claude call is
             // mistaken for response_format.
             structuredOutput: isAnthropicModel(model) ? 'none' : 'json_schema',
@@ -92,7 +92,7 @@ export const vertexModule: ProviderModule = {
 
     // Claude-on-Vertex speaks the Anthropic thinking protocol → resolve its facts
     // through the anthropic module (native Claude branch). Gemini-on-Vertex does
-    // structured via responseSchema (no forced tool_choice) → the safe default.
+    // structured via responseJsonSchema (no forced tool_choice) → the safe default.
     reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
         return isAnthropicModel(cfg.model)
             ? anthropicModule.reasoningTraits!(cfg)
@@ -100,7 +100,7 @@ export const vertexModule: ProviderModule = {
     },
 
     // The WIRE answer, per model: Vertex serves BOTH Gemini (schema in
-    // `generationConfig.responseSchema`) and Claude over the Anthropic protocol
+    // `generationConfig.responseJsonSchema`) and Claude over the Anthropic protocol
     // (forced tool use, no response_format) from this one id.
     structuredOutputPolicy(cfg: ProviderBuildConfig): StructuredOutputMode {
         return isAnthropicModel(cfg.model) ? 'none' : 'json_schema';

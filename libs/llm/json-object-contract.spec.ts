@@ -189,7 +189,9 @@ function schemaBearingChannel(body: any): boolean {
             body.tools.some((t: any) =>
                 props(t?.input_schema?.properties ?? t?.parameters?.properties),
             )) ||
-        // Gemini / Gemini-on-Vertex
+        // Gemini / Gemini-on-Vertex: JSON Schema as is since @ai-sdk/google
+        // 4.0.70; older builds sent an OpenAPI conversion in responseSchema.
+        props(body?.generationConfig?.responseJsonSchema) ||
         props(body?.generationConfig?.responseSchema)
     );
 }
