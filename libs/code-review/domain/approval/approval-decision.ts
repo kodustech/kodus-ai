@@ -167,3 +167,41 @@ export function evaluateApproval(input: {
         reason: input.risk.reason || 'Kody assessed low risk for this PR.',
     };
 }
+
+/**
+ * The cron's decision for the head Kody reviewed. With risk assessment on, a
+ * review approves only with an assessment, so an approval saved without one
+ * was given while it was off: it stands for this head (scope and sensitive
+ * paths still apply) and the next commit is assessed, instead of holding a PR
+ * that was approved correctly. A head reviewed without an assessment and not
+ * approved is held until the next commit, and says so.
+ */
+export function evaluateReviewedHeadApproval(
+    input: Parameters<typeof evaluateApproval>[0] & {
+        reviewedDecision?: { kind?: string };
+    },
+): ApprovalDecision {
+    const { reviewedDecision, ...rest } = input;
+    if (
+        rest.policy?.assessRisk &&
+        !rest.risk &&
+        reviewedDecision?.kind === 'approve'
+    ) {
+        return evaluateApproval({
+            ...rest,
+            policy: { ...rest.policy, assessRisk: false },
+        });
+    }
+    const decision = evaluateApproval(rest);
+    if (rest.policy?.assessRisk && !rest.risk && decision.kind === 'hold') {
+        return {
+            ...decision,
+            reason:
+                decision.reason ===
+                'Kody could not assess risk for the current PR head.'
+                    ? 'This commit was reviewed without a risk assessment; Kody assesses the next commit.'
+                    : decision.reason,
+        };
+    }
+    return decision;
+}

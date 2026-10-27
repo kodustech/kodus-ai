@@ -39,7 +39,7 @@ import {
     approvalPathsOf,
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
-    evaluateApproval,
+    evaluateReviewedHeadApproval,
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
 import {
@@ -995,8 +995,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }
                     changedPaths = approvalPathsOf(files);
                 }
-                const decision = evaluateApproval({
+                const decision = evaluateReviewedHeadApproval({
                     approvalActive: true,
+                    reviewedDecision,
                     policy,
                     author:
                         currentPullRequest?.user?.login ??
@@ -1278,8 +1279,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         }
                         return false;
                     }
-                    conditionalDecision = evaluateApproval({
+                    conditionalDecision = evaluateReviewedHeadApproval({
                         approvalActive: true,
+                        reviewedDecision,
                         policy,
                         author: latestPullRequest?.user?.login,
                         labels: latestPullRequest?.labels,
