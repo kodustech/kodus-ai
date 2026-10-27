@@ -73,11 +73,6 @@ on:
                 default: all
                 type: choice
                 options: [all, gitlab, bitbucket, azure-devops]
-            approval_diagnostic:
-                description: Print fixed categories for the three failed provider QA executions
-                required: false
-                default: false
-                type: boolean
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -434,17 +429,6 @@ jobs:
                     $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
                       "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
                   done
-
-            - name: Classify failed provider QA executions
-              if: steps.up.outcome == 'success' && inputs.approval_diagnostic == true
-              env:
-                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
-                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
-                  HEAD_REF: ${{ steps.target.outputs.branch }}
-              run: |
-                  set -euo pipefail
-                  $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
-                    "pnpm exec ts-node scripts/preview/diagnose-approval-qa.ts"
 
             - name: Smoke conditional approval on real providers
               if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'

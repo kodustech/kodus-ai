@@ -242,6 +242,62 @@ async function waitForApprovalReason(
     let lastReviewStatus: string | null = null;
     let lastStatusCheck = 0;
     while (Date.now() < deadline) {
+        if (Date.now() - lastStatusCheck >= 30_000) {
+            lastStatusCheck = Date.now();
+            const executions = await http<unknown>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${pr.number}&repositoryId=${encodeURIComponent(String(repo.id))}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
+                { headers: { Authorization: `Bearer ${session.accessToken}` } },
+            );
+            if (executions.status >= 200 && executions.status < 300) {
+                lastReviewStatus = findExecutionStatus(
+                    executions.body,
+                    pr.number,
+                );
+            }
+            if (!lastReviewStatus) {
+                // The enriched execution list omits skips that never reached
+                // code_review_execution. The awaiting list includes them.
+                const awaiting = await http<
+                    Array<{
+                        prNumber: number;
+                        repositoryId: string;
+                    }>
+                >(
+                    `${ctx.target.apiBaseUrl}/pull-requests/awaiting?teamId=${encodeURIComponent(session.teamId)}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                    },
+                );
+                if (
+                    awaiting.status >= 200 &&
+                    awaiting.status < 300 &&
+                    Array.isArray(awaiting.body) &&
+                    awaiting.body.some(
+                        (entry) =>
+                            entry.prNumber === pr.number &&
+                            String(entry.repositoryId) === String(repo.id),
+                    )
+                ) {
+                    lastReviewStatus = 'skipped';
+                }
+            }
+            if (
+                lastReviewStatus === 'skipped' ||
+                lastReviewStatus === 'error' ||
+                lastReviewStatus === 'partial_error'
+            ) {
+                terminalFailureSince ||= Date.now();
+                if (Date.now() - terminalFailureSince >= 90_000) {
+                    throw new Error(
+                        `${pr.url} review ended ${lastReviewStatus}; an approval decision requires a successful review`,
+                    );
+                }
+            } else {
+                terminalFailureSince = 0;
+            }
+        }
         const comments = await approvalComments(ctx, repo, pr);
         if (
             comments.some(
@@ -252,33 +308,6 @@ async function waitForApprovalReason(
             )
         )
             return;
-        if (Date.now() - lastStatusCheck >= 30_000) {
-            lastStatusCheck = Date.now();
-            const executions = await http<unknown>(
-                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${pr.number}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
-                { headers: { Authorization: `Bearer ${session.accessToken}` } },
-            );
-            if (executions.status >= 200 && executions.status < 300) {
-                lastReviewStatus = findExecutionStatus(
-                    executions.body,
-                    pr.number,
-                );
-                if (
-                    lastReviewStatus === 'skipped' ||
-                    lastReviewStatus === 'error' ||
-                    lastReviewStatus === 'partial_error'
-                ) {
-                    terminalFailureSince ||= Date.now();
-                    if (Date.now() - terminalFailureSince >= 90_000) {
-                        throw new Error(
-                            `${pr.url} review ended ${lastReviewStatus}; an approval decision requires a successful review`,
-                        );
-                    }
-                } else {
-                    terminalFailureSince = 0;
-                }
-            }
-        }
         await new Promise((resolve) =>
             setTimeout(
                 resolve,
