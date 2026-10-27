@@ -22,6 +22,14 @@ on:
                 required: false
                 default: ""
 
+# Two dispatches of the same new tag would both pass the "already exists"
+# check below before either pushes. Serializing them per tag makes the later
+# one see the published tag and fail. Runs without a tag key on the commit,
+# so push runs are not queued behind (or replace) a pending dispatch.
+concurrency:
+    group: rabbitmq-build-push-${{ inputs.tag || github.sha }}
+    cancel-in-progress: false
+
 jobs:
     build-and-push:
         name: Build and push kodus-rabbitmq
