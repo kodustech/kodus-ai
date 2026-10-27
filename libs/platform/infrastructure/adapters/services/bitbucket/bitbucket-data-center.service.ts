@@ -1,3 +1,7 @@
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -69,6 +73,10 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import { listingFailed } from '../repository-listing';
+
+const FILES_PAGE_SIZE = 1000;
+const MAX_FILE_PAGES = 200;
 
 @Injectable()
 export class BitbucketDataCenterService implements Omit<
@@ -3121,6 +3129,7 @@ export class BitbucketDataCenterService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -3136,7 +3145,11 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return [];
+            if (!authDetails || !repoConfig)
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket Data Center authentication or repository config not found',
+                );
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -3148,18 +3161,36 @@ export class BitbucketDataCenterService implements Omit<
                 });
             }
 
-            // DC provides a flat /files endpoint which is extremely efficient for getting all paths
-            const response = await axiosClient.get(
-                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
-                {
-                    params: {
-                        limit: 100000,
-                        at: branch,
+            // A flat /files listing, in pages: the server caps `limit`, so
+            // follow `nextPageStart` until `isLastPage`.
+            const allFilePaths: string[] = [];
+            let start = 0;
+            let isLastPage = false;
+            for (let page = 0; page < MAX_FILE_PAGES && !isLastPage; page++) {
+                const response = await axiosClient.get(
+                    `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
+                    { params: { limit: FILES_PAGE_SIZE, at: branch, start } },
+                );
+                allFilePaths.push(...(response.data?.values || []));
+                isLastPage =
+                    response.data?.isLastPage !== false ||
+                    response.data?.nextPageStart === undefined;
+                start = response.data?.nextPageStart ?? start;
+            }
+            if (!isLastPage) {
+                this.logger.warn({
+                    message: `Repository has more than ${MAX_FILE_PAGES * FILES_PAGE_SIZE} files; the listing stops there`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        files: allFilePaths.length,
                     },
-                },
-            );
+                });
+            }
 
-            const allFilePaths: string[] = response.data.values || [];
             const { filePatterns, excludePatterns, maxFiles = 1000 } = filters;
 
             const filteredFiles: RepositoryFile[] = [];
@@ -3167,19 +3198,18 @@ export class BitbucketDataCenterService implements Omit<
             for (const filePath of allFilePaths) {
                 if (maxFiles > 0 && filteredFiles.length >= maxFiles) break;
 
-                // Simple pattern matching fallback if glob utils aren't perfectly aligned
-                if (filePatterns && filePatterns.length > 0) {
-                    const matchesInclude = filePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (!matchesInclude) continue;
+                if (
+                    filePatterns?.length &&
+                    !isFileMatchingGlobCaseInsensitive(filePath, filePatterns)
+                ) {
+                    continue;
                 }
 
-                if (excludePatterns && excludePatterns.length > 0) {
-                    const matchesExclude = excludePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (matchesExclude) continue;
+                if (
+                    excludePatterns?.length &&
+                    isFileMatchingGlob(filePath, excludePatterns)
+                ) {
+                    continue;
                 }
 
                 filteredFiles.push({
@@ -3198,7 +3228,11 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 

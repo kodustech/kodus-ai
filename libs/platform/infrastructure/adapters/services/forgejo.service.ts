@@ -155,8 +155,12 @@ import {
     repoCreatePullRequest,
 } from '@llamaduck/forgejo-ts';
 import { Client, createClient } from '@llamaduck/forgejo-ts/client';
+import { listingFailed } from './repository-listing';
 
 const FORGEJO_REACTIONS_CONCURRENCY = 5;
+
+const TREE_PAGE_SIZE = 1000;
+const MAX_TREE_PAGES = 100;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.FORGEJO, 'codeManagement')
@@ -3830,34 +3834,76 @@ export class ForgejoService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return [];
+            if (!authDetail)
+                return listingFailed(
+                    params.throwOnError,
+                    'Forgejo authentication details not found',
+                );
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getRepositoryAllFiles',
             );
-            if (!repoInfo) return [];
+            if (!repoInfo)
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is not owner/repo',
+                );
 
             const client = this.createForgejoClient(authDetail);
 
-            const branch = params.filters?.branch || 'main';
-            const result = await getTree({
-                client,
-                path: {
-                    owner: repoInfo.owner,
-                    repo: repoInfo.repo,
-                    sha: branch,
-                },
-                query: { recursive: true },
-            });
+            const branch =
+                params.filters?.branch ||
+                (await this.getDefaultBranch({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: params.repository,
+                }));
 
-            const tree = result.data;
-            let files = (tree?.tree || [])
+            // A recursive tree comes in pages; `truncated` says more remain.
+            const entries: Array<{
+                path?: string;
+                type?: string;
+                sha?: string;
+                size?: number;
+            }> = [];
+            let truncated = false;
+            for (let page = 1; page <= MAX_TREE_PAGES; page++) {
+                const result = await getTree({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        sha: branch,
+                    },
+                    query: { recursive: true, page, per_page: TREE_PAGE_SIZE },
+                    throwOnError: true,
+                });
+                entries.push(...(result.data?.tree || []));
+                truncated = !!result.data?.truncated;
+                if (!truncated) break;
+            }
+            if (truncated) {
+                this.logger.warn({
+                    message: `Repository tree has more than ${MAX_TREE_PAGES * TREE_PAGE_SIZE} entries; the listing stops there`,
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        teamId: params.organizationAndTeamData?.teamId,
+                        repositoryId: params.repository?.id,
+                        branch,
+                        entries: entries.length,
+                    },
+                });
+            }
+
+            let files = entries
                 .filter((item) => item.type === 'blob')
                 .map((item) => ({
                     path: item.path,
@@ -3897,7 +3943,11 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 

@@ -41,7 +41,8 @@ export const FrozenRulesChip = ({
             <p>
                 Keep a convention by moving it to a .kody/rules file, or pause
                 or delete it here. Kody can read the coding-agent files
-                themselves during review: turn that on in Configuration.
+                themselves during review: turn on Coding-agent instructions in
+                What to review.
             </p>
             <p>
                 {isFiltering

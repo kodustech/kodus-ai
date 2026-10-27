@@ -482,6 +482,9 @@ export interface AgentLoopInput {
     /** True when `systemPrompt` lists `repoInstructions` (the agent may
      *  report `repo_instruction`); registers readRepoInstruction. */
     listsRepoInstructions?: boolean;
+    /** The labels the agent may report, as its prompt states them; the
+     *  finder's output schema offers only these. */
+    allowedLabels?: readonly ReviewFindingLabel[];
     /** Custom agents only: the team guides linked to this agent (may be
      *  empty). Set → findings may carry kind/source, and convention findings
      *  take the quote check (target branch, via the sandbox) and the

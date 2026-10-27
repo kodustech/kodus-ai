@@ -119,6 +119,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import { listingFailed } from '../repository-listing';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -5780,6 +5781,7 @@ export class AzureReposService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5799,7 +5801,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Azure Repos authentication details not found',
+                );
             }
 
             const { orgName, token } = authDetails;
@@ -5816,7 +5821,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Project ID not found for repository',
+                );
             }
 
             const {
@@ -5840,7 +5848,10 @@ export class AzureReposService implements Omit<
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5913,7 +5924,11 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 

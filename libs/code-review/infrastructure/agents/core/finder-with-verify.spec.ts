@@ -316,3 +316,291 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
         expect(r.droppedByVerify[0].evidence).toMatch(/not in the target-branch/);
     });
 });
+
+// A convention break reported under another label (a `bug` quoting
+// apps/billing/CLAUDE.md) gets the same check as a repo_instruction finding:
+// it must quote the target branch, or it is dropped.
+describe('runFinderWithVerify — findings that cite an instruction file under another label', () => {
+    const instructions = {
+        files: [
+            {
+                path: 'CLAUDE.md',
+                content: 'Amounts are integer cents.',
+                appliesTo: '**',
+                truncated: false,
+            },
+            {
+                path: 'docs/shared-guide.md',
+                content: 'Every thrown error must be a DomainError.',
+                appliesTo: '**',
+                truncated: false,
+            },
+        ],
+        otherFiles: [],
+        dropped: [],
+        truncated: false,
+        indexedCount: 2,
+    };
+    const finding = (relevantFile: string, suggestionContent: string) => ({
+        relevantFile,
+        label: 'bug',
+        suggestionContent,
+        existingCode: 'x',
+        improvedCode: 'y',
+        severity: 'high',
+    });
+
+    let verifierPrompts: string[] = [];
+    const run = async (
+        suggestions: unknown[],
+        repoInstructions?: typeof instructions,
+        extra: Record<string, unknown> = {},
+    ) => {
+        verifierPrompts = [];
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    if (sys.includes('REFUTE')) verifierPrompts.push(sys);
+                    const tc = sys.includes('REFUTE')
+                        ? {
+                              id: 'v',
+                              name: 'submitVerdict',
+                              input: { keep: true, rationale: 'ok' },
+                          }
+                        : {
+                              id: 'f',
+                              name: 'submitResult',
+                              input: { reasoning: 'r', suggestions },
+                          };
+                    return {
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: tc.id,
+                                toolName: tc.name,
+                                input: JSON.stringify(tc.input),
+                            },
+                        ],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        return runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec: buildFinderAgentSpec({
+                    systemPrompt: 'find bugs',
+                    modelId: 'mock',
+                    tools,
+                    coverageLedger: noCriticalLedger,
+                }),
+                modelId: 'mock',
+                tools,
+                ...(repoInstructions ? { repoInstructions } : {}),
+                ...extra,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+    };
+
+    it('relabels one that quotes the target branch as repo_instruction', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'docs/shared-guide.md says "Every thrown error must be a DomainError." This throws a bare Error.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['a.ts', 'repo_instruction'],
+        ]);
+    });
+
+    // Relabeled before verify, so the verifier judges it as an instruction
+    // finding: against the file's text, its appliesTo and the changed line.
+    it('verifies a relabeled finding as repo_instruction, with the instructions', async () => {
+        await run(
+            [
+                finding(
+                    'a.ts',
+                    'docs/shared-guide.md says "Every thrown error must be a DomainError." This throws a bare Error.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(verifierPrompts.length).toBeGreaterThan(0);
+        expect(
+            verifierPrompts.every(
+                (p) =>
+                    p.includes('Label: repo_instruction') &&
+                    p.includes('RepositoryInstructions'),
+            ),
+        ).toBe(true);
+    });
+
+    it('drops one that does not quote the target branch before verify', async () => {
+        await run(
+            [
+                finding(
+                    'a.ts',
+                    'CLAUDE.md, added in this PR, says "Never use let."',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(verifierPrompts).toEqual([]);
+    });
+
+    it('drops one whose quote is not on the target branch', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'CLAUDE.md, added in this PR, says "Never use let." This uses let.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(r.kept).toEqual([]);
+        expect(r.droppedByVerify[0].evidence).toMatch(/instruction file/);
+    });
+
+    it('drops one when the setting is off', async () => {
+        const r = await run([
+            finding(
+                'a.ts',
+                'apps/billing/CLAUDE.md requires integer cents: "Amounts are integer cents."',
+            ),
+        ]);
+
+        expect(r.kept).toEqual([]);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
+    // A custom agent's guides can be the same files; its findings take the
+    // convention check instead.
+    it('leaves a custom agent finding alone', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'AGENTS.md, linked to this agent, asks for the logger here.',
+                ),
+            ],
+            undefined,
+            { checksInstructionCitations: false },
+        );
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['a.ts', 'bug'],
+        ]);
+    });
+
+    // Code that handles these files names them; a bug there is a bug, with
+    // the setting on or off.
+    it.each([
+        ['off', undefined],
+        ['on', instructions],
+    ])(
+        'keeps a bug about code that handles instruction files (setting %s)',
+        async (_label, repoInstructions) => {
+            const r = await run(
+                [
+                    {
+                        ...finding(
+                            'loader.ts',
+                            'The glob `**/AGENTS.md` misses nested AGENTS.md files, so loadInstructions() returns [] for apps/*.',
+                        ),
+                        existingCode: "glob.sync('**/AGENTS.md', { deep: 1 })",
+                    },
+                    {
+                        ...finding(
+                            'config.ts',
+                            "readFileSync('CLAUDE.md') throws ENOENT when the repo has no CLAUDE.md; wrap it in existsSync.",
+                        ),
+                        existingCode: "readFileSync('CLAUDE.md', 'utf8')",
+                    },
+                    finding(
+                        'parser.ts',
+                        'The parser drops .cursor/rules/api.mdc frontmatter when globs is unquoted.',
+                    ),
+                ],
+                repoInstructions,
+            );
+
+            expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+                ['loader.ts', 'bug'],
+                ['config.ts', 'bug'],
+                ['parser.ts', 'bug'],
+            ]);
+        },
+    );
+
+    it('leaves alone a finding on the instruction file itself, and one that cites none', async () => {
+        const r = await run([
+            finding(
+                'CLAUDE.md',
+                'CLAUDE.md links to docs/missing.md, which does not exist.',
+            ),
+            finding('b.ts', 'The loop reads past the end of the array.'),
+        ]);
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['CLAUDE.md', 'bug'],
+            ['b.ts', 'bug'],
+        ]);
+    });
+});
+
+describe('buildFinderAgentSpec — label enum', () => {
+    const labelEnum = (labels?: string[]) => {
+        const spec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools: new InMemoryToolRegistry([]),
+            coverageLedger: noCriticalLedger,
+            ...(labels ? { labels: labels as any } : {}),
+        });
+        const submit = spec.tools
+            .list()
+            .find((t) => t.name === 'submitResult') as any;
+        return submit.inputSchema.properties.suggestions.items.properties.label
+            .enum;
+    };
+
+    it('offers the labels it is given', () => {
+        expect(labelEnum(['bug', 'security', 'performance'])).toEqual([
+            'bug',
+            'security',
+            'performance',
+        ]);
+        expect(labelEnum(['bug', 'repo_instruction'])).toEqual([
+            'bug',
+            'repo_instruction',
+        ]);
+    });
+
+    it('offers every label when given none it knows', () => {
+        const all = ['bug', 'security', 'performance', 'repo_instruction'];
+        expect(labelEnum()).toEqual(all);
+        expect(labelEnum(['custom_agent'])).toEqual(all);
+    });
+});

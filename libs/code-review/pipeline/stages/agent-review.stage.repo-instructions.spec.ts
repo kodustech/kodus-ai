@@ -58,6 +58,11 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
                 .filters.branch,
         ).toBe('release/2.0');
+        // A listing failure must not look like a repository without the files.
+        expect(
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
+                .throwOnError,
+        ).toBe(true);
         const read =
             codeManagementService.getRepositoryContentFile.mock.calls[0][0];
         expect(read.pullRequest.head.ref).toBe('release/2.0');
@@ -171,5 +176,85 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         expect(
             codeManagementService.getRepositoryContentFile,
         ).not.toHaveBeenCalled();
+    });
+});
+
+// GitLab and Bitbucket list a whole tree in pages; the index of instruction
+// files is the same for every review against one target-branch commit.
+describe('AgentReviewStage — instruction index cache', () => {
+    const makeCachedStage = () => {
+        const store = new Map<string, unknown>();
+        const cacheService = {
+            getFromCache: jest.fn(
+                async (key: string) => store.get(key) ?? null,
+            ),
+            addToCache: jest.fn(async (key: string, value: unknown) => {
+                store.set(key, value);
+            }),
+        };
+        const codeManagementService = {
+            getRepositoryAllFiles: jest
+                .fn()
+                .mockResolvedValue([{ path: 'CLAUDE.md' }]),
+            getRepositoryContentFile: jest.fn().mockResolvedValue({
+                data: { content: 'Amounts are integer cents.' },
+            }),
+        };
+        const stage = new AgentReviewStage(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+            undefined,
+            undefined,
+            undefined,
+            cacheService as any,
+        );
+        return { stage, codeManagementService };
+    };
+    const withBase = (sha?: string) => ({
+        ...context,
+        pullRequest: {
+            ...context.pullRequest,
+            base: { ref: 'release/2.0', ...(sha ? { sha } : {}) },
+        },
+    });
+    const resolve = (stage: AgentReviewStage, ctx: unknown) =>
+        (stage as any).resolveRepoInstructions(
+            ctx,
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+    it('lists once per target-branch commit and still reads the files', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+
+        const first = await resolve(stage, withBase('abc'));
+        const second = await resolve(stage, withBase('abc'));
+        await resolve(stage, withBase('def'));
+
+        expect(second.files).toEqual(first.files);
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(2);
+        expect(
+            codeManagementService.getRepositoryContentFile,
+        ).toHaveBeenCalledTimes(3);
+    });
+
+    it('lists every time when the target-branch commit is unknown', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+
+        await resolve(stage, withBase());
+        await resolve(stage, withBase());
+
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(2);
     });
 });

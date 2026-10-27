@@ -16,7 +16,10 @@ jest.mock('@libs/llm/model-invocation', () => ({
 import { MockLanguageModelV3 } from 'ai/test';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
-import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
+import {
+    finderRunEnvironment,
+    runAgentLoopViaCore,
+} from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 // The DETERMINISTIC parse layer the adapter's LLM.run boundary delegates to:
 // the finder done-tool payload (D = {reasoning, suggestions}) and the verifier
 // done-tool payload (D = {keep, rationale}). These are where off-schema model
@@ -1728,5 +1731,79 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         expect(
             out.findings.suggestions.map((s: any) => s.relevantFile),
         ).toEqual(['a.ts']);
+    });
+});
+
+// Custom agents can link the same files as guides; their findings take the
+// convention check, not the instruction-citation check.
+describe('finderRunEnvironment — instruction citations', () => {
+    it('checks them for built-in agents and not for custom agents', () => {
+        const model = new MockLanguageModelV3({});
+        expect(
+            finderRunEnvironment(makeInput(model), secrets).verifyParams
+                .checksInstructionCitations,
+        ).toBe(true);
+        expect(
+            finderRunEnvironment(
+                makeInput(model, { conventionGuides: [] }),
+                secrets,
+            ).verifyParams.checksInstructionCitations,
+        ).toBe(false);
+    });
+});
+
+describe('runAgentLoopViaCore — finder labels', () => {
+    const labelsOffered = async (over: Record<string, unknown>) => {
+        let enumOffered: string[] | undefined;
+        const doGenerate = (async (opts: any) => {
+            const submit = (opts?.tools ?? []).find(
+                (t: any) => t.name === 'submitResult',
+            );
+            if (submit && !enumOffered) {
+                const schema = submit.inputSchema ?? submit.parameters;
+                enumOffered =
+                    schema?.properties?.suggestions?.items?.properties?.label
+                        ?.enum;
+            }
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'f',
+                        toolName: 'submitResult',
+                        input: JSON.stringify({
+                            reasoning: 'r',
+                            suggestions: [],
+                        }),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+        await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), over),
+            secrets,
+        );
+        return enumOffered;
+    };
+
+    it('offers only the labels the agent may report', async () => {
+        expect(
+            await labelsOffered({
+                allowedLabels: ['bug', 'security', 'performance'],
+            }),
+        ).toEqual(['bug', 'security', 'performance']);
+        expect(
+            await labelsOffered({
+                allowedLabels: [
+                    'bug',
+                    'security',
+                    'performance',
+                    'repo_instruction',
+                ],
+            }),
+        ).toContain('repo_instruction');
     });
 });

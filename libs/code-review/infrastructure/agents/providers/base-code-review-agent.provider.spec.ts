@@ -1011,6 +1011,18 @@ describe('request assembly + byokConfig threading', () => {
             expect(loopParams.repoInstructions).toBe(repoInstructions);
         });
 
+        // The finder's output schema offers the same labels as its prompt.
+        it('hands the agent loop the labels the agent may report', async () => {
+            await new InstructionsAgent({} as any, {} as any).execute(
+                makeInput({ repoInstructions }),
+            );
+            const [loopParams] = runLoopMock.mock.calls[0];
+            expect(loopParams.allowedLabels).toEqual([
+                'bug',
+                'repo_instruction',
+            ]);
+        });
+
         it('is not set for an agent that may not report repo_instruction', async () => {
             await newAgent().execute(makeInput({ repoInstructions }));
             const [loopParams] = runLoopMock.mock.calls[0];
