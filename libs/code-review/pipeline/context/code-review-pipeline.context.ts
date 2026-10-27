@@ -50,6 +50,8 @@ export type PullRequestType = {
             fullName: string;
         };
         ref: string;
+        /** The target branch's commit, when the host's pull request has it. */
+        sha?: string;
     };
     head?: {
         sha: string;

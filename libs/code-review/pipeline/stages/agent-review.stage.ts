@@ -175,6 +175,7 @@ import {
     normalizeEnvelope,
     LLM_ENVELOPE_TAG,
 } from '@libs/llm/structured-output-repair';
+import { CacheService } from '@libs/core/cache/cache.service';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -335,6 +336,8 @@ export function snapLinesToDiff(
  * - Agents investigate the codebase using sandbox tools before suggesting
  * - Results are stored in context.fileAnalysisResults for downstream stages
  */
+const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'AgentReviewStage';
@@ -388,6 +391,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the repeat check uses the history loaded for the prompts.
         @Optional()
         private readonly buildPreviousReviewDecisionsUseCase?: BuildPreviousReviewDecisionsUseCase,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the instruction index is listed on every review.
+        @Optional()
+        private readonly cacheService?: CacheService,
     ) {
         super();
     }
@@ -473,10 +480,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
         const startedAt = Date.now();
+        // The index is the same for every review against one target-branch
+        // commit, and listing it can take many paged calls (GitLab,
+        // Bitbucket); without the commit it is listed each time.
+        const baseSha = context.pullRequest?.base?.sha;
+        const indexKey = baseSha
+            ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
+            : undefined;
+        let indexCached = false;
 
         const result = await collectRepoInstructions({
             changedFiles: changedFiles.map((f) => f.filename),
             listFiles: async () => {
+                if (indexKey && this.cacheService) {
+                    const cached =
+                        await this.cacheService.getFromCache<string[]>(
+                            indexKey,
+                        );
+                    if (cached) {
+                        indexCached = true;
+                        return cached;
+                    }
+                }
                 const files =
                     (await this.codeManagementService.getRepositoryAllFiles({
                         organizationAndTeamData,
@@ -489,7 +514,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         },
                         throwOnError: true,
                     })) ?? [];
-                return files.map((f: { path: string }) => f.path);
+                const paths = files.map((f: { path: string }) => f.path);
+                if (indexKey && this.cacheService) {
+                    await this.cacheService.addToCache(
+                        indexKey,
+                        paths,
+                        INSTRUCTION_INDEX_TTL_MS,
+                    );
+                }
+                return paths;
             },
             readFile: async (path) => {
                 const response =
@@ -521,6 +554,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             metadata: {
                 ...logMetadata,
                 ref,
+                baseSha,
+                indexCached,
                 durationMs: Date.now() - startedAt,
                 indexed: result.indexedCount,
                 listed: result.files.map((f) => f.path),
