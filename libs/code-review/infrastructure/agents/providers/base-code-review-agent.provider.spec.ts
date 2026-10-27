@@ -254,14 +254,37 @@ function newAgent(byokErrorCounter?: any, docSearch?: any) {
 // A. Output-shape zoo — how the boundary consumes the AgentLoopOutput envelope
 //    and its findings.suggestions payload.
 // ════════════════════════════════════════════════════════════════════════════
-describe('a built-in agent that answered in prose', () => {
-    // Prose recovery owns a built-in agent's run without submitResult (#2171);
-    // only a custom agent reads it as stopped early.
-    it('is not marked as stopped early', async () => {
+describe('a built-in agent without submitResult (#2171 QA)', () => {
+    it('marks an unsubmitted empty result incomplete', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: { reasoning: 'nothing to report', suggestions: [] },
                 submittedResult: false,
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('no-result');
+    });
+
+    it('keeps findings recovered from prose without claiming the run was empty', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({ submittedResult: false }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.suggestions).toHaveLength(1);
+        expect(out.hitHardLimit).toBe(false);
+    });
+
+    it('accepts a submitted empty result as a clean review', async () => {
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: 'nothing to report', suggestions: [] },
+                submittedResult: true,
             }),
         );
 
@@ -681,10 +704,9 @@ describe('C. transport / fail-safe', () => {
         await expect(newAgent().execute(makeInput())).rejects.toBeDefined();
     });
 
-    // Row 33 — refusal ("I cannot help…" / content_filter): surfaces at this
-    // boundary as an empty-success stop (no findings). It must NOT invent
-    // suggestions and must not be flagged as a hard-limit crash.
-    it('row 33: refusal → empty review, no fabricated suggestions, finishReason stop', async () => {
+    // Row 33 — refusal without a submitted result is incomplete, not a
+    // finished clean review. It still must not invent suggestions.
+    it('row 33: refusal without submitResult → no findings, incomplete', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({
                 findings: {
@@ -693,11 +715,13 @@ describe('C. transport / fail-safe', () => {
                 },
                 source: 'empty',
                 finishReason: 'stop',
+                submittedResult: false,
             }),
         );
         const out = await newAgent().execute(makeInput());
         expect(out.suggestions).toEqual([]);
-        expect(out.hitHardLimit).toBe(false);
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('no-result');
     });
 
     // Row 34 — abort signal fired mid-call: the parentSignal must be threaded to

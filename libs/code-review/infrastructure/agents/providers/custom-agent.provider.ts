@@ -344,11 +344,6 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
         };
     }
 
-    /** A custom agent that never submitted a result did not finish looking. */
-    protected readsMissingResultAsIncomplete(): boolean {
-        return true;
-    }
-
     protected getWarningName(): string {
         return this.agent.name;
     }
