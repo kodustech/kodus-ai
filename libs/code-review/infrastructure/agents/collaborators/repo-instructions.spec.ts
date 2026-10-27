@@ -685,20 +685,60 @@ describe('citesRepoInstruction', () => {
         truncated: false,
         indexedCount: 1,
     };
+    const finding = (
+        suggestionContent: string,
+        code: { existingCode?: string; improvedCode?: string } = {},
+    ) => ({ suggestionContent, ...code });
 
+    // The finding reasons from the file: it is the authority for the claim.
     it.each([
         'apps/billing/CLAUDE.md says "Amounts are integer cents."',
         'This breaks `AGENTS.md`.',
         'Per .cursor/rules/style.mdc, no default exports.',
         'As .github/copilot-instructions.md requires, use the logger.',
-    ])('finds a coding-agent file in %p', (text) => {
-        expect(citesRepoInstruction(text, undefined)).toBe(true);
+        'console.warn in src/ violates the src/shared/AGENTS.md logging rule.',
+        'Throw a DomainError subclass, per the rule in `docs/shared-guide.md`.',
+    ])('finds a citation in %p', (text) => {
+        expect(citesRepoInstruction(finding(text), context)).toBe(true);
     });
 
     it('finds a file the review collected, such as a pointer target', () => {
-        const text = 'Per docs/shared-guide.md, throw a DomainError.';
+        const text = finding('Per docs/shared-guide.md, throw a DomainError.');
         expect(citesRepoInstruction(text, context)).toBe(true);
         expect(citesRepoInstruction(text, undefined)).toBe(false);
+    });
+
+    // A bug in code that handles these files names them without reasoning
+    // from them; it is a bug like any other.
+    it.each([
+        finding(
+            'The glob `**/AGENTS.md` misses nested AGENTS.md files, so loadInstructions() returns [] for apps/*.',
+            {
+                existingCode:
+                    "const files = glob.sync('**/AGENTS.md', { deep: 1 });",
+            },
+        ),
+        finding(
+            "readFileSync('CLAUDE.md') throws ENOENT when the repo has no CLAUDE.md; wrap it in existsSync.",
+            { existingCode: "const text = readFileSync('CLAUDE.md', 'utf8');" },
+        ),
+        finding(
+            'The parser drops .cursor/rules/api.mdc frontmatter when globs is unquoted.',
+        ),
+    ])('finds no citation in a bug about the files themselves (%#)', (f) => {
+        expect(citesRepoInstruction(f, context)).toBe(false);
+    });
+
+    it('still finds one when another sentence reasons from a file the code names', () => {
+        expect(
+            citesRepoInstruction(
+                finding(
+                    'readFileSync on CLAUDE.md runs at import. AGENTS.md requires lazy reads of config files.',
+                    { existingCode: "readFileSync('CLAUDE.md')" },
+                ),
+                context,
+            ),
+        ).toBe(true);
     });
 
     it.each([
@@ -706,7 +746,7 @@ describe('citesRepoInstruction', () => {
         'The claude client in src/claude.ts leaks the key.',
         'The loop reads past the end of the array.',
     ])('finds nothing in %p', (text) => {
-        expect(citesRepoInstruction(text, context)).toBe(false);
+        expect(citesRepoInstruction(finding(text), context)).toBe(false);
     });
 });
 

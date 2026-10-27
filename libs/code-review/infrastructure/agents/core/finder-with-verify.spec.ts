@@ -514,6 +514,46 @@ describe('runFinderWithVerify — findings that cite an instruction file under a
         ]);
     });
 
+    // Code that handles these files names them; a bug there is a bug, with
+    // the setting on or off.
+    it.each([
+        ['off', undefined],
+        ['on', instructions],
+    ])(
+        'keeps a bug about code that handles instruction files (setting %s)',
+        async (_label, repoInstructions) => {
+            const r = await run(
+                [
+                    {
+                        ...finding(
+                            'loader.ts',
+                            'The glob `**/AGENTS.md` misses nested AGENTS.md files, so loadInstructions() returns [] for apps/*.',
+                        ),
+                        existingCode: "glob.sync('**/AGENTS.md', { deep: 1 })",
+                    },
+                    {
+                        ...finding(
+                            'config.ts',
+                            "readFileSync('CLAUDE.md') throws ENOENT when the repo has no CLAUDE.md; wrap it in existsSync.",
+                        ),
+                        existingCode: "readFileSync('CLAUDE.md', 'utf8')",
+                    },
+                    finding(
+                        'parser.ts',
+                        'The parser drops .cursor/rules/api.mdc frontmatter when globs is unquoted.',
+                    ),
+                ],
+                repoInstructions,
+            );
+
+            expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+                ['loader.ts', 'bug'],
+                ['config.ts', 'bug'],
+                ['parser.ts', 'bug'],
+            ]);
+        },
+    );
+
     it('leaves alone a finding on the instruction file itself, and one that cites none', async () => {
         const r = await run([
             finding(

@@ -1106,10 +1106,7 @@ export async function verifyFindings(
         for (const f of suggestions) {
             if (
                 f.label === 'repo_instruction' ||
-                !citesRepoInstruction(
-                    f.suggestionContent,
-                    params.repoInstructions,
-                ) ||
+                !citesRepoInstruction(f, params.repoInstructions) ||
                 isRepoInstructionFile(f.relevantFile, params.repoInstructions)
             ) {
                 continue;

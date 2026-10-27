@@ -524,15 +524,50 @@ export function isRepoInstructionFile(
     );
 }
 
-/** Whether `text` names an instruction file (see `isRepoInstructionFile`). */
+// The file as the authority for a claim: its subject ("CLAUDE.md says",
+// "CLAUDE.md, added in this PR, requires") or the direct object of one
+// ("per CLAUDE.md", "violates the CLAUDE.md rule", "breaks `AGENTS.md`").
+const CITED_AS_SUBJECT =
+    /\u00a7F[`'"]?\W*(?:[\w-]+\W+){0,4}?(?:says|said|states|stated|requires|required|asks|forbids|mandates|prescribes|instructs|demands)\b/i;
+const CITED_AS_OBJECT =
+    /\b(?:per|according to|violates|violated|violating|violation of|breaks|breaking|contradicts|stated in|defined in|rule in|rules in)\s+(?:the\s+)?[`'"]?\u00a7F/i;
+
+/**
+ * Whether a finding reasons from an instruction file (see
+ * `isRepoInstructionFile`): one of its sentences takes the file as the
+ * authority for its claim. A file the finding's own code names is not a
+ * citation: the finding is about code that handles that file.
+ */
 export function citesRepoInstruction(
-    text: string | undefined,
+    finding: {
+        suggestionContent?: string;
+        existingCode?: string;
+        improvedCode?: string;
+    },
     context: RepoInstructionsContext | undefined,
 ): boolean {
-    const tokens = (text ?? '').match(/[\w./@-]+/g) ?? [];
-    return tokens.some((token) => {
-        const path = token.replace(/^@/, '').replace(/[.,:;]+$/, '');
-        return path.includes('.') && isRepoInstructionFile(path, context);
+    const code = `${finding.existingCode ?? ''}\n${finding.improvedCode ?? ''}`;
+    const sentences = (finding.suggestionContent ?? '').split(
+        /(?<=[.!?;])\s+|\n+/,
+    );
+    return sentences.some((sentence) => {
+        let cited = false;
+        const marked = sentence.replace(/[\w./@-]+/g, (token) => {
+            const path = token.replace(/^@/, '').replace(/[.,:;]+$/, '');
+            if (
+                !path.includes('.') ||
+                !isRepoInstructionFile(path, context) ||
+                code.includes(path)
+            ) {
+                return token;
+            }
+            cited = true;
+            return '\u00a7F';
+        });
+        return (
+            cited &&
+            (CITED_AS_SUBJECT.test(marked) || CITED_AS_OBJECT.test(marked))
+        );
     });
 }
 
