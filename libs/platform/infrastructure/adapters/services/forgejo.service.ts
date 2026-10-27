@@ -4681,7 +4681,13 @@ export class ForgejoService implements Omit<
                                 return null;
                             }
 
-                            const reactions = result.data ?? [];
+                            // Forgejo answers a comment without reactions with
+                            // a `null` body, which the SDK returns as `{}`; a
+                            // non-array here means no reactions, and iterating
+                            // it would throw and lose the whole PR's counts.
+                            const reactions = Array.isArray(result?.data)
+                                ? result.data
+                                : [];
                             let thumbsUp = 0;
                             let thumbsDown = 0;
                             for (const reaction of reactions) {
