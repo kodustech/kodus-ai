@@ -1049,6 +1049,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 body: commentBody,
             };
             let updated = null;
+            let updateError: Error | undefined;
             if (platformType === PlatformType.GITLAB && previousGitlabNote) {
                 try {
                     updated =
@@ -1057,10 +1058,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             ...previousGitlabNote,
                         });
                 } catch (error) {
+                    updateError =
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error));
                     this.logger.warn({
                         message: `Could not update GitLab status note for PR#${prNumber}; creating a replacement`,
                         context: CommentManagerService.name,
-                        error,
+                        error: updateError,
                         metadata: {
                             organizationAndTeamData,
                             repositoryId: repository.id,
@@ -1076,6 +1081,14 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     commentRequest,
                     undefined,
                 ));
+            if (!comment) {
+                throw (
+                    updateError ??
+                    new Error(
+                        `Could not create initial review status for PR#${prNumber}`,
+                    )
+                );
+            }
 
             if (
                 PlatformType.GITHUB === platformType &&

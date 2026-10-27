@@ -624,6 +624,25 @@ describe('CommentManagerService GitLab status note reuse (#1721)', () => {
         ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
         expect(createIssueComment).toHaveBeenCalledTimes(1);
     });
+
+    it('surfaces the edit error if creating a replacement also fails', async () => {
+        const editError = new Error('GitLab token expired');
+        updateIssueComment.mockRejectedValue(editError);
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish({ commentId: 11, noteId: 11 })).rejects.toBe(
+            editError,
+        );
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails when a new status note cannot be published', async () => {
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish()).rejects.toThrow(
+            'Could not create initial review status for PR#42',
+        );
+    });
 });
 
 // repeatedCodeReviewSuggestionClustering was migrated from the legacy
