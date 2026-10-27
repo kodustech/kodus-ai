@@ -138,6 +138,22 @@ describe('ValidateSuggestionsStage', () => {
         );
     });
 
+    it('leaves the same suggestion untouched when committable suggestions are disabled', async () => {
+        const context = createBaseContext({
+            codeReviewConfig: { enableCommittableSuggestions: false } as any,
+        });
+
+        const result = await (stage as any).executeStage(context);
+
+        expect(result.validSuggestions[0].isCommittable).toBeUndefined();
+        expect(
+            mockSuggestionLLMValidator.checkSuggestionSimplicity,
+        ).not.toHaveBeenCalled();
+        expect(
+            mockSuggestionLLMValidator.validateWithLLM,
+        ).not.toHaveBeenCalled();
+    });
+
     it('only treats files with a supported extension as validatable', () => {
         const supported = (f: string) => (stage as any).isLanguageSupported(f);
         for (const f of ['a.ts', 'a.js', 'a.py', 'a.go', 'a.java', 'a.rb', 'a.php']) {
