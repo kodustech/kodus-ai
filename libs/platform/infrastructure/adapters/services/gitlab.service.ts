@@ -2669,12 +2669,19 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Create the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.create(
-                repository.id,
-                prNumber,
-                body,
-            );
+            // Status and summary comments must not open resolvable threads.
+            // PR-level findings carry a suggestion and remain discussions.
+            const response = params.suggestion
+                ? await gitlabAPI.MergeRequestDiscussions.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  )
+                : await gitlabAPI.MergeRequestNotes.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  );
 
             return response;
         } catch (error) {
@@ -2991,14 +2998,21 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Update the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.editNote(
-                repository.id,
-                prNumber,
-                String(threadId ?? commentId),
-                noteId ?? Number(commentId),
-                { body: body },
-            );
+            const response =
+                threadId != null
+                    ? await gitlabAPI.MergeRequestDiscussions.editNote(
+                          repository.id,
+                          prNumber,
+                          String(threadId),
+                          noteId ?? Number(commentId),
+                          { body },
+                      )
+                    : await gitlabAPI.MergeRequestNotes.edit(
+                          repository.id,
+                          prNumber,
+                          noteId ?? Number(commentId),
+                          { body },
+                      );
 
             return response;
         } catch (error) {
@@ -3428,14 +3442,15 @@ export class GitlabService implements Omit<
             // cleared, or erase the one the newer save surfaced (#2003 review).
             // The record carries when it was written, so the stale run is a
             // no-op instead of a blind wholesale replace.
-            const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
-                startedAt?: string;
-                recordedAt?: string;
-                failures?: Record<string, { reason: string; at: string }>;
-            }>(
-                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                organizationAndTeamData,
-            );
+            const stored =
+                await this.integrationConfigService.findIntegrationConfigFormatted<{
+                    startedAt?: string;
+                    recordedAt?: string;
+                    failures?: Record<string, { reason: string; at: string }>;
+                }>(
+                    IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                    organizationAndTeamData,
+                );
 
             // Compare observation STARTS, not write times (#2003 review): an
             // older run that finishes while a newer one is still reconciling
@@ -3450,8 +3465,7 @@ export class GitlabService implements Omit<
                     context: GitlabService.name,
                     serviceName: 'GitlabService recordWebhookCreationFailures',
                     metadata: {
-                        organizationId:
-                            organizationAndTeamData?.organizationId,
+                        organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
                     },
                 });

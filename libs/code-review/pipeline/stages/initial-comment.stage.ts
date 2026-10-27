@@ -110,6 +110,21 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         }
 
+        const previous = context.lastExecution;
+        const previousCommentId = Number(previous?.commentId);
+        const previousNoteId = Number(previous?.noteId);
+        const previousGitlabNote =
+            context.platformType === PlatformType.GITLAB &&
+            !previous?.threadId &&
+            Number.isSafeInteger(previousCommentId) &&
+            previousCommentId > 0 &&
+            previousCommentId === previousNoteId
+                ? {
+                      commentId: previousCommentId,
+                      noteId: previousNoteId,
+                  }
+                : undefined;
+
         const result = await this.commentManagerService.createInitialComment(
             context.organizationAndTeamData,
             context.pullRequest.number,
@@ -119,6 +134,7 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             context.platformType,
             context.codeReviewConfig,
             pullRequestMessagesConfig,
+            previousGitlabNote,
         );
 
         return this.updateContext(context, (draft) => {

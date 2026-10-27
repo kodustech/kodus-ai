@@ -35,6 +35,7 @@ export interface ICommentManagerService {
         platformType: string,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        previousGitlabNote?: { commentId: number; noteId: number },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     processEndReviewMessageTemplate(
