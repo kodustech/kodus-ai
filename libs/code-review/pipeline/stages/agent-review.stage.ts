@@ -483,15 +483,27 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // The index is the same for every review against one target-branch
         // commit, and listing it can take many paged calls (GitLab,
         // Bitbucket); without the commit it is listed each time.
-        const baseSha = context.pullRequest?.base?.sha;
-        const indexKey = baseSha
-            ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
-            : undefined;
+        let baseSha: string | undefined = context.pullRequest?.base?.sha;
         let indexCached = false;
 
         const result = await collectRepoInstructions({
             changedFiles: changedFiles.map((f) => f.filename),
             listFiles: async () => {
+                // GitLab's merge request and note payloads carry no
+                // target-branch commit; one PR lookup costs less than the
+                // paged listing it saves.
+                if (!baseSha && this.cacheService) {
+                    baseSha = await this.codeManagementService
+                        .getPullRequest(
+                            { organizationAndTeamData, repository, prNumber },
+                            context.platformType,
+                        )
+                        .then((pr) => pr?.base?.sha || undefined)
+                        .catch(() => undefined);
+                }
+                const indexKey = baseSha
+                    ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
+                    : undefined;
                 if (indexKey && this.cacheService) {
                     const cached =
                         await this.cacheService.getFromCache<string[]>(
