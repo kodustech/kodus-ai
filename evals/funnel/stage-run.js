@@ -6,7 +6,7 @@
 // PR's data (evals/shared/review-stage.js). Then the stage's control pair
 // (controls.js) the same way.
 //
-//   node evals/funnel/<stage>/run.js [--model=<id>] [--set=controlled|full] [--snapshot=<model>] [--gate] [--output=<file>] [--limit=N] [--cases=<id,id>] [--concurrency=N] [--controls]
+//   node evals/funnel/<stage>/run.js [--model=<id>] [--set=controlled|full] [--snapshot=<model>] [--embedder=platform|none] [--gate] [--output=<file>] [--limit=N] [--cases=<id,id>] [--concurrency=N] [--controls]
 //
 // --model     the model an LLM stage runs on (the nightly model by default)
 // --set       controlled (default): the snapshot's PRs of the finder's controlled
@@ -15,6 +15,8 @@
 //             its own floors (targets.json `sets.<set>.models`)
 // --snapshot  whose frozen input to read (snapshot/<id>.json)
 // --controls  the control pair only: a repository written for it, no GitHub
+// --embedder  a stage that embeds (the dedup): platform (default) or none, as a
+//             self-hosted install without the platform's OpenAI key (shared/embedder.js)
 //
 // A known bug reaches the stage when one of the findings it gets matches it,
 // and survives when one that matches it comes out. The metric counts those and
@@ -30,6 +32,7 @@ const { knownBugs, datasetFor } = require('./known-bugs');
 const { caseSentence } = require('./catalog');
 const { CONTROLS, CONTROL_PR, scoreControl } = require('./controls');
 const { CASE_SETS } = require('../investigation/recall-tests');
+const { parseEmbedder, applyEmbedder, watchEmbeddings } = require('../shared/embedder');
 
 // Which snapshot PRs each set reads.
 const SETS = {
@@ -60,6 +63,7 @@ function refusal(errors) {
  *                        inputOf(frozen) that come out of the step
  * @param stage.inputOf   (frozen) => the findings the step gets, in order (default frozen.candidates)
  * @param stage.controlInput (findings) => a control's findings as the step's frozen input
+ * @param stage.embedder  whether the step embeds (it then takes --embedder and records the embedder)
  */
 async function runStage(stage) {
     const args = parseArgs(process.argv.slice(2));
@@ -70,6 +74,19 @@ async function runStage(stage) {
         console.error(`unknown --set=${SET}: ${Object.keys(SETS).join(' or ')}`);
         process.exit(2);
     }
+    if (args.embedder !== undefined && !stage.embedder) {
+        console.error(`--embedder: ${stage.id} does not embed`);
+        process.exit(2);
+    }
+    let embedder = null;
+    if (stage.embedder) {
+        try {
+            embedder = parseEmbedder(args.embedder);
+        } catch (error) {
+            console.error(error.message);
+            process.exit(2);
+        }
+    }
     const dir = path.join(__dirname, stage.id);
     const TARGET = ((require(path.join(dir, 'targets.json')).sets || {})[SET]?.models || {})[MODEL] || {};
     // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
@@ -77,8 +94,10 @@ async function runStage(stage) {
     process.env.RECALL_MODEL = MODEL;
     const { internals } = require('../investigation/agent-provider');
     countTokens();
+    const environment = stage.embedder ? watchEmbeddings(embedder) : null;
     // A step that calls no model still reads the routed config; it routes nowhere.
     const route = stage.usesModel ? internals.resolveRoute({ provider: 'tier0', model: MODEL }) : { storedConfig: null, route: 'none' };
+    if (embedder) applyEmbedder(embedder);
     const permissionService = internals.evalPermissionService(route.storedConfig);
     const inputOf = stage.inputOf || ((frozen) => frozen.candidates);
 
@@ -154,6 +173,7 @@ async function runStage(stage) {
         // A PR where no known bug reaches the stage has nothing to keep: it is
         // left out of the cases, not shown as 0 of 0.
         cases: results.filter((r) => r.unmeasured || r.total > 0),
+        ...(environment ? { environment: environment() } : {}),
         tokens: tokensUsed(),
         infra: { errored, total: jobs.length },
     };

@@ -2,10 +2,12 @@
 import 'dotenv/config';
 import { execFileSync } from 'node:child_process';
 
-const sql = `with targets(pr) as (values (1233)), latest as (
-    select distinct on ("pullRequestNumber") "pullRequestNumber" as pr,
-        case when status::text in ('success','error','partial_error','skipped','in_progress','pending')
-            then status::text else 'other' end as status,
+const sql = `with targets(pr) as (values (1242)), latest as (
+    select distinct on (ae."pullRequestNumber") ae."pullRequestNumber" as pr,
+        case when ta."teamUuid" = 'ee481c63-f6fc-4631-b74a-65735e882c13'
+            then 'current' else 'other' end as route,
+        case when ae.status::text in ('success','error','partial_error','skipped','in_progress','pending')
+            then ae.status::text else 'other' end as status,
         case
             when "errorMessage" ~* 'credit|billing|licen[sc]|subscription|trial' then 'billing'
             when "errorMessage" ~* 'permission|unauthor|forbidden|token' then 'auth'
@@ -44,13 +46,15 @@ const sql = `with targets(pr) as (values (1233)), latest as (
             when "errorMessage" ~* 'missing|not.configured|no.api.key' then 'missing'
             when "errorMessage" ~* 'invalid|incorrect|expired|revoked' then 'invalid'
             else 'unknown' end as auth_kind
-    from automation_execution
-    where "pullRequestNumber" = 1233
-      and "createdAt" >= '2026-10-26 18:00:00+00'
-      and "createdAt" < '2026-10-26 18:14:51+00'
-    order by "pullRequestNumber", "createdAt" desc
+    from automation_execution ae
+    left join team_automations ta on ta.uuid = ae.team_automation_id
+    where ae."pullRequestNumber" = 1242
+      and ae."createdAt" >= '2026-10-27 10:37:00+00'
+      and ae."createdAt" < '2026-10-27 10:51:08+00'
+    order by ae."pullRequestNumber", ae."createdAt" desc
 )
-select distinct 'status=' || coalesce(latest.status,'missing') ||
+select distinct 'route=' || coalesce(latest.route,'missing') ||
+    ',status=' || coalesce(latest.status,'missing') ||
     ',cause=' || coalesce(latest.cause,'none') ||
     ',detail=' || coalesce(latest.detail,'none') ||
     ',upstream=' || coalesce(latest.upstream,'unknown') ||
@@ -72,7 +76,7 @@ try {
     ).trim();
     const lines = output.split('\n');
     const allowed =
-        /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(rate_limit|timeout|network|llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
+        /^route=(current|other|missing),status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(rate_limit|timeout|network|llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
     if (
         lines.length < 1 ||
         lines.length > 1 ||

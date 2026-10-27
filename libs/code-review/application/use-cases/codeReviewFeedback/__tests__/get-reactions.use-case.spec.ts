@@ -1,4 +1,7 @@
 import { GetReactionsUseCase } from '../get-reactions.use-case';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { AzureReposService } from '@libs/platform/infrastructure/adapters/services/azureRepos/azureRepos.service';
 import { ReactionSyncAbortedError } from '@libs/code-review/domain/codeReviewFeedback/errors/reaction-sync-aborted.error';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import {
@@ -11,6 +14,11 @@ import {
     createSampleComment,
     createSampleReactionResult,
 } from './fixtures';
+
+// Azure's reaction counter is real; only its unrelated Enterprise/MCP edge is isolated.
+jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
+    MCPManagerService: class {},
+}));
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -89,6 +97,147 @@ describe('GetReactionsUseCase', () => {
             codeManagementService.getPullRequestReviewComment,
         ).not.toHaveBeenCalled();
         expect(result).toEqual([]);
+    });
+
+    it('links a comment whose first identifier is not the stored one (Forgejo)', async () => {
+        // Forgejo's adapter fills threadId with the review id, so the first
+        // candidate misses; the comment's own id is what the suggestion was
+        // stored under (#2054), and the lookup has to try it too.
+        const pr = createSamplePullRequestWithSuggestions({
+            provider: PlatformType.FORGEJO,
+        });
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue([pr]);
+
+        const comment = createSampleComment({ id: 100, threadId: 'review-999' });
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([comment]);
+
+        const reaction = createSampleReactionResult({
+            comment: { id: 100, pull_request_review_id: 'pr-review-999' },
+        });
+        codeManagementService.countReactions.mockResolvedValue([reaction]);
+
+        const result = await useCase.execute(orgAndTeam, [42]);
+
+        expect(codeManagementService.countReactions).toHaveBeenCalledWith(
+            expect.objectContaining({ comments: [comment] }),
+        );
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+            reactions: { thumbsUp: 1, thumbsDown: 0 },
+            suggestionId: 'suggestion-001',
+        });
+    });
+
+    it.each([
+        { id: 100, threadId: 9999 },
+        { id: 888, threadId: 9999, notes: [{ id: 100 }] },
+        { id: 100 },
+    ])(
+        'rejects an Azure comment outside a suggestion thread: %j',
+        async (comment) => {
+            const pr = createSamplePullRequestWithSuggestions({
+                provider: PlatformType.AZURE_REPOS,
+            });
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [pr],
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+                comment,
+            ]);
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult({ comment: { id: 9999 } }),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(result).toEqual([]);
+            expect(codeManagementService.countReactions).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([false, true])(
+        'keeps Azure thread and note ids separate in both listing orders (reverse=%s)',
+        async (reverse) => {
+            const pr = createSamplePullRequestWithSuggestions({
+                provider: PlatformType.AZURE_REPOS,
+                suggestions: [
+                    {
+                        id: 'suggestion-A',
+                        deliveryStatus: DeliveryStatus.SENT,
+                        comment: { id: 10, pullRequestReviewId: null },
+                    },
+                    {
+                        id: 'suggestion-B',
+                        deliveryStatus: DeliveryStatus.SENT,
+                        comment: { id: 20, pullRequestReviewId: null },
+                    },
+                ],
+            });
+            const reply = (user: string) => ({
+                author: { id: user },
+                body: String.fromCodePoint(0x1f44d),
+            });
+            // A's note id equals B's thread id. Azure returns the thread id on reactions.
+            const comments = [
+                { id: 20, threadId: 10, replies: [reply('user-A')] },
+                {
+                    id: 30,
+                    threadId: 20,
+                    replies: [reply('user-B'), reply('user-C')],
+                },
+            ];
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [pr],
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                reverse ? [...comments].reverse() : comments,
+            );
+            // Exercise the real adapter's thread-id output, not a guessed reaction shape.
+            const azure = Object.create(
+                AzureReposService.prototype,
+            ) as AzureReposService;
+            codeManagementService.countReactions.mockImplementation((input) =>
+                azure.countReactions(input),
+            );
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(
+                result
+                    .map((reaction) => ({
+                        commentId: reaction.comment.id,
+                        suggestionId: reaction.suggestionId,
+                        thumbsUp: reaction.reactions.thumbsUp,
+                    }))
+                    .sort((a, b) => a.commentId - b.commentId),
+            ).toEqual([
+                { commentId: 10, suggestionId: 'suggestion-A', thumbsUp: 1 },
+                { commentId: 20, suggestionId: 'suggestion-B', thumbsUp: 2 },
+            ]);
+        },
+    );
+
+    it('keeps the caller repository id when the GitHub reaction omits it', async () => {
+        const pr = createSamplePullRequestWithSuggestions({
+            provider: PlatformType.GITHUB,
+        });
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [pr],
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            createSampleComment({ id: 100 }),
+        ]);
+        codeManagementService.countReactions.mockResolvedValue([
+            createSampleReactionResult({
+                pullRequest: { id: 'provider-pr', number: 42 },
+            }),
+        ]);
+        const result = await useCase.execute(orgAndTeam, [42]);
+        expect(result).toHaveLength(1);
+        expect(result[0].pullRequest.repository).toEqual({
+            id: pr.repository.id,
+            fullName: pr.repository.name,
+        });
     });
 
     it('should fetch comments and reactions for PRs with suggestions', async () => {

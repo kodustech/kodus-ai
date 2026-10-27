@@ -884,6 +884,9 @@ export class AutomationCodeReviewService implements Omit<
         if (validLastAnalyzedCommit) {
             Object.assign(baseData, {
                 lastAnalyzedCommit: result.lastAnalyzedCommit,
+                // What the reviewed commit was compared against; a rebase
+                // reads its earlier diff against the same branch (#2037).
+                reviewedBaseBranch: pullRequest?.base?.ref,
                 commentId: result.commentId,
                 noteId: result.noteId,
                 threadId: result.threadId,

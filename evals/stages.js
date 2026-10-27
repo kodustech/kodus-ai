@@ -264,6 +264,8 @@ const STAGES = [
                 name: 'The findings schema and the JSON extraction',
                 specs: [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
+                    'libs/llm/structured-output-repair.spec.ts',
                     'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],

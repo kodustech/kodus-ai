@@ -349,4 +349,45 @@ describe('KodyRulesTools rule listings', () => {
             });
         },
     );
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s returns stored Date timestamps as ISO strings the output schema accepts',
+        async (_name, tool, args) => {
+            const createdAt = new Date('2026-10-01T10:00:00.000Z');
+            const updatedAt = new Date('2026-10-02T11:30:00.000Z');
+            findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'rule-1',
+                        title: 'Avoid console.log',
+                        status: KodyRulesStatus.ACTIVE,
+                        repositoryId: 'repo-1',
+                        createdAt,
+                        updatedAt,
+                    },
+                ],
+            });
+            const definition = tool();
+
+            const result: any = await definition.execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.structuredContent.data[0]).toMatchObject({
+                createdAt: '2026-10-01T10:00:00.000Z',
+                updatedAt: '2026-10-02T11:30:00.000Z',
+            });
+            expect(() =>
+                definition.outputSchema.parse(result.structuredContent),
+            ).not.toThrow();
+        },
+    );
 });

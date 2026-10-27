@@ -6,6 +6,7 @@ import {
     isTerminalCategory,
     llmErrorLogLevel,
 } from './error-classifier';
+import { shouldFailoverToNextModel } from './model-failover';
 import { APICallError } from '@ai-sdk/provider';
 import { RetryError } from 'ai';
 
@@ -102,10 +103,59 @@ describe('classifyLLMError', () => {
             );
         });
 
+        it('disambiguates a 429 carrying the spend-cap prose → QUOTA_EXCEEDED', () => {
+            const err = errorWithStatus(
+                'You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        // The counterexample the vocabulary must NOT swallow: a temporary
+        // limit worded with "usage limit" is a rate limit, and reading it as
+        // a quota would skip the slot cooldown and cascade on every sub-call.
+        it('keeps a temporary usage-limit 429 on RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                'You have reached your usage limit, it will reset at 3pm.',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
         it('treats plain 429 → RATE_LIMIT', () => {
             const err = errorWithStatus('too many requests', 429);
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
+        // Google AI Studio words a per-minute token limit like a spent quota:
+        // "You exceeded your current quota". Only the quota id says which.
+        const googleQuota = (quotaId: string) =>
+            'You exceeded your current quota, please check your plan and billing details. ' +
+            `Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count, limit: 2000000, model: gemini-3.8-flash quotaId: ${quotaId} Please retry in 41s.`;
+
+        it('reads a Google per-minute token quota on a 429 as RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                googleQuota('GenerateContentPaidTierInputTokensPerModelPerMinute'),
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
+        it('keeps a Google daily quota on a 429 as QUOTA_EXCEEDED', () => {
+            const err = errorWithStatus(
+                googleQuota('GenerateRequestsPerDayPerProjectPerModel-FreeTier'),
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
             );
         });
 
@@ -306,6 +356,24 @@ describe('classifyLLMError', () => {
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.QUOTA_EXCEEDED,
             );
+        });
+
+        // Read off production: an Anthropic org's spend cap returns this exact
+        // prose. It names neither quota nor billing, so it classified as
+        // UNKNOWN -- never cascaded -- and the configured fallback model went
+        // unused for the whole month the cap was in force (#2110).
+        it('Anthropic organization spend cap prose cascades to the fallback', () => {
+            const err = new Error(
+                'You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+            // The outcome the issue reported: a terminal category is what
+            // shouldFailoverToNextModel cascades. Asserted with the REAL
+            // classifier -- model-failover.spec mocks it on purpose, so only
+            // this pair pins the two halves together.
+            expect(shouldFailoverToNextModel(err)).toBe(true);
         });
 
         it('"account is suspended due to insufficient credit" → QUOTA_EXCEEDED', () => {

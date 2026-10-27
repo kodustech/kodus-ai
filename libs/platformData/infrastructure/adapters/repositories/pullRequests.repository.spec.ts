@@ -104,6 +104,36 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('appendPrLevelSuggestions (atomic append)', () => {
+        it('pushes onto the resolved document and touches nothing else', async () => {
+            // The document the identity lookup resolved is the target, and the
+            // append happens in one statement: rebuilding the array from a
+            // snapshot is what dropped a concurrent writer's append (#2076
+            // review).
+            findOneAndUpdate.mockResolvedValue(null);
+            const entity = {
+                uuid: 'pr-uuid',
+                organizationId: 'org-A',
+            } as any;
+
+            await repo.appendPrLevelSuggestions(entity, [
+                { id: 'new' } as any,
+            ]);
+
+            expect(findOneAndUpdate).toHaveBeenCalledTimes(1);
+            const [filter, update, options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toEqual({
+                _id: 'pr-uuid',
+                organizationId: 'org-A',
+            });
+            expect(update).toEqual({
+                $push: { prLevelSuggestions: { $each: [{ id: 'new' }] } },
+                $set: { updatedAt: expect.any(String) },
+            });
+            expect(options).toEqual({ new: true });
+        });
+    });
+
     describe('findNumbersByRepositoryId (token-usage repo filter)', () => {
         const mockFind = (docs: Array<{ number: number }>) => {
             const findExec = jest.fn().mockResolvedValue(docs);

@@ -68,6 +68,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
+import { reviewedCommitIn } from '@libs/code-review/utils/reviewed-commit';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
@@ -1376,13 +1377,10 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // instead of merely anchoring it on a stale tree. The live list
             // read above is the source of truth for "is it still part of the
             // PR", so the pin is conditional on it.
-            const reviewedCommitBelongsToPr = reviewedCommit
-                ? commits.some((commit) => commit?.sha === reviewedCommit)
-                : false;
+            // Bitbucket's webhook carries a short sha; see reviewedCommitIn.
+            const reviewed = reviewedCommitIn(commits, reviewedCommit);
 
-            const lastAnalyzedCommit = reviewedCommitBelongsToPr
-                ? { sha: reviewedCommit }
-                : commits[commits.length - 1];
+            const lastAnalyzedCommit = reviewed ?? commits[commits.length - 1];
             const commentResults = [];
 
             if (!lineComments?.length) {
