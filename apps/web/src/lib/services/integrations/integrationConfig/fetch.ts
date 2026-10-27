@@ -1,9 +1,9 @@
-import type { Repository } from "@services/codeManagement/types";
 import { authorizedFetch } from "@services/fetch";
 import { IntegrationCategory } from "src/core/types";
 
 import { INTEGRATION_CONFIG } from ".";
 import type { IntegrationConfig } from "./types";
+import { selectedRepositoriesFrom } from "./utils";
 
 export const getIntegrationConfig = ({
     teamId,
@@ -17,5 +17,5 @@ export const getIntegrationConfig = ({
         {
             params: { teamId, integrationCategory },
         },
-    ).then((r) => (r.at(0)?.configValue ?? []) as Array<Repository>);
+    ).then(selectedRepositoriesFrom);
 };
