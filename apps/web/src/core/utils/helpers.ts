@@ -36,8 +36,7 @@ export function pathToApiUrl(
 
     let hostName = process.env.WEB_HOSTNAME_API;
     if (hostName === "localhost") {
-        hostName =
-            process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
+        hostName = process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
     }
     const port = process.env.WEB_PORT_API;
 
@@ -197,6 +196,11 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",
         "pullRequestApprovalActive",
+        "approvalLabels",
+        "approvalAuthors",
+        "approvalRiskActive",
+        "approvalRiskInstructions",
+        "approvalSensitivePaths",
         "suggestionControl",
         "summary",
         "isRequestChangesActive",
@@ -246,10 +250,8 @@ export const codeReviewConfigRemovePropertiesNotInType = (
 export const waitFor = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-// Trailing comma on the generic <T,> disambiguates from JSX for
-// SWC/Turbopack's edge-runtime parser when this module is imported
-// from middleware.ts.
-export const unformatConfig = <T,>(node: FormattedConfig<T>): T => {
+// This module is also imported from middleware.ts in the edge runtime.
+export const unformatConfig = <T>(node: FormattedConfig<T>): T => {
     const unformattedConfig: Partial<T> = {};
 
     (Object.keys(node) as (keyof T)[]).forEach((key) => {

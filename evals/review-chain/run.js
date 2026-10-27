@@ -50,30 +50,177 @@ const GATE = process.argv.includes('--gate');
 // runner (not a direct LLM.run call-site), so discovery won't see it — it is
 // still checked for resilience regressions.
 const BOUNDARIES = [
-    { phase: 'finder', files: ['libs/code-review/infrastructure/agents/core/finder.agent.ts'], requires: ['schema', 'shape'] },
-    { phase: 'verifier', files: ['libs/code-review/infrastructure/agents/core/verifier.agent.ts', 'libs/agent-harness/infrastructure/verify/llm-verdict.ts'], requires: ['shape'], noInvoke: true, note: 'agent-loop; extractVerdict → recoverVerdictObject → normalizeEnvelope (scalar), plus the text path via extractLastJsonObjectWith (#1937). The shape layer moved to the harness file so BOTH verifiers (code-review + business-rules) share it — declare both files or the scan reads a regression that is not there.' },
-    { phase: 'dedup', files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'], requires: ['schema', 'shape'] },
-    { phase: 'repeat-check', files: ['libs/code-review/infrastructure/agents/engine/repeat-check.ts'], requires: ['schema', 'shape'], note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)' },
-    { phase: 'enrich-content', files: ['libs/code-review/infrastructure/agents/engine/enrich-content.ts'], requires: ['schema'], note: "the finding's title, fixStatus and improvedCode in one call (#1821)" },
-    { phase: 'micro-agents', files: ['libs/code-review/infrastructure/agents/core/micro-agents.ts'], requires: ['schema'], note: 'M3 lens planner (#1821)' },
-    { phase: 'selector-shard', files: ['libs/code-review/infrastructure/agents/core/selector-shard.ts'], requires: ['schema'], note: 'shard selector (#1821)' },
-    { phase: 'scout-investigator', files: ['libs/code-review/infrastructure/agents/core/scout-investigator.ts'], requires: ['schema'], note: 'scout pass (#1821)' },
-    { phase: 'kody-rules-shard', files: ['libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts'], requires: ['schema', 'recover'], note: 'bare-array recovery (#1786) — floor includes recoverEnvelopeShape' },
-    { phase: 'kody-rules-compiler', files: ['libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts'], declined: true, note: 'produces a REGEX detector — recovering off-schema output would ship a wrong detector; declines by design' },
-    { phase: 'kodyIssues-merge', files: ['libs/ee/codeBase/kodyIssuesAnalysis.service.ts'], requires: ['schema'], note: 'wrong shape → re-ask by design (not opted into recover)' },
-    { phase: 'commentAnalysis', files: ['libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts'], requires: ['schema'] },
-    { phase: 'commentManager', files: ['libs/code-review/infrastructure/adapters/services/commentManager.service.ts'], requires: ['schema'] },
-    { phase: 'llmAnalysis', files: ['libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts'], requires: ['schema'] },
-    { phase: 'safeguard', files: ['libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts'], requires: ['schema', 'shape'] },
-    { phase: 'suggestionLLMValidator', files: ['libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts'], requires: ['schema'] },
-    { phase: 'documentation-planner', files: ['libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts'], requires: ['schema', 'shape'] },
-    { phase: 'documentation-search', files: ['libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts'], requires: ['schema'] },
-    { phase: 'llmResponseProcessor', files: ['libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform.ts'], requires: ['shape'], noInvoke: true, note: 'processor: extractJsonFromText + normalizeEnvelope' },
+    {
+        phase: 'finder',
+        files: ['libs/code-review/infrastructure/agents/core/finder.agent.ts'],
+        requires: ['schema', 'shape'],
+    },
+    {
+        phase: 'verifier',
+        files: [
+            'libs/code-review/infrastructure/agents/core/verifier.agent.ts',
+            'libs/agent-harness/infrastructure/verify/llm-verdict.ts',
+        ],
+        requires: ['shape'],
+        noInvoke: true,
+        note: 'agent-loop; extractVerdict → recoverVerdictObject → normalizeEnvelope (scalar), plus the text path via extractLastJsonObjectWith (#1937). The shape layer moved to the harness file so BOTH verifiers (code-review + business-rules) share it — declare both files or the scan reads a regression that is not there.',
+    },
+    {
+        phase: 'dedup',
+        files: ['libs/code-review/pipeline/stages/agent-review.stage.ts'],
+        requires: ['schema', 'shape'],
+    },
+    {
+        phase: 'repeat-check',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/repeat-check.ts',
+        ],
+        requires: ['schema', 'shape'],
+        note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)',
+    },
+    {
+        phase: 'enrich-content',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/enrich-content.ts',
+        ],
+        requires: ['schema'],
+        note: "the finding's title, fixStatus and improvedCode in one call (#1821)",
+    },
+    {
+        phase: 'micro-agents',
+        files: ['libs/code-review/infrastructure/agents/core/micro-agents.ts'],
+        requires: ['schema'],
+        note: 'M3 lens planner (#1821)',
+    },
+    {
+        phase: 'selector-shard',
+        files: [
+            'libs/code-review/infrastructure/agents/core/selector-shard.ts',
+        ],
+        requires: ['schema'],
+        note: 'shard selector (#1821)',
+    },
+    {
+        phase: 'scout-investigator',
+        files: [
+            'libs/code-review/infrastructure/agents/core/scout-investigator.ts',
+        ],
+        requires: ['schema'],
+        note: 'scout pass (#1821)',
+    },
+    {
+        phase: 'kody-rules-shard',
+        files: [
+            'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts',
+        ],
+        requires: ['schema', 'recover'],
+        note: 'bare-array recovery (#1786) — floor includes recoverEnvelopeShape',
+    },
+    {
+        phase: 'kody-rules-compiler',
+        files: [
+            'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts',
+        ],
+        declined: true,
+        note: 'produces a REGEX detector — recovering off-schema output would ship a wrong detector; declines by design',
+    },
+    {
+        phase: 'kodyIssues-merge',
+        files: ['libs/ee/codeBase/kodyIssuesAnalysis.service.ts'],
+        requires: ['schema'],
+        note: 'wrong shape → re-ask by design (not opted into recover)',
+    },
+    {
+        phase: 'commentAnalysis',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts',
+        ],
+        requires: ['schema'],
+    },
+    {
+        phase: 'commentManager',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/commentManager.service.ts',
+        ],
+        requires: ['schema'],
+    },
+    {
+        phase: 'llmAnalysis',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts',
+        ],
+        requires: ['schema'],
+    },
+    {
+        phase: 'safeguard',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts',
+        ],
+        requires: ['schema', 'shape'],
+    },
+    {
+        phase: 'suggestionLLMValidator',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts',
+        ],
+        requires: ['schema'],
+    },
+    {
+        phase: 'documentation-planner',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts',
+        ],
+        requires: ['schema', 'shape'],
+    },
+    {
+        phase: 'documentation-search',
+        files: [
+            'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts',
+        ],
+        requires: ['schema'],
+    },
+    {
+        phase: 'approval-risk',
+        files: ['libs/code-review/domain/approval/assess-approval-risk.ts'],
+        requires: ['schema'],
+        note: 'invalid or unavailable risk output is held for human approval',
+    },
+    {
+        phase: 'llmResponseProcessor',
+        files: [
+            'libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform.ts',
+        ],
+        requires: ['shape'],
+        noInvoke: true,
+        note: 'processor: extractJsonFromText + normalizeEnvelope',
+    },
     // ── accepted, non-gating: text-only or a parallel/bespoke extractor. Tracked
     //    so the ledger stays honest; degrade-safe, so not a silent-loss blocker.
-    { phase: 'classify-severity', files: ['libs/code-review/infrastructure/agents/engine/classify-severity.ts', 'libs/code-review/infrastructure/agents/engine/severity-prompt.ts'], accepted: true, note: 'text call; parseSeverityResponse is bespoke and degrades to all-medium (no dropped findings) — candidate to wire onto extractJsonFromText' },
-    { phase: 'format-suggestion-content', files: ['libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts'], accepted: true, note: 'text call; output is used as prose, no JSON parse — no shape concern' },
-    { phase: 'reference-detector', files: ['libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts'], accepted: true, note: 'uses a PARALLEL extractor (extractJsonFromResponse) with its OWN 42-row contract (aggressive bracket-slice + fail-safe) — tested, not a silent-loss gap; consolidating onto extractJsonFromText is a semantics migration, not a swap' },
+    {
+        phase: 'classify-severity',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/classify-severity.ts',
+            'libs/code-review/infrastructure/agents/engine/severity-prompt.ts',
+        ],
+        accepted: true,
+        note: 'text call; parseSeverityResponse is bespoke and degrades to all-medium (no dropped findings) — candidate to wire onto extractJsonFromText',
+    },
+    {
+        phase: 'format-suggestion-content',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/format-suggestion-content.ts',
+        ],
+        accepted: true,
+        note: 'text call; output is used as prose, no JSON parse — no shape concern',
+    },
+    {
+        phase: 'reference-detector',
+        files: [
+            'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.ts',
+        ],
+        accepted: true,
+        note: 'uses a PARALLEL extractor (extractJsonFromResponse) with its OWN 42-row contract (aggressive bracket-slice + fail-safe) — tested, not a silent-loss gap; consolidating onto extractJsonFromText is a semantics migration, not a swap',
+    },
 ];
 
 function read(rel) {
@@ -122,7 +269,12 @@ function analyze({ boundaries, detectFor, callSites }) {
     for (const b of boundaries) {
         const d = detectFor(b.files);
         if (d.missing && d.missing.length) {
-            rows.push({ phase: b.phase, status: 'MISSING-FILE', detail: d.missing.join(', '), gate: true });
+            rows.push({
+                phase: b.phase,
+                status: 'MISSING-FILE',
+                detail: d.missing.join(', '),
+                gate: true,
+            });
             gaps++;
             continue;
         }
@@ -140,15 +292,29 @@ function analyze({ boundaries, detectFor, callSites }) {
             (d[req] ? have : lost).push(req);
         }
         if (lost.length) {
-            rows.push({ phase: b.phase, status: 'REGRESSED', detail: `lost: ${lost.join('+')} (has: ${have.join('+') || 'none'})${b.note ? ' — ' + b.note : ''}`, gate: true });
+            rows.push({
+                phase: b.phase,
+                status: 'REGRESSED',
+                detail: `lost: ${lost.join('+')} (has: ${have.join('+') || 'none'})${b.note ? ' — ' + b.note : ''}`,
+                gate: true,
+            });
             gaps++;
         } else {
-            rows.push({ phase: b.phase, status: 'WIRED', detail: `${have.join('+')}${b.note ? ' — ' + b.note : ''}` });
+            rows.push({
+                phase: b.phase,
+                status: 'WIRED',
+                detail: `${have.join('+')}${b.note ? ' — ' + b.note : ''}`,
+            });
         }
     }
 
     for (const f of (callSites || []).filter((f) => !claimed.has(f))) {
-        rows.push({ phase: '(undeclared)', status: 'UNDECLARED', detail: `${f} calls an LLM but has no manifest entry — declare its resilience posture`, gate: true });
+        rows.push({
+            phase: '(undeclared)',
+            status: 'UNDECLARED',
+            detail: `${f} calls an LLM but has no manifest entry — declare its resilience posture`,
+            gate: true,
+        });
         gaps++;
     }
     return { rows, gaps };
@@ -164,10 +330,15 @@ function discoverCallSites() {
     try {
         out = execSync(cmd, { cwd: ROOT, encoding: 'utf8' });
     } catch (e) {
-        console.error(`[review-chain] INFRA: discovery grep failed: ${e.message}`);
+        console.error(
+            `[review-chain] INFRA: discovery grep failed: ${e.message}`,
+        );
         process.exit(2);
     }
-    return out.split('\n').map((s) => s.trim()).filter(Boolean);
+    return out
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
 }
 
 // ── exports (self-test drives the pure pieces) ────────────────────────────────
@@ -181,10 +352,19 @@ function main() {
         callSites: discoverCallSites(),
     });
 
-    const icon = { WIRED: '✅', DECLINED: '⛔', ACCEPTED: '⚠️ ', REGRESSED: '❌', UNDECLARED: '❌', 'MISSING-FILE': '❌' };
+    const icon = {
+        'WIRED': '✅',
+        'DECLINED': '⛔',
+        'ACCEPTED': '⚠️ ',
+        'REGRESSED': '❌',
+        'UNDECLARED': '❌',
+        'MISSING-FILE': '❌',
+    };
     console.log('\n review-chain LLM-resilience ledger\n');
     for (const r of rows) {
-        console.log(`  ${icon[r.status] || '  '} ${r.phase.padEnd(24)} ${r.status.padEnd(13)} ${r.detail || ''}`);
+        console.log(
+            `  ${icon[r.status] || '  '} ${r.phase.padEnd(24)} ${r.status.padEnd(13)} ${r.detail || ''}`,
+        );
     }
     const count = (s) => rows.filter((r) => r.status === s).length;
     console.log(
@@ -192,10 +372,14 @@ function main() {
     );
 
     if (gaps > 0) {
-        console.error('\n review-chain: a phase regressed below its resilience floor, or an LLM call-site is undeclared.');
+        console.error(
+            '\n review-chain: a phase regressed below its resilience floor, or an LLM call-site is undeclared.',
+        );
         process.exit(GATE ? 1 : 0);
     }
-    console.log('\n review-chain: every declared phase is wired to the shared resilience.');
+    console.log(
+        '\n review-chain: every declared phase is wired to the shared resilience.',
+    );
     process.exit(0);
 }
 

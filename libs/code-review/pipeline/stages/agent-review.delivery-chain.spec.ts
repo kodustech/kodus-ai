@@ -159,7 +159,15 @@ const buildStages = () => {
     };
     const pullRequests = {
         addPrLevelSuggestions: jest.fn(
-            async (_n: any, _r: any, suggestions: any[]) => {
+            // The signature is (number, repositoryId, repositoryName,
+            // suggestions, organizationAndTeamData): the mock has to skip the
+            // name too, or the suggestions slot receives it (#2076 review).
+            async (
+                _n: any,
+                _r: any,
+                _name: any,
+                suggestions: any[],
+            ) => {
                 saved.prLevel.push(...suggestions);
             },
         ),

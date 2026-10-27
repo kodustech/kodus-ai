@@ -4255,13 +4255,14 @@ export class BitbucketCloudService implements Omit<
             };
 
             const userUuid = currentUserRes?.data?.uuid;
+            if (!userUuid) return null;
             const activities =
                 await this.getPaginatedResults<BitbucketActivity>(
                     bitbucketAPI,
                     activitiesRes,
                 );
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const activity of activities) {
                 if (activity.approval?.user?.uuid === userUuid) {
                     state = PullRequestReviewState.APPROVED;
@@ -4515,6 +4516,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4560,6 +4562,7 @@ export class BitbucketCloudService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -6013,6 +6016,7 @@ export class BitbucketCloudService implements Omit<
             targetRefName: pullRequest?.destination?.branch?.name ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pullRequest?.destination?.branch?.name ?? '',
+                sha: pullRequest?.destination?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(

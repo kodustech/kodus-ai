@@ -28,6 +28,7 @@ const buildStrategy = (): CodeReviewPipelineStrategy =>
         mockStage('ValidateSuggestionsStage') as any,
         mockStage('CreateFileCommentsStage') as any,
         mockStage('AggregateResultsStage') as any,
+        mockStage('DecidePrApprovalStage') as any,
         mockStage('UpdateCommentsAndGenerateSummaryStage') as any,
         mockStage('RequestChangesOrApproveStage') as any,
     );
@@ -52,6 +53,7 @@ const EXPECTED_ORDER = [
     'ValidateSuggestionsStage',
     'CreateFileCommentsStage',
     'AggregateResultsStage',
+    'DecidePrApprovalStage',
     'UpdateCommentsAndGenerateSummaryStage',
     'RequestChangesOrApproveStage',
 ];

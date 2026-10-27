@@ -11,8 +11,8 @@ import type { FeatureAudience, SnapshotFeature } from './snapshot.types';
  *
  *   `deny`        — the catalog explicitly blocks the feature for this
  *                   audience / track combination. Adapter returns false.
- *   `pass`        — catalog allows. Cloud adapter should consult PostHog
- *                   for operational fine-tuning; self-hosted returns true.
+ *   `pass`        — catalog allows. Cloud beta needs no further flag;
+ *                   other cloud stages may consult PostHog.
  *   `compat-pass` — feature is missing from the catalog (legacy / in-flight
  *                   feature without an entry yet). Cloud should still hit
  *                   PostHog; self-hosted returns true. On PostHog error,
@@ -68,8 +68,8 @@ export function evaluateCatalogGate(inputs: GateInputs): GateDecision {
 
 /**
  * Cloud fallback when PostHog is unreachable. Mirrors the historical
- * permissive behavior: features missing from the catalog default to on,
- * GA features stay on, anything else is denied.
+ * permissive behavior for stages that still consult PostHog: features
+ * missing from the catalog default to on, GA stays on, alpha is denied.
  */
 export function cloudFallbackOnPosthogError(
     decision: GateDecision,

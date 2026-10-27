@@ -25,6 +25,10 @@ import type { ReducerTrace } from '@libs/code-review/infrastructure/agents/engin
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
+import type {
+    ApprovalDecision,
+    ApprovalRiskAssessment,
+} from '@libs/code-review/domain/approval/approval-decision';
 import {
     AnalysisContext,
     AutomaticReviewStatus,
@@ -234,6 +238,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     businessLogicPrBodyHash?: string;
 
     lineComments?: CommentResult[];
+
+    /** Approval policy result for this reviewed head; reused by the finish stage. */
+    approvalDecision?: ApprovalDecision;
+    approvalRisk?: ApprovalRiskAssessment;
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;

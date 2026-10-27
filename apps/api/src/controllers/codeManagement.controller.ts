@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
     CheckPolicies,
     PolicyGuard,
@@ -43,6 +44,7 @@ import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
 import { GetRepositoryTreeByDirectoryDto } from '@libs/platform/dtos/get-repository-tree-by-directory.dto';
 import { WebhookStatusQueryDto } from '../dtos/webhook-status-query.dto';
+import { AreaRiskMapQueryDto } from '../dtos/area-risk-map-query.dto';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -86,10 +88,34 @@ export class CodeManagementController {
         private readonly getWebhookCreationFailuresUseCase: GetWebhookCreationFailuresUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
+        private readonly getAreaRiskMapUseCase: GetAreaRiskMapUseCase,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
+
+    @Get('/area-risk-map')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkRepoPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+            repo: { key: { query: 'repositoryId' } },
+        }),
+    )
+    @ApiOperation({ summary: 'Read historical code-area risk evidence' })
+    @ApiQuery({ name: 'repositoryId', required: true })
+    @ApiQuery({ name: 'teamId', required: true })
+    public async getAreaRiskMap(@Query() query: AreaRiskMapQueryDto) {
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId)
+            throw new BadRequestException('organizationId required');
+        return this.getAreaRiskMapUseCase.execute({
+            organizationId,
+            teamId: query.teamId,
+            repositoryId: query.repositoryId,
+        });
+    }
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)

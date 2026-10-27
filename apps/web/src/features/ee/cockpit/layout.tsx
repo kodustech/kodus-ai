@@ -12,6 +12,9 @@ import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
 import { getReviewedPullRequestCount } from "@services/pull-requests/fetch";
+import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
+import { FEATURE_KEYS } from "@libs/feature-gate/domain/feature-keys";
+import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import type { CookieName } from "src/core/utils/cookie";
 import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
@@ -19,16 +22,18 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
 import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
-import { DateRangePicker } from "./_components/date-range-picker";
+import { CodeAreasTab } from "./_components/code-areas-tab";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
 import { IntentTab } from "./_components/intent-tab";
 import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
 import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
-import { RepositoryPicker } from "./_components/repository-picker";
 import { ShareViewButton } from "./_components/share-view-button";
+import { TabAwareDateRangePicker } from "./_components/tab-aware-date-range-picker";
+import { TabAwareRepositoryPicker } from "./_components/tab-aware-repository-picker";
 import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
+import { getSelectedRepository } from "./_helpers/get-selected-repository";
 import { isCockpitTierAllowed } from "./_helpers/tier-policy";
 import { getAnalyticsStatus } from "./_services/analytics/fetch";
 
@@ -79,10 +84,9 @@ async function CockpitLayoutBody({
     // in-process Postgres warehouse via apps/api (JWT auth), which never reads
     // that secret. Gating the page on an empty legacy secret made self-hosted
     // Enterprise orgs see "Analytics Not Available" despite a valid license.
-    const [cookieStore, selectedTeamId] = await Promise.all([
-        cookies(),
-        getGlobalSelectedTeamId(),
-    ]);
+    const [cookieStore, selectedTeamId, selectedRepository] = await Promise.all(
+        [cookies(), getGlobalSelectedTeamId(), getSelectedRepository()],
+    );
 
     // Kick the license check and the analytics/visibility fetches off together
     // (the license call can be slow — billing cold-start), then await the
@@ -183,6 +187,11 @@ async function CockpitLayoutBody({
     }
 
     const [analyticsResult, metricsVisibility] = await analyticsPromise;
+    const codeAreasEnabled = await isFeatureEnabled({
+        feature: FEATURE_KEYS.conditionalPrApproval,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    });
 
     const data = extractApiData(analyticsResult);
     const hasAnalyticsData = data?.hasData;
@@ -203,6 +212,7 @@ async function CockpitLayoutBody({
         "kodus-review": showKodusReview,
         "intent": metricsVisibility.tabs?.intent ?? true,
         "productivity": showProductivity || !showKodusReview,
+        "code-areas": codeAreasEnabled,
     };
     const defaultTab: TabValue = showKodusReview
         ? "kodus-review"
@@ -223,11 +233,13 @@ async function CockpitLayoutBody({
                     <Greeting />
                 </Page.Title>
                 <div className="ml-auto flex items-center gap-2">
-                    <RepositoryPicker
+                    <TabAwareRepositoryPicker
                         cookieValue={repositoryCookieValue}
                         teamId={selectedTeamId}
                     />
-                    <DateRangePicker cookieValue={dateRangeCookieValue} />
+                    <TabAwareDateRangePicker
+                        cookieValue={dateRangeCookieValue}
+                    />
                     <ShareViewButton />
                 </div>
             </Page.Header>
@@ -320,6 +332,13 @@ async function CockpitLayoutBody({
                                 {kodusReviewTab}
                             </TabsContent>
                         )}
+                        <TabsContent
+                            value={"code-areas" satisfies TabValue}
+                            className="min-w-0">
+                            <CodeAreasTab
+                                selectedRepository={selectedRepository}
+                            />
+                        </TabsContent>
                     </CockpitTabs>
                 </div>
 

@@ -137,6 +137,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
             observabilityService as any,
             permissionValidationService,
             codeManagementService as any,
+            {} as any,
         );
     });
 
@@ -573,6 +574,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
             observabilityService,
             {} as any,
             {} as any,
+            {} as any,
         );
     });
 
@@ -662,6 +664,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
 describe('CommentManagerService — pure helpers', () => {
     const svc = () =>
         new CommentManagerService(
+            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -827,6 +830,7 @@ describe('CommentManagerService — pure helpers', () => {
                     {} as any,
                     {} as any,
                     {} as any,
+                    {} as any,
                 ) as any
             ).generatePullRequestFinishSummaryMarkdown(
                 { organizationId: 'org' },
@@ -860,6 +864,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -912,6 +917,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -1134,6 +1140,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             parametersService,
             {} as any,
             { runLLMInSpan: jest.fn(), runAiSdkLLMInSpan: jest.fn() } as any,
+            {} as any,
             {} as any,
             {} as any,
         );
@@ -1932,6 +1939,7 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
                 {} as any,
                 {} as any,
                 {} as any,
+                {} as any,
             ) as any
         ).llmResponseProcessor;
     const org = { organizationId: 'o', teamId: 't' } as any;
@@ -1988,6 +1996,7 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
             {} as any,
             {} as any,
             { createReviewComment } as any,
+            {} as any,
         ) as any;
         const result = svc.createReviewCommentWithRetry({
             organizationAndTeamData: { organizationId: 'o', teamId: 't' },
@@ -2066,6 +2075,7 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
             {} as never,
             {} as never,
             codeManagementService,
+            {} as any,
         );
     });
 
@@ -2218,6 +2228,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
         return { svc, createReviewComment };
     };
@@ -2297,6 +2308,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
 
         const result = await svc.createLineComments(

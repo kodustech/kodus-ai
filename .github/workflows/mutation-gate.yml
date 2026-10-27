@@ -1,9 +1,10 @@
 name: "Backend: Mutation Gate"
 
-# Incremental mutation testing on the files a PR changes. Coverage says a line
+# Incremental mutation testing on the lines a PR changes. Coverage says a line
 # ran; the mutation score says an assertion actually caught a change to it. This
-# runs `pnpm mutation:diff`, which mutates only the changed production .ts files
-# and scopes the test run to their co-located specs.
+# runs `pnpm mutation:diff`, which mutates changed lines in production .ts files
+# and scopes the test run to nearby specs. Four shards keep the advisory score
+# within a PR's time budget without dropping changed production code.
 #
 # ADVISORY ROLLOUT: the job is `continue-on-error`, and stryker.config.json sets
 # thresholds.break=null, so it reports the score on the PR WITHOUT blocking the
@@ -19,6 +20,9 @@ on:
             - "apps/**/*.ts"
             - "stryker.config.json"
             - "jest.stryker.config.ts"
+            - "scripts/dev/mutation-diff.sh"
+            - "scripts/dev/mutation-shard.cjs"
+            - "scripts/dev/aggregate-mutation-reports.cjs"
             - ".github/workflows/mutation-gate.yml"
 
 # Least privilege for the automatically-provisioned GITHUB_TOKEN. Without this
@@ -33,10 +37,14 @@ permissions:
 
 jobs:
     mutation-diff:
-        name: Mutation score on changed files
+        name: Mutation shard ${{ matrix.shard }}
         runs-on: ubuntu-latest
         continue-on-error: true # advisory — reports, does not block (see header)
-        timeout-minutes: 25
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [0, 1, 2, 3]
         steps:
             - name: Checkout code
               uses: actions/checkout@v4.1.7
@@ -82,36 +90,50 @@ jobs:
 
             - name: Run the mutation gate on changed files
               id: run
+              env:
+                  MUTATION_SHARD_INDEX: ${{ matrix.shard }}
+                  MUTATION_SHARD_COUNT: 4
               run: pnpm run mutation:diff "origin/${{ github.base_ref }}"
 
-            - name: Mutation score (from reports/mutation/mutation.json)
-              id: score
+            - name: Record shard outcome
               if: always()
               env:
                   MUTATION_STEP_OUTCOME: ${{ steps.run.outcome }}
               run: |
-                  node -e "
-                    const fs = require(\"fs\"); const p = \"reports/mutation/mutation.json\";
-                    const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
-                    if (!fs.existsSync(p)) {
-                      // No report after a failed run is a crash or a timeout, not a deliberate skip.
-                      const died = process.env.MUTATION_STEP_OUTCOME && process.env.MUTATION_STEP_OUTCOME !== \"success\";
-                      out(\"status\", died ? \"infra\" : \"skipped\"); out(\"value\", \"\");
-                      out(\"meta\", JSON.stringify({ note: died ? \"mutation run \" + process.env.MUTATION_STEP_OUTCOME + \" before writing a report\" : \"no mutation report: nothing to mutate\" }));
-                      process.exit(0);
-                    }
-                    const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const c = { killed: 0, timeout: 0, survived: 0, no_coverage: 0, other: 0 };
-                    const survivors = [];
-                    for (const [fname, file] of Object.entries(r.files || {})) for (const m of file.mutants || []) {
-                      const st = m.status; if (st === \"Killed\") c.killed++; else if (st === \"Timeout\") c.timeout++; else if (st === \"Survived\") c.survived++; else if (st === \"NoCoverage\") c.no_coverage++; else c.other++;
-                      if ((st === \"Survived\" || st === \"NoCoverage\") && survivors.length < 15) survivors.push({ file: fname, line: m.location && m.location.start ? m.location.start.line : null, mutator: m.mutatorName, status: st });
-                    }
-                    const valid = c.killed + c.timeout + c.survived + c.no_coverage;
-                    const score = valid ? Math.round(((c.killed + c.timeout) / valid) * 10000) / 100 : null;
-                    const low = (r.thresholds && r.thresholds.low) || 60;
-                    out(\"status\", score === null ? \"skipped\" : score < low ? \"yellow\" : \"green\");
-                    out(\"value\", score === null ? \"\" : String(score)); out(\"meta\", JSON.stringify({ ...c, valid, low, survivors }));
-                  "
+                  mkdir -p reports/mutation
+                  node -e 'require("fs").writeFileSync("reports/mutation/status.json", JSON.stringify({ outcome: process.env.MUTATION_STEP_OUTCOME }))'
+
+            - name: Upload mutation shard
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: mutation-report-${{ matrix.shard }}
+                  path: |
+                      reports/mutation/mutation.json
+                      reports/mutation/status.json
+                  if-no-files-found: error
+
+    mutation-score:
+        name: Mutation score on changed files
+        needs: mutation-diff
+        if: always()
+        runs-on: ubuntu-latest
+        continue-on-error: true
+        timeout-minutes: 10
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4.1.7
+
+            - name: Download mutation shards
+              uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  pattern: mutation-report-*
+                  path: mutation-artifacts
+
+            - name: Aggregate mutation score
+              id: score
+              run: node scripts/dev/aggregate-mutation-reports.cjs mutation-artifacts 4
 
             - name: Report quality signal
               if: always()

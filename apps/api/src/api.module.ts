@@ -10,6 +10,8 @@ import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewDashboardModule } from '@libs/code-review/modules/code-review-dashboard.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
@@ -42,6 +44,7 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { TeamMembersModule } from '@libs/organization/modules/teamMembers.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
 import { SharedPostgresModule } from '@libs/shared/database/shared-postgres.module';
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
@@ -60,6 +63,7 @@ import { CliReviewController } from './controllers/cli/cli-review.controller';
 import { CliReviewsController } from './controllers/cli-reviews.controller';
 import { CodeBaseController } from './controllers/codeBase.controller';
 import { CodeManagementController } from './controllers/codeManagement.controller';
+import { GetAreaRiskMapUseCase } from './use-cases/get-area-risk-map.use-case';
 import { CodeReviewSettingLogController } from './controllers/codeReviewSettingLog.controller';
 import { GithubController } from './controllers/github.controller';
 import { IntegrationController } from './controllers/integration.controller';
@@ -133,6 +137,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         ParametersModule,
         WorkflowModule.register({ type: 'api' }),
         PlatformModule,
+        PlatformDataModule,
         AIEngineModule,
         AgentsModule,
         CodebaseModule,
@@ -209,6 +214,14 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CockpitReviewAnalyticsController,
         NotificationController,
     ],
-    providers: [LangfuseShutdownProvider, TrialExtensionNotifierService],
+    providers: [
+        LangfuseShutdownProvider,
+        TrialExtensionNotifierService,
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
+        GetAreaRiskMapUseCase,
+    ],
 })
 export class ApiModule {}

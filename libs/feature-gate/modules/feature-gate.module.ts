@@ -2,7 +2,10 @@ import { Global, Module } from '@nestjs/common';
 
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 
-import { FeatureGateService } from '../application/feature-gate.service';
+import {
+    FEATURE_GATE_SERVICE_TOKEN,
+    FeatureGateService,
+} from '../application/feature-gate.service';
 
 @Global()
 @Module({
@@ -13,7 +16,13 @@ import { FeatureGateService } from '../application/feature-gate.service';
     // `TelemetryModule` had registered the token (observed in the
     // webhooks app — `UnknownDependenciesException` at startup).
     imports: [TelemetryModule],
-    providers: [FeatureGateService],
-    exports: [FeatureGateService],
+    providers: [
+        FeatureGateService,
+        {
+            provide: FEATURE_GATE_SERVICE_TOKEN,
+            useExisting: FeatureGateService,
+        },
+    ],
+    exports: [FeatureGateService, FEATURE_GATE_SERVICE_TOKEN],
 })
 export class FeatureGateModule {}
