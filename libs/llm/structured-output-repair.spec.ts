@@ -408,6 +408,56 @@ describe('repairAndValidate', () => {
         });
     });
 
+    describe('#2259 an invalid escape inside a string literal', () => {
+        const issuesWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: { body: { type: 'string' } },
+                            required: ['body'],
+                            additionalProperties: false,
+                        },
+                    },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+
+        it('keeps a violation whose suggested fix carries a raw backslash', async () => {
+            // The model quotes code in its suggestion: Swift interpolation
+            // ("\(title)") or a regex ("\d") arrives with a SINGLE backslash, so
+            // JSON.parse rejects the whole payload and the shard degrades to zero
+            // findings for that file.
+            const raw = '{"violations":[{"body":"Rename to \\(title)"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'Rename to \\(title)' }],
+            });
+        });
+
+        it('leaves VALID escapes alone', async () => {
+            const raw =
+                '{"violations":[{"body":"line\\nbreak\\tand \\u0041"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'line\nbreak\tand A' }],
+            });
+        });
+
+        it('still rejects a payload that is cut short', async () => {
+            // Escape repair is the ONLY extra step: a truncated payload must keep
+            // failing so the caller escalates instead of judging a partial list.
+            const raw = '{"violations":[{"body":"cut here';
+
+            expect(await repairAndValidate(issuesWire, raw)).toBeUndefined();
+        });
+    });
+
     it('returns undefined when repaired JSON has the wrong shape', async () => {
         // Deterministic repair fixes the fence, but the shape is wrong → the
         // executor must escalate to a model re-ask, not accept bad data.

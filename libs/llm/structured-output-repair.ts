@@ -438,7 +438,21 @@ export async function repairAndValidate<T = unknown>(
     try {
         value = JSON.parse(candidate);
     } catch {
-        return undefined;
+        // A single invalid escape inside a string literal - code quoted in a
+        // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
+        // payload unparseable, and the reroute-json caller then loses every
+        // finding for that shard (#2259). Legalise the string escapes and retry;
+        // a payload broken any other way still fails, so a cut list is never
+        // accepted as a whole one.
+        const escaped = escapeStringLiterals(candidate);
+        if (escaped === candidate) {
+            return undefined;
+        }
+        const retried = tryParse(escaped);
+        if (!retried.ok) {
+            return undefined;
+        }
+        value = retried.value;
     }
     const schema = asSchema(wire as any);
     if (typeof schema.validate !== 'function') {
