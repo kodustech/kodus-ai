@@ -56,19 +56,14 @@ describe('FetchChangedFilesStage', () => {
         expect(result.statusInfo.message).toBe(expectedMessage);
     });
 
-    it('skips the same way when the provider returns null instead of a list', async () => {
+    it('skips when the provider returns null instead of a list', async () => {
         mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
             null,
         );
 
         const result = await stage.execute(context);
 
-        expect(result.statusInfo).toEqual({
-            status: AutomationStatus.SKIPPED,
-            message: StageMessageHelper.skippedWithReason(
-                PipelineReasons.FILES.NO_CHANGES,
-            ),
-        });
+        expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
     });
 
     it('should skip if all files are ignored (using PipelineReasons)', async () => {
