@@ -279,7 +279,14 @@ function observeFinderPasses() {
     for (const [method, stage] of [['dropRepeats', 'repeat-drop'], ['dedupSuggestionStreams', 'dedup'], ['reclassifyAndFilterSeverity', 'severity']]) {
         const original = AgentReviewStage.prototype[method];
         AgentReviewStage.prototype[method] = function staged(...args) {
-            return inStage(stage, () => original.apply(this, args));
+            const out = inStage(stage, () => original.apply(this, args));
+            // What the dedup kept, for the per-step quality comparison (#1821).
+            const store = observedLoops.getStore();
+            if (method !== 'dedupSuggestionStreams' || !store) return out;
+            return Promise.resolve(out).then((value) => {
+                store.dedupOut = clone(value?.deduped || []);
+                return value;
+            });
         };
     }
     // RECALL_STOP_AFTER=finder: the review ends when the finder returns (its
@@ -713,6 +720,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
             ruleReviews,
             steps: store.steps,
             finder: store.finder,
+            dedupOut: store.dedupOut ?? null,
             stoppedAfterFinder: store.stoppedAfterFinder,
             context: out,
             errors: out.errors || [],
