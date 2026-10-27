@@ -1,6 +1,8 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { UpdateCommentsAndGenerateSummaryStage } from './finish-comments.stage';
 import { InitialCommentStage } from './initial-comment.stage';
 
 describe('InitialCommentStage GitLab status note reuse (#1721)', () => {
@@ -51,5 +53,71 @@ describe('InitialCommentStage GitLab status note reuse (#1721)', () => {
         await run({ commentId: 'discussion-1', noteId: 11 });
 
         expect(createInitialComment.mock.calls[0][8]).toBeUndefined();
+    });
+
+    it('preserves the first summary when a later push only posts a start message', async () => {
+        const notes = new Map<number, string>();
+        let nextId = 11;
+        const manager = {
+            createInitialComment: jest.fn(async (...args: any[]) => {
+                const id = args[8]?.noteId ?? nextId++;
+                notes.set(id, 'Review started');
+                return { commentId: id, noteId: id };
+            }),
+            processEndReviewMessageTemplate: jest
+                .fn()
+                .mockResolvedValue('Review completed'),
+            updateOverallComment: jest.fn(async (...args: any[]) => {
+                notes.set(args[4], args[9]);
+            }),
+        };
+        const initial = new InitialCommentStage(manager as any);
+        const finish = new UpdateCommentsAndGenerateSummaryStage(
+            manager as any,
+            {} as any,
+            {} as any,
+        );
+        const context = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pullRequest: { number: 42 },
+            repository: { id: 'repo-1', name: 'repo' },
+            changedFiles: [],
+            lineComments: [],
+            errors: [],
+            codeReviewConfig: { languageResultPrompt: 'en-US' },
+            platformType: PlatformType.GITLAB,
+            pullRequestMessagesConfig: {
+                startReviewMessage: {
+                    status: PullRequestMessageStatus.EVERY_PUSH,
+                    content: 'Review started',
+                },
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.ONLY_WHEN_OPENED,
+                    content: 'Review completed',
+                },
+            },
+        } as CodeReviewPipelineContext;
+
+        const first = await (initial as any).executeStage(context);
+        await (finish as any).executeStage(first);
+        const second = await (initial as any).executeStage({
+            ...context,
+            lastExecution: first.initialCommentData,
+        });
+        await (finish as any).executeStage(second);
+
+        expect(notes.get(first.initialCommentData.noteId)).toBe(
+            'Review completed',
+        );
+        expect(notes.get(second.initialCommentData.noteId)).toBe(
+            'Review started',
+        );
+        expect(second.initialCommentData.noteId).not.toBe(
+            first.initialCommentData.noteId,
+        );
+        expect(manager.updateOverallComment).toHaveBeenCalledTimes(1);
     });
 });

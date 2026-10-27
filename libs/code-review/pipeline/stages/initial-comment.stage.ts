@@ -113,8 +113,12 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
         const previous = context.lastExecution;
         const previousCommentId = Number(previous?.commentId);
         const previousNoteId = Number(previous?.noteId);
+        // A later run with an opening-only end message never writes its
+        // summary back. Reusing that note would erase the first run's summary.
         const previousGitlabNote =
             context.platformType === PlatformType.GITLAB &&
+            pullRequestMessagesConfig?.endReviewMessage?.status !==
+                PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             !previous?.threadId &&
             Number.isSafeInteger(previousCommentId) &&
             previousCommentId > 0 &&
