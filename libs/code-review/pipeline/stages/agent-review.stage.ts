@@ -2668,9 +2668,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             telemetryMetadata: telemetryMeta,
             prNumber,
         });
+        for (const { finding, earlier } of result.revisions) {
+            if (!finding.revisesSuggestionId) {
+                finding.revisesSuggestionId = earlier.suggestionId;
+            }
+        }
 
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
@@ -2899,7 +2904,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // decided; any still left out falls to the safety net below.
             const leftOut =
                 groups.length || unique.length
-                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    ? unclassifiedDedupIndices(
+                          suggestions.length,
+                          groups,
+                          unique,
+                      )
                     : [];
             // Kept in the dedup trace: a failed follow-up keeps those
             // suggestions as they were (a duplicate may reach the PR), the same
