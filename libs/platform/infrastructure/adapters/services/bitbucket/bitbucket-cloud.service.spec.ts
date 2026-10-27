@@ -1,5 +1,61 @@
 import { BitbucketCloudService } from './bitbucket-cloud.service';
 
+it('maps both source and destination commits on a pull request', () => {
+    const service = new BitbucketCloudService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        undefined,
+    );
+    const result = (service as any).transformPullRequest(
+        {
+            id: 42,
+            source: { commit: { hash: 'source-tip' } },
+            destination: { commit: { hash: 'target-tip' } },
+        },
+        { organizationId: 'org-1', teamId: 'team-1' },
+    );
+
+    expect(result.head.sha).toBe('source-tip');
+    expect(result.base.sha).toBe('target-tip');
+});
+
+it('propagates a failed strict Bitbucket comment lookup', async () => {
+    const service = new BitbucketCloudService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        undefined,
+    );
+    jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+        token: 'fake-token',
+    });
+    jest.spyOn(service as any, 'getWorkspaceFromRepository').mockResolvedValue(
+        'workspace-1',
+    );
+    jest.spyOn(service as any, 'instanceBitbucketApi').mockReturnValue({
+        pullrequests: {
+            listComments: jest
+                .fn()
+                .mockRejectedValue(new Error('Bitbucket unavailable')),
+        },
+    });
+
+    await expect(
+        service.getAllCommentsInPullRequest({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+            failOnError: true,
+        }),
+    ).rejects.toThrow('Bitbucket unavailable');
+});
+
 /**
  * Regression test for "fix(platform): rethrow transient fetch failures
  * from getCommits swallow" (2026-07-29): getCommitsForPullRequestForCodeReview

@@ -5,9 +5,18 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-10-22T20:30:54.673Z",
+    "generated_at": "2026-10-23T18:39:31.119Z",
     "source": "manual",
     "features": {
+        "conditional-pr-approval": {
+            "name": "Conditional PR approval",
+            "stage": "beta",
+            "description": "Limit automatic approval by PR label or author, require a person for sensitive paths, and let Kody assess risk using the change and available code history. Available on Teams and Enterprise plans.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "custom-agents": {
             "name": "Custom review agents",
             "stage": "beta",
@@ -30,6 +39,15 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "name": "GitHub Enterprise Server (PAT auth)",
             "stage": "beta",
             "description": "Connect a GitHub Enterprise Server installation using a personal access token, for environments where the GitHub App flow isn't available.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "heavy-review": {
+            "name": "Heavy review (deeper pass)",
+            "stage": "alpha",
+            "description": "An opt-in deeper review that re-runs the finder multiple times to surface more real bugs, for the changes where catching everything matters more than speed.",
             "audience": [
                 "cloud",
                 "self-hosted"

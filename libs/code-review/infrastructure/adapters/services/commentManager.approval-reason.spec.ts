@@ -1,0 +1,273 @@
+import { CommentManagerService } from './commentManager.service';
+import { formatApprovalReasonComment } from '@libs/code-review/infrastructure/approval/approval-reason-comment';
+
+it('updates the existing approval reason after a review hold', async () => {
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue([
+            {
+                id: 42,
+                threadId: 99,
+                body: formatApprovalReasonComment('hold', 'Previous reason'),
+            },
+        ]),
+        updateIssueComment: jest.fn().mockResolvedValue(undefined),
+        createIssueComment: jest.fn().mockResolvedValue(undefined),
+    };
+    const pullRequests = { setApprovalReasonDeliveryFailure: jest.fn() };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+        pullRequests as any,
+    );
+
+    await service.postApprovalReason(
+        { organizationId: 'org', teamId: 'team' },
+        12,
+        { id: 'repo', name: 'api' },
+        'Current reason',
+        'hold',
+    );
+
+    expect(codeManagement.updateIssueComment).toHaveBeenCalledWith(
+        expect.objectContaining({
+            commentId: 42,
+            threadId: 99,
+            body: formatApprovalReasonComment('hold', 'Current reason'),
+        }),
+    );
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+    expect(codeManagement.getAllCommentsInPullRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ failOnError: true }),
+    );
+    expect(pullRequests.setApprovalReasonDeliveryFailure).toHaveBeenCalledWith(
+        'org',
+        'repo',
+        12,
+        null,
+    );
+});
+
+it('clears a stale delivery warning when the approval comment already matches', async () => {
+    const body = formatApprovalReasonComment('hold', 'Current reason');
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest
+            .fn()
+            .mockResolvedValue([{ id: 42, body }]),
+        updateIssueComment: jest.fn(),
+        createIssueComment: jest.fn(),
+    };
+    const pullRequests = { setApprovalReasonDeliveryFailure: jest.fn() };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+        pullRequests as any,
+    );
+
+    await service.postApprovalReason(
+        { organizationId: 'org', teamId: 'team' },
+        12,
+        { id: 'repo', name: 'api' },
+        'Current reason',
+        'hold',
+    );
+
+    expect(codeManagement.updateIssueComment).not.toHaveBeenCalled();
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+    expect(pullRequests.setApprovalReasonDeliveryFailure).toHaveBeenCalledWith(
+        'org',
+        'repo',
+        12,
+        null,
+    );
+});
+
+it('does not create an approval reason when the comment lookup fails', async () => {
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue(null),
+        createIssueComment: jest.fn(),
+    };
+    const pullRequests = { setApprovalReasonDeliveryFailure: jest.fn() };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+        pullRequests as any,
+    );
+
+    await expect(
+        service.postApprovalReason(
+            { organizationId: 'org', teamId: 'team' },
+            12,
+            { id: 'repo', name: 'api' },
+            'Current reason',
+            'hold',
+        ),
+    ).rejects.toThrow('Approval reason comment lookup returned no result');
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+    expect(
+        pullRequests.setApprovalReasonDeliveryFailure,
+    ).not.toHaveBeenCalled();
+});
+
+it('replaces a previous hold with the completed approval reason', async () => {
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue([
+            {
+                id: 42,
+                body: formatApprovalReasonComment('hold', 'Old risk'),
+            },
+        ]),
+        updateIssueComment: jest.fn().mockResolvedValue(undefined),
+        createIssueComment: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+        { setApprovalReasonDeliveryFailure: jest.fn() } as any,
+    );
+
+    await service.postApprovalReason(
+        { organizationId: 'org', teamId: 'team' },
+        12,
+        { id: 'repo', name: 'api' },
+        'Clean review',
+        'approve',
+    );
+
+    expect(codeManagement.updateIssueComment).toHaveBeenCalledWith(
+        expect.objectContaining({
+            commentId: 42,
+            body: formatApprovalReasonComment('approve', 'Clean review'),
+        }),
+    );
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+});
+
+it('uses a numeric fallback ID when the provider supplies a string ID', async () => {
+    const codeManagement = {
+        getAllCommentsInPullRequest: jest.fn().mockResolvedValue([
+            {
+                id: 'opaque-id',
+                note_id: 42,
+                body: formatApprovalReasonComment('hold', 'Previous reason'),
+            },
+        ]),
+        updateIssueComment: jest.fn().mockResolvedValue(undefined),
+        createIssueComment: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        codeManagement as any,
+        { setApprovalReasonDeliveryFailure: jest.fn() } as any,
+    );
+
+    await service.postApprovalReason(
+        { organizationId: 'org', teamId: 'team' },
+        12,
+        { id: 'repo', name: 'api' },
+        'Current reason',
+        'hold',
+    );
+
+    expect(codeManagement.updateIssueComment).toHaveBeenCalledWith(
+        expect.objectContaining({ commentId: 42 }),
+    );
+    expect(codeManagement.createIssueComment).not.toHaveBeenCalled();
+});
+
+it('bounds a stalled hold-comment write', async () => {
+    jest.useFakeTimers();
+    try {
+        const codeManagement = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
+            createIssueComment: jest
+                .fn()
+                .mockReturnValue(new Promise(() => {})),
+        };
+        const service = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagement as any,
+            { setApprovalReasonDeliveryFailure: jest.fn() } as any,
+        );
+        const posting = service.postApprovalReason(
+            { organizationId: 'org', teamId: 'team' },
+            12,
+            { id: 'repo', name: 'api' },
+            'Current reason',
+            'hold',
+        );
+        const outcome = expect(posting).rejects.toThrow(
+            'approval hold comment create org=org team=team repo=repo pr=12 bounded timeout after 15000ms',
+        );
+        await jest.advanceTimersByTimeAsync(15_000);
+        await outcome;
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+it.each([
+    { existing: true, method: 'updateIssueComment', action: 'update' },
+    { existing: false, method: 'createIssueComment', action: 'create' },
+])(
+    'reports a provider $action failure returned as null',
+    async ({ existing, method, action }) => {
+        const codeManagement = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue(
+                existing
+                    ? [
+                          {
+                              id: 42,
+                              body: formatApprovalReasonComment(
+                                  'hold',
+                                  'Old reason',
+                              ),
+                          },
+                      ]
+                    : [],
+            ),
+            updateIssueComment: jest.fn().mockResolvedValue(null),
+            createIssueComment: jest.fn().mockResolvedValue(null),
+        };
+        const pullRequests = { setApprovalReasonDeliveryFailure: jest.fn() };
+        const service = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagement as any,
+            pullRequests as any,
+        );
+
+        await expect(
+            service.postApprovalReason(
+                { organizationId: 'org', teamId: 'team' },
+                12,
+                { id: 'repo', name: 'api' },
+                'Current reason',
+                'hold',
+            ),
+        ).rejects.toThrow(`Approval reason comment ${action} returned null`);
+        expect(codeManagement[method]).toHaveBeenCalledTimes(1);
+        expect(
+            pullRequests.setApprovalReasonDeliveryFailure,
+        ).not.toHaveBeenCalled();
+    },
+);

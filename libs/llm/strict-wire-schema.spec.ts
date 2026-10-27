@@ -9,6 +9,7 @@ import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/co
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
+import { approvalRiskOutputSchema } from '@libs/code-review/domain/approval/assess-approval-risk';
 
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
@@ -92,6 +93,7 @@ describe('zodToStrictWireSchema', () => {
     // which degrades to the raw zod schema and 400s OpenAI-strict) fails here
     // BEFORE it 400s a BYOK-OpenAI customer's shards.
     const realSchemas: Array<[string, z.ZodType]> = [
+        ['approvalRiskOutputSchema', approvalRiskOutputSchema],
         [
             'kodyRulesIDEGeneratorSchema (guidance-file extraction)',
             kodyRulesIDEGeneratorSchema,
@@ -303,6 +305,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // covered above. Keep this in lockstep with the schema lists — the scan
     // below fails if a call site appears in a file that isn't listed here.
     const REGISTERED_CALL_SITE_FILES = new Set<string>([
+        'libs/code-review/domain/approval/assess-approval-risk.ts', // approvalRiskOutputSchema
         'libs/ee/kodyRules/service/kody-rule-detector-compiler.service.ts', // compilerOutputSchema
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema

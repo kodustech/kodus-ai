@@ -73,9 +73,15 @@ export const BYOKModelSelectorSection = () => {
         if (!provider || !modelId.trim()) return;
         setTest({ status: "testing" });
         try {
+            // Scope settings store the BYOK entry id, while the provider probe
+            // expects its actual model name. Sending the id makes every model
+            // with a generated UUID fail the test despite a working connection.
+            const providerModel =
+                llmConfigStatus?.models.find((m) => m.modelId === modelId)
+                    ?.model ?? modelId;
             const res: TestBYOKResult = await testBYOKModel({
                 provider,
-                model: modelId.trim(),
+                model: providerModel.trim(),
             });
             setTest(
                 res.ok

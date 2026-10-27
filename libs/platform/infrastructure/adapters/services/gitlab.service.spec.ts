@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
 jest.mock('@gitbeaker/rest', () => ({
@@ -53,6 +54,110 @@ describe('GitlabService', () => {
         );
 
         jest.clearAllMocks();
+    });
+
+    it.each([
+        ['createIssueComment', 'MergeRequestDiscussions'],
+        ['createSingleIssueComment', 'MergeRequestNotes'],
+    ] as const)('returns null when %s cannot publish', async (method, api) => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            [api]: { create: jest.fn().mockRejectedValue(new Error('denied')) },
+        });
+
+        await expect(
+            service[method]({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                body: 'Automatic approval held',
+            }),
+        ).resolves.toBeNull();
+    });
+
+    it('keeps the discussion ID needed to update an approval reason', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const editNote = jest.fn().mockResolvedValue({ id: 42 });
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest.fn().mockResolvedValue([
+                    {
+                        id: 'discussion-1',
+                        notes: [{ id: 42, body: 'Old reason' }],
+                    },
+                ]),
+                editNote,
+            },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        const comments = await service.getAllCommentsInPullRequest(request);
+        expect(comments).toEqual([
+            { id: 42, body: 'Old reason', threadId: 'discussion-1' },
+        ]);
+        await service.updateIssueComment({
+            ...request,
+            commentId: 42,
+            noteId: 42,
+            threadId: comments[0].threadId,
+            body: 'Current reason',
+        });
+        expect(editNote).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'discussion-1',
+            42,
+            { body: 'Current reason' },
+        );
+    });
+
+    it('reports a failed comment lookup instead of treating it as an empty list', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest
+                    .fn()
+                    .mockRejectedValue(new Error('GitLab unavailable')),
+            },
+        });
+
+        await expect(
+            service.getAllCommentsInPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                failOnError: true,
+            }),
+        ).rejects.toThrow('GitLab unavailable');
+    });
+
+    it('distinguishes no Kody approval from an unavailable GitLab lookup', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestApprovals: {
+                showConfiguration: jest
+                    .fn()
+                    .mockResolvedValueOnce({ approved_by: [] })
+                    .mockRejectedValueOnce(new Error('GitLab unavailable')),
+            },
+            Users: { showCurrentUser: jest.fn().mockResolvedValue({ id: 7 }) },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('normalizes bare stored hosts before creating the GitLab API client', () => {
@@ -442,6 +547,21 @@ describe('GitlabService', () => {
                 prNumber: 1,
             });
         };
+
+        it('maps the target branch commit from diff_refs.start_sha', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                diff_refs: {
+                    base_sha: 'merge-base',
+                    start_sha: 'target-tip',
+                    head_sha: 'source-tip',
+                },
+            });
+
+            expect(result?.base?.sha).toBe('target-tip');
+            expect(result?.head?.sha).toBe('source-tip');
+        });
 
         it('maps draft null and work_in_progress true to draft', async () => {
             const result = await getPullRequest({

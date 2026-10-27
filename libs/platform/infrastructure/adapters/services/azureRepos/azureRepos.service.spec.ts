@@ -1,4 +1,5 @@
 import { AzureReposService } from './azureRepos.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 /**
  * Regression test for issue #1045 / Bug B — Azure DevOps' API uses
@@ -51,6 +52,28 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             service as any,
             'getProjectIdFromRepository',
         ).mockResolvedValue(stubRepository.project.id);
+    });
+
+    it('distinguishes no Kody vote from an unavailable Azure lookup', async () => {
+        (azureReposRequestHelper as any).getAuthenticatedUserId = jest
+            .fn()
+            .mockResolvedValue('kody');
+        (azureReposRequestHelper as any).getListOfPullRequestReviewers = jest
+            .fn()
+            .mockResolvedValueOnce([])
+            .mockRejectedValueOnce(new Error('Azure unavailable'));
+        const request = {
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('maps Azure `description` onto `body` while preserving the original `description` field', async () => {
@@ -128,6 +151,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             sourceRefName: 'refs/heads/feature/anchors',
             repository: stubRepository,
             lastMergeSourceCommit: { commitId: 'a1b2c3d4e5f6' },
+            lastMergeTargetCommit: { commitId: 'target-commit' },
         });
 
         const result = await service.getPullRequest({
@@ -137,6 +161,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         });
 
         expect(result?.head?.sha).toBe('a1b2c3d4e5f6');
+        expect(result?.base?.sha).toBe('target-commit');
         // The ref keeps its existing shape (the `refs/heads/` prefix stripped).
         expect(result?.head?.ref).toBe('feature/anchors');
     });

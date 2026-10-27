@@ -9,6 +9,11 @@ reviewCadence:
     timeWindow: 15 # minutes
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # not on gitlab
 runOnDraft: true
 ignorePaths:

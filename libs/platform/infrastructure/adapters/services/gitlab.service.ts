@@ -1,5 +1,6 @@
 import {
     CommitSchema,
+    ExpandedMergeRequestSchema,
     Gitlab,
     MergeRequestSchema,
     MergeRequestSchemaWithBasicLabels,
@@ -342,6 +343,7 @@ export class GitlabService implements Omit<
                 },
                 base: {
                     ref: mergeRequest.target_branch,
+                    sha: mergeRequest.diff_refs?.start_sha ?? '',
                     repo: {
                         name: params.repository.name,
                         id: projectId,
@@ -589,7 +591,8 @@ export class GitlabService implements Omit<
         }
 
         const gitlabAPI = this.instanceGitlabApi(authDetail);
-        const projectId = `${repository.owner}/${repository.name}`;
+        const projectId =
+            repository.id ?? `${repository.owner}/${repository.name}`;
 
         try {
             const issue = await gitlabAPI.Issues.show(issueNumber, {
@@ -2683,6 +2686,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -2715,6 +2719,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -2963,9 +2968,10 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
         prNumber: number;
-        commentId: string;
+        commentId: string | number;
         body: string;
         noteId?: number;
+        threadId?: string | number;
     }): Promise<any | null> {
         try {
             const {
@@ -2975,6 +2981,7 @@ export class GitlabService implements Omit<
                 commentId,
                 body,
                 noteId,
+                threadId,
             } = params;
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -2987,8 +2994,8 @@ export class GitlabService implements Omit<
             const response = await gitlabAPI.MergeRequestDiscussions.editNote(
                 repository.id,
                 prNumber,
-                commentId,
-                noteId,
+                String(threadId ?? commentId),
+                noteId ?? Number(commentId),
                 { body: body },
             );
 
@@ -4391,7 +4398,7 @@ export class GitlabService implements Omit<
 
             return isApprovedByCurrentUser
                 ? PullRequestReviewState.APPROVED
-                : null;
+                : PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error fetching review status for MR #${params.prNumber}`,
@@ -4571,6 +4578,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4587,7 +4595,12 @@ export class GitlabService implements Omit<
                 { perPage: GITLAB_MAX_PER_PAGE },
             );
 
-            return discussions.flatMap((discussion) => discussion.notes);
+            return discussions.flatMap((discussion) =>
+                discussion.notes.map((note) => ({
+                    ...note,
+                    threadId: discussion.id,
+                })),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to get all comments in pull request',
@@ -4596,6 +4609,7 @@ export class GitlabService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -4963,6 +4977,8 @@ export class GitlabService implements Omit<
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<any[]> {
         try {
@@ -4980,8 +4996,26 @@ export class GitlabService implements Omit<
 
             const mergeRequests = await gitlabAPI.MergeRequests.all({
                 projectId: repository.id,
-                createdAfter: filters?.startDate,
-                createdBefore: filters?.endDate,
+                ...(filters?.maxResults
+                    ? {
+                          perPage: filters.maxResults,
+                          maxPages: 1,
+                          orderBy:
+                              filters.dateField === 'updated'
+                                  ? ('updated_at' as const)
+                                  : ('created_at' as const),
+                          sort: 'desc' as const,
+                      }
+                    : {}),
+                ...(filters?.dateField === 'updated'
+                    ? {
+                          updatedAfter: filters.startDate,
+                          updatedBefore: filters.endDate,
+                      }
+                    : {
+                          createdAfter: filters?.startDate,
+                          createdBefore: filters?.endDate,
+                      }),
             });
 
             return mergeRequests.map(
@@ -4990,6 +5024,7 @@ export class GitlabService implements Omit<
                     author_id: pr.author?.id.toString(),
                     author_name: pr.author?.name,
                     author_created_at: pr.created_at,
+                    updated_at: pr.updated_at,
                     repository: repository.name,
                     repositoryId: repository.id,
                     message: pr.description,
@@ -5912,6 +5947,12 @@ export class GitlabService implements Omit<
         repository: Partial<Repositories>,
         organizationAndTeamData: OrganizationAndTeamData,
     ): PullRequest {
+        const hasDiffRefs = (
+            value: MergeRequestSchema,
+        ): value is ExpandedMergeRequestSchema => 'diff_refs' in value;
+        const diffRefs = hasDiffRefs(mergeRequest)
+            ? mergeRequest.diff_refs
+            : undefined;
         return {
             id: mergeRequest?.id?.toString() ?? '',
             number: mergeRequest?.iid ?? -1,
@@ -5919,6 +5960,9 @@ export class GitlabService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: mergeRequest?.title ?? '',
             body: mergeRequest?.description ?? '',
+            labels: (mergeRequest?.labels ?? []).map((label) =>
+                typeof label === 'string' ? label : label.name,
+            ),
             state:
                 this._prStateMap.get(
                     mergeRequest?.state as GitlabPullRequestState,
@@ -5947,16 +5991,7 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
-                // `diff_refs` is typed loosely by the client; the head sha
-                // lives there on a merge-request payload and falls back to
-                // the MR's own sha.
-                sha:
-                    (
-                        mergeRequest?.diff_refs as
-                            { head_sha?: string } | undefined
-                    )?.head_sha ??
-                    mergeRequest?.sha ??
-                    '',
+                sha: diffRefs?.head_sha ?? mergeRequest?.sha ?? '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',
@@ -5967,6 +6002,7 @@ export class GitlabService implements Omit<
             targetRefName: mergeRequest?.target_branch ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: mergeRequest?.target_branch ?? '',
+                sha: diffRefs?.start_sha ?? '',
                 repo: {
                     id: repository?.id ?? '',
                     name: repository?.name ?? '',

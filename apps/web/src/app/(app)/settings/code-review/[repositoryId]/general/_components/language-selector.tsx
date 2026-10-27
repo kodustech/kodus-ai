@@ -190,7 +190,7 @@ export const LanguageSelector = () => {
                                     variant="helper"
                                     id={field.name}
                                     disabled={field.disabled}
-                                    className="w-72 justify-between"
+                                    className="w-full max-w-72 justify-between"
                                     rightIcon={
                                         <ChevronsUpDown className="-mr-2 opacity-50" />
                                     }>

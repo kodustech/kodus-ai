@@ -114,7 +114,9 @@ export class BitbucketDataCenterService implements Omit<
     // Bitbucket Cloud-only feature; Server users track work in Jira). These
     // satisfy the contract for the routing wrapper and return empty so the
     // generic issues MCP degrades gracefully on Server.
-    async listIssues(_params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+    async listIssues(
+        _params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
         this.logger.warn({
             message:
                 'listIssues called on Bitbucket Data Center, which has no issue tracker',
@@ -123,7 +125,9 @@ export class BitbucketDataCenterService implements Omit<
         return [];
     }
 
-    async getIssue(_params: GetIssueParams): Promise<CodeManagementIssue | null> {
+    async getIssue(
+        _params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
         this.logger.warn({
             message:
                 'getIssue called on Bitbucket Data Center, which has no issue tracker',
@@ -857,6 +861,7 @@ export class BitbucketDataCenterService implements Omit<
             sourceRefName: pr.fromRef?.displayId || '',
             head: {
                 ref: pr.fromRef?.displayId || '',
+                sha: pr.fromRef?.latestCommit || '',
                 repo: {
                     id: pr.fromRef?.repository?.id?.toString() || '',
                     name: pr.fromRef?.repository?.slug || '',
@@ -867,6 +872,7 @@ export class BitbucketDataCenterService implements Omit<
             targetRefName: pr.toRef?.displayId || '',
             base: {
                 ref: pr.toRef?.displayId || '',
+                sha: pr.toRef?.latestCommit || '',
                 repo: {
                     id: pr.toRef?.repository?.id?.toString() || '',
                     name: pr.toRef?.repository?.slug || '',
@@ -2459,8 +2465,12 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }): Promise<any[]> {
         const comments = await this.getPullRequestReviewComments(params);
+        if (!comments && params.failOnError) {
+            throw new Error('Could not load pull request comments');
+        }
         return comments || [];
     }
 
@@ -2747,14 +2757,14 @@ export class BitbucketDataCenterService implements Omit<
                 (r: any) => r.user?.name === currentUser.id,
             );
 
-            if (!userReview) return null;
+            if (!userReview) return PullRequestReviewState.NONE;
 
             if (userReview.status === 'APPROVED')
                 return PullRequestReviewState.APPROVED;
             if (userReview.status === 'NEEDS_WORK')
                 return PullRequestReviewState.CHANGES_REQUESTED;
 
-            return null;
+            return PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error getting review status for PR #${params.prNumber} in Data Center`,
@@ -3491,9 +3501,7 @@ export class BitbucketDataCenterService implements Omit<
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for Bitbucket Data Center — callers fall
         // back to per-user `getUserByUsername`.
         return null;

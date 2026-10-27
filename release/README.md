@@ -29,14 +29,14 @@ release/features-snapshot.json   ←  committed, shipped in Docker images
         ▼
 FeatureGateService.isEnabled(...) at runtime
    │
-   ├─ Cloud: stage gate -> audience gate -> PostHog flag (org/repo conditions)
+   ├─ Cloud beta: stage gate -> audience gate -> release track
+   ├─ Cloud alpha/GA/legacy: stage gate -> audience gate -> PostHog flag
    └─ Self-hosted: stage gate -> audience gate -> BETA_FEATURES env
 ```
 
-The PostHog feature flags themselves stay in PostHog (each `key` in the
-catalog corresponds to a flag of the same name there). They handle real-time
-operational rollout — percentage, per-org allowlists, kill-switch. The
-catalog handles lifecycle and customer-facing communication.
+PostHog flags remain available for alpha, GA and legacy rollout controls.
+Beta features use the release track directly, without a PostHog flag.
+The catalog handles lifecycle and customer-facing communication.
 
 ## Stage semantics
 
@@ -167,8 +167,7 @@ yarn feature-gate:set-track --org-id=<uuid> --track=alpha --env=.env.prod
 
 Default for every new org is `beta`. Stability customers get flipped to
 `stable`. Design partners and the Kodus dogfood org get `alpha`. PostHog
-flag conditions remain available for operational fine-tuning (rollout %,
-kill-switch, per-org overrides) on top of the track gate.
+conditions apply to alpha and GA rollout, after the track gate.
 
 ### Dry run locally
 
@@ -186,6 +185,6 @@ and concrete. Changes go through PR review like any other source-of-truth.
 - `features.yaml` is hand-edited through PRs. CODEOWNERS approval required.
 - Don't hand-edit `features-snapshot.json` — it's regenerated. CI fails
   otherwise.
-- A feature key must match a real PostHog feature flag key (kebab-case).
+- A feature key uses kebab-case. Alpha and GA flags must match their PostHog key.
 - Don't set `private_beta_orgs` on stages other than `alpha` or `beta`; the
   validator will reject.

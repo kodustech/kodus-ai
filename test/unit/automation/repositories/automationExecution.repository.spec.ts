@@ -139,8 +139,16 @@ describe('AutomationExecutionRepository', () => {
         );
 
         expect(result).toEqual([
-            { repositoryId: 'repo-a', pullRequestNumber: 12 },
-            { repositoryId: 'repo-b', pullRequestNumber: 34 },
+            {
+                repositoryId: 'repo-a',
+                pullRequestNumber: 12,
+                mayAllowNoComments: false,
+            },
+            {
+                repositoryId: 'repo-b',
+                pullRequestNumber: 34,
+                mayAllowNoComments: false,
+            },
         ]);
     });
 });
