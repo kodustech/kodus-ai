@@ -1,0 +1,191 @@
+{
+  "dual-storage-architecture-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "dual-storage-architecture-grafana-codex#05",
+      "newGroup": null,
+      "reason": "Async legacy write goroutine inherits request context cancellation, so legacy writes can be cancelled."
+    },
+    {
+      "id": "S2",
+      "match": "dual-storage-architecture-grafana-codex#06",
+      "newGroup": null,
+      "reason": "Legacy.Update receives the original objInfo instead of a wrapper with the unified-storage result."
+    },
+    {
+      "id": "S3",
+      "match": "dual-storage-architecture-grafana-codex#03",
+      "newGroup": null,
+      "reason": "Delete success metric passes name instead of options.Kind in the kind label."
+    },
+    {
+      "id": "S4",
+      "match": "dual-storage-architecture-grafana-codex#04",
+      "newGroup": null,
+      "reason": "Storage Create/Update failures recorded with recordLegacyDuration."
+    },
+    {
+      "id": "S5",
+      "match": "dual-storage-architecture-grafana-codex#02",
+      "newGroup": null,
+      "reason": "Legacy DeleteCollection duration recorded with recordStorageDuration."
+    },
+    {
+      "id": "S6",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Playlist integration test races assertions against async legacy writes; #07 is about Mode 3 unit tests never asserting legacy writes, a different test and problem."
+    }
+  ],
+  "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+    {
+      "id": "S1",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+      "newGroup": null,
+      "reason": "Sync branch returns raw fetch Response while callers expect provider-specific token shapes."
+    },
+    {
+      "id": "S2",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#08",
+      "newGroup": null,
+      "reason": "Computed keys from z.string().toString() are literal keys, so the sync schema does not keep expiry fields."
+    },
+    {
+      "id": "S3",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+      "newGroup": null,
+      "reason": "Google Calendar stores the safeParse wrapper instead of .data as the credential key."
+    },
+    {
+      "id": "S4",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+      "newGroup": null,
+      "reason": "Zoho Bigin passes credentialId instead of userId to refreshOAuthTokens."
+    },
+    {
+      "id": "S5",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#14",
+      "newGroup": null,
+      "reason": "Salesforce refresh uses prisma without importing it."
+    },
+    {
+      "id": "S6",
+      "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#13",
+      "newGroup": null,
+      "reason": "Salesforce refreshes token and writes credential on every construction; also mentions the stale token (#17), but the primary fix is making refresh conditional."
+    }
+  ],
+  "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+      "newGroup": null,
+      "reason": "Global all-clients VIEW grant short-circuits canView(client), bypassing client-specific denials."
+    },
+    {
+      "id": "S2",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+      "newGroup": null,
+      "reason": "canView() ignores the global MANAGE permission; fix is including MANAGE in canView()."
+    },
+    {
+      "id": "S3",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#10",
+      "newGroup": null,
+      "reason": "Global all-clients VIEW grant short-circuits canView(client), bypassing client-specific denials."
+    },
+    {
+      "id": "S4",
+      "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#09",
+      "newGroup": null,
+      "reason": "canView() ignores the global MANAGE permission; fix is including MANAGE in canView()."
+    }
+  ],
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08",
+      "newGroup": null,
+      "reason": "Invalidation on update compares the organization-aware enabled state, so a now-hidden IDP stays in the cached login list."
+    },
+    {
+      "id": "S2",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Performance issue: cold-cache getForLogin discards loaded models and reloads each by id; no golden issue covers this."
+    },
+    {
+      "id": "S3",
+      "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+      "newGroup": null,
+      "reason": "Cleanup registered for literal 'alias' instead of the created IDP aliases."
+    }
+  ],
+  "github-oauth-security-enhancement-sentry": [
+    {
+      "id": "S1",
+      "match": "github-oauth-security-enhancement-sentry#03",
+      "newGroup": null,
+      "reason": "OAuth state uses static pipeline.signature instead of a per-flow random nonce."
+    },
+    {
+      "id": "S2",
+      "match": "github-oauth-security-enhancement-sentry#06",
+      "newGroup": null,
+      "reason": "When no Integration exists the DoesNotExist branch advances without verifying the installer."
+    },
+    {
+      "id": "S3",
+      "match": "github-oauth-security-enhancement-sentry#09",
+      "newGroup": null,
+      "reason": "metadata['sender']['login'] raises KeyError when sender metadata is missing."
+    }
+  ],
+  "feature-localization-fallbacks-server-side-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+      "newGroup": null,
+      "reason": "Fallback locales only loaded in the controller filter, so non-controller translation paths lack fallbacks."
+    },
+    {
+      "id": "S2",
+      "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+      "newGroup": null,
+      "reason": "Translation cache key omits site/default locale although fallback results depend on it."
+    }
+  ],
+  "implement-access-token-context-encoding-framework-keycloak": [
+    {
+      "id": "S1",
+      "match": "implement-access-token-context-encoding-framework-keycloak#05",
+      "newGroup": null,
+      "reason": "Client-credentials flow never sets GRANT_TYPE, so tokens encode the unknown 'na' shortcut."
+    },
+    {
+      "id": "S2",
+      "match": "implement-access-token-context-encoding-framework-keycloak#02",
+      "newGroup": null,
+      "reason": "isAccessTokenId reads the wrong offset and inverts the comparison."
+    }
+  ],
+  "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+    {
+      "id": "S1",
+      "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+      "newGroup": null,
+      "reason": "queued default timezone.now() evaluated at import time instead of per instance."
+    }
+  ],
+  "fixing-re-authentication-with-passkeys-keycloak": [
+    {
+      "id": "S1",
+      "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+      "newGroup": null,
+      "reason": "Passkey-only users routed to base login-password.ftl that lacks the passkeys conditional UI."
+    }
+  ],
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [],
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [],
+  "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": []
+}

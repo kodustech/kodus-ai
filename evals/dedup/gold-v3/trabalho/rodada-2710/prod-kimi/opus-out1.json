@@ -1,0 +1,250 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem: mainHostDestinationCalendar.integration dereferenced without optional chaining, crashing the Google Meet fallback when destinationCalendar is null/empty."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem: evt.destinationCalendar?.push is a no-op when destinationCalendar is null, dropping co-hosts' destination calendars in collective bookings."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: Google createEvent takes the organizer email from the first destination calendar while inserting into the credential-matched calendar; no golden issue covers the organizer attribution."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem: per-destination prisma.credential.findUnique inside the loops instead of one batched findMany."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem: mainHostDestinationCalendar.integration dereferenced without optional chaining, crashing the Google Meet fallback when destinationCalendar is null/empty."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar. (deleteEvent side)"
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: Google createEvent takes the organizer email from the first destination calendar while inserting into the credential-matched calendar; no golden issue covers the organizer attribution."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Same problem: evt.destinationCalendar?.push is a no-op when destinationCalendar is null, dropping co-hosts' destination calendars in collective bookings."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "newGroup": null,
+   "reason": "Same problem: slug is now set only when IS_TEAM_BILLING_ENABLED (inverted condition), so non-billing orgs get no slug."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Same problem: per-destination prisma.credential.findUnique inside the loops instead of one batched findMany."
+  },
+  {
+   "id": "S13",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar."
+  },
+  {
+   "id": "S14",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: Google createEvent takes the organizer email from the first destination calendar while inserting into the credential-matched calendar; no golden issue covers the organizer attribution."
+  },
+  {
+   "id": "S15",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: Google createEvent takes the organizer email from the first destination calendar while inserting into the credential-matched calendar; no golden issue covers the organizer attribution."
+  },
+  {
+   "id": "S16",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem: mainHostDestinationCalendar.integration dereferenced without optional chaining, crashing the Google Meet fallback when destinationCalendar is null/empty."
+  },
+  {
+   "id": "S17",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar."
+  },
+  {
+   "id": "S18",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem: mainHostDestinationCalendar.integration dereferenced without optional chaining, crashing the Google Meet fallback when destinationCalendar is null/empty."
+  },
+  {
+   "id": "S19",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same problem: the fallback find compares externalId to the absent externalCalendarId, never matches, so update/delete lose the configured destination calendar."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Same problem: isinstance(process, multiprocessing.Process) does not match SpawnProcess, so hung flushers are never killed."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Same problem: join() breaks out of the per-process loop on deadline, leaving remaining flusher processes unterminated."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Same problem: isinstance check against multiprocessing.Process misses spawn-context processes, so they are not killed."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "Same problem: break on shared deadline in join() skips termination of remaining processes."
+  },
+  {
+   "id": "S5",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "Same problem: get_memory_info() called per flusher buffer, repeating the same cluster-wide Redis INFO per process."
+  },
+  {
+   "id": "S6",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+   "newGroup": null,
+   "reason": "Same problem: isinstance(process, multiprocessing.Process) guard does not match SpawnProcess instances."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#01",
+   "newGroup": null,
+   "reason": "Same problem: password check skipped when any totpCode is present, and the backup-code branch never validates totpCode, allowing login without password."
+  },
+  {
+   "id": "S2",
+   "match": "feat-2fa-backup-codes-cal-com#17",
+   "newGroup": null,
+   "reason": "Same problem: backup codes compared case-sensitively against lowercase hex, rejecting uppercase input."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: used codes are nulled instead of removed, so MissingBackupCodes never fires once all are consumed; no golden issue covers this."
+  },
+  {
+   "id": "S4",
+   "match": "feat-2fa-backup-codes-cal-com#07",
+   "newGroup": null,
+   "reason": "Same problem: non-atomic read-modify-write of backupCodes lets concurrent logins reuse the same backup code."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: claims the V1-guarded listener crashes removal when both V1 and V2 are enabled because ClientPermissionsV2.setPermissionsEnabled throws; issue #01 is the opposite (cleanup skipped when only V2 enabled), and the suggested fix (skip when V2 active) would not fix it."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: same as S1, listener with both flags enabled hits ClientPermissionsV2.setPermissionsEnabled and throws; not the orphaned-cleanup-when-only-V2 issue."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "New: ClientResource management-permission endpoints require V1 but get the V2 implementation when V2 is enabled, throwing UnsupportedOperationException; no golden issue covers it."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01",
+   "newGroup": null,
+   "reason": "Same problem: getSubGroupsCount returns null when the delegate is gone, violating the GroupModel non-null contract."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "New: getSubGroupsStream overloads still dereference modelSupplier.get() without a null guard; different methods from issue #01."
+  },
+  {
+   "id": "S3",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Same problem: the reader thread is never joined before asserting caughtExceptions is empty, so the test can miss exceptions."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Same problem: public options type makes teamId optional for team scope, so a missing teamId compiles and silently yields empty results."
+  },
+  {
+   "id": "S2",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+   "newGroup": null,
+   "reason": "Same problem: teamId optional for scope team in the public type while the zod schema requires it, silently returning NOTHING_CONDITION."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same problem: TestLogger.FromContext returns a fresh logger instead of the receiver, so logs are lost to assertions."
+  },
+  {
+   "id": "S2",
+   "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same problem: TestLogger.FromContext returns a disconnected TestLogger instead of the receiver."
+  }
+ ]
+}

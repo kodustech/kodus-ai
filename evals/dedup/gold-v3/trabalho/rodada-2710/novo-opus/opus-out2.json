@@ -1,0 +1,214 @@
+{
+  "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+    {
+      "id": "S1",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+      "newGroup": null,
+      "reason": "Same missing optional chaining on mainHostDestinationCalendar.integration crashing Meet bookings without destination calendar."
+    },
+    {
+      "id": "S2",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+      "newGroup": null,
+      "reason": "Same dropped credentialId on video booking references breaking later update/delete."
+    },
+    {
+      "id": "S3",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+      "newGroup": null,
+      "reason": "Same never-matching fallback find on externalCalendarId in updateEvent."
+    },
+    {
+      "id": "S4",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+      "newGroup": null,
+      "reason": "Same never-matching fallback find on externalCalendarId, in deleteEvent (issue covers both)."
+    },
+    {
+      "id": "S5",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+      "newGroup": null,
+      "reason": "Same undefined calendarId passed to the hangout-link events.patch in Google createEvent."
+    },
+    {
+      "id": "S6",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+      "newGroup": null,
+      "reason": "Same null destinationCalendar making the optional push drop other hosts' calendars."
+    },
+    {
+      "id": "S7",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+      "newGroup": null,
+      "reason": "Same inverted IS_TEAM_BILLING_ENABLED slug condition."
+    },
+    {
+      "id": "S8",
+      "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+      "newGroup": null,
+      "reason": "Same recurring-series deletion repeated once per calendar reference causing duplicate deletes."
+    }
+  ],
+  "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+    {
+      "id": "S1",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+      "newGroup": null,
+      "reason": "Same unsanitized raw_html cook output rendered with raw post.cooked (stored XSS)."
+    },
+    {
+      "id": "S2",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+      "newGroup": null,
+      "reason": "Same throttle keyed by full embed URL, bypassed by varying the query string to create unbounded topics."
+    },
+    {
+      "id": "S3",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+      "newGroup": null,
+      "reason": "Same synchronous full feed poll on every new article retrieval."
+    },
+    {
+      "id": "S4",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+      "newGroup": null,
+      "reason": "Same i.content.scrub NoMethodError on items without content."
+    },
+    {
+      "id": "S5",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+      "newGroup": null,
+      "reason": "Same nil embed.post passed to PostRevisor on the update path."
+    },
+    {
+      "id": "S6",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+      "newGroup": null,
+      "reason": "Same protocol-relative URL rewrite in absolutize_urls."
+    },
+    {
+      "id": "S7",
+      "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+      "newGroup": null,
+      "reason": "Same substring indexOf origin check in embed.js postMessage handler."
+    }
+  ],
+  "anonymous-add-configurable-device-limit-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+      "newGroup": null,
+      "reason": "Same cache entry written before CreateOrUpdateDevice and kept on ErrDeviceLimitReached, letting retries bypass the limit."
+    },
+    {
+      "id": "S2",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+      "newGroup": null,
+      "reason": "Same nil return from TagDevice when the device ID header is missing, bypassing the limit."
+    },
+    {
+      "id": "S3",
+      "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+      "newGroup": null,
+      "reason": "Same non-atomic count-then-insert race exceeding the limit."
+    },
+    {
+      "id": "S4",
+      "match": "new",
+      "newGroup": "N1",
+      "reason": "Wire provider graph break from ProvideAnonDBStore's new int64 argument; no golden issue covers it."
+    }
+  ],
+  "implement-access-token-context-encoding-framework-keycloak": [
+    {
+      "id": "S1",
+      "match": "implement-access-token-context-encoding-framework-keycloak#01",
+      "newGroup": null,
+      "reason": "Same duplicated grantType null check instead of rawTokenId."
+    },
+    {
+      "id": "S2",
+      "match": "implement-access-token-context-encoding-framework-keycloak#02",
+      "newGroup": null,
+      "reason": "Same wrong substring offset and inverted comparison in isAccessTokenId."
+    },
+    {
+      "id": "S3",
+      "match": "implement-access-token-context-encoding-framework-keycloak#03",
+      "newGroup": null,
+      "reason": "Shortcut length mismatch vs the 3-letter Javadoc; fixing it includes correcting the Javadoc the issue names."
+    },
+    {
+      "id": "S4",
+      "match": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+      "newGroup": null,
+      "reason": "Same abstract getShortcut() breaking existing custom grant factories."
+    }
+  ],
+  "sms-workflow-reminder-retry-count-tracking-cal-com": [
+    {
+      "id": "S1",
+      "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+      "newGroup": null,
+      "reason": "Same retryCount > 1 OR branch lacking the SMS method filter."
+    },
+    {
+      "id": "S2",
+      "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+      "newGroup": null,
+      "reason": "Same unguarded retry-count update in the catch block aborting the loop."
+    },
+    {
+      "id": "S3",
+      "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+      "newGroup": null,
+      "reason": "Same counting of SMS-sending locks (scheduleSMS returning undefined) as failed attempts, deleting valid reminders."
+    }
+  ],
+  "github-oauth-security-enhancement-sentry": [
+    {
+      "id": "S1",
+      "match": "github-oauth-security-enhancement-sentry#09",
+      "newGroup": null,
+      "reason": "Same KeyError on integration.metadata['sender'] when sender is absent."
+    },
+    {
+      "id": "S2",
+      "match": "github-oauth-security-enhancement-sentry#05",
+      "newGroup": null,
+      "reason": "Same token exchange/user lookup outside error handling causing 500s."
+    }
+  ],
+  "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+    {
+      "id": "S1",
+      "match": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+      "newGroup": null,
+      "reason": "Same literal 'alias' cleanup leaving the created IDPs undeleted."
+    }
+  ],
+  "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+    {
+      "id": "S1",
+      "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+      "newGroup": null,
+      "reason": "Same unparenthesized OR fragment returned by getBaseConditions."
+    }
+  ],
+  "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+    {
+      "id": "S1",
+      "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+      "newGroup": null,
+      "reason": "Same reader thread never joined before the exception assertion."
+    }
+  ],
+  "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+    {
+      "id": "S1",
+      "match": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03",
+      "newGroup": null,
+      "reason": "Same TestLogger.FromContext returning a fresh logger instead of the receiver."
+    }
+  ]
+}

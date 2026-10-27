@@ -1,0 +1,554 @@
+{
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S1"
+  ],
+  "final": []
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S1"
+  ],
+  "final": [
+   "S1"
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7"
+  ],
+  "final": [
+   "S1",
+   "S2",
+   "S4",
+   "S5",
+   "S7",
+   "S3",
+   "S6"
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3"
+  ],
+  "dedup": [
+   "S1",
+   "S2"
+  ],
+  "final": [
+   "S1",
+   "S2"
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S5",
+   "S6",
+   "S3",
+   "S2"
+  ],
+  "final": [
+   "S7",
+   "S6",
+   "S8",
+   "S2"
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7"
+  ],
+  "dedup": [
+   "S2",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S1"
+  ],
+  "final": [
+   "S5",
+   "S2",
+   "S4",
+   "S8",
+   "S1"
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S5"
+  ],
+  "final": [
+   "S2",
+   "S1",
+   "S3",
+   "S5"
+  ]
+ },
+ "feat-2fa-backup-codes-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S1",
+   "S4",
+   "S5",
+   "S6",
+   "S2"
+  ],
+  "final": [
+   "S5",
+   "S6",
+   "S2",
+   "S4"
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "finder": [
+   "S1"
+  ],
+  "dedup": [
+   "S2"
+  ],
+  "final": [
+   "S2"
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S2"
+  ],
+  "final": [
+   "S2"
+  ]
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S1"
+  ],
+  "final": [
+   "S1"
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5"
+  ],
+  "dedup": [
+   "S2",
+   "S3",
+   "S5",
+   "S1"
+  ],
+  "final": [
+   "S2",
+   "S5",
+   "S1",
+   "S3"
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9",
+   "S10"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9",
+   "S10"
+  ],
+  "final": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S8",
+   "S9",
+   "S10"
+  ]
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S2"
+  ],
+  "final": [
+   "S2"
+  ]
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "dedup": [
+   "S1",
+   "S4"
+  ],
+  "final": [
+   "S1",
+   "S4"
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9",
+   "S10",
+   "S11",
+   "S12",
+   "S13",
+   "S14"
+  ],
+  "dedup": [
+   "S8",
+   "S12",
+   "S14",
+   "S7",
+   "S2",
+   "S3",
+   "S10",
+   "S13"
+  ],
+  "final": [
+   "S8",
+   "S12",
+   "S7",
+   "S2",
+   "S3",
+   "S10",
+   "S14",
+   "S13"
+  ]
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S4",
+   "S3"
+  ],
+  "final": [
+   "S3",
+   "S2",
+   "S4"
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "finder": [],
+  "dedup": [],
+  "final": []
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S3",
+   "S2"
+  ],
+  "final": [
+   "S3",
+   "S2"
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S7",
+   "S6"
+  ],
+  "final": [
+   "S1",
+   "S2",
+   "S4",
+   "S7",
+   "S6",
+   "S3"
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "dedup": [
+   "S1",
+   "S2"
+  ],
+  "final": [
+   "S1",
+   "S2"
+  ]
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S4"
+  ],
+  "final": [
+   "S4"
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S10",
+   "S6",
+   "S7",
+   "S8",
+   "S9"
+  ],
+  "final": [
+   "S2",
+   "S3",
+   "S4",
+   "S10",
+   "S8",
+   "S9",
+   "S1",
+   "S6",
+   "S7"
+  ]
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S2"
+  ],
+  "final": []
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S2"
+  ],
+  "final": [
+   "S2"
+  ]
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "finder": [],
+  "dedup": [],
+  "final": []
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S2",
+   "S5",
+   "S1",
+   "S6"
+  ],
+  "final": [
+   "S1",
+   "S2",
+   "S5",
+   "S6"
+  ]
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5"
+  ],
+  "dedup": [
+   "S1",
+   "S6",
+   "S3",
+   "S4",
+   "S5"
+  ],
+  "final": [
+   "S1",
+   "S5",
+   "S6",
+   "S3",
+   "S4"
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "dedup": [
+   "S1",
+   "S4"
+  ],
+  "final": [
+   "S1",
+   "S4"
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S3"
+  ],
+  "final": [
+   "S3"
+  ]
+ }
+}
