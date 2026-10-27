@@ -63,6 +63,11 @@ type AreaMapResponse = {
             sampled: boolean;
         };
     } | null;
+    /** The background scan, or null when none has started for the repository. */
+    sync: {
+        complete: boolean;
+        discoveredMergedPrs: number;
+    } | null;
     rankedAreaPaths: string[];
 };
 
@@ -339,7 +344,9 @@ export function CodeAreasTab({
                         className="text-primary-light mt-3 text-xs font-medium hover:underline">
                         {expanded
                             ? "Show fewer"
-                            : "Show up to " + Math.min(items.length - 4, 96) + " more"}
+                            : "Show up to " +
+                              Math.min(items.length - 4, 96) +
+                              " more"}
                     </button>
                 )}
                 {expanded && items.length > visible.length && (
@@ -427,7 +434,9 @@ export function CodeAreasTab({
                 </div>
             ) : !data?.map ? (
                 <div className="border-card-lv3 bg-card-lv1 text-text-secondary rounded-lg border px-5 py-12 text-sm">
-                    History is being collected. Check back after the first scan.
+                    {data?.sync
+                        ? `History is being collected: ${data.sync.discoveredMergedPrs} merged PRs scanned so far. Check back after the first scan.`
+                        : "No history yet. The first background scan of this repository has not started."}
                 </div>
             ) : (
                 <>
@@ -717,9 +726,8 @@ export function CodeAreasTab({
                                 PRs.
                             </p>
                             <p>
-                                The first scan covers the previous 30 days.
-                                New merged PRs extend the history, up to one
-                                year.
+                                The first scan covers the previous 30 days. New
+                                merged PRs extend the history, up to one year.
                             </p>
                             <p>
                                 Structural checks analyzed{" "}

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
@@ -26,7 +27,10 @@ import {
     REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
-const MAX_REPOSITORIES_PER_RUN = 5;
+// Each batch reads up to ten PRs, so a repository's first scan takes several.
+// The run spends this many batches, finishing scans before refreshing others.
+const MAX_BATCHES_PER_RUN = 40;
+const STATUS_READ_CONCURRENCY = 10;
 const RUN_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
@@ -108,29 +112,56 @@ export class RefreshCodeAreaRiskMapCron {
                     });
                 }
             }
-            repositories.sort((a, b) =>
-                `${a.organizationId}:${a.id}`.localeCompare(
-                    `${b.organizationId}:${b.id}`,
+            if (!repositories.length) return;
+
+            // Never scanned first, then unfinished scans, then complete ones
+            // stalest first: a fixed rotation left first scans incomplete for
+            // weeks while finished repositories were refreshed.
+            const limit = pLimit(STATUS_READ_CONCURRENCY);
+            const statuses = await Promise.all(
+                repositories.map((repo) =>
+                    limit(() =>
+                        this.refresh
+                            .readStatus(repo.organizationId, repo.id)
+                            .catch(() => null),
+                    ),
                 ),
             );
-            const pages = Math.ceil(
-                repositories.length / MAX_REPOSITORIES_PER_RUN,
-            );
-            if (!pages) return;
-            const page = Math.floor(Date.now() / RUN_INTERVAL_MS) % pages;
-            const selected = repositories.slice(
-                page * MAX_REPOSITORIES_PER_RUN,
-                (page + 1) * MAX_REPOSITORIES_PER_RUN,
-            );
-            for (const repo of selected) {
+            const rank = (status: (typeof statuses)[number]) =>
+                !status ? 0 : status.complete ? 2 : 1;
+            const ordered = repositories
+                .map((repo, index) => ({ repo, status: statuses[index] }))
+                .sort(
+                    (a, b) =>
+                        rank(a.status) - rank(b.status) ||
+                        (a.status?.cursorEnd ?? '').localeCompare(
+                            b.status?.cursorEnd ?? '',
+                        ) ||
+                        `${a.repo.organizationId}:${a.repo.id}`.localeCompare(
+                            `${b.repo.organizationId}:${b.repo.id}`,
+                        ),
+                );
+
+            let batches = 0;
+            for (const { repo } of ordered) {
+                if (batches >= MAX_BATCHES_PER_RUN) break;
                 try {
-                    await this.refresh.refreshOneBatch({
-                        organizationAndTeamData: {
-                            organizationId: repo.organizationId,
-                            teamId: repo.teamId,
-                        },
-                        repository: { id: repo.id, name: repo.name },
-                    });
+                    // An unfinished scan keeps going while it makes progress.
+                    let result: { complete: boolean; processed: number };
+                    do {
+                        result = await this.refresh.refreshOneBatch({
+                            organizationAndTeamData: {
+                                organizationId: repo.organizationId,
+                                teamId: repo.teamId,
+                            },
+                            repository: { id: repo.id, name: repo.name },
+                        });
+                        batches++;
+                    } while (
+                        !result?.complete &&
+                        result?.processed > 0 &&
+                        batches < MAX_BATCHES_PER_RUN
+                    );
                 } catch (error) {
                     this.logger.warn({
                         message: 'Could not refresh code-area history batch',

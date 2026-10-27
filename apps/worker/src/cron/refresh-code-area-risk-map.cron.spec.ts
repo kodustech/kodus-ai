@@ -16,6 +16,7 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
         }),
     };
     const refresh = {
+        readStatus: jest.fn().mockResolvedValue(null),
         refreshOneBatch: jest.fn().mockResolvedValue({}),
     };
     const codeManagement = {
@@ -70,6 +71,7 @@ it('filters unsupported providers before choosing repository pages', async () =>
         }),
     };
     const refresh = {
+        readStatus: jest.fn().mockResolvedValue(null),
         refreshOneBatch: jest.fn().mockResolvedValue({}),
     };
     const codeManagement = {
@@ -103,4 +105,108 @@ it('filters unsupported providers before choosing repository pages', async () =>
         repository: { id: 'repo-1', name: 'api' },
     });
     expect(release).toHaveBeenCalledTimes(1);
+});
+
+// A repository's first scan needs many batches (ten PRs each); one batch per
+// visit in a fixed rotation left it incomplete for weeks. Unscanned and
+// incomplete repositories go first and keep batching within the run's budget;
+// complete ones are refreshed stalest first.
+describe('refresh order and batch budget', () => {
+    const build = (
+        repositories: Array<{ id: string; name: string }>,
+        statuses: Record<string, unknown>,
+        batches: Record<string, Array<{ complete: boolean; processed: number }>>,
+    ) => {
+        const refresh = {
+            readStatus: jest.fn(
+                async (_org: string, repositoryId: string) =>
+                    statuses[repositoryId] ?? null,
+            ),
+            refreshOneBatch: jest.fn(async ({ repository }) => {
+                const queue = batches[repository.id] ?? [];
+                return queue.shift() ?? { complete: true, processed: 0 };
+            }),
+        };
+        const cron = new RefreshCodeAreaRiskMapCron(
+            {
+                findTeamsWithIntegrations: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { uuid: 'team-1', organization: { uuid: 'org-1' } },
+                    ]),
+            } as any,
+            {
+                findOne: jest.fn().mockResolvedValue({
+                    configValue: {
+                        repositories: repositories.map((r) => ({
+                            ...r,
+                            isSelected: true,
+                        })),
+                    },
+                }),
+            } as any,
+            refresh as any,
+            { acquire: jest.fn().mockResolvedValue({ release: jest.fn() }) } as any,
+            { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+            {
+                getTypeIntegration: jest
+                    .fn()
+                    .mockResolvedValue(PlatformType.GITLAB),
+            } as any,
+        );
+        const order = () =>
+            refresh.refreshOneBatch.mock.calls.map(([p]) => p.repository.id);
+        return { cron, refresh, order };
+    };
+
+    it('scans unscanned, then incomplete, then the stalest complete repository', async () => {
+        const { cron, order } = build(
+            [
+                { id: 'fresh', name: 'fresh' },
+                { id: 'stale', name: 'stale' },
+                { id: 'partial', name: 'partial' },
+                { id: 'never', name: 'never' },
+            ],
+            {
+                fresh: { complete: true, cursorEnd: '2026-10-27T00:00:00Z' },
+                stale: { complete: true, cursorEnd: '2026-10-01T00:00:00Z' },
+                partial: { complete: false, cursorEnd: '2026-10-20T00:00:00Z' },
+            },
+            {},
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['never', 'partial', 'stale', 'fresh']);
+    });
+
+    it('keeps batching an incomplete repository until its scan completes', async () => {
+        const { cron, order } = build(
+            [{ id: 'never', name: 'never' }],
+            {},
+            {
+                never: [
+                    { complete: false, processed: 10 },
+                    { complete: false, processed: 10 },
+                    { complete: true, processed: 4 },
+                ],
+            },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['never', 'never', 'never']);
+    });
+
+    it('stops batching a repository that makes no progress', async () => {
+        const { cron, order } = build(
+            [{ id: 'stuck', name: 'stuck' }],
+            {},
+            { stuck: [{ complete: false, processed: 0 }] },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['stuck']);
+    });
 });
