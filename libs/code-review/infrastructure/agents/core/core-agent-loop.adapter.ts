@@ -281,24 +281,24 @@ export async function runAgentLoopViaCore(
 
     // The ledger is read back below for the coverage summary.
     const finderSpec = buildFinderAgentSpec({
-            systemPrompt: input.systemPrompt,
-            modelId: specModelId,
-            fallbackModelId,
-            usageRunName: input.usageRunName,
-            agentName: input.agentName,
-            tools,
-            coverageLedger,
-            compressor: contextWindowTokens
-                ? new ContextWindowCompressor(contextWindowTokens, {
-                      overheadTokens,
-                  })
-                : undefined,
-            maxSteps: input.maxSteps ?? 20,
-            providerOptions,
-            acceptsRevisions: !!input.previousDecisions?.length,
-            acceptsConventions: !!readGuide,
-        });
-
+        systemPrompt: input.systemPrompt,
+        modelId: specModelId,
+        fallbackModelId,
+        usageRunName: input.usageRunName,
+        agentName: input.agentName,
+        tools,
+        labels: input.allowedLabels,
+        coverageLedger,
+        compressor: contextWindowTokens
+            ? new ContextWindowCompressor(contextWindowTokens, {
+                  overheadTokens,
+              })
+            : undefined,
+        maxSteps: input.maxSteps ?? 20,
+        providerOptions,
+        acceptsRevisions: !!input.previousDecisions?.length,
+        acceptsConventions: !!readGuide,
+    });
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +

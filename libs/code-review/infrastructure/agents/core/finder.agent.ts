@@ -98,6 +98,13 @@ export interface FinderSuggestion {
     source?: { file: string; section?: string; quote: string };
 }
 
+const FINDER_LABELS = [
+    'bug',
+    'security',
+    'performance',
+    'repo_instruction',
+] as const;
+
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
 const SUBMIT_RESULT_SCHEMA: JSONSchema = {
     type: 'object',
@@ -115,15 +122,7 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                 properties: {
                     relevantFile: { type: 'string' },
                     language: { type: 'string' },
-                    label: {
-                        type: 'string',
-                        enum: [
-                            'bug',
-                            'security',
-                            'performance',
-                            'repo_instruction',
-                        ],
-                    },
+                    label: { type: 'string', enum: [...FINDER_LABELS] },
                     suggestionContent: { type: 'string' },
                     existingCode: { type: 'string' },
                     improvedCode: { type: 'string' },
@@ -213,6 +212,40 @@ function withConventionFields(tool: AgentTool): AgentTool {
 /** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
  *  Offered only when the PR has earlier suggestions: a first-round review sends
  *  exactly the tool it always did, so this change cannot move its recall. */
+/**
+ * The done-tool offering only `labels` (the agent's allowed labels, as its
+ * prompt states them). Labels the finder does not know are ignored; with none
+ * it knows, every label stays.
+ */
+function withLabels(
+    tool: AgentTool,
+    labels: readonly string[] | undefined,
+): AgentTool {
+    const offered = FINDER_LABELS.filter((l) => labels?.includes(l));
+    if (!offered.length) return tool;
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            label: { ...items.properties.label, enum: offered },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 function withRevisionField(tool: AgentTool): AgentTool {
     const schema = tool.inputSchema as any;
     const items = schema.properties.suggestions.items;
@@ -247,6 +280,8 @@ export interface BuildFinderSpecParams {
     fallbackModelId?: string;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
+    /** The labels the agent may report; the done-tool offers only these. */
+    labels?: readonly string[];
     coverageLedger: ProgressLedger;
     compressor?: Compressor;
     maxSteps?: number;
@@ -273,6 +308,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         ? withRevisionField(submitResultTool)
         : submitResultTool;
     if (params.acceptsConventions) doneTool = withConventionFields(doneTool);
+    doneTool = withLabels(doneTool, params.labels);
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Enable strict/structured tool calling on the done-tool for

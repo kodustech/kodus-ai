@@ -1751,3 +1751,59 @@ describe('finderRunEnvironment — instruction citations', () => {
         ).toBe(false);
     });
 });
+
+describe('runAgentLoopViaCore — finder labels', () => {
+    const labelsOffered = async (over: Record<string, unknown>) => {
+        let enumOffered: string[] | undefined;
+        const doGenerate = (async (opts: any) => {
+            const submit = (opts?.tools ?? []).find(
+                (t: any) => t.name === 'submitResult',
+            );
+            if (submit && !enumOffered) {
+                const schema = submit.inputSchema ?? submit.parameters;
+                enumOffered =
+                    schema?.properties?.suggestions?.items?.properties?.label
+                        ?.enum;
+            }
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'f',
+                        toolName: 'submitResult',
+                        input: JSON.stringify({
+                            reasoning: 'r',
+                            suggestions: [],
+                        }),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+        await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), over),
+            secrets,
+        );
+        return enumOffered;
+    };
+
+    it('offers only the labels the agent may report', async () => {
+        expect(
+            await labelsOffered({
+                allowedLabels: ['bug', 'security', 'performance'],
+            }),
+        ).toEqual(['bug', 'security', 'performance']);
+        expect(
+            await labelsOffered({
+                allowedLabels: [
+                    'bug',
+                    'security',
+                    'performance',
+                    'repo_instruction',
+                ],
+            }),
+        ).toContain('repo_instruction');
+    });
+});

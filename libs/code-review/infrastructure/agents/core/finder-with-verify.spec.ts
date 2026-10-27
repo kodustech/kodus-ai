@@ -489,3 +489,38 @@ describe('runFinderWithVerify — findings that cite an instruction file under a
         ]);
     });
 });
+
+describe('buildFinderAgentSpec — label enum', () => {
+    const labelEnum = (labels?: string[]) => {
+        const spec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools: new InMemoryToolRegistry([]),
+            coverageLedger: noCriticalLedger,
+            ...(labels ? { labels: labels as any } : {}),
+        });
+        const submit = spec.tools
+            .list()
+            .find((t) => t.name === 'submitResult') as any;
+        return submit.inputSchema.properties.suggestions.items.properties.label
+            .enum;
+    };
+
+    it('offers the labels it is given', () => {
+        expect(labelEnum(['bug', 'security', 'performance'])).toEqual([
+            'bug',
+            'security',
+            'performance',
+        ]);
+        expect(labelEnum(['bug', 'repo_instruction'])).toEqual([
+            'bug',
+            'repo_instruction',
+        ]);
+    });
+
+    it('offers every label when given none it knows', () => {
+        const all = ['bug', 'security', 'performance', 'repo_instruction'];
+        expect(labelEnum()).toEqual(all);
+        expect(labelEnum(['custom_agent'])).toEqual(all);
+    });
+});
