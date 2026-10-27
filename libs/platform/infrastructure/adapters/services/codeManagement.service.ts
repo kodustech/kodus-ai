@@ -1749,9 +1749,10 @@ export class CodeManagementService implements ICodeManagementService {
         );
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
-        // A host without the call dismisses nothing.
+        // Every host implements it; one that does not must fail the step
+        // rather than leave Kody's approval in place under a hold.
         if (!provider?.dismissOwnPullRequestApprovals) {
-            return 0;
+            throw new Error(`Approval dismissal is unavailable on ${type}`);
         }
         return provider.dismissOwnPullRequestApprovals(params);
     }

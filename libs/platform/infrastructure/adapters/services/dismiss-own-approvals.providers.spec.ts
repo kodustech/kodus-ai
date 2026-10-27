@@ -16,7 +16,10 @@ import { PullRequestReviewState } from '@libs/platform/domain/platformIntegratio
 import { AzureReposService } from './azureRepos/azureRepos.service';
 import { BitbucketCloudService } from './bitbucket/bitbucket-cloud.service';
 import { BitbucketDataCenterService } from './bitbucket/bitbucket-data-center.service';
+import { BitbucketService } from './bitbucket.service';
 import { ForgejoService } from './forgejo.service';
+import { GithubService } from './github/github.service';
+import { GitlabService } from './gitlab.service';
 
 /**
  * When a later review holds approval, the PR must not stay approved by Kody
@@ -54,7 +57,17 @@ describe.each([
                     pullrequests: { deleteApproval },
                 }),
             });
-            return { service, undo: deleteApproval };
+            return {
+                service,
+                undo: deleteApproval,
+                undoArgs: [
+                    {
+                        pull_request_id: 7,
+                        repo_slug: '{repo-1}',
+                        workspace: '{ws}',
+                    },
+                ],
+            };
         },
     },
     {
@@ -69,7 +82,14 @@ describe.each([
                     .mockResolvedValue({ workspaceId: 'PRJ', name: 'api' }),
                 getAxiosInstance: () => ({ put }),
             });
-            return { service, undo: put };
+            return {
+                service,
+                undo: put,
+                undoArgs: [
+                    '/projects/PRJ/repos/api/pull-requests/7/participants/kody',
+                    { status: 'UNAPPROVED' },
+                ],
+            };
         },
     },
     {
@@ -87,16 +107,31 @@ describe.each([
                     votePullRequest,
                 },
             });
-            return { service, undo: votePullRequest };
+            return {
+                service,
+                undo: votePullRequest,
+                undoArgs: [
+                    expect.objectContaining({
+                        projectId: 'p-1',
+                        repositoryId: 'repo-1',
+                        prId: 7,
+                        reviewerId: 'me',
+                        vote: 0,
+                    }),
+                ],
+            };
         },
     },
 ])('$host — dismissOwnPullRequestApprovals', ({ build }) => {
     it('removes the approval Kody gave', async () => {
-        const { service, undo } = build(PullRequestReviewState.APPROVED);
+        const { service, undo, undoArgs } = build(
+            PullRequestReviewState.APPROVED,
+        );
         expect(
             await (service as any).dismissOwnPullRequestApprovals(params),
         ).toBe(1);
         expect(undo).toHaveBeenCalledTimes(1);
+        expect(undo).toHaveBeenCalledWith(...undoArgs);
     });
 
     it('leaves the PR alone when Kody has not approved it', async () => {
@@ -161,5 +196,45 @@ describe('Forgejo — dismissOwnPullRequestApprovals', () => {
         await expect(
             (build() as any).dismissOwnPullRequestApprovals(params),
         ).rejects.toBeTruthy();
+    });
+});
+
+// The factory hands the stage whatever each host registered: a host whose
+// registered service lacks the call (the Bitbucket wrapper did) dismisses
+// nothing and the approval stays.
+describe('every registered code management service', () => {
+    it.each([
+        ['GitHub', GithubService],
+        ['GitLab', GitlabService],
+        ['Bitbucket', BitbucketService],
+        ['Azure Repos', AzureReposService],
+        ['Forgejo', ForgejoService],
+    ])('%s implements dismissOwnPullRequestApprovals', (_host, cls) => {
+        expect(typeof cls.prototype.dismissOwnPullRequestApprovals).toBe(
+            'function',
+        );
+    });
+
+    it.each([
+        ['Data Center', 'https://bitbucket.acme.test'],
+        ['Cloud', ''],
+    ])('the Bitbucket wrapper delegates to %s', async (_label, host) => {
+        const cloud = { dismissOwnPullRequestApprovals: jest.fn().mockResolvedValue(1) };
+        const dataCenter = {
+            dismissOwnPullRequestApprovals: jest.fn().mockResolvedValue(1),
+        };
+        const service = make(BitbucketService, {
+            bitbucketCloudService: cloud,
+            bitbucketDataCenterService: dataCenter,
+            integrationService: {
+                getPlatformAuthDetails: jest.fn().mockResolvedValue({ host }),
+            },
+        });
+
+        expect(await service.dismissOwnPullRequestApprovals(params)).toBe(1);
+        const used = host ? dataCenter : cloud;
+        const unused = host ? cloud : dataCenter;
+        expect(used.dismissOwnPullRequestApprovals).toHaveBeenCalledWith(params);
+        expect(unused.dismissOwnPullRequestApprovals).not.toHaveBeenCalled();
     });
 });
