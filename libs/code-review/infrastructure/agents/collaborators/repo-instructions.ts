@@ -296,7 +296,8 @@ export async function collectRepoInstructions(params: {
 
     let index: string[];
     try {
-        index = (await params.listFiles()).map(normalize);
+        // A host can list one file twice; it takes one slot.
+        index = [...new Set((await params.listFiles()).map(normalize))];
     } catch (error) {
         return { ...EMPTY, error: errorMessage(error) };
     }

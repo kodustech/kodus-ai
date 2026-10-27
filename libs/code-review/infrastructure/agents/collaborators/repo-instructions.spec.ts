@@ -255,6 +255,38 @@ describe('collectRepoInstructions', () => {
         expect(result.error).toBe('rate limited');
     });
 
+    // A host can list one file twice (overlapping directory scans); it must
+    // still take one slot of the budget and be read once.
+    it('lists a file the host returned twice once', async () => {
+        const repo = {
+            listFiles: jest
+                .fn()
+                .mockResolvedValue([
+                    '.github/instructions/api.instructions.md',
+                    'CLAUDE.md',
+                    '/.github/instructions/api.instructions.md',
+                    '.github/instructions/api.instructions.md',
+                ]),
+            readFile: jest
+                .fn()
+                .mockImplementation(async (p: string) =>
+                    p === 'CLAUDE.md' ? 'Use pnpm.' : 'Use the logger.',
+                ),
+        };
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['a.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual([
+            '.github/instructions/api.instructions.md',
+            'CLAUDE.md',
+        ]);
+        expect(result.indexedCount).toBe(2);
+        expect(repo.readFile).toHaveBeenCalledTimes(2);
+    });
+
     it('keeps the files it could read when one read fails', async () => {
         const result = await collectRepoInstructions({
             listFiles: jest

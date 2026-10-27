@@ -58,6 +58,11 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
                 .filters.branch,
         ).toBe('release/2.0');
+        // A listing failure must not look like a repository without the files.
+        expect(
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
+                .throwOnError,
+        ).toBe(true);
         const read =
             codeManagementService.getRepositoryContentFile.mock.calls[0][0];
         expect(read.pullRequest.head.ref).toBe('release/2.0');

@@ -487,6 +487,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
                             ],
                         },
+                        throwOnError: true,
                     })) ?? [];
                 return files.map((f: { path: string }) => f.path);
             },
