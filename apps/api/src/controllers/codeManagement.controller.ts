@@ -543,7 +543,9 @@ export class CodeManagementController {
     }
 
     // NOT USED IN WEB - INTERNAL USE ONLY
-    @Get('/webhook-status')
+    // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
+    // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
+    @Get('/hook-status')
     @ApiOperation({
         summary: 'Get webhook status',
         description: 'Checks if the repository webhook is active.',
@@ -561,7 +563,9 @@ export class CodeManagementController {
         });
     }
 
-    @Get('/webhook-failures')
+    // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
+    // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
+    @Get('/hook-failures')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
         checkPermissions({
