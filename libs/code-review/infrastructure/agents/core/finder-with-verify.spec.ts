@@ -350,15 +350,18 @@ describe('runFinderWithVerify — findings that cite an instruction file under a
         severity: 'high',
     });
 
+    let verifierPrompts: string[] = [];
     const run = async (
         suggestions: unknown[],
         repoInstructions?: typeof instructions,
         extra: Record<string, unknown> = {},
     ) => {
+        verifierPrompts = [];
         mockResolve.mockImplementation(() => ({
             model: new MockLanguageModelV3({
                 doGenerate: (async (opts: any) => {
                     const sys = JSON.stringify(opts?.prompt ?? '');
+                    if (sys.includes('REFUTE')) verifierPrompts.push(sys);
                     const tc = sys.includes('REFUTE')
                         ? {
                               id: 'v',
@@ -424,6 +427,43 @@ describe('runFinderWithVerify — findings that cite an instruction file under a
         expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
             ['a.ts', 'repo_instruction'],
         ]);
+    });
+
+    // Relabeled before verify, so the verifier judges it as an instruction
+    // finding: against the file's text, its appliesTo and the changed line.
+    it('verifies a relabeled finding as repo_instruction, with the instructions', async () => {
+        await run(
+            [
+                finding(
+                    'a.ts',
+                    'docs/shared-guide.md says "Every thrown error must be a DomainError." This throws a bare Error.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(verifierPrompts.length).toBeGreaterThan(0);
+        expect(
+            verifierPrompts.every(
+                (p) =>
+                    p.includes('Label: repo_instruction') &&
+                    p.includes('RepositoryInstructions'),
+            ),
+        ).toBe(true);
+    });
+
+    it('drops one that does not quote the target branch before verify', async () => {
+        await run(
+            [
+                finding(
+                    'a.ts',
+                    'CLAUDE.md, added in this PR, says "Never use let."',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(verifierPrompts).toEqual([]);
     });
 
     it('drops one whose quote is not on the target branch', async () => {

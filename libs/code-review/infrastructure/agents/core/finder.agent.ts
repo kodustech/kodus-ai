@@ -1092,6 +1092,66 @@ export async function verifyFindings(
     verdictByFinding: Map<FinderSuggestion, Verdict>;
     verifyUsage: VerifyUsage;
 }> {
+    // A finding that cites an instruction file under another label is a
+    // convention break too. Before verify, one quoting the target branch is
+    // relabeled repo_instruction, so the verifier judges it against the file
+    // (appliesTo, the changed line); one that does not (the setting is off,
+    // or it quotes the PR's own version) is dropped. A finding on the
+    // instruction file itself reviews that file and is left alone.
+    const preDropped: { candidate: FinderSuggestion; verdict: Verdict }[] = [];
+    let candidates = suggestions;
+    if (params.checksInstructionCitations !== false) {
+        const relabeled = new Map<FinderSuggestion, FinderSuggestion>();
+        const unsupported = new Set<FinderSuggestion>();
+        for (const f of suggestions) {
+            if (
+                f.label === 'repo_instruction' ||
+                !citesRepoInstruction(
+                    f.suggestionContent,
+                    params.repoInstructions,
+                ) ||
+                isRepoInstructionFile(f.relevantFile, params.repoInstructions)
+            ) {
+                continue;
+            }
+            if (
+                quotesRepoInstruction(
+                    f.suggestionContent,
+                    params.repoInstructions,
+                )
+            ) {
+                relabeled.set(f, { ...f, label: 'repo_instruction' });
+            } else {
+                unsupported.add(f);
+            }
+        }
+        if (relabeled.size || unsupported.size) {
+            candidates = suggestions
+                .filter((f) => !unsupported.has(f))
+                .map((f) => relabeled.get(f) ?? f);
+            const rationale = params.repoInstructions?.files?.length
+                ? 'It cites an instruction file without quoting it as merged on the target branch.'
+                : 'It cites an instruction file, and coding-agent instructions are off for this review.';
+            for (const candidate of unsupported) {
+                preDropped.push({
+                    candidate,
+                    verdict: { keep: false, rationale },
+                });
+            }
+            finderLogger.log({
+                message: `Findings citing an instruction file under another label: ${relabeled.size} relabeled repo_instruction, ${unsupported.size} dropped`,
+                context: 'finder.repo-instruction-citation',
+                metadata: {
+                    ...params.telemetryMetadata,
+                    agentName: params.agentName,
+                    instructionsOn: !!params.repoInstructions?.files?.length,
+                    relabeled: [...relabeled.keys()].map((f) => f.relevantFile),
+                    dropped: [...unsupported].map((f) => f.relevantFile),
+                },
+            });
+        }
+    }
+
     // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
     // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
     const verifier = new LlmVerifier(params.runner, {
@@ -1107,12 +1167,12 @@ export async function verifyFindings(
         laneFocus: params.laneFocus,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
-        { candidates: suggestions, verifier, concurrency: params.concurrency },
+        { candidates, verifier, concurrency: params.concurrency },
         ctx,
     );
 
     let kept = pass.kept;
-    let dropped = pass.dropped;
+    let dropped = [...preDropped, ...pass.dropped];
     let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
 
     // Per-finding verifier verdict (carries the verifier's investigation tool
@@ -1120,6 +1180,7 @@ export async function verifyFindings(
     const verdictByFinding = new Map<FinderSuggestion, Verdict>();
     pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
     pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+    preDropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
 
     // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
     // having investigated its file is not trusted blindly — it gets a thorough
@@ -1161,69 +1222,6 @@ export async function verifyFindings(
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];
         gateUsage = { ...fullVerifier.usage };
-    }
-
-    // A finding that cites an instruction file under another label is a
-    // convention break too. It may stand only as a repo_instruction finding
-    // quoting the target branch: with the setting off, or a quote of the PR's
-    // own version, it is dropped. A finding on the instruction file itself
-    // reviews that file and is left alone.
-    const citing = kept.filter(
-        (f) =>
-            params.checksInstructionCitations !== false &&
-            f.label !== 'repo_instruction' &&
-            citesRepoInstruction(
-                f.suggestionContent,
-                params.repoInstructions,
-            ) &&
-            !isRepoInstructionFile(f.relevantFile, params.repoInstructions),
-    );
-    if (citing.length > 0) {
-        const relabeled = new Map<FinderSuggestion, FinderSuggestion>();
-        const unsupported: FinderSuggestion[] = [];
-        for (const f of citing) {
-            if (
-                quotesRepoInstruction(
-                    f.suggestionContent,
-                    params.repoInstructions,
-                )
-            ) {
-                const next = { ...f, label: 'repo_instruction' as const };
-                relabeled.set(f, next);
-                verdictByFinding.set(next, verdictByFinding.get(f));
-            } else {
-                unsupported.push(f);
-            }
-        }
-        const unsupportedSet = new Set(unsupported);
-        kept = kept
-            .filter((f) => !unsupportedSet.has(f))
-            .map((f) => relabeled.get(f) ?? f);
-        dropped = [
-            ...dropped,
-            ...unsupported.map((candidate) => {
-                const verdict: Verdict = {
-                    ...verdictByFinding.get(candidate),
-                    keep: false,
-                    rationale: params.repoInstructions?.files?.length
-                        ? 'It cites an instruction file without quoting it as merged on the target branch.'
-                        : 'It cites an instruction file, and coding-agent instructions are off for this review.',
-                };
-                verdictByFinding.set(candidate, verdict);
-                return { candidate, verdict };
-            }),
-        ];
-        finderLogger.log({
-            message: `Findings citing an instruction file under another label: ${relabeled.size} relabeled repo_instruction, ${unsupported.length} dropped`,
-            context: 'finder.repo-instruction-citation',
-            metadata: {
-                ...params.telemetryMetadata,
-                agentName: params.agentName,
-                instructionsOn: !!params.repoInstructions?.files?.length,
-                relabeled: [...relabeled.keys()].map((f) => f.relevantFile),
-                dropped: unsupported.map((f) => f.relevantFile),
-            },
-        });
     }
 
     // A repo_instruction finding must quote the instructions merged on the
