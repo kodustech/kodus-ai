@@ -310,11 +310,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             { id: 'repo-1', name: 'acme/api' },
             'The PR does not carry a configured approval label.',
             'hold',
+            { onlyIfPresent: false },
         );
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
-    it('does not post a hold notice for an out-of-scope PR with no prior approval', async () => {
+    it('only updates an earlier reason note for an out-of-scope PR with no prior approval', async () => {
         codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
 
         await stage.execute(
@@ -327,7 +328,16 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             }),
         );
 
-        expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
+        // No note is opened for a PR that never had one; a stale hold reason
+        // from an earlier review is brought up to date.
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            'The PR does not carry a configured approval label.',
+            'hold',
+            { onlyIfPresent: true },
+        );
     });
 
     it('records a failed status comment after dismissing an out-of-scope approval', async () => {

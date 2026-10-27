@@ -75,10 +75,10 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             reason: context.approvalDecision.reason,
                         },
                     );
-                if (
-                    dismissed > 0 &&
-                    context.approvalDecision.kind === 'out-of-scope'
-                ) {
+                // Out of scope: a PR Kody approved says why it no longer is;
+                // one that never had a reason note keeps not getting one, but
+                // an earlier note (an old hold reason) is brought up to date.
+                if (context.approvalDecision.kind === 'out-of-scope') {
                     try {
                         await this.commentManagerService.postApprovalReason(
                             organizationAndTeamData,
@@ -86,6 +86,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             repository,
                             context.approvalDecision.reason,
                             'hold',
+                            { onlyIfPresent: dismissed === 0 },
                         );
                     } catch (error) {
                         this.logger.warn({

@@ -129,6 +129,7 @@ export class CommentManagerService implements ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
+        options?: { onlyIfPresent?: boolean },
     ): Promise<void> {
         const request = {
             organizationAndTeamData,
@@ -176,6 +177,8 @@ export class CommentManagerService implements ICommentManagerService {
                     );
                 }
             }
+        } else if (options?.onlyIfPresent) {
+            return;
         } else {
             const createdComment = await runWithBoundedTimeout(
                 this.codeManagementService.createIssueComment({
