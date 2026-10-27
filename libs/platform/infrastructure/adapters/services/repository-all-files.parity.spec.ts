@@ -210,10 +210,20 @@ const HOSTS: Array<{ name: string; make: (fake: Fake) => Made }> = [
                 DEFAULT_BRANCH,
             );
             jest.spyOn(service, 'getAxiosInstance').mockReturnValue({
+                // Data Center pages `/files` (`start`, `isLastPage`,
+                // `nextPageStart`) whatever `limit` asks for.
                 get: jest.fn(async (_url: string, { params }) => {
                     refs.push(params.at);
                     if (failWith) throw failWith;
-                    return { data: { values: TREE } };
+                    const start = params.start ?? 0;
+                    const end = start + PAGE_SIZE;
+                    return {
+                        data: {
+                            values: TREE.slice(start, end),
+                            isLastPage: end >= TREE.length,
+                            nextPageStart: end < TREE.length ? end : undefined,
+                        },
+                    };
                 }),
             });
             return { service, refs };

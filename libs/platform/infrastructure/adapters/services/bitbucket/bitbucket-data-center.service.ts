@@ -75,6 +75,9 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import { listingFailed } from '../repository-listing';
 
+const FILES_PAGE_SIZE = 1000;
+const MAX_FILE_PAGES = 200;
+
 @Injectable()
 export class BitbucketDataCenterService implements Omit<
     ICodeManagementService,
@@ -3158,18 +3161,36 @@ export class BitbucketDataCenterService implements Omit<
                 });
             }
 
-            // DC provides a flat /files endpoint which is extremely efficient for getting all paths
-            const response = await axiosClient.get(
-                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
-                {
-                    params: {
-                        limit: 100000,
-                        at: branch,
+            // A flat /files listing, in pages: the server caps `limit`, so
+            // follow `nextPageStart` until `isLastPage`.
+            const allFilePaths: string[] = [];
+            let start = 0;
+            let isLastPage = false;
+            for (let page = 0; page < MAX_FILE_PAGES && !isLastPage; page++) {
+                const response = await axiosClient.get(
+                    `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
+                    { params: { limit: FILES_PAGE_SIZE, at: branch, start } },
+                );
+                allFilePaths.push(...(response.data?.values || []));
+                isLastPage =
+                    response.data?.isLastPage !== false ||
+                    response.data?.nextPageStart === undefined;
+                start = response.data?.nextPageStart ?? start;
+            }
+            if (!isLastPage) {
+                this.logger.warn({
+                    message: `Repository has more than ${MAX_FILE_PAGES * FILES_PAGE_SIZE} files; the listing stops there`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        files: allFilePaths.length,
                     },
-                },
-            );
+                });
+            }
 
-            const allFilePaths: string[] = response.data.values || [];
             const { filePatterns, excludePatterns, maxFiles = 1000 } = filters;
 
             const filteredFiles: RepositoryFile[] = [];
