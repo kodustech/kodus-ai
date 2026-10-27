@@ -199,6 +199,7 @@ describe('AgentReviewStage — instruction index cache', () => {
             getRepositoryContentFile: jest.fn().mockResolvedValue({
                 data: { content: 'Amounts are integer cents.' },
             }),
+            getPullRequest: jest.fn().mockResolvedValue(null),
         };
         const stage = new AgentReviewStage(
             {} as any,
@@ -247,14 +248,67 @@ describe('AgentReviewStage — instruction index cache', () => {
         ).toHaveBeenCalledTimes(3);
     });
 
-    it('lists every time when the target-branch commit is unknown', async () => {
+    // GitLab's merge request and note payloads carry no target-branch commit,
+    // so the pipeline's pull request has none; the provider's own PR has it.
+    it('asks the provider for the target-branch commit when the payload has none', async () => {
         const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockResolvedValue({
+            base: { ref: 'release/2.0', sha: 'abc' },
+        });
 
         await resolve(stage, withBase());
         await resolve(stage, withBase());
 
         expect(
             codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(1);
+        expect(codeManagementService.getPullRequest.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ prNumber: 7 }),
+        );
+    });
+
+    it('does not ask the provider when the payload has the commit', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+
+        await resolve(stage, withBase('abc'));
+
+        expect(codeManagementService.getPullRequest).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['has no commit for the target branch either', async () => ({ base: {} })],
+        [
+            'fails',
+            async () => {
+                throw new Error('502');
+            },
+        ],
+    ])('lists every time when the provider %s', async (_label, impl) => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockImplementation(impl);
+
+        const result = await resolve(stage, withBase());
+        await resolve(stage, withBase());
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(
+            codeManagementService.getRepositoryAllFiles,
         ).toHaveBeenCalledTimes(2);
+    });
+
+    it('warns when the provider lookup fails', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockRejectedValue(new Error('502'));
+        const warn = jest.spyOn((stage as any).logger, 'warn');
+
+        await resolve(stage, withBase());
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('commit lookup failed'),
+            }),
+        );
     });
 });
