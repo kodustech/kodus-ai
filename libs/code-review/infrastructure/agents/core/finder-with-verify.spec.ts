@@ -316,3 +316,176 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
         expect(r.droppedByVerify[0].evidence).toMatch(/not in the target-branch/);
     });
 });
+
+// A convention break reported under another label (a `bug` quoting
+// apps/billing/CLAUDE.md) gets the same check as a repo_instruction finding:
+// it must quote the target branch, or it is dropped.
+describe('runFinderWithVerify — findings that cite an instruction file under another label', () => {
+    const instructions = {
+        files: [
+            {
+                path: 'CLAUDE.md',
+                content: 'Amounts are integer cents.',
+                appliesTo: '**',
+                truncated: false,
+            },
+            {
+                path: 'docs/shared-guide.md',
+                content: 'Every thrown error must be a DomainError.',
+                appliesTo: '**',
+                truncated: false,
+            },
+        ],
+        otherFiles: [],
+        dropped: [],
+        truncated: false,
+        indexedCount: 2,
+    };
+    const finding = (relevantFile: string, suggestionContent: string) => ({
+        relevantFile,
+        label: 'bug',
+        suggestionContent,
+        existingCode: 'x',
+        improvedCode: 'y',
+        severity: 'high',
+    });
+
+    const run = async (
+        suggestions: unknown[],
+        repoInstructions?: typeof instructions,
+        extra: Record<string, unknown> = {},
+    ) => {
+        mockResolve.mockImplementation(() => ({
+            model: new MockLanguageModelV3({
+                doGenerate: (async (opts: any) => {
+                    const sys = JSON.stringify(opts?.prompt ?? '');
+                    const tc = sys.includes('REFUTE')
+                        ? {
+                              id: 'v',
+                              name: 'submitVerdict',
+                              input: { keep: true, rationale: 'ok' },
+                          }
+                        : {
+                              id: 'f',
+                              name: 'submitResult',
+                              input: { reasoning: 'r', suggestions },
+                          };
+                    return {
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: tc.id,
+                                toolName: tc.name,
+                                input: JSON.stringify(tc.input),
+                            },
+                        ],
+                        finishReason: 'tool-calls',
+                        usage: { inputTokens: 5, outputTokens: 5 },
+                        warnings: [],
+                    };
+                }) as any,
+            }),
+            callOptions: {},
+            providerOptions: {},
+            modelName: 'mock',
+            usageIdentity: {},
+        }));
+        const tools = new InMemoryToolRegistry([]);
+        return runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec: buildFinderAgentSpec({
+                    systemPrompt: 'find bugs',
+                    modelId: 'mock',
+                    tools,
+                    coverageLedger: noCriticalLedger,
+                }),
+                modelId: 'mock',
+                tools,
+                ...(repoInstructions ? { repoInstructions } : {}),
+                ...extra,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+    };
+
+    it('relabels one that quotes the target branch as repo_instruction', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'docs/shared-guide.md says "Every thrown error must be a DomainError." This throws a bare Error.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['a.ts', 'repo_instruction'],
+        ]);
+    });
+
+    it('drops one whose quote is not on the target branch', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'CLAUDE.md, added in this PR, says "Never use let." This uses let.',
+                ),
+            ],
+            instructions,
+        );
+
+        expect(r.kept).toEqual([]);
+        expect(r.droppedByVerify[0].evidence).toMatch(/instruction file/);
+    });
+
+    it('drops one when the setting is off', async () => {
+        const r = await run([
+            finding(
+                'a.ts',
+                'apps/billing/CLAUDE.md requires integer cents: "Amounts are integer cents."',
+            ),
+        ]);
+
+        expect(r.kept).toEqual([]);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
+            'a.ts',
+        ]);
+    });
+
+    // A custom agent's guides can be the same files; its findings take the
+    // convention check instead.
+    it('leaves a custom agent finding alone', async () => {
+        const r = await run(
+            [
+                finding(
+                    'a.ts',
+                    'AGENTS.md, linked to this agent, asks for the logger here.',
+                ),
+            ],
+            undefined,
+            { checksInstructionCitations: false },
+        );
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['a.ts', 'bug'],
+        ]);
+    });
+
+    it('leaves alone a finding on the instruction file itself, and one that cites none', async () => {
+        const r = await run([
+            finding(
+                'CLAUDE.md',
+                'CLAUDE.md links to docs/missing.md, which does not exist.',
+            ),
+            finding('b.ts', 'The loop reads past the end of the array.'),
+        ]);
+
+        expect(r.kept.map((f) => [f.relevantFile, f.label])).toEqual([
+            ['CLAUDE.md', 'bug'],
+            ['b.ts', 'bug'],
+        ]);
+    });
+});

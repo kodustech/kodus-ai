@@ -16,7 +16,10 @@ jest.mock('@libs/llm/model-invocation', () => ({
 import { MockLanguageModelV3 } from 'ai/test';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
-import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
+import {
+    finderRunEnvironment,
+    runAgentLoopViaCore,
+} from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 // The DETERMINISTIC parse layer the adapter's LLM.run boundary delegates to:
 // the finder done-tool payload (D = {reasoning, suggestions}) and the verifier
 // done-tool payload (D = {keep, rationale}). These are where off-schema model
@@ -1728,5 +1731,23 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         expect(
             out.findings.suggestions.map((s: any) => s.relevantFile),
         ).toEqual(['a.ts']);
+    });
+});
+
+// Custom agents can link the same files as guides; their findings take the
+// convention check, not the instruction-citation check.
+describe('finderRunEnvironment — instruction citations', () => {
+    it('checks them for built-in agents and not for custom agents', () => {
+        const model = new MockLanguageModelV3({});
+        expect(
+            finderRunEnvironment(makeInput(model), secrets).verifyParams
+                .checksInstructionCitations,
+        ).toBe(true);
+        expect(
+            finderRunEnvironment(
+                makeInput(model, { conventionGuides: [] }),
+                secrets,
+            ).verifyParams.checksInstructionCitations,
+        ).toBe(false);
     });
 });

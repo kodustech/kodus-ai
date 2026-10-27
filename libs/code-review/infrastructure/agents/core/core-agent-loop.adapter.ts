@@ -218,6 +218,7 @@ export function finderRunEnvironment(
             providerOptions,
             previousDecisions: input.previousDecisions,
             repoInstructions: input.repoInstructions,
+            checksInstructionCitations: input.conventionGuides === undefined,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,

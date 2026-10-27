@@ -1,6 +1,8 @@
 import {
     collectRepoInstructions,
     quotesRepoInstruction,
+    citesRepoInstruction,
+    isRepoInstructionFile,
     REPO_INSTRUCTIONS_LIMITS,
     selectGoverningFiles,
     shouldCollectRepoInstructions,
@@ -625,5 +627,70 @@ describe('collectRepoInstructions — pointers to another file', () => {
 
         expect(result.files).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
         expect(result.dropped.length).toBeGreaterThan(0);
+    });
+});
+
+describe('citesRepoInstruction', () => {
+    const context = {
+        files: [
+            {
+                path: 'docs/shared-guide.md',
+                content: 'Errors are DomainErrors.',
+                appliesTo: '**',
+                truncated: false,
+            },
+        ],
+        otherFiles: [],
+        dropped: [],
+        truncated: false,
+        indexedCount: 1,
+    };
+
+    it.each([
+        'apps/billing/CLAUDE.md says "Amounts are integer cents."',
+        'This breaks `AGENTS.md`.',
+        'Per .cursor/rules/style.mdc, no default exports.',
+        'As .github/copilot-instructions.md requires, use the logger.',
+    ])('finds a coding-agent file in %p', (text) => {
+        expect(citesRepoInstruction(text, undefined)).toBe(true);
+    });
+
+    it('finds a file the review collected, such as a pointer target', () => {
+        const text = 'Per docs/shared-guide.md, throw a DomainError.';
+        expect(citesRepoInstruction(text, context)).toBe(true);
+        expect(citesRepoInstruction(text, undefined)).toBe(false);
+    });
+
+    it.each([
+        'See README.md for the API.',
+        'The claude client in src/claude.ts leaks the key.',
+        'The loop reads past the end of the array.',
+    ])('finds nothing in %p', (text) => {
+        expect(citesRepoInstruction(text, context)).toBe(false);
+    });
+});
+
+describe('isRepoInstructionFile', () => {
+    it('is true for a coding-agent file or a collected file, false otherwise', () => {
+        expect(isRepoInstructionFile('services/api/AGENTS.md', undefined)).toBe(
+            true,
+        );
+        expect(
+            isRepoInstructionFile('docs/guide.md', {
+                files: [
+                    {
+                        path: 'docs/guide.md',
+                        content: 'x',
+                        appliesTo: '**',
+                        truncated: false,
+                    },
+                ],
+                otherFiles: [],
+                dropped: [],
+                truncated: false,
+                indexedCount: 1,
+            }),
+        ).toBe(true);
+        expect(isRepoInstructionFile('src/a.ts', undefined)).toBe(false);
     });
 });

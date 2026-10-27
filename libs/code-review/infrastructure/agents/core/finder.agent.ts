@@ -49,6 +49,8 @@ import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agen
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
+    citesRepoInstruction,
+    isRepoInstructionFile,
     quotesRepoInstruction,
     type RepoInstructionsContext,
 } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
@@ -690,6 +692,10 @@ export interface RunFinderWithVerifyParams {
     /** Forwarded to the LlmVerifier as evidence for `repo_instruction`
      *  candidates. */
     repoInstructions?: RepoInstructionsContext;
+    /** Hold a finding that cites an instruction file under another label to
+     *  the repo_instruction quote check. Off for custom agents, whose guides
+     *  can be the same files and take the convention check. Default on. */
+    checksInstructionCitations?: boolean;
     /** Second pass for convention findings (custom agents with linked guides).
      *  When set, `kind: 'convention'` findings take the quote check and the
      *  convention verifier instead of HV2. Absent → every finding takes HV2,
@@ -1038,6 +1044,7 @@ export async function verifyFindings(
         | 'usageRunName'
         | 'previousDecisions'
         | 'repoInstructions'
+        | 'checksInstructionCitations'
         | 'laneFocus'
     >,
     suggestions: FinderSuggestion[],
@@ -1118,6 +1125,69 @@ export async function verifyFindings(
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];
         gateUsage = { ...fullVerifier.usage };
+    }
+
+    // A finding that cites an instruction file under another label is a
+    // convention break too. It may stand only as a repo_instruction finding
+    // quoting the target branch: with the setting off, or a quote of the PR's
+    // own version, it is dropped. A finding on the instruction file itself
+    // reviews that file and is left alone.
+    const citing = kept.filter(
+        (f) =>
+            params.checksInstructionCitations !== false &&
+            f.label !== 'repo_instruction' &&
+            citesRepoInstruction(
+                f.suggestionContent,
+                params.repoInstructions,
+            ) &&
+            !isRepoInstructionFile(f.relevantFile, params.repoInstructions),
+    );
+    if (citing.length > 0) {
+        const relabeled = new Map<FinderSuggestion, FinderSuggestion>();
+        const unsupported: FinderSuggestion[] = [];
+        for (const f of citing) {
+            if (
+                quotesRepoInstruction(
+                    f.suggestionContent,
+                    params.repoInstructions,
+                )
+            ) {
+                const next = { ...f, label: 'repo_instruction' as const };
+                relabeled.set(f, next);
+                verdictByFinding.set(next, verdictByFinding.get(f));
+            } else {
+                unsupported.push(f);
+            }
+        }
+        const unsupportedSet = new Set(unsupported);
+        kept = kept
+            .filter((f) => !unsupportedSet.has(f))
+            .map((f) => relabeled.get(f) ?? f);
+        dropped = [
+            ...dropped,
+            ...unsupported.map((candidate) => {
+                const verdict: Verdict = {
+                    ...verdictByFinding.get(candidate),
+                    keep: false,
+                    rationale: params.repoInstructions?.files?.length
+                        ? 'It cites an instruction file without quoting it as merged on the target branch.'
+                        : 'It cites an instruction file, and coding-agent instructions are off for this review.',
+                };
+                verdictByFinding.set(candidate, verdict);
+                return { candidate, verdict };
+            }),
+        ];
+        finderLogger.log({
+            message: `Findings citing an instruction file under another label: ${relabeled.size} relabeled repo_instruction, ${unsupported.length} dropped`,
+            context: 'finder.repo-instruction-citation',
+            metadata: {
+                ...params.telemetryMetadata,
+                agentName: params.agentName,
+                instructionsOn: !!params.repoInstructions?.files?.length,
+                relabeled: [...relabeled.keys()].map((f) => f.relevantFile),
+                dropped: unsupported.map((f) => f.relevantFile),
+            },
+        });
     }
 
     // A repo_instruction finding must quote the instructions merged on the

@@ -482,6 +482,34 @@ const trimPunctuation = (text: string): string =>
     text.replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/g, '');
 
 /**
+ * Whether `path` is a coding-agent instruction file, or a file the review
+ * collected as one (a pointer's target such as `docs/guide.md`).
+ */
+export function isRepoInstructionFile(
+    path: string | undefined,
+    context: RepoInstructionsContext | undefined,
+): boolean {
+    if (!path) return false;
+    const normalized = normalize(path);
+    return (
+        isAgentInstructionProseFile(normalized) ||
+        (context?.files ?? []).some((f) => normalize(f.path) === normalized)
+    );
+}
+
+/** Whether `text` names an instruction file (see `isRepoInstructionFile`). */
+export function citesRepoInstruction(
+    text: string | undefined,
+    context: RepoInstructionsContext | undefined,
+): boolean {
+    const tokens = (text ?? '').match(/[\w./@-]+/g) ?? [];
+    return tokens.some((token) => {
+        const path = token.replace(/^@/, '').replace(/[.,:;]+$/, '');
+        return path.includes('.') && isRepoInstructionFile(path, context);
+    });
+}
+
+/**
  * Whether `text` (a finding's content) quotes one of the collected
  * instruction files: some span of it between two double quotes (see
  * MAX_INNER_QUOTE_MARKS), normalized, appears in a file's normalized text. A quote cut with an ellipsis matches when every part
