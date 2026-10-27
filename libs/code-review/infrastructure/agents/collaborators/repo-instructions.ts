@@ -94,6 +94,11 @@ function depth(scope: string | null): number {
     return scope ? scope.split('/').length : 0;
 }
 
+function dirOf(path: string): string | null {
+    const slash = path.lastIndexOf('/');
+    return slash > 0 ? path.slice(0, slash) : null;
+}
+
 /**
  * Prose instruction files whose directory contains at least one changed file,
  * root files first, then deeper ones. Tool configuration files are dropped.
@@ -326,11 +331,25 @@ export async function collectRepoInstructions(params: {
         return contents.get(path) ?? null;
     };
 
-    // Governing files first; a pointer's targets go right after it and take
-    // the pointer's scope.
-    const queue: Array<{ path: string; appliesTo?: string }> = candidates.map(
-        (path) => ({ path }),
-    );
+    // Read nearest the change first, so a full budget drops the files
+    // furthest from it; a pointer's targets go right after it and take its
+    // place and scope. The prompt still lists them root first (`rank`).
+    const rank = new Map(candidates.map((path, i) => [path, i]));
+    const distance = (path: string) => {
+        const scope = scopeOf(path);
+        const gaps = changed
+            .filter((c) => governsByDirectory(scope, c))
+            .map((c) => depth(dirOf(c)) - depth(scope));
+        return gaps.length ? Math.min(...gaps) : Infinity;
+    };
+    const queue: Array<{ path: string; appliesTo?: string; rank: number }> = [
+        ...candidates,
+    ]
+        .sort(
+            (a, b) => distance(a) - distance(b) || rank.get(a)! - rank.get(b)!,
+        )
+        .map((path) => ({ path, rank: rank.get(path)! }));
+    const ranks = new Map<string, number>();
     const seen = new Set<string>(candidates);
     // A target can be named by pointers in several scopes; it applies to all
     // of them, and so do the files it points to.
@@ -340,7 +359,7 @@ export async function collectRepoInstructions(params: {
         files.length >= limits.maxFiles || total >= limits.maxTotalBytes;
 
     while (queue.length) {
-        const { path, appliesTo: inherited } = queue.shift()!;
+        const { path, appliesTo: inherited, rank: at } = queue.shift()!;
         if (budgetFull()) {
             dropped.push(path);
             continue;
@@ -395,7 +414,7 @@ export async function collectRepoInstructions(params: {
             }
         }
         queue.unshift(
-            ...targets.map((target) => ({ path: target, appliesTo })),
+            ...targets.map((target) => ({ path: target, appliesTo, rank: at })),
         );
         // A file that only points elsewhere holds no instruction of its own:
         // its targets are listed instead.
@@ -416,6 +435,7 @@ export async function collectRepoInstructions(params: {
         total += Buffer.byteLength(text);
         truncated = truncated || cut;
         files.push({ path, content: text, appliesTo, truncated: cut });
+        ranks.set(path, at);
     }
 
     // Spread each pointer's scopes to its targets until nothing changes; the
@@ -439,12 +459,19 @@ export async function collectRepoInstructions(params: {
 
     const used = new Set([...files.map((f) => f.path), ...dropped]);
     return {
-        files: files.map((file) => ({
-            ...file,
-            appliesTo: [...(scopes.get(file.path) ?? [file.appliesTo])].join(
-                ',',
-            ),
-        })),
+        files: files
+            .map((file, read) => ({ file, read }))
+            .sort(
+                (a, b) =>
+                    ranks.get(a.file.path)! - ranks.get(b.file.path)! ||
+                    a.read - b.read,
+            )
+            .map(({ file }) => ({
+                ...file,
+                appliesTo: [
+                    ...(scopes.get(file.path) ?? [file.appliesTo]),
+                ].join(','),
+            })),
         otherFiles: prose
             .filter((p) => !used.has(p))
             .slice(0, limits.maxOtherFiles),

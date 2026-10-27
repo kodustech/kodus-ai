@@ -204,10 +204,13 @@ describe('collectRepoInstructions', () => {
         ]);
     });
 
-    it('truncates a long file and stops at the total budget', async () => {
+    it('truncates a long file and stops at the total budget, dropping the furthest first', async () => {
         const big = 'x'.repeat(REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile + 500);
-        const map: Record<string, string> = { 'CLAUDE.md': big };
-        for (let i = 0; i < 10; i++) {
+        const map: Record<string, string> = {
+            'CLAUDE.md': 'Use pnpm.',
+            'pkg0/AGENTS.md': big,
+        };
+        for (let i = 1; i < 10; i++) {
             map[`pkg${i}/AGENTS.md`] = 'y'.repeat(9_000);
         }
         const repo = files(map);
@@ -217,8 +220,9 @@ describe('collectRepoInstructions', () => {
             changedFiles: Array.from({ length: 10 }, (_, i) => `pkg${i}/a.ts`),
         });
 
-        expect(result.files[0].truncated).toBe(true);
-        expect(Buffer.byteLength(result.files[0].content)).toBeLessThanOrEqual(
+        const long = result.files.find((f) => f.path === 'pkg0/AGENTS.md')!;
+        expect(long.truncated).toBe(true);
+        expect(Buffer.byteLength(long.content)).toBeLessThanOrEqual(
             REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile,
         );
         const total = result.files.reduce(
@@ -231,7 +235,7 @@ describe('collectRepoInstructions', () => {
         expect(result.files.length).toBeLessThanOrEqual(
             REPO_INSTRUCTIONS_LIMITS.maxFiles,
         );
-        expect(result.dropped.length).toBeGreaterThan(0);
+        expect(result.dropped).toContain('CLAUDE.md');
         expect(result.truncated).toBe(true);
     });
 
@@ -305,6 +309,42 @@ describe('collectRepoInstructions', () => {
 
         expect(result.files.map((f) => f.path)).toEqual(['CLAUDE.md']);
         expect(result.unreadable).toEqual(['AGENTS.md: 404']);
+    });
+
+    // When the budget is full, the files nearest the change win: a large root
+    // file and everything a root file imports must not push out the CLAUDE.md
+    // next to the changed code. The prompt still lists them root first.
+    it('keeps the files nearest the change when the budget is full', async () => {
+        const map: Record<string, string> = {
+            '.github/copilot-instructions.md': 'x'.repeat(200_000),
+            'AGENTS.md': Array.from(
+                { length: REPO_INSTRUCTIONS_LIMITS.maxFiles },
+                (_, i) => `@docs/guide${i}.md`,
+            ).join('\n'),
+            'services/billing/CLAUDE.md': 'Amounts are integer cents.',
+            'services/billing/AGENTS.md': '@../../docs/billing-guide.md',
+            'docs/billing-guide.md': 'Refunds go through the ledger.',
+        };
+        for (let i = 0; i < REPO_INSTRUCTIONS_LIMITS.maxFiles; i++) {
+            map[`docs/guide${i}.md`] = `Root rule ${i}.`;
+        }
+
+        const result = await collectRepoInstructions({
+            ...files(map),
+            changedFiles: ['services/billing/pay.ts'],
+        });
+        const paths = result.files.map((f) => f.path);
+
+        expect(paths).toContain('services/billing/CLAUDE.md');
+        // A pointer's target takes its source's place.
+        expect(paths).toContain('docs/billing-guide.md');
+        expect(paths).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
+        // Root first, the billing files last.
+        expect(paths[0]).toBe('.github/copilot-instructions.md');
+        expect(paths.slice(-2)).toEqual([
+            'docs/billing-guide.md',
+            'services/billing/CLAUDE.md',
+        ]);
     });
 
     it('stops reading once the file budget is full and lists the rest as dropped', async () => {
