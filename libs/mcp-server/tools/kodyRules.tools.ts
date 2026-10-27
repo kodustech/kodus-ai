@@ -106,11 +106,32 @@ function serializeKodyRule(rule: Partial<IKodyRule>): SerializedKodyRule {
     const { createdAt, updatedAt, ...rest } = rule;
     const toIso = (value?: Date | string) =>
         value instanceof Date ? value.toISOString() : value;
+    const normalized: Partial<IKodyRule> = { ...rest };
+
+    // Older embedded rules may store null where the MCP list contract has an
+    // optional field. Omit those values; reason and directoryId are the two
+    // fields whose output schema explicitly permits null.
+    const optionalNonNullableFields = [
+        'uuid',
+        'title',
+        'rule',
+        'path',
+        'status',
+        'severity',
+        'label',
+        'type',
+        'examples',
+        'repositoryId',
+        'scope',
+    ] as const;
+    for (const key of optionalNonNullableFields) {
+        if (normalized[key] === null) delete normalized[key];
+    }
 
     return {
-        ...rest,
-        ...(createdAt !== undefined && { createdAt: toIso(createdAt) }),
-        ...(updatedAt !== undefined && { updatedAt: toIso(updatedAt) }),
+        ...normalized,
+        ...(createdAt != null && { createdAt: toIso(createdAt) }),
+        ...(updatedAt != null && { updatedAt: toIso(updatedAt) }),
     };
 }
 
