@@ -121,6 +121,7 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { listingFailed } from './repository-listing';
 
 /**
  * Award emojis are the one reaction source that costs a request per comment —
@@ -5583,6 +5584,7 @@ export class GitlabService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5599,7 +5601,10 @@ export class GitlabService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository ID is required',
+                );
             }
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -5614,7 +5619,10 @@ export class GitlabService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'GitLab authentication details not found',
+                );
             }
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
@@ -5641,83 +5649,48 @@ export class GitlabService implements Omit<
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
-            // Extract base directories from filePatterns
-            const baseDirectoriesRaw = this.extractBaseDirectoriesFromPatterns(
-                filePatterns || [],
-            );
-            const globChars = ['*', '?', '{', '}', '[', ']', '!'];
-            const hasRootOnlyPatterns = (filePatterns || []).some((pattern) => {
-                const normalized = pattern
-                    .replace(/^\/+/, '')
-                    .replace(/\\/g, '/');
-                const hasGlob = globChars.some((ch) => normalized.includes(ch));
-                const hasSlash = normalized.includes('/');
-                // Plain filename (no glob, no directory) -> needs root scan
-                return !hasGlob && !hasSlash;
-            });
-            // Include root as a base directory if patterns target files at repo root
-            const baseDirectories = hasRootOnlyPatterns
-                ? [''].concat(baseDirectoriesRaw.filter((dir) => dir !== ''))
-                : baseDirectoriesRaw;
+            const scans = this.treeScansFor(filePatterns || []);
+            const byPath = new Map<string, RepositoryFile>();
 
-            let allFiles: RepositoryFile[] = [];
+            for (const scan of scans) {
+                try {
+                    const trees =
+                        await gitlabAPI.Repositories.allRepositoryTrees(
+                            repository.id,
+                            {
+                                ref: branch,
+                                recursive: scan.recursive,
+                                perPage: 100,
+                                ...(scan.path ? { path: scan.path } : {}),
+                            },
+                        );
 
-            // If we have specific directories, search only them
-            if (baseDirectories.length > 0) {
-                // Search files from each specific directory
-                for (const baseDir of baseDirectories) {
-                    try {
-                        const options: any = {
-                            ref: branch,
-                            recursive: true, // deep search for subdirs
-                        };
-
-                        // For root scans (''), avoid recursion to keep it fast and match only top-level files
-                        if (!baseDir) {
-                            options.recursive = false;
-                        } else {
-                            options.path = baseDir;
-                        }
-
-                        const trees =
-                            await gitlabAPI.Repositories.allRepositoryTrees(
-                                repository.id,
-                                options,
-                            );
-
-                        const files = trees
-                            ?.filter((file) => file.type === 'blob')
-                            ?.map((file) => this.transformRepositoryFile(file));
-
-                        allFiles.push(...files);
-                    } catch (dirError) {
-                        this.logger.warn({
-                            message: `Error fetching directory ${baseDir}`,
-                            context: GitlabService.name,
-                            error: dirError,
-                            metadata: { baseDir, repository: repository.name },
-                        });
-                        // Continue to the next directory
+                    for (const file of trees ?? []) {
+                        if (file.type !== 'blob') continue;
+                        byPath.set(
+                            file.path,
+                            this.transformRepositoryFile(file),
+                        );
                     }
+                } catch (dirError) {
+                    this.logger.warn({
+                        message: `Error fetching directory ${scan.path || '/'}`,
+                        context: GitlabService.name,
+                        error: dirError,
+                        metadata: { scan, repository: repository.name },
+                    });
+                    if (params.throwOnError) throw dirError;
                 }
-            } else {
-                // Fallback: if there are no specific patterns, search everything (original behavior)
-                const trees = await gitlabAPI.Repositories.allRepositoryTrees(
-                    repository.id,
-                    {
-                        ref: branch,
-                        recursive: true,
-                    },
-                );
-
-                allFiles = trees
-                    .filter((file) => file.type === 'blob')
-                    .map((file) => this.transformRepositoryFile(file));
             }
+
+            const allFiles = [...byPath.values()];
 
             // Filter files by patterns (if any pattern does not have a clear base directory)
             const filteredFiles: RepositoryFile[] = [];
@@ -5752,7 +5725,7 @@ export class GitlabService implements Omit<
                 metadata: {
                     ...params,
                     retrievedFilesCount: filteredFiles.length,
-                    baseDirectoriesSearched: baseDirectories,
+                    scans,
                 },
             });
 
@@ -5766,8 +5739,47 @@ export class GitlabService implements Omit<
                 metadata: params,
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
+    }
+
+    /**
+     * The tree listings that cover `patterns`: the whole tree, recursively,
+     * when a pattern can match at any depth (`**\/AGENTS.md`); otherwise each
+     * pattern's base directory, recursively, without one already covered by
+     * an ancestor, plus the root alone for plain root filenames.
+     */
+    private treeScansFor(
+        patterns: string[],
+    ): Array<{ path?: string; recursive: boolean }> {
+        const globChars = ['*', '?', '{', '}', '[', ']', '!'];
+        const normalized = patterns.map((pattern) =>
+            pattern.replace(/^\/+/, '').replace(/\\/g, '/'),
+        );
+        const anyDepth = normalized.some((pattern) => {
+            const first = pattern.split('/')[0];
+            return globChars.some((ch) => first.includes(ch));
+        });
+        if (!normalized.length || anyDepth) return [{ recursive: true }];
+
+        const dirs =
+            this.extractBaseDirectoriesFromPatterns(normalized).filter(Boolean);
+        const covered = (dir: string) =>
+            dirs.some((other) => other !== dir && dir.startsWith(`${other}/`));
+        const scans: Array<{ path?: string; recursive: boolean }> = dirs
+            .filter((dir) => !covered(dir))
+            .map((dir) => ({ path: dir, recursive: true }));
+
+        const rootFiles = normalized.some(
+            (pattern) =>
+                !pattern.includes('/') &&
+                !globChars.some((ch) => pattern.includes(ch)),
+        );
+        return rootFiles ? [{ recursive: false }, ...scans] : scans;
     }
 
     private extractBaseDirectoriesFromPatterns(patterns: string[]): string[] {

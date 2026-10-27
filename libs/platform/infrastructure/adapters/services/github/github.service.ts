@@ -139,6 +139,7 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { listingFailed } from '../repository-listing';
 
 interface GitHubAuthResponse {
     token: string;
@@ -6106,6 +6107,7 @@ This is an experimental feature that generates committable changes. Review the d
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -6121,7 +6123,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is required',
+                );
             }
 
             const authDetails = await this.getGithubAuthDetails(
@@ -6135,7 +6140,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'GitHub authentication details not found',
+                );
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
@@ -6162,7 +6170,10 @@ This is an experimental feature that generates committable changes. Review the d
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -6234,7 +6245,11 @@ This is an experimental feature that generates committable changes. Review the d
                 metadata: params,
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 

@@ -109,6 +109,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { listingFailed } from '../repository-listing';
 
 @Injectable()
 export class BitbucketCloudService implements Omit<
@@ -5621,6 +5622,7 @@ export class BitbucketCloudService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5636,7 +5638,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository ID is required',
+                );
             }
 
             const bitbucketAuthDetails = await this.getAuthDetails(
@@ -5650,7 +5655,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket authentication details not found',
+                );
             }
 
             const workspace = await this.getWorkspaceFromRepository(
@@ -5665,7 +5673,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Workspace not found for repository',
+                );
             }
 
             const bitbucketAPI =
@@ -5686,7 +5697,10 @@ export class BitbucketCloudService implements Omit<
                         metadata: { organizationAndTeamData, repository },
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5706,7 +5720,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository, branch },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'No commit found on the branch',
+                );
             }
 
             const fileResponse = await bitbucketAPI.source.read({
@@ -5775,7 +5792,11 @@ export class BitbucketCloudService implements Omit<
                 },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 

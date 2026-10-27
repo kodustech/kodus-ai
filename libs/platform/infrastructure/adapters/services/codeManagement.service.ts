@@ -1126,6 +1126,12 @@ export class CodeManagementService implements ICodeManagementService {
                 excludePatterns?: string[];
                 maxFiles?: number;
             };
+            /**
+             * Throw a `RepositoryListingError` instead of returning `[]` when the
+             * repository cannot be listed, so a failure is not read as a
+             * repository without the files.
+             */
+            throwOnError?: boolean;
         },
         type?: PlatformType,
     ): Promise<RepositoryFile[]> {

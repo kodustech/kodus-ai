@@ -1,3 +1,7 @@
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -69,6 +73,7 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import { listingFailed } from '../repository-listing';
 
 @Injectable()
 export class BitbucketDataCenterService implements Omit<
@@ -3121,6 +3126,7 @@ export class BitbucketDataCenterService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -3136,7 +3142,11 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return [];
+            if (!authDetails || !repoConfig)
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket Data Center authentication or repository config not found',
+                );
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -3167,19 +3177,18 @@ export class BitbucketDataCenterService implements Omit<
             for (const filePath of allFilePaths) {
                 if (maxFiles > 0 && filteredFiles.length >= maxFiles) break;
 
-                // Simple pattern matching fallback if glob utils aren't perfectly aligned
-                if (filePatterns && filePatterns.length > 0) {
-                    const matchesInclude = filePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (!matchesInclude) continue;
+                if (
+                    filePatterns?.length &&
+                    !isFileMatchingGlobCaseInsensitive(filePath, filePatterns)
+                ) {
+                    continue;
                 }
 
-                if (excludePatterns && excludePatterns.length > 0) {
-                    const matchesExclude = excludePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (matchesExclude) continue;
+                if (
+                    excludePatterns?.length &&
+                    isFileMatchingGlob(filePath, excludePatterns)
+                ) {
+                    continue;
                 }
 
                 filteredFiles.push({
@@ -3198,7 +3207,11 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
