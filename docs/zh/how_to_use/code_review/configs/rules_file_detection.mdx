@@ -39,6 +39,8 @@ description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AG
 
 工具配置文件(`.claude/settings.json`、`.opencode.json`、`.aider.conf.yml`、`.aiderignore`)会被识别但从不读取,因为它们不包含可用来检查代码的指令。
 
+Claude 技能(`.claude/skills/**`)也不会被读取:Claude 只在任务需要时才加载技能。
+
 ## 审查如何使用它们
 
 - **只读取覆盖本次更改的文件。** 代码库根目录下的文件覆盖所有文件。嵌套文件(例如 `services/billing/CLAUDE.md`)覆盖 `services/billing/**`。带有 `globs:`(且没有 `alwaysApply: true`)的 Cursor 规则,或带有 `applyTo:` 的 Copilot 文件,只覆盖其声明的文件。两者都没有的 Cursor 规则只在 Cursor 的代理请求时才加载,因此不会被读取。
@@ -48,10 +50,6 @@ description: "让 Kody 读取团队为编码代理编写的指令(CLAUDE.md、AG
 - **发现的问题标记为 Repo Instruction。** 只有当指令适用于被更改的文件,且违反它的那一行是由该拉取请求新增或修改的,Kody 才会报告。评论会引用该指令并注明所在文件。
 - **审查的过滤器同样适用。** Repo Instruction 发现与其他发现一样,要经过团队的严重性过滤器和建议数量上限;低于阈值的发现不会发布。该设置让 Kody 读取这些文件,而不是绕过这些上限发布评论。
 - **从不作为给 Kody 的指令。** 这些文件被视为用来检查 diff 的代码库文本。其中要求审查者做的任何事情都会被忽略,也从不改变对 bug、安全或性能问题的判断方式。
-
-<Note>
-深度审查模式运行独立的 bug、安全和性能审查器,不会读取编码代理指令。
-</Note>
 
 ## 此变更之前导入的规则
 
