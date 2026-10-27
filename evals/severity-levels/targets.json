@@ -2,14 +2,14 @@
     "__doc": [
         "Floors per model for the share of the 205 suggestions rated at their defined level (floor, observed), and for each level's share (levels.<level>), as ratios. --gate fails below any of them. controlled and full are the same 205 suggestions.",
         "Set by hand on 2026-10-22 from the runs in `measured`, the prompt of test 17b (#1821), and never above 0.90.",
-        "GPT, DeepSeek and Kimi ran through this eval on the BYOK route. Sonnet and Opus are research runs of the same prompt (evals/severity/run.js) by the Claude Agent SDK subscription: re-measure them on the BYOK route once the Anthropic API has quota."
+        "Sonnet, Opus, GPT and DeepSeek were re-measured on the BYOK route on 2026-10-27, after a critical rated high stopped counting as right; GPT's overall floor went from 0.90 to 0.87 on that run. Kimi kept its OpenRouter floors of 2026-10-22: OpenRouter was out of credits on 2026-10-27, and the same eval through Moonshot directly (kimi-k2.7-code) scored lower, 163/205 (0.795): low 0.72, medium 0.843, high 0.74, critical 0.886. Through Moonshot, expect results below these floors."
     ],
     "sets": {
         "controlled": {
             "models": {
                 "gpt-6-sol": {
-                    "floor": 0.9,
-                    "observed": 0.917,
+                    "floor": 0.87,
+                    "observed": 0.898,
                     "levels": {
                         "low": {
                             "floor": 0.85,
@@ -17,22 +17,22 @@
                         },
                         "medium": {
                             "floor": 0.85,
-                            "observed": 0.871
+                            "observed": 0.857
                         },
                         "high": {
                             "floor": 0.9,
-                            "observed": 0.96
+                            "observed": 0.92
                         },
                         "critical": {
                             "floor": 0.9,
-                            "observed": 1.0
+                            "observed": 0.971
                         }
                     },
-                    "measured": "one run, BYOK route, on this commit"
+                    "measured": "one run, BYOK route, 2026-10-27, critical scored strictly"
                 },
                 "deepseek-v4-flash@fireworks": {
                     "floor": 0.9,
-                    "observed": 0.907,
+                    "observed": 0.912,
                     "levels": {
                         "low": {
                             "floor": 0.9,
@@ -40,18 +40,18 @@
                         },
                         "medium": {
                             "floor": 0.85,
-                            "observed": 0.857
+                            "observed": 0.871
                         },
                         "high": {
                             "floor": 0.9,
-                            "observed": 0.9
+                            "observed": 0.94
                         },
                         "critical": {
                             "floor": 0.9,
-                            "observed": 1.0
+                            "observed": 0.943
                         }
                     },
-                    "measured": "one run, BYOK route, on this commit"
+                    "measured": "one run, BYOK route, 2026-10-27, critical scored strictly"
                 },
                 "kimi-k2.7-code@openrouter": {
                     "floor": 0.8,
@@ -78,30 +78,7 @@
                 },
                 "claude-sonnet-5-5": {
                     "floor": 0.8,
-                    "observed": 0.839,
-                    "levels": {
-                        "low": {
-                            "floor": 0.8,
-                            "observed": 0.82
-                        },
-                        "medium": {
-                            "floor": 0.8,
-                            "observed": 0.829
-                        },
-                        "high": {
-                            "floor": 0.75,
-                            "observed": 0.77
-                        },
-                        "critical": {
-                            "floor": 0.9,
-                            "observed": 1.0
-                        }
-                    },
-                    "measured": "mean of 6 single calls of prompt 17b by the Claude Agent SDK subscription (evals/severity results/r17bx3), the API being out of quota"
-                },
-                "claude-opus-5.5@api": {
-                    "floor": 0.85,
-                    "observed": 0.883,
+                    "observed": 0.815,
                     "levels": {
                         "low": {
                             "floor": 0.8,
@@ -109,18 +86,41 @@
                         },
                         "medium": {
                             "floor": 0.8,
-                            "observed": 0.843
+                            "observed": 0.829
+                        },
+                        "high": {
+                            "floor": 0.75,
+                            "observed": 0.7
+                        },
+                        "critical": {
+                            "floor": 0.9,
+                            "observed": 0.914
+                        }
+                    },
+                    "measured": "one run, BYOK route, 2026-10-27, critical scored strictly; high is below its floor and the floor stays"
+                },
+                "claude-opus-5.5@api": {
+                    "floor": 0.85,
+                    "observed": 0.912,
+                    "levels": {
+                        "low": {
+                            "floor": 0.8,
+                            "observed": 0.92
+                        },
+                        "medium": {
+                            "floor": 0.8,
+                            "observed": 0.857
                         },
                         "high": {
                             "floor": 0.9,
-                            "observed": 0.9
+                            "observed": 0.92
                         },
                         "critical": {
                             "floor": 0.9,
                             "observed": 1.0
                         }
                     },
-                    "measured": "one call of prompt 17b by the Claude Agent SDK subscription (evals/severity results/r17bx3), the API being out of quota"
+                    "measured": "one run, BYOK route, 2026-10-27, critical scored strictly"
                 }
             }
         },

@@ -24,9 +24,7 @@ const parseArgs = (argv) =>
         }),
     );
 
-// A critical answered high is right: both reach the team at the default threshold,
-// and the critical items are too few to tell those two apart.
-const isRight = (level, got) => (level === 'critical' ? got === 'critical' || got === 'high' : got === level);
+const isRight = (level, got) => got === level;
 
 // The suggestion as the stage gets it from the lean finder.
 const findingOf = (item) => ({

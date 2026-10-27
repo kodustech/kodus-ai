@@ -20,7 +20,7 @@ ROTULOS = {'texto': {x['issueId']: x['severity'] for x in _ITENS}, 'gold': {x['i
 def por_nivel(rows, rotulo='texto'):
     GOLD = ROTULOS[rotulo]
     rows = [r for r in rows if r['issueId'] in GOLD]
-    certo = lambda g, x: x in ('high', 'critical') if g == 'critical' else x == g
+    certo = lambda g, x: x == g
     feitos = [r for r in rows if r.get('got')]
     return {l: {'n': sum(GOLD[r['issueId']] == l for r in feitos), 'right': sum(GOLD[r['issueId']] == l and certo(l, r['got']) for r in feitos)} for l in NIVEIS}
 
@@ -116,7 +116,7 @@ def tab_defs():
 
 
 # Aba Erros: por nível atribuído, quantos itens receberam aquele nível sem ser dele (rótulo pelo texto).
-# Uma linha por chamada. Aqui critical respondido como high conta como high errado.
+# Uma linha por chamada.
 def erros_linhas(nome, rows):
     GOLD = ROTULOS['texto']
     k = len(rows[0]['votes'])
@@ -177,10 +177,10 @@ def tab_erros():
         blocos.append(f'''<section><h2>{E(t["titulo"])}</h2>
 <div class="wrap"><table><thead><tr><th>Modelo</th><th>recebeu critical</th><th>recebeu high</th><th>recebeu medium</th><th>recebeu low</th></tr></thead>
 <tbody>{"".join(linhas)}</tbody></table></div></section>''')
-    return f'''<p>O avesso da aba Testes: em vez de quanto de cada nível o modelo acertou, quanto do que ele <b>deu</b> a cada nível estava errado. Cada célula: itens que receberam o nível sem ser dele / itens que receberam o nível, o %, e embaixo o nível real dos errados. Aqui é estrito: um critical respondido como high conta como high errado (na aba Testes ele conta como acerto). Uma chamada por PR, como em produção, e só a melhor chamada de cada modelo em cada teste: a que errou menos itens no total. Meta: até 15% errado (85% de acerto) é verde; 16–25% é amarelo, ou azul quando todo erro da célula é um nível só abaixo do real (o modelo subestimou, não inflou); acima de 25% é sempre vermelho.</p>
+    return f'''<p>O avesso da aba Testes: em vez de quanto de cada nível o modelo acertou, quanto do que ele <b>deu</b> a cada nível estava errado. Cada célula: itens que receberam o nível sem ser dele / itens que receberam o nível, o %, e embaixo o nível real dos errados. Um critical respondido como high conta como high errado. Uma chamada por PR, como em produção, e só a melhor chamada de cada modelo em cada teste: a que errou menos itens no total. Meta: até 15% errado (85% de acerto) é verde; 16–25% é amarelo, ou azul quando todo erro da célula é um nível só abaixo do real (o modelo subestimou, não inflou); acima de 25% é sempre vermelho.</p>
 {"".join(blocos)}
 <section><h2>Veredito: para que lado erra</h2>
-<p>Erros por chamada, em média de todas as chamadas (não só a melhor): sobe é o nível dado acima do real (infla), desce é abaixo (rebaixa). Um lado ganha quando tem pelo menos 1,5 vez os erros do outro. Ao lado, os três passos mais comuns de cada lado, com a média por chamada. Estrito como as tabelas acima: critical respondido como high conta como descer.</p>
+<p>Erros por chamada, em média de todas as chamadas (não só a melhor): sobe é o nível dado acima do real (infla), desce é abaixo (rebaixa). Um lado ganha quando tem pelo menos 1,5 vez os erros do outro. Ao lado, os três passos mais comuns de cada lado, com a média por chamada. Um critical respondido como high conta como descer.</p>
 <div class="wrap"><table><thead><tr><th>Modelo</th><th>Teste</th><th class="sep">Sobe</th><th>Desce</th><th>Veredito</th><th>Passos mais comuns</th></tr></thead>
 <tbody>{"".join(veredito(n, t, r) for n, t, r in sorted(vered, key=lambda x: ([m for _, m in MODELOS].index(x[0]), x[1])))}</tbody></table></div></section>'''
 
@@ -229,7 +229,7 @@ details summary{{cursor:pointer;font-weight:600;margin-bottom:8px}}table.rev td{
 <h1>Severidade: testes de prompt</h1>
 <div class="tabs" id="tabs"><button class="on" data-t="testes">Testes</button><button data-t="erros">Erros</button><button data-t="defs">Definições</button></div>
 <section id="t-testes" class="aba">
-<p>Meta: 85% de acerto em cada nível, separado. Dataset: 205 sugestões rotuladas pelo próprio texto, contra a definição da aba Definições (50 low, 70 medium, 50 high, 35 critical; 31 dos critical são sintéticos, confirmados pelo Astra, porque o gold só tem 4). Errou, errou: um nível ou três dá no mesmo. Única tolerância: critical respondido como high conta como acerto. Verde ≥ 85% (na meta), amarelo 75–84%, vermelho abaixo de 75%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
+<p>Meta: 85% de acerto em cada nível, separado. Dataset: 205 sugestões rotuladas pelo próprio texto, contra a definição da aba Definições (50 low, 70 medium, 50 high, 35 critical; 31 dos critical são sintéticos, confirmados pelo Astra, porque o gold só tem 4). Errou, errou: um nível ou três dá no mesmo, e um critical respondido como high também é erro. Verde ≥ 85% (na meta), amarelo 75–84%, vermelho abaixo de 75%. Pior nível: o nível de menor acerto do modelo, que é o que decide a meta.</p>
 <p class="leitura"><b>Resultado:</b> com a meta de 85% e uma chamada por PR, como em produção, só o DeepSeek passa em todos os níveis em toda chamada no teste 16 (pior nível 86%). O Opus fica no limite (84–86%), o GPT oscila no high (80–90%), o Kimi fica em 76–77% no medium (sobe medium para high). O Sonnet, que no teste 16 ficava em 58–64% no high, sobe para 74–80% com o 17b, que é o escolhido para ele. O prompt de produção fica em 27–51% no medium e 42–58% no high. Os testes 1 a 15 abaixo são histórico, medidos pelo rótulo do gold.</p>
 {''.join(blocos)}
 </section>

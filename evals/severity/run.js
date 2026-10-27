@@ -10,9 +10,7 @@
  * review. The suggestion text is taken as true: whether the problem exists is
  * the verifier's question, not this step's.
  *
- * Right answer per gold level: low, medium and high exact (critical for a high
- * is wrong); a critical answered high or critical is right (8 cases, too few to
- * tell those two apart).
+ * Right answer per gold level: the level itself, nothing else.
  */
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env'), quiet: true });
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env.local'), override: true, quiet: true });
@@ -43,7 +41,7 @@ const LEVELS = ['low', 'medium', 'high', 'critical'];
 const ONLY = arg('levels', '');
 const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.json'), 'utf8')).items.filter((x) => !ONLY || ONLY.split(',').includes(x.severity));
 const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
-const right = (gold, got) => (gold === 'critical' ? got === 'high' || got === 'critical' : got === gold);
+const right = (gold, got) => got === gold;
 
 // The head file around the cited lines; "+" marks lines the PR changed, ">" the cited ones.
 function excerpt(it) {

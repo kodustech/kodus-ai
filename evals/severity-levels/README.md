@@ -19,8 +19,8 @@ turned out to be: the step sees only the text. 174 come from the gold v3 reviews
 the reviews have 4. The rating is the step's whole job, so `controlled` and `full` are the
 same 205.
 
-A suggestion is right when it gets its level. A critical rated high is right too: both
-reach the team at the default threshold, and 35 cases are too few to tell them apart.
+A suggestion is right when it gets its level, and only then: a critical rated high is
+wrong.
 
 The prompt was chosen over 17 versions in `evals/severity` (`prompts.js`, test 17b; the
 results page is built by `report.py`).
