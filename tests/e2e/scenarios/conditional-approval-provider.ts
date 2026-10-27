@@ -28,11 +28,13 @@ async function assignCloudAuthorSeat(ctx: RunContext, session: KodusSession) {
         body: {
             organizationId: session.organizationId,
             teamId: session.teamId,
-            users: [{
-                gitId,
-                gitTool: ctx.provider.licenseGitTool(),
-                licenseStatus: 'active',
-            }],
+            users: [
+                {
+                    gitId,
+                    gitTool: ctx.provider.licenseGitTool(),
+                    licenseStatus: 'active',
+                },
+            ],
             userName: `${ctx.provider.name} approval QA`,
         },
     });
@@ -42,7 +44,9 @@ async function assignCloudAuthorSeat(ctx: RunContext, session: KodusSession) {
         `${ctx.provider.name} QA author has no review seat; billing refused to assign one`,
     );
     ctx.assert(
-        response.body.successful?.some((user) => String(user.git_id) === String(gitId)),
+        response.body.successful?.some(
+            (user) => String(user.git_id) === String(gitId),
+        ),
         `Billing did not confirm the ${ctx.provider.name} QA author seat`,
     );
 }
@@ -147,6 +151,18 @@ export const conditionalApprovalProvider: Scenario = {
         await ctx.kodus.registerIntegration(session);
         const repo = await ctx.kodus.registerRepo(session);
         await ctx.kodus.finishOnboarding(session, repo);
+        if (ctx.provider.name === 'gitlab') {
+            const hooks = await ctx.provider.listWebhooks();
+            ctx.assert(
+                hooks.some(
+                    (hook) =>
+                        hook.url.includes(ctx.provider.webhookPath) &&
+                        hook.active &&
+                        hook.events.includes('merge_request'),
+                ),
+                'GitLab merge request webhook is missing or inactive after onboarding',
+            );
+        }
         await resetCodeReviewConfig(ctx.target, session);
         await assignCloudAuthorSeat(ctx, session);
         await setApprovalPolicy(ctx, session.accessToken, session.teamId, true);
@@ -164,7 +180,14 @@ export const conditionalApprovalProvider: Scenario = {
                 },
             });
             opened.push(sensitivePr);
-            await waitForApprovalReason(ctx, session, repo, sensitivePr, 'held', SENSITIVE_FILE);
+            await waitForApprovalReason(
+                ctx,
+                session,
+                repo,
+                sensitivePr,
+                'held',
+                SENSITIVE_FILE,
+            );
 
             const safeBranch = `e2e/approval-safe-${randomUUID().slice(0, 8)}`;
             const safePr = await ctx.provider.openPR({
@@ -177,7 +200,13 @@ export const conditionalApprovalProvider: Scenario = {
                 },
             });
             opened.push(safePr);
-            await waitForApprovalReason(ctx, session, repo, safePr, 'completed');
+            await waitForApprovalReason(
+                ctx,
+                session,
+                repo,
+                safePr,
+                'completed',
+            );
             return {
                 provider: ctx.provider.name,
                 sensitivePr: sensitivePr.url,
@@ -214,19 +243,26 @@ async function waitForApprovalReason(
     let lastStatusCheck = 0;
     while (Date.now() < deadline) {
         const comments = await approvalComments(ctx, repo, pr);
-        if (comments.some((comment) =>
-            comment.includes(REASON_MARKER) &&
-            comment.includes(`Automatic approval ${kind}`) &&
-            (!detail || comment.includes(detail)),
-        )) return;
+        if (
+            comments.some(
+                (comment) =>
+                    comment.includes(REASON_MARKER) &&
+                    comment.includes(`Automatic approval ${kind}`) &&
+                    (!detail || comment.includes(detail)),
+            )
+        )
+            return;
         if (Date.now() - lastStatusCheck >= 30_000) {
             lastStatusCheck = Date.now();
             const executions = await http<unknown>(
-                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${pr.number}&repositoryId=${encodeURIComponent(String(repo.id))}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${pr.number}&teamId=${encodeURIComponent(session.teamId)}&limit=10`,
                 { headers: { Authorization: `Bearer ${session.accessToken}` } },
             );
             if (executions.status >= 200 && executions.status < 300) {
-                lastReviewStatus = findExecutionStatus(executions.body, pr.number);
+                lastReviewStatus = findExecutionStatus(
+                    executions.body,
+                    pr.number,
+                );
                 if (
                     lastReviewStatus === 'skipped' ||
                     lastReviewStatus === 'error' ||
@@ -243,9 +279,16 @@ async function waitForApprovalReason(
                 }
             }
         }
-        await new Promise((resolve) => setTimeout(resolve, 10_000));
+        await new Promise((resolve) =>
+            setTimeout(
+                resolve,
+                ctx.provider.name === 'gitlab' ? 60_000 : 10_000,
+            ),
+        );
     }
-    throw new Error(`No automatic approval ${kind} reason appeared on ${pr.url} within 12 minutes (review=${lastReviewStatus ?? 'unknown'})`);
+    throw new Error(
+        `No automatic approval ${kind} reason appeared on ${pr.url} within 12 minutes (review=${lastReviewStatus ?? 'unknown'})`,
+    );
 }
 
 export default conditionalApprovalProvider;
