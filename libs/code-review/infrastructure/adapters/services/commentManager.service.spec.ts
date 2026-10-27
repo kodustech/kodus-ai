@@ -614,6 +614,16 @@ describe('CommentManagerService GitLab status note reuse (#1721)', () => {
         ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
         expect(createIssueComment).toHaveBeenCalledTimes(1);
     });
+
+    it('creates a replacement note when editing the stored note rejects', async () => {
+        updateIssueComment.mockRejectedValue(new Error('note not found'));
+        createIssueComment.mockResolvedValue({ id: 12 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
 });
 
 // repeatedCodeReviewSuggestionClustering was migrated from the legacy

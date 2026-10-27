@@ -1048,13 +1048,28 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 },
                 body: commentBody,
             };
-            const updated =
-                platformType === PlatformType.GITLAB && previousGitlabNote
-                    ? await this.codeManagementService.updateIssueComment({
-                          ...commentRequest,
-                          ...previousGitlabNote,
-                      })
-                    : null;
+            let updated = null;
+            if (platformType === PlatformType.GITLAB && previousGitlabNote) {
+                try {
+                    updated =
+                        await this.codeManagementService.updateIssueComment({
+                            ...commentRequest,
+                            ...previousGitlabNote,
+                        });
+                } catch (error) {
+                    this.logger.warn({
+                        message: `Could not update GitLab status note for PR#${prNumber}; creating a replacement`,
+                        context: CommentManagerService.name,
+                        error,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                            noteId: previousGitlabNote.noteId,
+                        },
+                    });
+                }
+            }
             const comment =
                 updated ??
                 (await this.codeManagementService.createIssueComment(
