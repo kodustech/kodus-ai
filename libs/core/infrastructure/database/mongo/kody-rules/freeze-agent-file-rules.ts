@@ -213,6 +213,9 @@ export async function restoreAgentFileRules(
     return { restored };
 }
 
+/** Marks a rule `restoreTemplateOnboardingImports` brought back. */
+const RESTORED_MARK = 'restoredByTemplateMigration';
+
 /**
  * Brings back the onboarding imports from Repository Rules locations that the
  * first run of this migration removed (before those locations were spared).
@@ -221,12 +224,16 @@ export async function restoreTemplateOnboardingImports(
     db: Db,
     opts: { log?: (msg: string) => void } = {},
 ): Promise<{ restored: number; orgs: string[] }> {
-    const result = await rewriteRules(db, (rule) =>
-        typeof rule?.sourcePath === 'string' &&
-        isRepositoryRulesLocation(rule.sourcePath)
-            ? restoreAgentFileRule(rule)
-            : null,
-    );
+    const result = await rewriteRules(db, (rule) => {
+        if (
+            typeof rule?.sourcePath !== 'string' ||
+            !isRepositoryRulesLocation(rule.sourcePath)
+        ) {
+            return null;
+        }
+        const restored = restoreAgentFileRule(rule);
+        return restored ? { ...restored, [RESTORED_MARK]: true } : null;
+    });
     opts.log?.(
         `[freeze-agent-file-rules] restored ${result.changed} onboarding import(s) from Repository Rules locations across ${result.orgs.length} org(s).`,
     );
@@ -234,26 +241,19 @@ export async function restoreTemplateOnboardingImports(
 }
 
 /**
- * Undoes `restoreTemplateOnboardingImports`: removes the onboarding imports
- * the first run removed from Repository Rules locations (`.kody/rules/` never
- * was). They stay restorable.
+ * Undoes `restoreTemplateOnboardingImports`: removes again only the rules it
+ * restored (marked), so an install where the freeze already kept them is left
+ * alone. They stay restorable.
  */
 export async function removeTemplateOnboardingImports(
     db: Db,
     opts: { log?: (msg: string) => void } = {},
 ): Promise<{ removed: number }> {
     const result = await rewriteRules(db, (rule) => {
-        if (
-            !isOnboardingImport(rule) ||
-            !REMOVABLE_STATUSES.has(rule.status) ||
-            typeof rule.sourcePath !== 'string' ||
-            !isRepositoryRulesLocation(rule.sourcePath) ||
-            dirSegmentEnd(rule.sourcePath.toLowerCase(), '.kody/rules/') >= 0
-        ) {
-            return null;
-        }
+        if (rule?.[RESTORED_MARK] !== true) return null;
+        const { [RESTORED_MARK]: _mark, ...rest } = rule;
         return {
-            ...rule,
+            ...rest,
             status: 'deleted',
             previousStatus: rule.status,
             reason: ONBOARDING_IMPORT_REMOVED_REASON,

@@ -267,26 +267,35 @@ describe('freezeAgentFileRules', () => {
         expect(result).toEqual({ restored: 1, orgs: ['org-1'] });
     });
 
-    it('removeTemplateOnboardingImports removes them again, restorable', async () => {
+    // Only what `up` restored is removed again: on an install where the freeze
+    // already kept these rules, `up` changes nothing and `down` must not either.
+    it('removeTemplateOnboardingImports removes only the rules the restore brought back, restorable', async () => {
+        const removed = {
+            ...onboardingRule({ sourcePath: 'docs/coding-standards/a.md' }),
+            status: 'deleted',
+            previousStatus: 'active',
+            reason: ONBOARDING_IMPORT_REMOVED_REASON,
+        };
+        const neverRemoved = onboardingRule({
+            uuid: 'r2',
+            sourcePath: 'docs/coding-standards/b.md',
+        });
         const { db, updateOne } = fakeDb([
             {
                 _id: 'd1',
                 organizationId: 'org-1',
-                rules: [
-                    onboardingRule({
-                        sourcePath: 'docs/coding-standards/a.md',
-                    }),
-                    onboardingRule({
-                        uuid: 'r2',
-                        sourcePath: '.kody/rules/b.md',
-                    }),
-                ],
+                rules: [removed, neverRemoved],
             },
         ]);
+        await restoreTemplateOnboardingImports(db);
+        const restored = updateOne.mock.calls[0][1].$set.rules;
 
-        await removeTemplateOnboardingImports(db);
+        const second = fakeDb([
+            { _id: 'd1', organizationId: 'org-1', rules: restored },
+        ]);
+        await removeTemplateOnboardingImports(second.db);
 
-        const [, update] = updateOne.mock.calls[0];
+        const [, update] = second.updateOne.mock.calls[0];
         expect(update.$set.rules[0]).toEqual(
             expect.objectContaining({
                 status: 'deleted',
@@ -294,7 +303,25 @@ describe('freezeAgentFileRules', () => {
                 reason: ONBOARDING_IMPORT_REMOVED_REASON,
             }),
         );
-        expect(update.$set.rules[1].status).toBe('active');
+        expect(update.$set.rules[0]).not.toHaveProperty(
+            'restoredByTemplateMigration',
+        );
+        expect(update.$set.rules[1]).toEqual(neverRemoved);
+    });
+
+    it('removeTemplateOnboardingImports leaves an install the restore did not touch alone', async () => {
+        const { db, updateOne } = fakeDb([
+            {
+                _id: 'd1',
+                organizationId: 'org-1',
+                rules: [onboardingRule({ sourcePath: '.rules/naming.md' })],
+            },
+        ]);
+
+        const result = await removeTemplateOnboardingImports(db);
+
+        expect(updateOne).not.toHaveBeenCalled();
+        expect(result.removed).toBe(0);
     });
 
     it('restoreAgentFileRules can restore a single organization', async () => {
