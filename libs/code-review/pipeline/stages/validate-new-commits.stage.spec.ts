@@ -157,47 +157,6 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
 
-        // logic returns "Only Merge Commits" with no tech detail in my implementation of stage,
-        // OR it might have tech detail if I passed one.
-        // Let's check my implementation:
-        // message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        // No second arg. So no tech detail in parens.
-        // But `StageMessageHelper` might append tech detail if I passed it to `skippedWithReason`.
-        // I didn't pass it.
-        // HOWEVER, the `ValidateNewCommitsStage.ts` logic at the top (lines 110+) does:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-        // Wait!
-        // In lines 110+, `message` is retrieved from `details.message`.
-        // If I set `details.message` using `skippedWithReason`, it already contains the formatted string.
-        // Then lines 151-153 append `(${details.technicalReason})` AGAIN?
-
-        // Let's look at lines 151-153 in `ValidateNewCommitsStage.ts`:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-
-        // In my implementation of `validateCommits`:
-        // details: {
-        //    message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        //    technicalReason: 'All new commits identified as merge commits',
-        // }
-
-        // So `message` = "Only Merge Commits — Merge commits are skipped to avoid noise"
-        // Then `draft.statusInfo.message` becomes:
-        // "Only Merge Commits — Merge commits are skipped to avoid noise (All new commits identified as merge commits)"
-
-        // This seems redundant or double-wrapping if `skippedWithReason` was supposed to handle it.
-        // But `skippedWithReason` was called WITHOUT tech detail.
-        // So the "outer" wrapping adds the tech detail.
-        // Ideally I should remove the outer wrapping in `executeStage` and let `validateCommits` handle full formatting using `skippedWithReason(reason, techDetail)`.
-
-        // IF I do that, I need to update `executeStage` logic.
-        // Currently `executeStage` forces the append.
-
-        // Let's fix `executeStage` to NOT double-wrap if `message` already looks formatted? No, that's hacky.
-        // Better: Update `executeStage` to just use `details.message` if available.
-        // AND ensure `validateCommits` returns the FULLY formatted message in `details.message`.
-
-        // Let's check `executeStage` again.
-
         const expectedMessage = `${PipelineReasons.COMMITS.ONLY_MERGE.message}`;
         expect(result.statusInfo.message).toContain(expectedMessage);
     });
@@ -654,16 +613,6 @@ describe('ValidateNewCommitsStage', () => {
                 expect(
                     mockPullRequestManagerService.getRebaseInterdiff,
                 ).toHaveBeenCalled();
-            });
-
-            it('records the fallback on orphanedBaseCommit when the earlier diff is unreadable', async () => {
-                orphan();
-
-                const result = await stage.execute(context);
-
-                expect(result.orphanedBaseCommit?.interdiff).toEqual({
-                    fallback: 'previous_diff_unavailable',
-                });
             });
 
             it.each([

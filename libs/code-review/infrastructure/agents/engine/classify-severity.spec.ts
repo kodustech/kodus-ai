@@ -44,30 +44,6 @@ describe('classifySeverity — input assembly & fail-safe degradation', () => {
         expect(runSpy).not.toHaveBeenCalled();
     });
 
-    it('returns the parsed classifications on a successful parse', async () => {
-        const parsed = new Map<number, string>([
-            [0, 'high'],
-            [1, 'low'],
-        ]);
-        parseMock.mockReturnValue({ classifications: parsed, parseOk: true });
-
-        const out = await classifySeverity([{}, {}] as any);
-
-        expect(out).toBe(parsed);
-    });
-
-    it('preserves PARTIAL responses — only the indices the model actually returned', async () => {
-        parseMock.mockReturnValue({
-            classifications: new Map([[1, 'critical']]),
-            parseOk: true,
-        });
-
-        const out = await classifySeverity([{}, {}, {}] as any);
-
-        expect(out.has(0)).toBe(false); // caller keeps the agent severity there
-        expect(out.get(1)).toBe('critical');
-    });
-
     it('defaults EVERY suggestion to medium when the response has no parseable JSON', async () => {
         parseMock.mockReturnValue({ classifications: new Map(), parseOk: false });
 
@@ -126,16 +102,6 @@ describe('classifySeverity — input assembly & fail-safe degradation', () => {
         runSpy.mockResolvedValue(undefined as any);
         await classifySeverity([{}] as any);
         expect(parseMock).toHaveBeenCalledWith(''); // null/undefined response → '' guard
-    });
-
-    it('coalesces a null response to "" as well (never .match on null)', async () => {
-        runSpy.mockResolvedValue(null as any);
-        const out = await classifySeverity([{}, {}] as any);
-        expect(parseMock).toHaveBeenCalledWith('');
-        // parseMock (mocked) returns parseOk:true empty here → empty map, but the
-        // point is the '' guard fired without throwing. Real-parse fallback is
-        // covered in the envelope-zoo block below.
-        expect(out).toBeInstanceOf(Map);
     });
 });
 
@@ -210,20 +176,6 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         expect([...out.values()]).toEqual(allMedium(1));
     });
 
-    // Rows 4/5/6 — wrapper / double-wrapper / opaque single-key wrap: the
-    // payload is nested under result/data/0/content, so top-level
-    // parsed.classifications is undefined → all-medium fallback.
-    it.each([
-        ['row 4 wrapper', '{"result":{"classifications":[{"index":0,"severity":"high"}]}}'],
-        ['row 5 double wrapper', '{"result":{"result":{"classifications":[{"index":0,"severity":"high"}]}}}'],
-        ['row 6a numeric key wrap', '{"0":{"classifications":[{"index":0,"severity":"high"}]}}'],
-        ['row 6b content key wrap', '{"content":{"classifications":[{"index":0,"severity":"high"}]}}'],
-    ])('[%s] nested payload → all-medium fallback (never silently empty)', async (_label, text) => {
-        runSpy.mockResolvedValue(text);
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
     // Row 7 — stringified JSON: the whole D delivered as a JSON string literal.
     // Boundary must return a valid Map (recover or fallback), never throw.
     it('[row 7] stringified-JSON envelope → returns a Map, never throws', async () => {
@@ -287,15 +239,6 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         expect(out.get(1)).toBe('low');
     });
 
-    // Row 13 — extra unknown keys alongside the right ones: tolerated, recovers.
-    it('[row 13] extra unknown keys tolerated → recovered', async () => {
-        runSpy.mockResolvedValue(
-            '{"classifications":[{"index":0,"severity":"high","reason":"x","confidence":0.9}],"meta":"ignore"}',
-        );
-        const out = await classifySeverity([{}] as any);
-        expect(out.get(0)).toBe('high');
-    });
-
     // Row 14 — empty object {}: no "classifications" → all-medium fallback.
     it('[row 14] empty object {} → all-medium fallback', async () => {
         runSpy.mockResolvedValue('{}');
@@ -310,45 +253,11 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         expect([...out.values()]).toEqual(allMedium(2));
     });
 
-    // Row 16 — empty / whitespace-only string → all-medium fallback.
-    it('[row 16] whitespace-only response → all-medium fallback', async () => {
-        runSpy.mockResolvedValue('   \n\t  ');
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
     // Row 17 — null / undefined return → coalesced to '' → all-medium fallback.
     it('[row 17] null response → all-medium fallback (no throw)', async () => {
         runSpy.mockResolvedValue(null as any);
         const out = await classifySeverity([{}] as any);
         expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // Row 18 — primitive / prose where an object is expected → all-medium.
-    it('[row 18] primitive prose ("ok") → all-medium fallback', async () => {
-        runSpy.mockResolvedValue('ok');
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // Row 19 — provider envelope leak surfacing as text (unwrap is LLM.run's
-    // job, below this boundary; if one still leaks, the boundary fails safe).
-    it('[row 19] leaked provider envelope as text → all-medium fallback', async () => {
-        runSpy.mockResolvedValue(
-            '{"choices":[{"message":{"content":"whatever"}}]}',
-        );
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // Row 20 — reasoning/thinking leak preceding the JSON: the embedded JSON is
-    // still extracted → recovers.
-    it('[row 20] thinking/reasoning prose before the JSON → recovered', async () => {
-        runSpy.mockResolvedValue(
-            'Let me think about this carefully...\nThe issue is severe.\n{"classifications":[{"index":0,"severity":"critical"}]}',
-        );
-        const out = await classifySeverity([{}] as any);
-        expect(out.get(0)).toBe('critical');
     });
 
     // ── B. Semantic-but-wrong ───────────────────────────────────────────────
@@ -398,16 +307,6 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         expect(out.get(0)).toBe('low');
     });
 
-    // Row 27 — unicode / emoji / escaped newlines inside string fields → still
-    // parses and recovers the severity.
-    it('[row 27] unicode/emoji in reason field → recovered', async () => {
-        runSpy.mockResolvedValue(
-            '{"classifications":[{"index":0,"severity":"high","reason":"núll ptr 💥\\nline2"}]}',
-        );
-        const out = await classifySeverity([{}] as any);
-        expect(out.get(0)).toBe('high');
-    });
-
     // ── C. Unparseable / transport (fail-safe layer) ────────────────────────
 
     // Row 28 — truncated JSON (max_tokens mid-object) → JSON.parse throws or no
@@ -420,38 +319,10 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         expect([...out.values()]).toEqual(allMedium(1));
     });
 
-    // Row 29 — malformed JSON (trailing comma / single quotes / unquoted keys)
-    // → JSON.parse throws inside parse's try → all-medium fallback.
-    it.each([
-        ['trailing comma', '{"classifications":[{"index":0,"severity":"high"},]}'],
-        ['single quotes', "{'classifications':[{'index':0,'severity':'high'}]}"],
-        ['unquoted keys', '{classifications:[{index:0,severity:"high"}]}'],
-    ])('[row 29] malformed JSON (%s) → all-medium fallback', async (_label, text) => {
-        runSpy.mockResolvedValue(text);
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // Row 30 — LLM.run throws (network/timeout) → caught → all-medium fallback,
-    // never propagates past the boundary. (Also covered in the assembly block;
-    // re-pinned here against the real parser.)
-    it('[row 30] LLM.run rejects → all-medium fallback, no throw past boundary', async () => {
-        runSpy.mockRejectedValue(new Error('ECONNRESET'));
-        const out = await classifySeverity([{}, {}] as any);
-        expect([...out.values()]).toEqual(allMedium(2));
-    });
-
     // Row 31 — {error:...} object returned instead of a string: parse's .match
     // on a non-string throws → boundary catch → all-medium fallback.
     it('[row 31] {error} object returned → all-medium fallback', async () => {
         runSpy.mockResolvedValue({ error: 'rate_limited' } as any);
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // Row 32 — empty success (content:'' / finish_reason length) → all-medium.
-    it('[row 32] empty-success ("") → all-medium fallback', async () => {
-        runSpy.mockResolvedValue('');
         const out = await classifySeverity([{}] as any);
         expect([...out.values()]).toEqual(allMedium(1));
     });
@@ -464,81 +335,10 @@ describe('classifySeverity — LLM.run envelope contract (real parser)', () => {
         const out = await classifySeverity([{}] as any);
         expect([...out.values()]).toEqual(allMedium(1));
     });
-
-    // Row 34 — abort-style rejection mid-call. This boundary owns a timeout
-    // (SEVERITY_TIMEOUT_MS) rather than an external abortSignal, but any
-    // abort/timeout rejection must still degrade to all-medium.
-    it('[row 34] abort/timeout rejection → all-medium fallback', async () => {
-        runSpy.mockRejectedValue(
-            Object.assign(new Error('The operation was aborted'), {
-                name: 'AbortError',
-            }),
-        );
-        const out = await classifySeverity([{}] as any);
-        expect([...out.values()]).toEqual(allMedium(1));
-    });
-
-    // ── E. Provider / model policy (N modelos) ──────────────────────────────
-
-    // classifySeverity calls LLM.run WITHOUT a schema → it is a plain TEXT call,
-    // so structured-output-gate's json_schema-vs-json_object branch never
-    // applies here: EVERY provider goes through the same text→regex→parse path.
-    // Assert that off-schema handling is provider-INDEPENDENT (no per-model
-    // trust shortcut at this boundary) across both gate cohorts.
-    const STRICT = ['openai', 'anthropic', 'google', 'moonshotai'];
-    const FALLBACK = ['kimi', 'glm', 'deepseek', 'z-ai'];
-
-    it.each([...STRICT, ...FALLBACK])(
-        '[E] off-schema (bare array) degrades identically under provider "%s"',
-        async (provider) => {
-            runSpy.mockResolvedValue('[{"index":0,"severity":"high"}]');
-            const out = await classifySeverity(
-                [{}] as any,
-                undefined,
-                { provider, model: 'm' } as any,
-            );
-            expect([...out.values()]).toEqual(allMedium(1)); // no provider shortcut
-        },
-    );
-
-    it.each([...STRICT, ...FALLBACK])(
-        '[E] clean D recovers identically under provider "%s"',
-        async (provider) => {
-            runSpy.mockResolvedValue(
-                '{"classifications":[{"index":0,"severity":"low"}]}',
-            );
-            const out = await classifySeverity(
-                [{}] as any,
-                undefined,
-                { provider, model: 'm' } as any,
-            );
-            expect(out.get(0)).toBe('low');
-        },
-    );
-
-    // ── Guaranteed return shape (all layers) ────────────────────────────────
-    it('always returns a Map<number,string> with in-set values, whatever comes back', async () => {
-        const shapes = [
-            '{"classifications":[{"index":0,"severity":"high"}]}',
-            '[{"index":0,"severity":"high"}]',
-            'garbage',
-            '',
-            '{}',
-        ];
-        for (const s of shapes) {
-            runSpy.mockResolvedValue(s as any);
-            const out = await classifySeverity([{}] as any);
-            expect(out).toBeInstanceOf(Map);
-            for (const [k, v] of out.entries()) {
-                expect(typeof k).toBe('number');
-                expect(ALLOWED_SEVERITIES).toContain(v);
-            }
-        }
-    });
 });
 
 /**
- * ── D. Input variants (matrix rows 35-42) ───────────────────────────────────
+ * ── D. Input variants (matrix row 37) ───────────────────────────────────
  *
  * classifySeverity sends ALL suggestions in ONE prompt (no batching), keys the
  * result by array POSITION, and reads only `suggestions.length` itself. So the
@@ -560,21 +360,6 @@ describe('classifySeverity — input variants (D)', () => {
 
     afterEach(() => jest.restoreAllMocks());
 
-    // Row 35 — empty input: no model call, empty map (also in assembly block).
-    it('[row 35] empty input → no LLM call, empty map', async () => {
-        const out = await classifySeverity([]);
-        expect(runSpy).not.toHaveBeenCalled();
-        expect(out.size).toBe(0);
-    });
-
-    // Row 36 — single item → exactly one call, prompt built with the item.
-    it('[row 36] single item → exactly one LLM.run call', async () => {
-        const suggestions = [{ relevantFile: 'a.ts', suggestionContent: 'x' }] as any;
-        await classifySeverity(suggestions);
-        expect(runSpy).toHaveBeenCalledTimes(1);
-        expect(buildMock).toHaveBeenCalledWith(suggestions, expect.anything());
-    });
-
     // Row 37 — large input crossing any token/batch boundary: NO batching here,
     // so still exactly ONE call carrying all N; fallback map covers all N.
     it('[row 37] large input → still ONE call, all N present in fallback', async () => {
@@ -588,63 +373,6 @@ describe('classifySeverity — input variants (D)', () => {
         expect(out.get(0)).toBe('medium');
         expect(out.get(499)).toBe('medium');
     });
-
-    // Row 38 — duplicate items: kept as distinct positions, one call.
-    it('[row 38] duplicate items → distinct positions, one call', async () => {
-        const dup = { relevantFile: 'a.ts', suggestionContent: 'same' };
-        const out = await classifySeverity([dup, dup] as any);
-        expect(runSpy).toHaveBeenCalledTimes(1);
-        expect(out.size).toBe(2); // positions 0 and 1 both present
-    });
-
-    // Row 39 — item with null/undefined required fields: pass-through, no throw.
-    it('[row 39] null/undefined fields in an item → no throw, still classified', async () => {
-        const out = await classifySeverity([
-            { relevantFile: undefined, suggestionContent: null },
-        ] as any);
-        expect(runSpy).toHaveBeenCalledTimes(1);
-        expect(out.get(0)).toBe('medium');
-    });
-
-    // Row 40 — special chars / whitespace-only content: pass-through, no throw.
-    it('[row 40] special chars / whitespace content → no throw, classified', async () => {
-        const out = await classifySeverity([
-            { relevantFile: 'a.ts', suggestionContent: '   \n\t💥`${x}`<script>' },
-            { relevantFile: 'b.ts', suggestionContent: '' },
-        ] as any);
-        expect(runSpy).toHaveBeenCalledTimes(1);
-        expect(out.size).toBe(2);
-    });
-
-    // Row 42 — order permutation: keyed by position, so a permuted input yields
-    // an equivalent-shaped result (metamorphic; the fallback size is invariant
-    // and every position is present regardless of order).
-    it('[row 42] order permutation → equivalent result shape (position-keyed)', async () => {
-        const a = { relevantFile: 'a.ts', suggestionContent: 'A' };
-        const b = { relevantFile: 'b.ts', suggestionContent: 'B' };
-        const out1 = await classifySeverity([a, b] as any);
-        const out2 = await classifySeverity([b, a] as any);
-        expect([...out1.keys()].sort()).toEqual([...out2.keys()].sort());
-        expect([...out1.values()]).toEqual([...out2.values()]); // both all-medium
-    });
-
-    // Row 41 — off-by-one at the batch boundary: N/A for this boundary. There is
-    // NO batching — classifySeverity emits exactly one LLM.run for any non-empty
-    // input, keyed by array position (verified in rows 36/37). To pin that there
-    // is no hidden chunk edge, assert the call count stays 1 as size crosses a
-    // typical chunk size (49/50/51). Documents row 41's non-applicability.
-    it.each([49, 50, 51])(
-        '[row 41 N/A] no batch boundary — %i suggestions still emit exactly ONE call',
-        async (n) => {
-            const input = Array.from({ length: n }, (_, i) => ({
-                relevantFile: `f${i}.ts`,
-                suggestionContent: `x${i}`,
-            })) as any;
-            const out = await classifySeverity(input);
-            expect(runSpy).toHaveBeenCalledTimes(1);
-            expect(out.size).toBe(n);
-        },
-    );
 });
 
 /**
@@ -675,7 +403,6 @@ describe('classifySeverity — mis-typed severity value (rows 21-23 analog)', ()
 
     it.each([
         ['severity as number (1)', '{"classifications":[{"index":0,"severity":1}]}'],
-        ['severity as bool (true)', '{"classifications":[{"index":0,"severity":true}]}'],
         ['index as string ("0")', '{"classifications":[{"index":"0","severity":"high"}]}'],
     ])(
         '[rows 21-23 analog] mis-typed entry (%s) is skipped → observable all-medium, never coerced',

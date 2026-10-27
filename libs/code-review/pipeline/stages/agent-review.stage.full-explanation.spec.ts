@@ -133,21 +133,8 @@ describe('AgentReviewStage — full explanation', () => {
 
         expect(s.suggestionContent).toBe('The user can be null. Guard it.');
         expect(s.fullExplanation).toBe(STRIPPED);
-    });
-
-    it('builds llmPrompt from the title and the full explanation, not the short body', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([sugg({ suggestionContent: RAW })]),
-        );
-        (formatSuggestionContent as jest.Mock).mockResolvedValueOnce(
-            new Map([
-                [0, { suggestionContent: 'The user can be null. Guard it.' }],
-            ]),
-        );
-
-        const [s] = analyzedSuggestions(await run(stage, makeContext()));
-
+        // llmPrompt is built from the title and the full explanation, not the
+        // short body.
         expect(s.llmPrompt).toBe(
             `user object can be null and is dereferenced\n\n${STRIPPED}`,
         );
@@ -344,44 +331,6 @@ describe('agent-facing text keeps what the comment adds after formatting', () =>
             'Kody rule violation: [Guard nullable users]',
         );
         expect(s.llmPrompt.match(/Kody rule violation/g)).toHaveLength(1);
-    });
-
-    it('the revision reference reaches the full explanation, and the prompt once', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([
-                sugg({
-                    suggestionContent: RAW,
-                    revisesSuggestionId: 'prior-1',
-                }),
-            ]),
-        );
-
-        const [s] = analyzedSuggestions(
-            await run(
-                stage,
-                makeContext({
-                    previousDecisions: [
-                        {
-                            suggestionId: 'prior-1',
-                            relevantFile: 'src/user.ts',
-                            relevantLinesStart: 10,
-                            suggestionContent: 'Earlier fix.',
-                            label: 'bug',
-                            outcome: 'implemented',
-                            decidedAt: '2026-10-03T10:00:00Z',
-                        },
-                    ],
-                }),
-            ),
-        );
-
-        expect(s.fullExplanation).toMatch(
-            /^\*\*Revises an earlier Kody suggestion\*\*/,
-        );
-        expect(
-            s.llmPrompt.match(/Revises an earlier Kody suggestion/g),
-        ).toHaveLength(1);
     });
 
     it('a merged finding with no text of its own is not titled with its location list', async () => {

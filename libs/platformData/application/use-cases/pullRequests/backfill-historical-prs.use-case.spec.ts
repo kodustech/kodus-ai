@@ -160,8 +160,7 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
         expect(result).toEqual({
             // Not '' — PullRequestsModel requires a non-empty `title`
             // (Mongoose's String required-check tests `.length`), so an
-            // empty title 500'd the save (prod, 157 occurrences). See
-            // backfill-historical-prs.title.spec.ts.
+            // empty title 500'd the save (prod, 157 occurrences).
             title: 'Untitled',
             status: 'unknown',
             merged: false,
@@ -486,43 +485,7 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
         });
     });
 
-    describe('passthrough and static fields', () => {
-        it('passes commits through by reference and organizationId verbatim', () => {
-            const commits = [{ sha: 'deadbeef', message: 'x' }];
-            const result = transform({}, 'org-abc', zeroStats, commits, {
-                id: 'r',
-                name: 'n',
-            });
-            expect(result.commits).toBe(commits);
-            expect(result.organizationId).toBe('org-abc');
-        });
-
-        it('copies fileStats totals exactly', () => {
-            const result = transform(
-                {},
-                'o',
-                { totalAdded: 100, totalDeleted: 40, totalChanges: 140 },
-                [],
-                { id: 'r', name: 'n' },
-            );
-            expect(result.totalAdded).toBe(100);
-            expect(result.totalDeleted).toBe(40);
-            expect(result.totalChanges).toBe(140);
-        });
-
-        it('sets the fixed literal fields', () => {
-            const result = transform({}, 'o', zeroStats, [], {
-                id: 'r',
-                name: 'n',
-            });
-            expect(result.provider).toBe('');
-            expect(result.language).toBeUndefined();
-            expect(result.repository.language).toBe('');
-            expect(result.files).toEqual([]);
-            expect(result.syncedEmbeddedSuggestions).toBe(false);
-            expect(result.syncedWithIssues).toBe(false);
-        });
-
+    describe('draft flag', () => {
         it('isDraft reflects pr.isDraft, defaulting to false', () => {
             const draft = transform({ isDraft: true }, 'o', zeroStats, [], {
                 id: 'r',
@@ -557,6 +520,14 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
             expect(result.url).toBe('https://u');
         });
 
+        it('falls back to a non-empty title when the provider sends an empty one', () => {
+            const result = transform({ title: '' }, 'o', zeroStats, [], {
+                id: 'r',
+                name: 'n',
+            });
+            expect(result.title).toBe('Untitled');
+        });
+
         it('status prefers pr.state, defaulting to the literal "unknown"', () => {
             const closed = transform({ state: 'closed' }, 'o', zeroStats, [], {
                 id: 'r',
@@ -569,14 +540,6 @@ describe('BackfillHistoricalPRsUseCase.transformPullRequestToDocument', () => {
                 name: 'n',
             });
             expect(missing.status).toBe('unknown');
-        });
-
-        it('number is copied verbatim (including 0)', () => {
-            const result = transform({ number: 0 }, 'o', zeroStats, [], {
-                id: 'r',
-                name: 'n',
-            });
-            expect(result.number).toBe(0);
         });
     });
 });

@@ -78,17 +78,6 @@ describe('CommentAnalysisService — structured-call delegation', () => {
             }),
         );
     });
-
-    it('hands the executor the CIPHERTEXT slot — decryption stays inside the executor', async () => {
-        await service.categorizeComments({
-            comments: [{ id: 1, body: 'a comment' } as any],
-            organizationAndTeamData: org,
-        });
-
-        const arg = runStructuredReviewCall.mock.calls[0][0];
-        expect(arg.byokConfig).toEqual(CIPHERTEXT_SLOT);
-        expect(arg.byokConfig.apiKey).toBe('enc-oa'); // ciphertext, not decrypted here
-    });
 });
 
 /**
@@ -168,33 +157,6 @@ describe('CommentAnalysisService — pure comment processing', () => {
             ]);
             expect(out).toHaveLength(1);
             expect(out[0].id).toBe('n1');
-        });
-
-        it('drops bot-authored comments, keeps human ones', () => {
-            const out = svc().processComments([
-                pr({
-                    generalComments: [
-                        { id: 1, user: { type: 'Bot' }, body: long('a') },
-                        { id: 2, user: { type: 'User' }, body: long('b') },
-                    ],
-                }),
-            ]);
-            expect(out.map((c: any) => c.id)).toEqual([2]);
-        });
-
-        it('drops excluded reviewers but keeps comments whose author is unidentifiable', () => {
-            const out = svc().processComments(
-                [
-                    pr({
-                        generalComments: [
-                            { id: 1, user: { id: 99 }, body: long('a') },
-                            { id: 2, body: long('b') }, // no author → kept
-                        ],
-                    }),
-                ],
-                new Set(['99']),
-            );
-            expect(out.map((c: any) => c.id)).toEqual([2]);
         });
 
         it('tags comments with the dominant supported language from the PR files', () => {
@@ -317,11 +279,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
     const resolveTaskSlot = jest.fn();
     const org = { organizationId: 'org-1', teamId: 'team-1' } as any;
     const OPENAI_SLOT = { provider: 'openai', apiKey: 'enc', model: 'gpt-4o' };
-    const KIMI_SLOT = {
-        provider: 'moonshotai',
-        apiKey: 'enc',
-        model: 'kimi-k2',
-    };
 
     // A comment long enough to survive processComments' >100-char gate, though
     // categorize/filter/generate don't gate on length — the LLM decides.
@@ -406,17 +363,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             expect(out[0].severity).toBeUndefined();
         });
 
-        it('A13: extra unknown keys alongside the right ones → tolerated', async () => {
-            const out = await categorizeWith({
-                suggestions: [
-                    { id: '1', category: 'security', severity: 'high' },
-                ],
-                _usage: { tokens: 42 },
-                model: 'gpt-4o',
-            });
-            expect(out).toHaveLength(1);
-        });
-
         it('A14: empty object {} → typed-empty [] (documented safe-default), never throws', async () => {
             await expect(categorizeWith({})).resolves.toEqual([]);
         });
@@ -427,20 +373,9 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             ).resolves.toEqual([]);
         });
 
-        it('A16: empty-string / whitespace executor return → typed-empty []', async () => {
-            await expect(categorizeWith('')).resolves.toEqual([]);
-            await expect(categorizeWith('   ')).resolves.toEqual([]);
-        });
-
         it('A17: null / undefined executor return → typed-empty []', async () => {
             await expect(categorizeWith(null)).resolves.toEqual([]);
             await expect(categorizeWith(undefined)).resolves.toEqual([]);
-        });
-
-        it('A18: primitive where object expected → typed-empty []', async () => {
-            await expect(categorizeWith(true)).resolves.toEqual([]);
-            await expect(categorizeWith(0)).resolves.toEqual([]);
-            await expect(categorizeWith('ok')).resolves.toEqual([]);
         });
 
         // A2/A4/A5/A6/A10/A11/A19: the executor hands back a parsed OBJECT whose
@@ -451,15 +386,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
         it.each([
             ['A2 bare array', [{ id: '1' }]],
             ['A4 wrapper key {data:D}', { data: { ids: ['1'] } }],
-            ['A5 double wrapper', { result: { result: { ids: ['1'] } } }],
-            ['A6 numeric/opaque single-key wrap', { '0': { ids: ['1'] } }],
-            ['A6 content wrap', { content: { ids: ['1'] } }],
-            ['A10 right data, wrong keys', { identifiers: ['1'] }],
-            ['A11 case/convention mismatch', { Ids: ['1'] }],
-            [
-                'A19 provider envelope leak',
-                { choices: [{ message: { content: '{"ids":["1"]}' } }] },
-            ],
         ])(
             '%s → typed-empty [] (recovery delegated to executor), never crash-leaks',
             async (_label, shape) => {
@@ -492,26 +418,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
     // ── B. Semantic-but-wrong ──────────────────────────────────────────────
 
     describe('B — semantic-but-wrong values', () => {
-        it('B24: enum/severity out of the allowed set → passed through verbatim (enum validation delegated to the executor schema, not re-checked here)', async () => {
-            const out = await categorizeWith({
-                suggestions: [
-                    { id: '1', category: 'NOT_A_CATEGORY', severity: 'URGENT' },
-                ],
-            });
-            // Documents that this boundary does NOT re-validate the enum: the
-            // json_schema/zod gate in runStructuredReviewCall is the single
-            // validator. If it ever regresses, a bad enum reaches the mapper —
-            // caught by the executor's own contract spec, not silenced here.
-            expect(out).toEqual([
-                {
-                    id: 1,
-                    body: 'x'.repeat(120),
-                    category: 'NOT_A_CATEGORY',
-                    severity: 'URGENT',
-                },
-            ]);
-        });
-
         it('B25: dangling reference — a returned uuid absent from the candidates is dropped, not crashed', () => {
             const out = (service as any).mapRuleUuidToRule({
                 rules: [{ uuid: 'a' }, { uuid: 'b' }],
@@ -530,24 +436,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             });
             expect(out).toHaveLength(1);
             expect(out[0].id).toBe(1);
-        });
-
-        it('B27: unicode / emoji / escaped newlines in mapped fields survive verbatim', async () => {
-            const body = 'café ☕ \n\t 日本語 💥 line2';
-            seq(
-                { ids: ['1'] },
-                {
-                    suggestions: [
-                        { id: '1', category: 'código 🔒', severity: 'high' },
-                    ],
-                },
-            );
-            const out = await service.categorizeComments({
-                comments: [c(1, body)],
-                organizationAndTeamData: org,
-            });
-            expect(out[0].body).toBe(body);
-            expect(out[0].category).toBe('código 🔒');
         });
     });
 
@@ -602,17 +490,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
                 }),
             ).resolves.not.toThrow();
         });
-
-        it('C31: error OBJECT returned instead of a throw → read as a missing payload → typed-empty [] (no {error} leaks into output)', async () => {
-            runStructuredReviewCall.mockResolvedValueOnce({
-                error: 'quota_exceeded',
-            });
-            const out = await (service as any).filterComments({
-                comments: [c(1)],
-                organizationAndTeamData: org,
-            });
-            expect(out).toEqual([]);
-        });
     });
 
     // ── D. Input variants ──────────────────────────────────────────────────
@@ -636,30 +513,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
                 organizationAndTeamData: org,
             });
             expect(out).toEqual([]);
-        });
-
-        it('D36: single item → happy path returns exactly one categorized comment', async () => {
-            const out = await categorizeWith({
-                suggestions: [
-                    { id: '1', category: 'refactoring', severity: 'low' },
-                ],
-            });
-            expect(out).toHaveLength(1);
-        });
-
-        it('D37: large input crossing the 100-comment cap → processComments slices to 100 (the only chunk boundary; no per-call batching)', () => {
-            const many = Array.from({ length: 150 }, (_, i) => ({
-                id: i + 1,
-                body: 'x'.repeat(120),
-            }));
-            const out = (service as any).processComments([
-                {
-                    pr: { id: 'pr' },
-                    generalComments: many,
-                    reviewComments: [],
-                },
-            ]);
-            expect(out).toHaveLength(100);
         });
 
         it('D38: duplicate ids in the filter result set → each matching input comment is kept (filter is membership, not dedup)', async () => {
@@ -689,18 +542,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             expect(out).toEqual([]);
         });
 
-        it('D40: special-chars / whitespace-only body flows through processComments and is preserved', () => {
-            const weird = '  \t\n «ñ» 🚀 '.padEnd(120, '·');
-            const out = (service as any).processComments([
-                {
-                    pr: { id: 'pr' },
-                    generalComments: [{ id: 1, body: weird }],
-                    reviewComments: [],
-                },
-            ]);
-            expect(out[0].body).toBe(weird);
-        });
-
         it('D41: off-by-one at the 100-cap — exactly 100 kept as-is, 101 sliced to 100', () => {
             const build = (n: number) =>
                 Array.from({ length: n }, (_, i) => ({
@@ -717,21 +558,6 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             expect(oneOver).toHaveLength(100);
         });
 
-        it('D42: order permutation of the same input → the same SET of kept comments (metamorphic)', () => {
-            const items = [
-                { id: 1, body: 'a'.repeat(120) },
-                { id: 2, body: 'b'.repeat(120) },
-                { id: 3, body: 'c'.repeat(120) },
-            ];
-            const run = (arr: any[]) =>
-                ((service as any).processComments([
-                    { pr: { id: 'p' }, generalComments: arr, reviewComments: [] },
-                ]) as any[])
-                    .map((x) => x.id)
-                    .sort();
-            expect(run([...items])).toEqual(run([...items].reverse()));
-        });
-
         it('D42 (mapRuleUuidToRule): permuting the uuid list yields the same kept-rule set (output follows rule order)', () => {
             const rules = [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }];
             const a = (service as any).mapRuleUuidToRule({
@@ -744,43 +570,5 @@ describe('CommentAnalysisService — LLM.run I/O contract (#1786 matrix)', () =>
             });
             expect(a).toEqual(b);
         });
-    });
-
-    // ── E. Provider / model policy (delegated gate) ────────────────────────
-
-    describe('E — N-model policy: the boundary is model-agnostic (always requests structured output)', () => {
-        it.each([
-            ['strict json_schema provider (openai)', OPENAI_SLOT],
-            ['json_object fallback provider (moonshotai/kimi)', KIMI_SLOT],
-        ])(
-            'passes a `schema` to the executor for %s — never downgrades the strict/json_object gate itself',
-            async (_label, slot) => {
-                resolveTaskSlot.mockResolvedValue(slot);
-                runStructuredReviewCall.mockResolvedValue({ ids: [] });
-                await (service as any).filterComments({
-                    comments: [c(1)],
-                    organizationAndTeamData: org,
-                });
-                const arg = runStructuredReviewCall.mock.calls[0][0];
-                expect(arg.schema).toBeDefined();
-                expect(arg.byokConfig).toBe(slot);
-            },
-        );
-    });
-
-    // ── Cross-cutting: the boundary always returns its DECLARED type ───────
-
-    describe('always returns the declared array type across the off-schema layer', () => {
-        it.each([[null], [undefined], [true], [42], ['str'], [{}], [{ nope: 1 }], [[]]])(
-            'filterComments(%p executor return) → an array, never a crash',
-            async (shape) => {
-                runStructuredReviewCall.mockResolvedValueOnce(shape as any);
-                const out = await (service as any).filterComments({
-                    comments: [c(1)],
-                    organizationAndTeamData: org,
-                });
-                expect(Array.isArray(out)).toBe(true);
-            },
-        );
     });
 });

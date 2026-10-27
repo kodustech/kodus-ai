@@ -3,6 +3,7 @@ import { FetchChangedFilesStage } from './fetch-changed-files.stage';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { AutomationMessage } from '@libs/automation/domain/automation/enum/automation-status';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
 
@@ -55,6 +56,21 @@ describe('FetchChangedFilesStage', () => {
         expect(result.statusInfo.message).toBe(expectedMessage);
     });
 
+    it('skips the same way when the provider returns null instead of a list', async () => {
+        mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+            null,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo).toEqual({
+            status: AutomationStatus.SKIPPED,
+            message: StageMessageHelper.skippedWithReason(
+                PipelineReasons.FILES.NO_CHANGES,
+            ),
+        });
+    });
+
     it('should skip if all files are ignored (using PipelineReasons)', async () => {
         context.codeReviewConfig.ignorePaths = ['**/*.js'];
         const files = [{ filename: 'file.js' }];
@@ -74,6 +90,10 @@ describe('FetchChangedFilesStage', () => {
 
         expect(result.statusInfo.message).toBe(expectedMessage);
         expect(result.ignoredFiles).toEqual(['file.js']);
+        // No file content is fetched for a PR it will not review.
+        expect(
+            mockPullRequestManagerService.enrichFilesWithContent,
+        ).not.toHaveBeenCalled();
     });
 
     it('should populate ignoredFiles and proceed if some files are valid', async () => {
@@ -115,6 +135,122 @@ describe('FetchChangedFilesStage', () => {
             context.pullRequest,
             undefined,
         );
+    });
+
+    it('passes lastAnalyzedCommit as the base of an incremental fetch', async () => {
+        context.lastExecution = { lastAnalyzedCommit: 'sha-prev' };
+
+        mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+            [],
+        );
+
+        await stage.execute(context);
+
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            context.repository,
+            context.pullRequest,
+            'sha-prev',
+        );
+    });
+
+    it('reuses preliminaryFiles from the context instead of fetching', async () => {
+        const files = [
+            { filename: 'src/a.ts', status: 'modified', patch: '' },
+        ];
+        context.preliminaryFiles = files as any;
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+            files,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(
+            mockPullRequestManagerService.getChangedFilesMetadata,
+        ).not.toHaveBeenCalled();
+        expect(result.changedFiles).toHaveLength(1);
+    });
+
+    it('skips when there is no config in the context', async () => {
+        context.codeReviewConfig = undefined;
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo).toEqual({
+            status: AutomationStatus.SKIPPED,
+            message: AutomationMessage.NO_CONFIG_IN_CONTEXT,
+        });
+    });
+
+    it('computes the PR stats from the files it will review', async () => {
+        const files = [
+            { filename: 'a.ts', status: 'modified', additions: 10, deletions: 3, patch: '' },
+            { filename: 'b.ts', status: 'added', additions: 50, patch: '' },
+            { filename: 'c.ts', status: 'modified', additions: 5, deletions: 20, patch: '' },
+        ];
+        mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+            files,
+        );
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+            files,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.pullRequest.stats).toEqual({
+            total_additions: 65,
+            total_deletions: 23,
+            total_files: 3,
+            total_lines_changed: 88,
+        });
+    });
+
+    it('reviews a PR right at the 2000-file ceiling (the legacy 350 ceiling is gone)', async () => {
+        const files = Array.from({ length: 2000 }, (_, i) => ({
+            filename: `file${i}.ts`,
+            status: 'modified',
+            additions: 1,
+            patch: '',
+        }));
+        mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+            files,
+        );
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+            files,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo).toBeUndefined();
+        expect(result.changedFiles).toHaveLength(2000);
+    });
+
+    it('keeps files with no patch or a patch it cannot number, instead of failing the stage', async () => {
+        const binary = { filename: 'binary.png', status: 'added' };
+        const files = [
+            binary,
+            {
+                filename: 'malformed.ts',
+                status: 'modified',
+                patch: 'this is not a valid patch format',
+            },
+        ];
+        mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+            files,
+        );
+        mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+            files,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.changedFiles.map((f) => f.filename)).toEqual([
+            'binary.png',
+            'malformed.ts',
+        ]);
+        expect(result.changedFiles[0]).toEqual(binary);
     });
 
     describe('ignored files a custom agent names (#2172)', () => {
@@ -171,6 +307,10 @@ describe('FetchChangedFilesStage', () => {
             expect(result.changedFiles.map((f) => f.filename)).toEqual([
                 'src/hive.ts',
             ]);
+            expect(result.changedFiles[0]).toMatchObject({
+                fileContent: 'content of src/hive.ts',
+                patchWithLinesStr: expect.stringContaining('apiary'),
+            });
             const byName = new Map(
                 result.ignoredFileChanges.map((f) => [f.filename, f]),
             );

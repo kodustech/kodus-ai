@@ -89,25 +89,14 @@ describe('isReadOnlyMcpTool', () => {
     });
 
     it.each([
+        // No read verb at all: one case per way a name is split into words.
         'create_ticket',
         'updateIssue',
-        'deletePage',
         'write-file',
-        'post_comment',
-        'sendMessage',
-        'add_label',
-        'removeWatcher',
-        'set_status',
-        'editPage',
-        'close_issue',
-        'mergePullRequest',
         'issues.create',
         // Not a read verb: a blocklist would let these through.
         'archive_project',
-        'transition_issue',
         'run_pipeline',
-        'assignTicket',
-        'jira_comment',
         // A read verb next to a write verb is still a write.
         'get_or_create_ticket',
         'list_and_delete_pages',

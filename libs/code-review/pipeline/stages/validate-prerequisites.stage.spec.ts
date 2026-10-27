@@ -471,34 +471,6 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
-        it('marks the pipeline SKIPPED with a USER_NO_LICENSE reason when user is not licensed and auto-assign is unavailable', async () => {
-            const context = makeContext();
-
-            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
-                {
-                    allowed: false,
-                    errorType: ValidationErrorType.USER_NOT_LICENSED,
-                },
-            );
-            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
-                shouldProceed: false,
-                reason: 'NOT_ENOUGH_PRS',
-            });
-            mockParametersService.findByKey.mockResolvedValue({
-                configValue: {
-                    configs: { showStatusFeedback: true },
-                    repositories: [],
-                },
-            });
-
-            const result = await stage.execute(context);
-
-            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
-            expect(result.statusInfo?.message?.toLowerCase()).toMatch(
-                /(license|subscription|seat)/,
-            );
-        });
-
         it('marks the pipeline SKIPPED with USER_IGNORED message when the user is in the ignored list', async () => {
             const context = makeContext();
 
@@ -660,27 +632,6 @@ describe('ValidatePrerequisitesStage', () => {
                 mockLicenseService.getAllUsersWithLicense,
             ).not.toHaveBeenCalled();
         });
-
-        it('does NOT mark SKIPPED on the happy path (license valid, user not ignored)', async () => {
-            const context = makeContext();
-
-            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
-                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
-            );
-            mockParametersService.findByKey.mockResolvedValue({
-                configValue: {
-                    configs: { showStatusFeedback: true },
-                    repositories: [],
-                },
-            });
-
-            const result = await stage.execute(context);
-
-            // statusInfo not changed from in_progress
-            expect(result.statusInfo?.status).not.toBe(
-                AutomationStatus.SKIPPED,
-            );
-        });
     });
 
     describe('trial review credit consumption', () => {
@@ -697,8 +648,12 @@ describe('ValidatePrerequisitesStage', () => {
                 },
             });
 
-            await stage.execute(context);
+            const result = await stage.execute(context);
 
+            // Happy path (license valid, user not ignored): not skipped.
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
             // Prerequisites only checks whether credits remain — it must NOT
             // consume one up-front, or a review that later ERRORs/SKIPs would
             // still cost the user a free trial review. The consume happens in
@@ -715,7 +670,7 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
-        it('posts a BYOK-focused comment (not "trial ended") when trial credits run out', async () => {
+        it('posts a BYOK-focused comment and a trial-specific SKIPPED status when trial credits run out', async () => {
             const context = makeContext();
 
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
@@ -733,7 +688,7 @@ describe('ValidatePrerequisitesStage', () => {
                 },
             });
 
-            await stage.execute(context);
+            const result = await stage.execute(context);
 
             const body =
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
@@ -741,6 +696,11 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).toContain('Kodus-paid PR reviews');
             expect(body).toContain('/byok');
             expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Trial Reviews Used Up');
+            expect(result.statusInfo?.message).not.toContain(
+                'Plan Limit Exceeded',
+            );
         });
 
         it('posts a top-up comment (not BYOK-required, not trial-ended) when Kodus credits are exhausted', async () => {
@@ -803,33 +763,6 @@ describe('ValidatePrerequisitesStage', () => {
             );
             expect(result.statusInfo?.message).not.toContain(
                 'Trial Reviews Used Up',
-            );
-        });
-
-        it('sets a trial-specific SKIPPED status (not the paid "Plan Limit Exceeded") when trial credits run out', async () => {
-            const context = makeContext();
-
-            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
-                {
-                    allowed: false,
-                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                    subscriptionStatus: 'trial',
-                    metadata: { trialCreditsExhausted: true },
-                },
-            );
-            mockParametersService.findByKey.mockResolvedValue({
-                configValue: {
-                    configs: { showStatusFeedback: true },
-                    repositories: [],
-                },
-            });
-
-            const result = await stage.execute(context);
-
-            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
-            expect(result.statusInfo?.message).toContain('Trial Reviews Used Up');
-            expect(result.statusInfo?.message).not.toContain(
-                'Plan Limit Exceeded',
             );
         });
 

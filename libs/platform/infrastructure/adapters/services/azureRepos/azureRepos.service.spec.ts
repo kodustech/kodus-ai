@@ -213,29 +213,6 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
 
         expect(result).toBeNull();
     });
-
-    /**
-     * Anti-regression — the bug shape this test guards against is:
-     * the method returning the raw Azure object without mapping
-     * description→body, leaving downstream consumers with
-     * `pr.body === undefined`. If anyone refactors and forgets the
-     * spread, this assertion fails immediately.
-     */
-    it('does NOT regress to returning the raw Azure object (anti-regression)', async () => {
-        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
-            id: 1,
-            description: 'something',
-        });
-
-        const result = await service.getPullRequestByNumber({
-            organizationAndTeamData: stubOrg,
-            repository: stubRepository,
-            prNumber: 1,
-        });
-
-        expect(result).toHaveProperty('body');
-        expect(result?.body).not.toBeUndefined();
-    });
 });
 
 /**

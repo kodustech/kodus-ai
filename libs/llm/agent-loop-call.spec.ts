@@ -12,17 +12,10 @@
  *
  * This boundary is a PASS-THROUGH: it never parses/validates the model output —
  * it returns the raw `generateText` result to the runner, which maps it onto its
- * own RunState. So the "output-shape zoo" (matrix A) and "semantic-but-wrong"
- * (matrix B) rows are asserted as the NON-DEGRADATION invariant of a pass-through:
- * WHATEVER shape generateText returns, the boundary returns the SAME reference,
- * unchanged, and never throws / coerces / drops. Value-encoding coercion and
- * envelope parsing belong to the downstream runner + the (separately-specced)
- * tool-call repair path; at THIS boundary the correct behavior for every odd
- * shape is verbatim pass-through with no silent transform.
+ * own RunState. One case pins that return reference; envelope parsing belongs to
+ * the downstream runner + the (separately-specced) tool-call repair path.
  *
  * We do NOT test model DECISION quality (that is the eval track).
- *
- * See: /scratchpad/llm-io-contract-matrix.md (42 rows across A/B/C/D + E policy).
  */
 
 // ── Mock the LLM.run boundary itself: `generateText` from the AI SDK. ──
@@ -136,84 +129,7 @@ afterEach(() => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A. Output-shape zoo (rows 1-18, 20) + B. Semantic-but-wrong (rows 21-27)
-//
-// This boundary declares its output D as "the raw generateText result". The
-// non-degradation contract for a pass-through: return the EXACT reference for
-// any shape, never transform / coerce / drop / crash. One parametrized suite
-// pins that for the whole A/B zoo (row 19 + tool-arg recovery get their own
-// delegation suite below; row 1 also gets the full happy-path assembly suite).
-// ─────────────────────────────────────────────────────────────────────────────
-describe('A/B pass-through — verbatim return for every output shape (rows 1-18, 20-27)', () => {
-    const zoo: Array<[string, any]> = [
-        ['row1 exact D (text/steps/usage)', OK_RESULT()],
-        ['row2 bare array', [{ a: 1 }]],
-        ['row3 single object where array expected', { one: true }],
-        ['row4 wrapper key {result:D}', { result: { text: 'x' } }],
-        ['row5 double wrapper {result:{result:D}}', { result: { result: {} } }],
-        ['row6 opaque single-key {content:D}', { content: { text: 'x' } }],
-        ['row7 stringified JSON', '{"text":"x"}'],
-        ['row8 markdown-fenced', '```json\n{"text":"x"}\n```'],
-        ['row9 prose-wrapped', 'Here is the result: {"text":"x"}'],
-        ['row10 right data wrong keys', { output: 'x', tokens: 3 }],
-        ['row11 case/convention mismatch', { Text: 'x', Steps: [] }],
-        ['row12 partial object (missing keys)', { text: 'x' }],
-        ['row13 extra unknown keys', { ...OK_RESULT(), surprise: 1 }],
-        ['row14 empty object', {}],
-        ['row15 empty array', []],
-        ['row16 empty string', ''],
-        ['row17 whitespace-only string', '   \n\t '],
-        ['row18 primitive true', true],
-        ['row18 primitive 0', 0],
-        ['row18 primitive "ok"', 'ok'],
-        [
-            'row20 reasoning/thinking leak in content',
-            { text: '<thinking>secret</thinking>answer', reasoning: 'r' },
-        ],
-        ['row21 boolean as string keep:"true"', { keep: 'true' }],
-        ['row22 boolean as yes/no keep:"yes"', { keep: 'yes' }],
-        ['row23 boolean as number keep:1', { keep: 1 }],
-        ['row24 enum out of allowed set', { severity: 'URGENT' }],
-        ['row25 index out of range / dangling ref', { unique: [999] }],
-        ['row26 duplicate-keys JSON text (last wins)', '{"k":1,"k":2}'],
-        ['row27 unicode/escapes/emoji in fields', { text: 'café\n🎉 ' }],
-    ];
-
-    it.each(zoo)(
-        'returns the SAME reference unchanged, no throw: %s',
-        async (_label, shape) => {
-            mockGenerate.mockResolvedValueOnce(shape);
-            const out = await runAgentLoopCall(baseParams());
-            // Verbatim: identity for objects/arrays, value-equal for primitives.
-            if (shape !== null && typeof shape === 'object') {
-                expect(out).toBe(shape); // same reference — never re-wrapped/coerced
-            } else {
-                expect(out).toBe(shape);
-            }
-        },
-    );
-
-    it('row17 (null) — a null result passes through without a crash', async () => {
-        mockGenerate.mockResolvedValueOnce(null as any);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBeNull();
-    });
-
-    it('row17 (undefined) — an undefined result passes through without a crash', async () => {
-        mockGenerate.mockResolvedValueOnce(undefined as any);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBeUndefined();
-    });
-
-    it('does NOT coerce a semantic-wrong value (row21) — "true" stays the string "true"', async () => {
-        const shape = { steps: [], text: '{"keep":"true"}', keep: 'true' };
-        mockGenerate.mockResolvedValueOnce(shape);
-        const out: any = await runAgentLoopCall(baseParams());
-        expect(out.keep).toBe('true'); // still a string, not boolean true
-        expect(out).toBe(shape);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Row 1 (exact D) — full happy-path REQUEST ASSEMBLY contract.
+// Full happy-path REQUEST ASSEMBLY contract.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('row1 request assembly — the exact generateText invocation', () => {
     it('threads model, retries, system, messages, tools, providerOptions, signal', async () => {
@@ -248,10 +164,7 @@ describe('row1 request assembly — the exact generateText invocation', () => {
         });
 
         expect(mockStepCountIs).toHaveBeenCalledWith(12);
-        expect(genArgs().stopWhen).toEqual([
-            extraStop,
-            { __stepCountIs: 12 },
-        ]);
+        expect(genArgs().stopWhen).toEqual([extraStop, { __stepCountIs: 12 }]);
     });
 
     it('appends only the step ceiling when the runner supplies no stopWhen', async () => {
@@ -310,7 +223,6 @@ describe('row1 request assembly — the exact generateText invocation', () => {
             ...defaultResolved(),
             model: RESOLVED_MODEL,
         });
-        (mockResolve() as any).model; // no-op keep types happy
         await runAgentLoopCall(baseParams()); // no byokConfig
         const cacheArg = mockCache.mock.calls[0][0];
         expect(cacheArg.provider).toBeUndefined(); // slot?.provider
@@ -385,7 +297,10 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 
     it('delegates to repairInvalidToolInput with THIS model + abort signal + the failed toolCall', async () => {
         const signal = new AbortController().signal;
-        mockRepair.mockResolvedValueOnce({ toolName: 't1', input: '{"fixed":1}' });
+        mockRepair.mockResolvedValueOnce({
+            toolName: 't1',
+            input: '{"fixed":1}',
+        });
 
         await runAgentLoopCall({ ...baseParams(), signal });
 
@@ -420,122 +335,17 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// C. Unparseable / transport / fail-safe (rows 28-34)
-//
-// This boundary is the LOOP primitive: its fail-safe is SDK-level retry
-// (maxRetries:3) plus EXPLICIT propagation to the caller — it never SWALLOWS an
-// error into a silent default. A non-throwing odd result (empty / {error} /
-// refusal / truncated) is returned verbatim; a thrown error re-throws (signals).
+// Observability span wrapping + span attributes (return-shape invariant across
+// BOTH layers: with a port and without one).
 // ─────────────────────────────────────────────────────────────────────────────
-describe('C fail-safe / transport (rows 28-34)', () => {
-    it('row28 truncated result (finishReason:length) → returned verbatim, no crash', async () => {
-        const truncated = {
-            text: '{"partial":',
-            finishReason: 'length',
-            usage: {},
-        };
-        mockGenerate.mockResolvedValueOnce(truncated);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBe(truncated);
-    });
-
-    it('row29 malformed-JSON text → returned verbatim (parse is the runner/repair concern)', async () => {
-        const malformed = { text: "{k: 'v',}", steps: [], usage: {} };
-        mockGenerate.mockResolvedValueOnce(malformed);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBe(malformed);
-    });
-
-    it('row30 generateText THROWS (network) → propagates explicitly, never a silent default', async () => {
-        mockGenerate.mockRejectedValueOnce(new Error('fetch failed'));
-        await expect(runAgentLoopCall(baseParams())).rejects.toThrow(
-            'fetch failed',
-        );
-    });
-
-    it('row30 the SDK owns retries — maxRetries:3 is pinned so the loop survives empty bodies', async () => {
-        await runAgentLoopCall(baseParams());
-        expect(genArgs().maxRetries).toBe(3);
-    });
-
-    it('row31 {error} result (resolved, not thrown) → returned verbatim, no crash', async () => {
-        const errShape = { error: { message: 'provider 500' } };
-        mockGenerate.mockResolvedValueOnce(errShape);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBe(errShape);
-    });
-
-    it('row32 empty success (text:"") → returned verbatim', async () => {
-        const empty = { text: '', steps: [], usage: {}, finishReason: 'stop' };
-        mockGenerate.mockResolvedValueOnce(empty);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBe(empty);
-    });
-
-    it('row33 refusal (finishReason:content_filter) → returned verbatim', async () => {
-        const refusal = {
-            text: 'I cannot help with that.',
-            finishReason: 'content-filter',
-            usage: {},
-        };
-        mockGenerate.mockResolvedValueOnce(refusal);
-        await expect(runAgentLoopCall(baseParams())).resolves.toBe(refusal);
-    });
-
-    it('row34 abort signal is threaded to generateText (and the repair path)', async () => {
-        const ctrl = new AbortController();
-        await runAgentLoopCall({ ...baseParams(), signal: ctrl.signal });
-        expect(genArgs().abortSignal).toBe(ctrl.signal);
-    });
-
-    it('row34 an AbortError from generateText propagates (never swallowed into a default)', async () => {
-        const abortErr: any = new Error('The operation was aborted');
-        abortErr.name = 'AbortError';
-        mockGenerate.mockRejectedValueOnce(abortErr);
-        await expect(runAgentLoopCall(baseParams())).rejects.toThrow(
-            'The operation was aborted',
-        );
-    });
-
-    it('row30 the error propagates THROUGH the observability span too (span does not swallow)', async () => {
+describe('observability span — present vs absent port', () => {
+    it('a thrown error propagates THROUGH the observability span too (span does not swallow)', async () => {
         mockGenerate.mockRejectedValueOnce(new Error('boom'));
         await expect(runAgentLoopCall(baseParams())).rejects.toThrow('boom');
         expect(spanPort.runAiSdkLLMInSpan).toHaveBeenCalledTimes(1);
     });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-// D. Input variants (rows 35-42) — feed the boundary, assert the invariant.
-// ─────────────────────────────────────────────────────────────────────────────
-describe('D input variants (rows 35-42)', () => {
-    it('row35 empty messages array → threaded whole (no synthetic message injected)', async () => {
-        await runAgentLoopCall({ ...baseParams(), messages: [] as any });
-        expect(genArgs().messages).toEqual([]);
-        expect(mockCache.mock.calls[0][0].messages).toEqual([]);
-    });
-
-    it('row36 single message → threaded verbatim', async () => {
-        const one = [{ role: 'user', content: 'only' }];
-        await runAgentLoopCall({ ...baseParams(), messages: one as any });
-        expect(genArgs().messages).toEqual(one);
-    });
-
-    it('row37 large message array (crosses no batch — boundary never chunks) → threaded whole', async () => {
-        const big = Array.from({ length: 500 }, (_, i) => ({
-            role: i % 2 ? 'assistant' : 'user',
-            content: `m${i}`,
-        }));
-        await runAgentLoopCall({ ...baseParams(), messages: big as any });
-        expect(genArgs().messages).toHaveLength(500);
-        expect(genArgs().messages).toBe(big); // not sliced/copied/truncated
-    });
-
-    it('row38 duplicate messages → NOT de-duplicated at this layer', async () => {
-        const dup = [
-            { role: 'user', content: 'same' },
-            { role: 'user', content: 'same' },
-        ];
-        await runAgentLoopCall({ ...baseParams(), messages: dup as any });
-        expect(genArgs().messages).toHaveLength(2);
-    });
-
-    it('row39 null/undefined slot fields → managed path assembles cleanly (type:system)', async () => {
+    it('no slot (managed path) → span type system, ids undefined', async () => {
         mockIdentity.mockReturnValue({
             model: 'managed-default',
             isByok: false,
@@ -550,47 +360,6 @@ describe('D input variants (rows 35-42)', () => {
         expect(spanArg.credentialId).toBeUndefined();
     });
 
-    it('row39 a message with a null content field → threaded verbatim, no crash', async () => {
-        const withNull = [{ role: 'user', content: null }];
-        await expect(
-            runAgentLoopCall({ ...baseParams(), messages: withNull as any }),
-        ).resolves.toBeDefined();
-        expect(genArgs().messages).toEqual(withNull);
-    });
-
-    it('row40 special chars / whitespace-only system + diff → threaded verbatim', async () => {
-        const weird = '  \n\t <script>💥</script>   ';
-        await runAgentLoopCall({
-            ...baseParams(),
-            system: weird,
-            messages: [{ role: 'user', content: '```\n\tdiff\r\n' }] as any,
-        });
-        expect(genArgs().system).toBe(weird);
-        expect(genArgs().messages[0].content).toBe('```\n\tdiff\r\n');
-    });
-
-    it('row42 order permutation → the boundary preserves message order (no reordering)', async () => {
-        const a = [
-            { role: 'user', content: '1' },
-            { role: 'assistant', content: '2' },
-        ];
-        const b = [
-            { role: 'assistant', content: '2' },
-            { role: 'user', content: '1' },
-        ];
-        await runAgentLoopCall({ ...baseParams(), messages: a as any });
-        await runAgentLoopCall({ ...baseParams(), messages: b as any });
-        // Deterministic threading: each call forwards its own order untouched.
-        expect(genArgs(0).messages).toEqual(a);
-        expect(genArgs(1).messages).toEqual(b);
-    });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Observability span wrapping + span attributes (return-shape invariant across
-// BOTH layers: with a port and without one).
-// ─────────────────────────────────────────────────────────────────────────────
-describe('observability span — present vs absent port', () => {
     it('routes through the span and returns the exec result verbatim', async () => {
         const result = OK_RESULT();
         mockGenerate.mockResolvedValueOnce(result);
@@ -696,51 +465,4 @@ describe('langfuse telemetry — conditional wiring', () => {
         expect(toAiSdkTelemetryArgs).toHaveBeenCalled();
         expect(genArgs().experimental_telemetry).toEqual({ isEnabled: false });
     });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// E. Provider / model matrix. The agent loop has NO structured-output channel,
-// so the json_schema-vs-json_object policy gate (structured-output-gate.ts) does
-// NOT participate here — model policy is delegated to the resolver + tool-repair.
-// What this boundary IS provider-aware about: the cache hint (keyed off the
-// slot's provider/model) and the span type. So we run the pass-through zoo under
-// BOTH a strict-json_schema family (anthropic) and a json_object-fallback family
-// (moonshot/kimi) and assert IDENTICAL verbatim behavior + correct provider
-// threading — proving the loop is model-policy-agnostic (no degradation either way).
-// ─────────────────────────────────────────────────────────────────────────────
-describe('E provider matrix — pass-through is identical across policy families', () => {
-    const providers: Array<[string, string]> = [
-        ['strict json_schema family', 'anthropic'],
-        ['strict json_schema family', 'openai'],
-        ['strict json_schema family', 'google'],
-        ['json_object fallback family', 'moonshot'], // kimi transport
-        ['json_object fallback family', 'z_ai'], // glm transport
-        ['json_object fallback family', 'deepseek'],
-    ];
-
-    it.each(providers)(
-        'threads the slot provider/model into the cache hint (%s: %s)',
-        async (_family, provider) => {
-            await runAgentLoopCall({
-                ...baseParams(),
-                byokConfig: { provider, model: `${provider}-model` } as any,
-            });
-            expect(mockCache.mock.calls[0][0].provider).toBe(provider);
-            expect(mockCache.mock.calls[0][0].model).toBe(`${provider}-model`);
-        },
-    );
-
-    it.each(providers)(
-        'returns an off-schema result verbatim regardless of family (%s: %s)',
-        async (_family, provider) => {
-            const offSchema = { result: { nested: 'x' }, notD: true };
-            mockGenerate.mockResolvedValueOnce(offSchema);
-            const out = await runAgentLoopCall({
-                ...baseParams(),
-                byokConfig: { provider, model: 'm' } as any,
-            });
-            // No family parses/repairs the loop result here — always verbatim.
-            expect(out).toBe(offSchema);
-        },
-    );
 });

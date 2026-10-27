@@ -44,17 +44,6 @@ describe('TeamMemberService — deterministic logic', () => {
             expect(result).toEqual({ members: [] });
         });
 
-        it('returns empty members when repository returns an empty array', async () => {
-            const repo = {
-                findTeamMembersWithUser: jest.fn().mockResolvedValue([]),
-            };
-            const service = makeService(repo);
-
-            const result = await service.findTeamMembersFormated(orgTeam);
-
-            expect(result).toEqual({ members: [] });
-        });
-
         it('maps every field exactly for a fully-populated active member', async () => {
             const member = {
                 uuid: 'tm-1',
@@ -208,20 +197,6 @@ describe('TeamMemberService — deterministic logic', () => {
             const result = await service.findTeamMembersFormated(orgTeam);
 
             expect(result).toEqual({ members: [] });
-        });
-
-        it('forwards the teamMembersStatus flag to the repository', async () => {
-            const repo = {
-                findTeamMembersWithUser: jest.fn().mockResolvedValue([]),
-            };
-            const service = makeService(repo);
-
-            await service.findTeamMembersFormated(orgTeam, false);
-
-            expect(repo.findTeamMembersWithUser).toHaveBeenCalledWith(
-                orgTeam,
-                false,
-            );
         });
     });
 

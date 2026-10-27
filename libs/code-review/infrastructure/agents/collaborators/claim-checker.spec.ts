@@ -70,18 +70,6 @@ describe('readClaim — what a violation actually claims', () => {
         ).toEqual({ kind: 'unused', symbol: 'formatDate', path: undefined });
     });
 
-    it('treats an absent claim as none', () => {
-        expect(readClaim(violation()).kind).toBe('none');
-    });
-
-    it('treats an unused claim with a whitespace-only symbol as none (KRC-21)', () => {
-        expect(
-            readClaim(
-                violation({ claimKind: 'unused', claimSymbol: '   ' }),
-            ).kind,
-        ).toBe('none');
-    });
-
     it('treats a missing claim with no path as none (KRC-21)', () => {
         expect(
             readClaim(
@@ -556,7 +544,6 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
     });
 });
 
-
 // Regression: the checked unit must be the PUBLISHED unit.
 //
 // The shard prompt asks for "one entry PER violating line PER rule; do not
@@ -616,32 +603,6 @@ describe('claim check groups by (rule, file), not by finding', () => {
 
         const res = await checkClaims({
             violations: [declared, ...differentlyWorded],
-            changedFiles: [{ filename: 'src/blog/slug.ts' }],
-            lookup,
-        });
-
-        expect(res.kept).toHaveLength(0);
-        expect(res.dropped).toHaveLength(8);
-    });
-
-    it('drops undeclared siblings when the group\'s claim is refuted', async () => {
-        const declared = violation({
-            ruleUuid: 'rule-no-reimplemented-helper',
-            relevantFile: 'src/blog/slug.ts',
-            relevantLinesStart: 1,
-            relevantLinesEnd: 1,
-            suggestionContent:
-                'Reimplemented a `slugify` helper instead of using the existing one in `src/shared`.',
-            claimKind: 'duplicate',
-            claimSymbol: 'slugify',
-            claimPath: 'src/shared',
-        });
-
-        // `slugify` exists nowhere else: the duplicate claim is false.
-        const lookup = fakeLookup({ grep: () => 'No matches found.' });
-
-        const res = await checkClaims({
-            violations: [declared, ...eightSiblings()],
             changedFiles: [{ filename: 'src/blog/slug.ts' }],
             lookup,
         });

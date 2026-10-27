@@ -268,28 +268,35 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 .mockRejectedValueOnce(transientError)
                 .mockResolvedValueOnce(mockCreatedComment);
 
-            const startTime = Date.now();
+            jest.useFakeTimers();
+            try {
+                const pending = service.createLineComments(
+                    mockOrganizationAndTeamData as any,
+                    1,
+                    mockRepository,
+                    [mockComment],
+                    'en-US',
+                );
 
-            const result = await service.createLineComments(
-                mockOrganizationAndTeamData as any,
-                1,
-                mockRepository,
-                [mockComment],
-                'en-US',
-            );
+                // The retry waits the full 500ms before calling again.
+                await jest.advanceTimersByTimeAsync(499);
+                expect(
+                    mockCodeManagementService.createReviewComment,
+                ).toHaveBeenCalledTimes(1);
+                await jest.advanceTimersByTimeAsync(1);
 
-            const elapsedTime = Date.now() - startTime;
+                const result = await pending;
 
-            expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(
-                DeliveryStatus.SENT,
-            );
-            expect(
-                mockCodeManagementService.createReviewComment,
-            ).toHaveBeenCalledTimes(2);
-
-            // Verify delay was respected (at least 450ms to account for execution time variance)
-            expect(elapsedTime).toBeGreaterThanOrEqual(450);
+                expect(result.commentResults).toHaveLength(1);
+                expect(result.commentResults[0].deliveryStatus).toBe(
+                    DeliveryStatus.SENT,
+                );
+                expect(
+                    mockCodeManagementService.createReviewComment,
+                ).toHaveBeenCalledTimes(2);
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 

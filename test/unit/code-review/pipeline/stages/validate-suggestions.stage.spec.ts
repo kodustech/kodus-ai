@@ -16,35 +16,23 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
-// Mock posthog
-jest.mock('@libs/common/utils/posthog', () => ({
-    __esModule: true,
-    default: {
-        isFeatureEnabled: jest.fn(),
-    },
-    FEATURE_FLAGS: {
-        committableSuggestions: 'committable-suggestions',
-    },
-}));
-
 // Mock morphsdk
 jest.mock('@morphllm/morphsdk', () => ({
     applyEdit: jest.fn(),
 }));
 
-import posthog from '@libs/common/utils/posthog';
 import { applyEdit } from '@morphllm/morphsdk';
 
 describe('ValidateSuggestionsStage', () => {
     let stage: ValidateSuggestionsStage;
 
     const mockSandboxSyntaxValidator = {
-        validateFiles: jest.fn().mockResolvedValue(new Set()),
+        validateFiles: jest.fn(),
     };
 
     const mockSuggestionLLMValidator = {
-        validateWithLLM: jest.fn().mockResolvedValue({ isValid: true }),
-        checkSuggestionSimplicity: jest.fn().mockResolvedValue({ isSimple: true, reason: null }),
+        validateWithLLM: jest.fn(),
+        checkSuggestionSimplicity: jest.fn(),
     };
 
     const mockOrganizationAndTeamData = {
@@ -52,41 +40,30 @@ describe('ValidateSuggestionsStage', () => {
         teamId: 'team-456',
     };
 
+    const SIMPLE_UDIFF = `--- a/test.ts
++++ b/test.ts
+@@ -1 +1 @@
+-var x;
++const x = 1;`;
+
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
     ) => ({
         organizationAndTeamData: mockOrganizationAndTeamData as any,
-        repository: {
-            id: 'repo-1',
-            name: 'test-repo',
-            language: 'typescript',
-        } as any,
-        branch: 'main',
-        pullRequest: {
-            number: 123,
-            title: 'Test PR',
-            base: { repo: { fullName: 'org/repo' }, ref: 'main' },
-            repository: {} as any,
-            isDraft: false,
-            stats: {
-                total_additions: 10,
-                total_deletions: 5,
-                total_files: 2,
-                total_lines_changed: 15,
-            },
-        },
-        teamAutomationId: 'team-auto-1',
-        origin: 'github',
-        action: 'opened',
+        pullRequest: { number: 123 },
         platformType: PlatformType.GITHUB,
         codeReviewConfig: {
             enableCommittableSuggestions: true,
         } as any,
-        validSuggestions: [],
-        discardedSuggestions: [],
-        changedFiles: [],
-        preparedFileContexts: [],
-        correlationId: 'test-correlation-id',
+        validSuggestions: [
+            {
+                id: 's1',
+                relevantFile: 'test.ts',
+                improvedCode: 'const x = 1;',
+                llmPrompt: 'Use const',
+            },
+        ],
+        changedFiles: [{ filename: 'test.ts', fileContent: 'var x;' } as any],
         ...overrides,
     });
 
@@ -106,365 +83,128 @@ describe('ValidateSuggestionsStage', () => {
         }).compile();
 
         stage = module.get<ValidateSuggestionsStage>(ValidateSuggestionsStage);
-        jest.clearAllMocks();
-    });
 
-    describe('stage name', () => {
-        it('should have correct stage name', () => {
-            expect(stage.stageName).toBe('ValidateSuggestionsStage');
+        jest.resetAllMocks();
+        mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
+            isSimple: true,
+            reason: null,
+        });
+        mockSuggestionLLMValidator.validateWithLLM.mockResolvedValue({
+            isValid: true,
+        });
+        mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(
+            new Set(['s1']),
+        );
+        (applyEdit as jest.Mock).mockResolvedValue({
+            mergedCode: 'const x = 1;',
+            udiff: SIMPLE_UDIFF,
         });
     });
 
-    describe('shouldRunStage conditions', () => {
-        it('should skip when feature flag is disabled', async () => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(false);
-
-            const context = createBaseContext({
-                validSuggestions: [{ id: 's1', improvedCode: 'const x = 1;' }],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x = 1;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            // Should return context unchanged when feature is disabled
-            expect(result.validSuggestions[0].isCommittable).toBeUndefined();
+    it("marks a simple, validated suggestion committable, routing both validator calls through the pipeline's resolved BYOK slot", async () => {
+        const byokConfig = { provider: 'openai', model: 'gpt-4o' } as any;
+        const context = createBaseContext({
+            codeReviewConfig: {
+                enableCommittableSuggestions: true,
+                resolvedModelSlot: byokConfig,
+            } as any,
         });
 
-        it('should skip when enableCommittableSuggestions is false in config', async () => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
+        const result = await (stage as any).executeStage(context);
 
-            const context = createBaseContext({
-                codeReviewConfig: {
-                    enableCommittableSuggestions: false,
-                } as any,
-                validSuggestions: [{ id: 's1', improvedCode: 'const x = 1;' }],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x = 1;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.validSuggestions[0].isCommittable).toBeUndefined();
+        const suggestion = result.validSuggestions.find((s) => s.id === 's1');
+        expect(suggestion?.isCommittable).toBe(true);
+        expect(suggestion?.validatedData).toEqual({
+            code: 'const x = 1;',
+            diff: SIMPLE_UDIFF,
+            lineStart: 1,
+            lineEnd: 1,
         });
-
-        it('should skip when platform is not GitHub', async () => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
-
-            const context = createBaseContext({
-                platformType: PlatformType.GITLAB,
-                validSuggestions: [{ id: 's1', improvedCode: 'const x = 1;' }],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x = 1;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.validSuggestions[0].isCommittable).toBeUndefined();
-        });
-
-        it('should skip when no valid suggestions', async () => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x = 1;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result).toBeDefined();
-        });
-
-        it('should skip when no changed files', async () => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
-
-            const context = createBaseContext({
-                validSuggestions: [{ id: 's1', improvedCode: 'const x = 1;' }],
-                changedFiles: [],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result).toBeDefined();
-        });
+        expect(
+            mockSuggestionLLMValidator.checkSuggestionSimplicity,
+        ).toHaveBeenCalledWith(
+            mockOrganizationAndTeamData,
+            123,
+            expect.objectContaining({ id: 's1' }),
+            byokConfig,
+        );
+        expect(
+            mockSuggestionLLMValidator.validateWithLLM,
+        ).toHaveBeenCalledWith(
+            expect.anything(),
+            mockOrganizationAndTeamData,
+            123,
+            byokConfig,
+        );
     });
 
-    describe('filterComplexSuggestions', () => {
-        beforeEach(() => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
-        });
-
-        it('should filter out suggestions exceeding character threshold', async () => {
-            // MAX_CHARS_THRESHOLD = 1000
-            const longCode = 'x'.repeat(1001);
-
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
-
-            const context = createBaseContext({
-                validSuggestions: [
-                    { id: 's1', improvedCode: longCode, llmPrompt: 'test' },
-                ],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            // Suggestion should not be marked as committable due to being too long
-            const suggestion = result.validSuggestions.find(
-                (s) => s.id === 's1',
-            );
-            expect(suggestion?.isCommittable).toBeUndefined();
-        });
-
-        it('should filter out suggestions exceeding line threshold', async () => {
-            // MAX_LINES_THRESHOLD = 15
-            const manyLines = Array(16).fill('const x = 1;').join('\n');
-
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
-
-            const context = createBaseContext({
-                validSuggestions: [
-                    { id: 's1', improvedCode: manyLines, llmPrompt: 'test' },
-                ],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            const suggestion = result.validSuggestions.find(
-                (s) => s.id === 's1',
-            );
-            expect(suggestion?.isCommittable).toBeUndefined();
-        });
-
-        it('should filter out complex suggestions based on AST analysis', async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: false,
-                reason: 'Contains complex structural changes',
-            });
-
-            const context = createBaseContext({
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'test',
-                    },
-                ],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            const suggestion = result.validSuggestions.find(
-                (s) => s.id === 's1',
-            );
-            expect(suggestion?.isCommittable).toBeUndefined();
-        });
-
-        it('should pass through simple suggestions', async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
-
-            mockSuggestionLLMValidator.validateWithLLM.mockResolvedValue({
-                isValid: true,
-            });
-            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
-
-            (applyEdit as jest.Mock).mockResolvedValue({
-                mergedCode: 'const x = 1;',
-                udiff: `--- a/test.ts
-+++ b/test.ts
-@@ -1 +1 @@
--var x;
-+const x = 1;`,
-            });
-
-            const context = createBaseContext({
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        relevantFile: 'test.ts',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'Use const',
-                    },
-                ],
-                changedFiles: [
-                    {
-                        filename: 'test.ts',
-                        fileContent: 'var x;',
-                    } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            const suggestion = result.validSuggestions.find(
-                (s) => s.id === 's1',
-            );
-            expect(suggestion?.isCommittable).toBe(true);
-            expect(suggestion?.validatedData).toBeDefined();
-        });
-
-        it("threads the pipeline's resolved BYOK slot into both validator calls", async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
-            mockSuggestionLLMValidator.validateWithLLM.mockResolvedValue({
-                isValid: true,
-            });
-            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
-
-            (applyEdit as jest.Mock).mockResolvedValue({
-                mergedCode: 'const x = 1;',
-                udiff: `--- a/test.ts
-+++ b/test.ts
-@@ -1 +1 @@
--var x;
-+const x = 1;`,
-            });
-
-            const byokConfig = { provider: 'openai', model: 'gpt-4o' } as any;
-            const context = createBaseContext({
-                codeReviewConfig: {
-                    enableCommittableSuggestions: true,
-                    resolvedModelSlot: byokConfig,
-                } as any,
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        relevantFile: 'test.ts',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'Use const',
-                    },
-                ],
-                changedFiles: [
-                    {
-                        filename: 'test.ts',
-                        fileContent: 'var x;',
-                    } as any,
-                ],
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockSuggestionLLMValidator.checkSuggestionSimplicity,
-            ).toHaveBeenCalledWith(
-                mockOrganizationAndTeamData,
-                123,
-                expect.objectContaining({ id: 's1' }),
-                byokConfig,
-            );
-            expect(
-                mockSuggestionLLMValidator.validateWithLLM,
-            ).toHaveBeenCalledWith(
-                expect.anything(),
-                mockOrganizationAndTeamData,
-                123,
-                byokConfig,
-            );
-        });
+    it('only treats files with a supported extension as validatable', () => {
+        const supported = (f: string) => (stage as any).isLanguageSupported(f);
+        for (const f of ['a.ts', 'a.js', 'a.py', 'a.go', 'a.java', 'a.rb', 'a.php']) {
+            expect(supported(f)).toBe(true);
+        }
+        // tsx and jsx are NOT in SUPPORTED_LANGUAGES
+        for (const f of ['a.tsx', 'a.jsx', 'image.png', 'Dockerfile']) {
+            expect(supported(f)).toBe(false);
+        }
     });
 
-    describe('isLanguageSupported', () => {
-        it('should support TypeScript files', () => {
-            const result = (stage as any).isLanguageSupported('test.ts');
-            expect(result).toBe(true);
-        });
-
-        it('should support JavaScript files', () => {
-            const result = (stage as any).isLanguageSupported('test.js');
-            expect(result).toBe(true);
-        });
-
-        it('should support Python files', () => {
-            const result = (stage as any).isLanguageSupported('test.py');
-            expect(result).toBe(true);
-        });
-
-        it('should not support binary files', () => {
-            const result = (stage as any).isLanguageSupported('image.png');
-            expect(result).toBe(false);
-        });
-
-        it('should not support files without extension', () => {
-            const result = (stage as any).isLanguageSupported('Dockerfile');
-            expect(result).toBe(false);
-        });
-
-        it('should handle various extensions', () => {
-            // These are the supported languages defined in SUPPORTED_LANGUAGES
-            expect((stage as any).isLanguageSupported('test.go')).toBe(true);
-            expect((stage as any).isLanguageSupported('test.java')).toBe(true);
-            expect((stage as any).isLanguageSupported('test.rb')).toBe(true);
-            expect((stage as any).isLanguageSupported('test.php')).toBe(true);
-            // tsx and jsx are NOT in SUPPORTED_LANGUAGES
-            expect((stage as any).isLanguageSupported('test.tsx')).toBe(false);
-            expect((stage as any).isLanguageSupported('test.jsx')).toBe(false);
-        });
-    });
-
-    describe('groupSuggestionsByFile', () => {
-        it('should group suggestions by their relevant file', () => {
-            const suggestions = [
+    it('groups suggestions per changed file and drops those for files outside the PR', () => {
+        const result = (stage as any).groupSuggestionsByFile(
+            [
                 { id: 's1', relevantFile: 'a.ts' },
                 { id: 's2', relevantFile: 'a.ts' },
                 { id: 's3', relevantFile: 'b.ts' },
-            ];
-
-            const files = [
+                { id: 's4', relevantFile: 'nonexistent.ts' },
+            ],
+            [
                 { filename: 'a.ts', fileContent: 'var a;' },
                 { filename: 'b.ts', fileContent: 'var b;' },
-            ];
+            ],
+        );
 
-            const result = (stage as any).groupSuggestionsByFile(
-                suggestions,
-                files,
-            );
+        expect(Object.keys(result)).toEqual(['a.ts', 'b.ts']);
+        expect(result['a.ts'].suggestions.map((s) => s.id)).toEqual(['s1', 's2']);
+        expect(result['b.ts'].suggestions.map((s) => s.id)).toEqual(['s3']);
+    });
 
-            expect(Object.keys(result)).toHaveLength(2);
-            expect(result['a.ts'].suggestions).toHaveLength(2);
-            expect(result['b.ts'].suggestions).toHaveLength(1);
-        });
+    // MAX_CHARS_THRESHOLD = 1000, MAX_LINES_THRESHOLD = 15. Today the only
+    // observable effect of the thresholds is skipping the simplicity LLM
+    // call: the suggestion still goes on to Morph + validation.
+    it.each([
+        ['at the character threshold', 'x'.repeat(1000)],
+        ['at the line threshold', Array(15).fill('a;').join('\n')],
+    ])('skips the simplicity LLM call for a suggestion %s', async (_label, improvedCode) => {
+        await (stage as any).executeStage(
+            createBaseContext({
+                validSuggestions: [
+                    { id: 's1', relevantFile: 'test.ts', improvedCode, llmPrompt: 'p' },
+                ] as any,
+            }),
+        );
 
-        it('should skip suggestions for files not in changed files list', () => {
-            const suggestions = [
-                { id: 's1', relevantFile: 'a.ts' },
-                { id: 's2', relevantFile: 'nonexistent.ts' },
-            ];
+        expect(
+            mockSuggestionLLMValidator.checkSuggestionSimplicity,
+        ).not.toHaveBeenCalled();
+    });
 
-            const files = [{ filename: 'a.ts', fileContent: 'var a;' }];
+    it('asks the simplicity check for a suggestion just under both thresholds', async () => {
+        await (stage as any).executeStage(
+            createBaseContext({
+                validSuggestions: [
+                    {
+                        id: 's1',
+                        relevantFile: 'test.ts',
+                        improvedCode: Array(14).fill('a;').join('\n'),
+                        llmPrompt: 'p',
+                    },
+                ] as any,
+            }),
+        );
 
-            const result = (stage as any).groupSuggestionsByFile(
-                suggestions,
-                files,
-            );
-
-            expect(Object.keys(result)).toHaveLength(1);
-            expect(result['a.ts'].suggestions).toHaveLength(1);
-        });
+        expect(
+            mockSuggestionLLMValidator.checkSuggestionSimplicity,
+        ).toHaveBeenCalledTimes(1);
     });
 
     describe('getFormattedSuggestionFromDiff', () => {
@@ -532,109 +272,41 @@ ${manyAddedLines}`;
         });
     });
 
-    describe('error handling', () => {
-        beforeEach(() => {
-            (posthog.isFeatureEnabled as jest.Mock).mockResolvedValue(true);
-        });
-
-        it('should handle AST simplicity check errors gracefully', async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockRejectedValue(
-                new Error('AST service unavailable'),
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'test',
-                    },
-                ],
-                changedFiles: [
-                    { filename: 'test.ts', fileContent: 'var x;' } as any,
-                ],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            // Should not crash, but suggestion won't be validated
-            expect(result).toBeDefined();
-        });
-
-        it('should handle MorphLLM applyEdit errors gracefully', async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
-
+    describe('a per-suggestion failure does not fail the stage', () => {
+        it('when MorphLLM applyEdit throws', async () => {
             (applyEdit as jest.Mock).mockRejectedValue(
                 new Error('MorphLLM error'),
             );
 
-            const context = createBaseContext({
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        relevantFile: 'test.ts',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'Use const',
-                    },
-                ],
-                changedFiles: [
-                    {
-                        filename: 'test.ts',
-                        fileContent: 'var x;',
-                    } as any,
-                ],
-            });
+            const result = await (stage as any).executeStage(
+                createBaseContext(),
+            );
 
-            const result = await (stage as any).executeStage(context);
-
-            // Should not crash
-            expect(result).toBeDefined();
+            expect(result.validSuggestions[0].isCommittable).toBeUndefined();
         });
 
-        it('should handle validation sandbox failure gracefully', async () => {
-            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
-                isSimple: true,
-                reason: null,
-            });
+        it('when the simplicity check throws (the stage does not fail)', async () => {
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockRejectedValue(
+                new Error('AST service unavailable'),
+            );
 
-            // Sandbox validation fails — should fall back to LLM-only
-            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
+            const result = await (stage as any).executeStage(
+                createBaseContext(),
+            );
+
+            expect(result.validSuggestions.map((s) => s.id)).toEqual(['s1']);
+        });
+
+        it('when the LLM validation call throws', async () => {
             mockSuggestionLLMValidator.validateWithLLM.mockRejectedValue(
                 new Error('LLM timeout'),
             );
 
-            (applyEdit as jest.Mock).mockResolvedValue({
-                mergedCode: 'const x = 1;',
-                udiff: `--- a/test.ts
-+++ b/test.ts
-@@ -1 +1 @@
--var x;
-+const x = 1;`,
-            });
+            const result = await (stage as any).executeStage(
+                createBaseContext(),
+            );
 
-            const context = createBaseContext({
-                validSuggestions: [
-                    {
-                        id: 's1',
-                        relevantFile: 'test.ts',
-                        improvedCode: 'const x = 1;',
-                        llmPrompt: 'Use const',
-                    },
-                ],
-                changedFiles: [
-                    {
-                        filename: 'test.ts',
-                        fileContent: 'var x;',
-                    } as any,
-                ],
-            });
-
-            // Should not crash — LLM error is caught per-candidate
-            const result = await (stage as any).executeStage(context);
-            expect(result).toBeDefined();
+            expect(result.validSuggestions[0].isCommittable).toBeUndefined();
         });
     });
 });

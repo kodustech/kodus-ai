@@ -3,10 +3,8 @@ import { CreateFileCommentsStage } from '@/code-review/pipeline/stages/create-fi
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/CommentManagerService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { SUGGESTION_SERVICE_TOKEN } from '@/code-review/domain/contracts/SuggestionService.contract';
-import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
-import { DeliveryStatus } from '@/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ClusteringType } from '@/core/infrastructure/config/types/general/codeReview.type';
 
 // Mock logger to silence logs during tests
@@ -29,32 +27,21 @@ describe('CreateFileCommentsStage', () => {
 
     const mockPullRequestService = {
         aggregateAndSaveDataStructure: jest.fn(),
-        findByNumberAndRepositoryName: jest.fn(),
     };
 
     const mockSuggestionService = {
-        sortAndPrioritizeSuggestions: jest.fn(),
         verifyIfSuggestionsWereSent: jest.fn(),
         resolveImplementedSuggestionsOnPlatform: jest.fn(),
         extractRepriorizedSuggestions: jest.fn(),
     };
 
-    const mockCodeManagementService = {
-        getCommitsForPullRequestForCodeReview: jest.fn(),
-        getPullRequestReviewThreads: jest.fn(),
-        getPullRequestReviewComments: jest.fn(),
-        markReviewCommentAsResolved: jest.fn(),
-    };
-
-    const mockOrganizationAndTeamData = {
-        organizationId: 'org-123',
-        teamId: 'team-456',
-    };
-
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
     ) => ({
-        organizationAndTeamData: mockOrganizationAndTeamData as any,
+        organizationAndTeamData: {
+            organizationId: 'org-123',
+            teamId: 'team-456',
+        } as any,
         repository: {
             id: 'repo-1',
             name: 'test-repo',
@@ -67,16 +54,7 @@ describe('CreateFileCommentsStage', () => {
             base: { repo: { fullName: 'org/repo' }, ref: 'main' },
             repository: {} as any,
             isDraft: false,
-            stats: {
-                total_additions: 10,
-                total_deletions: 5,
-                total_files: 2,
-                total_lines_changed: 15,
-            },
         },
-        teamAutomationId: 'team-auto-1',
-        origin: 'github',
-        action: 'opened',
         platformType: PlatformType.GITHUB,
         codeReviewConfig: {
             languageResultPrompt: 'en',
@@ -84,7 +62,6 @@ describe('CreateFileCommentsStage', () => {
         validSuggestions: [],
         discardedSuggestions: [],
         changedFiles: [],
-        preparedFileContexts: [],
         correlationId: 'test-correlation-id',
         ...overrides,
     });
@@ -105,125 +82,85 @@ describe('CreateFileCommentsStage', () => {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
                 },
-                {
-                    provide: CodeManagementService,
-                    useValue: mockCodeManagementService,
-                },
             ],
         }).compile();
 
         stage = module.get<CreateFileCommentsStage>(CreateFileCommentsStage);
-        jest.clearAllMocks();
-    });
 
-    describe('stage name', () => {
-        it('should have correct stage name', () => {
-            expect(stage.stageName).toBe('CreateFileCommentsStage');
+        jest.resetAllMocks();
+        mockCommentManagerService.createLineComments.mockResolvedValue({
+            lastAnalyzedCommit: 'abc123',
+            commentResults: [],
         });
+        mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue([]);
+        mockSuggestionService.extractRepriorizedSuggestions.mockImplementation(
+            (_commentResults: any, discarded: any) => ({
+                repriorizedSuggestions: [],
+                filteredDiscardedSuggestions: discarded,
+            }),
+        );
     });
 
-    describe('context validation', () => {
-        it('should return context unchanged when organizationAndTeamData is missing', async () => {
+    const postedLineComments = () =>
+        mockCommentManagerService.createLineComments.mock.calls[0][3];
+
+    it.each([
+        ['organizationAndTeamData', { organizationAndTeamData: undefined }],
+        ['pullRequest', { pullRequest: undefined }],
+        ['repository', { repository: undefined }],
+    ])(
+        'posts and persists nothing when %s is missing',
+        async (_label, patch) => {
             const context = createBaseContext({
-                organizationAndTeamData: undefined as any,
+                validSuggestions: [
+                    { id: 's1', relevantFile: 'test.ts', severity: 'high' },
+                ],
+                changedFiles: [{ filename: 'test.ts' } as any],
+                prAllCommits: [{ sha: 'abc123' }] as any,
+                ...(patch as any),
             });
 
-            const result = await (stage as any).executeStage(context);
+            await (stage as any).executeStage(context);
 
-            expect(result).toBeDefined();
             expect(
                 mockCommentManagerService.createLineComments,
             ).not.toHaveBeenCalled();
-        });
-
-        it('should return context unchanged when pullRequest is missing', async () => {
-            const context = createBaseContext({
-                pullRequest: undefined as any,
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result).toBeDefined();
             expect(
-                mockCommentManagerService.createLineComments,
+                mockPullRequestService.aggregateAndSaveDataStructure,
             ).not.toHaveBeenCalled();
-        });
-
-        it('should return context unchanged when repository is missing', async () => {
-            const context = createBaseContext({
-                repository: undefined as any,
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result).toBeDefined();
-            expect(
-                mockCommentManagerService.createLineComments,
-            ).not.toHaveBeenCalled();
-        });
-    });
+        },
+    );
 
     describe('processing suggestions', () => {
-        it('should process valid suggestions and create comments', async () => {
-            const validSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Use const instead of let',
-                    improvedCode: 'const x = 1;',
-                    relevantLinesStart: 10,
-                    relevantLinesEnd: 12,
-                },
-            ];
-
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: validSuggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
+        it('stores the posted comments and the commit they anchored on', async () => {
             mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
+                lastAnalyzedCommit: 'def456',
                 commentResults: [
-                    { comment: { id: 1 }, deliveryStatus: DeliveryStatus.SENT },
+                    { comment: { id: 1 }, deliveryStatus: 'sent' },
                 ],
             });
 
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
-                validSuggestions,
-            );
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: [],
-                },
-            );
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
             const context = createBaseContext({
-                validSuggestions,
+                validSuggestions: [
+                    {
+                        id: 's1',
+                        relevantFile: 'test.ts',
+                        severity: 'high',
+                        relevantLinesStart: 10,
+                        relevantLinesEnd: 12,
+                    },
+                ],
                 changedFiles: [{ filename: 'test.ts' } as any],
             });
 
             const result = await (stage as any).executeStage(context);
 
-            // sortAndPrioritizeSuggestions is no longer called — v2 filtering removed
-            expect(
-                mockCommentManagerService.createLineComments,
-            ).toHaveBeenCalled();
-            expect(result.lineComments).toHaveLength(1);
-            expect(result.lastAnalyzedCommit).toBe('abc123');
+            // RequestChangesOrApproveStage reads lineComments to decide
+            // whether the PR is clean enough to approve.
+            expect(result.lineComments).toEqual([
+                { comment: { id: 1 }, deliveryStatus: 'sent' },
+            ]);
+            expect(result.lastAnalyzedCommit).toBe('def456');
         });
 
         it('groups comments for the same file together, critical → low within a file, files alphabetical', async () => {
@@ -237,22 +174,6 @@ describe('CreateFileCommentsStage', () => {
                 { id: '6', relevantFile: 'a.ts', severity: 'low', relevantLinesStart: 50, relevantLinesEnd: 50 },
             ] as any[];
 
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue([]);
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue({
-                repriorizedSuggestions: [],
-                filteredDiscardedSuggestions: [],
-            });
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                { number: 123, files: [] },
-            );
-
             const context = createBaseContext({
                 validSuggestions,
                 changedFiles: [
@@ -264,9 +185,7 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            const passedLineComments =
-                mockCommentManagerService.createLineComments.mock.calls[0][3];
-            const observedOrder = passedLineComments.map(
+            const observedOrder = postedLineComments().map(
                 (c: any) => `${c.path}:${c.suggestion.id}/${c.suggestion.severity}`,
             );
 
@@ -287,22 +206,6 @@ describe('CreateFileCommentsStage', () => {
                 { id: '3', relevantFile: 'a.ts', severity: 'high', relevantLinesStart: 2, relevantLinesEnd: 2 },
             ] as any[];
 
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue([]);
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue({
-                repriorizedSuggestions: [],
-                filteredDiscardedSuggestions: [],
-            });
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                { number: 123, files: [] },
-            );
-
             const context = createBaseContext({
                 validSuggestions,
                 changedFiles: [
@@ -313,38 +216,13 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            const passedLineComments =
-                mockCommentManagerService.createLineComments.mock.calls[0][3];
-            const observedOrder = passedLineComments.map(
+            const observedOrder = postedLineComments().map(
                 (c: any) => `${c.path}:${c.suggestion.id}`,
             );
 
             // a.ts before b.ts; within a.ts the known severity wins over
             // the unknown/missing one.
             expect(observedOrder).toEqual(['a.ts:3', 'a.ts:2', 'b.ts:1']);
-        });
-
-        it('should return empty line comments when no valid suggestions', async () => {
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                changedFiles: [{ filename: 'test.ts' } as any],
-                // prAllCommits é necessário para determinar lastAnalyzedCommit
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.lineComments).toHaveLength(0);
-            expect(
-                mockSuggestionService.sortAndPrioritizeSuggestions,
-            ).not.toHaveBeenCalled();
         });
 
         // Bug A1 regression: a suggestion pointing at a file that was
@@ -366,32 +244,6 @@ describe('CreateFileCommentsStage', () => {
                 },
             ];
 
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: suggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
-                [],
-            );
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: [],
-                },
-            );
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                { number: 123, files: [] },
-            );
-
             const context = createBaseContext({
                 validSuggestions: suggestions,
                 changedFiles: [
@@ -402,9 +254,7 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            const callArgs =
-                mockCommentManagerService.createLineComments.mock.calls[0];
-            const lineComments = callArgs[3];
+            const lineComments = postedLineComments();
             expect(lineComments).toHaveLength(1);
             expect(lineComments[0].suggestion.id).toBe('s-kept');
         });
@@ -423,38 +273,6 @@ describe('CreateFileCommentsStage', () => {
                 },
             ];
 
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: suggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
-                [],
-            );
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: [],
-                },
-            );
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
             const context = createBaseContext({
                 validSuggestions: suggestions,
                 changedFiles: [{ filename: 'test.ts' } as any],
@@ -462,41 +280,56 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            // Check that the line comments passed to createLineComments filtered out RELATED
-            const callArgs =
-                mockCommentManagerService.createLineComments.mock.calls[0];
-            const lineComments = callArgs[3]; // 4th argument
+            const lineComments = postedLineComments();
             expect(lineComments).toHaveLength(1);
             expect(lineComments[0].suggestion.id).toBe('s1');
         });
     });
 
+    describe('saving discarded suggestions to database', () => {
+        it('persists every discarded suggestion, whatever the reason, when none is valid', async () => {
+            const discardedSuggestions = [
+                { id: 's1', relevantFile: 'test.ts', priorityStatus: 'discarded-by-code-diff' },
+                { id: 's2', relevantFile: 'test.ts', priorityStatus: 'discarded-by-severity' },
+                { id: 's3', relevantFile: 'test.ts', priorityStatus: 'discarded-by-safeguard' },
+                { id: 's4', relevantFile: 'test.ts', priorityStatus: 'discarded-by-kody-fine-tuning' },
+            ] as any[];
+
+            const context = createBaseContext({
+                validSuggestions: [],
+                discardedSuggestions,
+                changedFiles: [{ filename: 'test.ts' } as any],
+                prAllCommits: [{ sha: 'abc123' }] as any,
+            });
+
+            await (stage as any).executeStage(context);
+
+            expect(
+                mockPullRequestService.aggregateAndSaveDataStructure,
+            ).toHaveBeenCalledTimes(1);
+            // 5th argument: the unused (discarded) suggestions.
+            const unusedSuggestions =
+                mockPullRequestService.aggregateAndSaveDataStructure.mock
+                    .calls[0][4];
+            expect(unusedSuggestions.map((s: any) => s.priorityStatus)).toEqual([
+                'discarded-by-code-diff',
+                'discarded-by-severity',
+                'discarded-by-safeguard',
+                'discarded-by-kody-fine-tuning',
+            ]);
+        });
+    });
+
     describe('error handling', () => {
         it('should handle errors in line comments creation gracefully', async () => {
-            const validSuggestions = [
-                { id: 's1', relevantFile: 'test.ts', severity: 'high' },
-            ];
-
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: validSuggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
             mockCommentManagerService.createLineComments.mockRejectedValue(
                 new Error('API error'),
             );
 
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
             const context = createBaseContext({
-                validSuggestions,
+                validSuggestions: [
+                    { id: 's1', relevantFile: 'test.ts', severity: 'high' },
+                ],
                 changedFiles: [{ filename: 'test.ts' } as any],
             });
 
@@ -505,86 +338,10 @@ describe('CreateFileCommentsStage', () => {
             // Should return context with empty comments, not crash
             expect(result.lineComments).toHaveLength(0);
         });
-
-        it('should handle error in finalizeReviewProcessing gracefully', async () => {
-            const validSuggestions = [
-                { id: 's1', relevantFile: 'test.ts', severity: 'high' },
-            ];
-
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockRejectedValue(
-                new Error('Prioritization error'),
-            );
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions,
-                changedFiles: [{ filename: 'test.ts' } as any],
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            // Should handle error gracefully
-            expect(result.lineComments).toHaveLength(0);
-        });
-    });
-
-    describe('resolving implemented suggestions', () => {
-        it('should resolve comments for implemented suggestions on GitHub', async () => {
-            const prEntity = {
-                number: 123,
-                files: [
-                    {
-                        suggestions: [
-                            {
-                                comment: { id: 100 },
-                                implementationStatus: 'FULLY_IMPLEMENTED',
-                                deliveryStatus: DeliveryStatus.SENT,
-                            },
-                        ],
-                    },
-                ],
-            };
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                prEntity,
-            );
-
-            mockCodeManagementService.getPullRequestReviewThreads.mockResolvedValue(
-                [{ id: 1, fullDatabaseId: '100', threadId: 'thread-1' }],
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                platformType: PlatformType.GITHUB,
-            });
-
-            await (stage as any).executeStage(context);
-
-            // Check that resolve was attempted
-            expect(
-                mockSuggestionService.resolveImplementedSuggestionsOnPlatform,
-            ).toHaveBeenCalled();
-        });
     });
 
     describe('file metadata enrichment', () => {
         it('should enrich changed files with metadata', async () => {
-            const validSuggestions = [
-                { id: 's1', relevantFile: 'test.ts', severity: 'high' },
-            ];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
             const fileMetadata = new Map([
                 [
                     'test.ts',
@@ -592,294 +349,22 @@ describe('CreateFileCommentsStage', () => {
                 ],
             ]);
 
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: validSuggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
-                validSuggestions,
-            );
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: [],
-                },
-            );
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
             const context = createBaseContext({
-                validSuggestions,
-                changedFiles,
+                validSuggestions: [
+                    { id: 's1', relevantFile: 'test.ts', severity: 'high' },
+                ],
+                changedFiles: [{ filename: 'test.ts' } as any],
                 fileMetadata,
             });
 
             await (stage as any).executeStage(context);
 
-            // Verify aggregateAndSaveDataStructure was called with enriched files
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-            const callArgs =
+            const enrichedFiles =
                 mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const enrichedFiles = callArgs[2]; // 3rd argument
+                    .calls[0][2];
             expect(enrichedFiles[0].reviewMode).toBe('heavy');
             expect(enrichedFiles[0].codeReviewModelUsed).toBe('gpt-4');
         });
-    });
-
-    describe('saving discarded suggestions to database', () => {
-        it('should save all discarded suggestions to database when all suggestions are discarded by code-diff', async () => {
-            const discardedSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Use const instead of let',
-                    priorityStatus: 'discarded-by-code-diff',
-                },
-                {
-                    id: 's2',
-                    relevantFile: 'test.ts',
-                    severity: 'medium',
-                    suggestionContent: 'Add type annotation',
-                    priorityStatus: 'discarded-by-code-diff',
-                },
-            ] as any[];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                null, // New PR, so no existing PR
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discardedSuggestions,
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [], // No valid suggestions
-                discardedSuggestions, // Only discarded suggestions
-                changedFiles,
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            await (stage as any).executeStage(context);
-
-            // CRITICAL: aggregateAndSaveDataStructure MUST be called even when all suggestions are discarded
-            // This is the bug - it won't be called because of early return at line 113-137
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-
-            const callArgs =
-                mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = callArgs[4]; // 5th argument - unusedSuggestions
-            expect(unusedSuggestions).toHaveLength(2);
-            expect(unusedSuggestions[0].priorityStatus).toBe(
-                'discarded-by-code-diff',
-            );
-            expect(unusedSuggestions[1].priorityStatus).toBe(
-                'discarded-by-code-diff',
-            );
-        });
-
-        it('should save all discarded suggestions to database when all suggestions are discarded by severity', async () => {
-            const discardedSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'low',
-                    suggestionContent: 'Minor style improvement',
-                    priorityStatus: 'discarded-by-severity',
-                },
-                {
-                    id: 's2',
-                    relevantFile: 'test.ts',
-                    severity: 'info',
-                    suggestionContent: 'Consider refactoring',
-                    priorityStatus: 'discarded-by-severity',
-                },
-            ] as any[];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                null,
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discardedSuggestions,
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                discardedSuggestions,
-                changedFiles,
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-
-            const callArgs =
-                mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = callArgs[4];
-            expect(unusedSuggestions).toHaveLength(2);
-            expect(
-                unusedSuggestions.every(
-                    (s) => s.priorityStatus === 'discarded-by-severity',
-                ),
-            ).toBe(true);
-        });
-
-        it('should save all discarded suggestions to database when all suggestions are discarded by safeguard', async () => {
-            const discardedSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Remove this code',
-                    priorityStatus: 'discarded-by-safeguard',
-                },
-            ] as any[];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                null,
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discardedSuggestions,
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                discardedSuggestions,
-                changedFiles,
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-
-            const callArgs =
-                mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = callArgs[4];
-            expect(unusedSuggestions).toHaveLength(1);
-            expect(unusedSuggestions[0].priorityStatus).toBe(
-                'discarded-by-safeguard',
-            );
-        });
-
-        it('should save all discarded suggestions to database when all suggestions are discarded by kody-fine-tuning', async () => {
-            const discardedSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'medium',
-                    suggestionContent: 'Update this pattern',
-                    priorityStatus: 'discarded-by-kody-fine-tuning',
-                },
-                {
-                    id: 's2',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Fix this issue',
-                    priorityStatus: 'discarded-by-kody-fine-tuning',
-                },
-            ] as any[];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                null,
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discardedSuggestions,
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                discardedSuggestions,
-                changedFiles,
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-
-            const callArgs =
-                mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = callArgs[4];
-            expect(unusedSuggestions).toHaveLength(2);
-            expect(
-                unusedSuggestions.every(
-                    (s) => s.priorityStatus === 'discarded-by-kody-fine-tuning',
-                ),
-            ).toBe(true);
-        });
-
     });
 
     // Docblock hunk with a single inserted line: added line 1032, context
@@ -893,28 +378,6 @@ describe('CreateFileCommentsStage', () => {
       */`;
 
     describe('GitLab added-line anchoring gate', () => {
-        const wireHappyPathMocks = () => {
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
-                [],
-            );
-            mockSuggestionService.extractRepriorizedSuggestions.mockImplementation(
-                (_commentResults: any, discarded: any) => ({
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discarded,
-                }),
-            );
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                { number: 123, files: [] },
-            );
-        };
-
         it('keeps added-line comments, snaps context-in-span onto the added line, discards context-only', async () => {
             const validSuggestions = [
                 // anchor already on the added line → kept as-is.
@@ -924,8 +387,6 @@ describe('CreateFileCommentsStage', () => {
                 // multi-line span [1030,1034] covering the added line → snapped to 1032.
                 { id: 'snap', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1030, relevantLinesEnd: 1034 },
             ] as any[];
-
-            wireHappyPathMocks();
 
             const context = createBaseContext({
                 platformType: PlatformType.GITLAB,
@@ -937,8 +398,7 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            const posted =
-                mockCommentManagerService.createLineComments.mock.calls[0][3];
+            const posted = postedLineComments();
             expect(posted.map((c: any) => c.suggestion.id)).toEqual([
                 'added',
                 'snap',
@@ -953,10 +413,9 @@ describe('CreateFileCommentsStage', () => {
             expect(snap.start_line).toBeUndefined();
 
             // The context-only comment reaches Mongo as discarded-by-code-diff.
-            const saveArgs =
+            const unusedSuggestions =
                 mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = saveArgs[4];
+                    .calls[0][4];
             const discarded = unusedSuggestions.find(
                 (s: any) => s.id === 'context',
             );
@@ -971,7 +430,6 @@ describe('CreateFileCommentsStage', () => {
                 { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },
             ] as any[];
 
-            wireHappyPathMocks();
             // Passthrough so we can inspect exactly which suggestions reach
             // persistence as prioritized (the ones that would get a delivery status).
             mockSuggestionService.verifyIfSuggestionsWereSent.mockImplementation(
@@ -1017,8 +475,6 @@ describe('CreateFileCommentsStage', () => {
                 { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },
             ] as any[];
 
-            wireHappyPathMocks();
-
             const context = createBaseContext({
                 platformType: PlatformType.GITHUB,
                 validSuggestions,
@@ -1029,94 +485,10 @@ describe('CreateFileCommentsStage', () => {
 
             await (stage as any).executeStage(context);
 
-            const posted =
-                mockCommentManagerService.createLineComments.mock.calls[0][3];
+            const posted = postedLineComments();
             expect(posted).toHaveLength(1);
             expect(posted[0].suggestion.id).toBe('context');
             expect(posted[0].line).toBe(1035);
-        });
-    });
-
-    describe('saving discarded suggestions to database (extra reasons)', () => {
-        it('should save mixed discarded suggestions to database when all are discarded by different reasons', async () => {
-            const discardedSuggestions = [
-                {
-                    id: 's1',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Fix 1',
-                    priorityStatus: 'discarded-by-code-diff',
-                },
-                {
-                    id: 's2',
-                    relevantFile: 'test.ts',
-                    severity: 'low',
-                    suggestionContent: 'Fix 2',
-                    priorityStatus: 'discarded-by-severity',
-                },
-                {
-                    id: 's3',
-                    relevantFile: 'test.ts',
-                    severity: 'medium',
-                    suggestionContent: 'Fix 3',
-                    priorityStatus: 'discarded-by-safeguard',
-                },
-                {
-                    id: 's4',
-                    relevantFile: 'test.ts',
-                    severity: 'high',
-                    suggestionContent: 'Fix 4',
-                    priorityStatus: 'discarded-by-kody-fine-tuning',
-                },
-            ] as any[];
-
-            const changedFiles = [{ filename: 'test.ts' } as any];
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                null,
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            mockSuggestionService.extractRepriorizedSuggestions.mockReturnValue(
-                {
-                    repriorizedSuggestions: [],
-                    filteredDiscardedSuggestions: discardedSuggestions,
-                },
-            );
-
-            const context = createBaseContext({
-                validSuggestions: [],
-                discardedSuggestions,
-                changedFiles,
-                prAllCommits: [{ sha: 'abc123' }] as any,
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).toHaveBeenCalled();
-
-            const callArgs =
-                mockPullRequestService.aggregateAndSaveDataStructure.mock
-                    .calls[0];
-            const unusedSuggestions = callArgs[4];
-            expect(unusedSuggestions).toHaveLength(4);
-            expect(unusedSuggestions[0].priorityStatus).toBe(
-                'discarded-by-code-diff',
-            );
-            expect(unusedSuggestions[1].priorityStatus).toBe(
-                'discarded-by-severity',
-            );
-            expect(unusedSuggestions[2].priorityStatus).toBe(
-                'discarded-by-safeguard',
-            );
-            expect(unusedSuggestions[3].priorityStatus).toBe(
-                'discarded-by-kody-fine-tuning',
-            );
         });
     });
 });

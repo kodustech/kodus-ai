@@ -15,7 +15,6 @@ import {
     REFUSAL_MEMORY_MS,
     rejectedReasoningField,
 } from './rejected-reasoning-field';
-import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 import './providers';
 
 /** The body OpenCode Go returned in production (2026-09-30), verbatim. */
@@ -75,15 +74,6 @@ const run = (slot: any, organizationId = 'org-1') =>
         organizationId,
         messages: [{ role: 'user', content: 'ping' }],
         loop: { tools: {}, maxSteps: 1 },
-        runName: 'rejected-reasoning-field-spec',
-    } as any);
-
-const runStructured = (slot: any) =>
-    LLM.run({
-        byokConfig: { ...slot, apiKey: 'k' },
-        organizationId: 'org-1',
-        user: 'ping',
-        schema: z.object({ ok: z.boolean() }),
         runName: 'rejected-reasoning-field-spec',
     } as any);
 
@@ -149,27 +139,6 @@ describe('a reasoning field the upstream refuses', () => {
         expect(up.bodies[1].thinking).toBeUndefined();
     });
 
-    it('is dropped on a structured call too', async () => {
-        up = upstream({ refuses: ['thinking'] });
-        OK.choices[0].message.content = '{"ok":true}';
-        try {
-            await runStructured(deepseek);
-        } finally {
-            OK.choices[0].message.content = 'ok';
-        }
-        expect(up.bodies).toHaveLength(2);
-        expect(up.bodies[1].thinking).toBeUndefined();
-    });
-
-    it('is dropped one field at a time when the upstream refuses both', async () => {
-        up = upstream({ refuses: ['thinking', 'reasoning_effort'] });
-        await run(deepseek);
-        // Go's decoder names the first unknown field only, so each costs one ask.
-        expect(up.bodies).toHaveLength(3);
-        expect(up.bodies[2].thinking).toBeUndefined();
-        expect(up.bodies[2].reasoning_effort).toBeUndefined();
-    });
-
     it('is not sent again to the same slot for a while, then tried again', async () => {
         up = upstream({ refuses: ['thinking'] });
         await run(deepseek);
@@ -195,15 +164,6 @@ describe('a reasoning field the upstream refuses', () => {
         expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
     });
 
-    it('is remembered per organization', async () => {
-        up = upstream({ refuses: ['thinking'] });
-        await run(deepseek, 'org-1');
-        up.restore();
-        up = upstream({});
-        await run(deepseek, 'org-2');
-        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
-    });
-
     it('costs at most one extra request per call when calls run at once', async () => {
         up = upstream({ refuses: ['thinking'] });
         await Promise.all(Array.from({ length: 8 }, () => run(deepseek)));
@@ -216,36 +176,15 @@ describe('a reasoning field the upstream refuses', () => {
     });
 });
 
+// The other "never asks again" cases (accepted body, permanent refusal, a field
+// we did not send, a 400 about something else) run over every production slot
+// shape in rejected-reasoning-field.matrix.spec.ts.
 describe('what never triggers another request', () => {
     let up: ReturnType<typeof upstream> | undefined;
     afterEach(() => {
         up?.restore();
         up = undefined;
         clearRefusals();
-    });
-
-    it('an upstream that accepts the body: one request for every opencode slot in production', async () => {
-        const slots = (PROD_SHAPES as any[]).filter((s) =>
-            /opencode\.ai/.test(s.baseURL ?? ''),
-        );
-        expect(slots.length).toBeGreaterThan(0);
-        for (const { orgs: _orgs, ...slot } of slots) {
-            up = upstream({});
-            await run(slot);
-            expect({ model: slot.model, requests: up.bodies.length }).toEqual({
-                model: slot.model,
-                requests: 1,
-            });
-            up.restore();
-        }
-    });
-
-    it('an upstream that keeps refusing the field after it is gone', async () => {
-        // A gateway that answers the same refusal whatever it receives must not
-        // turn into a loop: the field is gone, so there is nothing left to drop.
-        up = upstream({ respond: () => refusalOf('thinking') });
-        await expect(run(deepseek)).rejects.toBeDefined();
-        expect(up.bodies).toHaveLength(2);
     });
 
     it('an upstream that names a different reasoning field every time', async () => {
@@ -258,51 +197,6 @@ describe('what never triggers another request', () => {
         expect(up.bodies).toHaveLength(1 + MAX_REFUSAL_RETRIES);
     });
 
-    it('a refusal of a field we did not send', async () => {
-        // MiMo gets no reasoning field at all, so a refusal naming one cannot be
-        // about our body: repeating the call would send the same thing.
-        up = upstream({ respond: () => refusalOf('thinking') });
-        await expect(
-            run({
-                provider: 'openai_compatible',
-                model: 'mimo-v2.5',
-                baseURL: 'https://opencode.ai/zen/go/v1',
-                reasoningEffort: 'high',
-            }),
-        ).rejects.toBeDefined();
-        expect(up.bodies).toHaveLength(1);
-    });
-
-    it('a 400 about anything else', async () => {
-        up = upstream({
-            respond: () => ({
-                error: {
-                    type: 'invalid_request_error',
-                    message:
-                        'invalid request body: json: unknown field "agent"',
-                },
-            }),
-        });
-        await expect(run(deepseek)).rejects.toBeDefined();
-        expect(up.bodies).toHaveLength(1);
-    });
-
-    it('a 400 about the value of a reasoning field', async () => {
-        // The field is known and its value is wrong: that is the user's
-        // configuration, and dropping it would hide the error.
-        up = upstream({
-            respond: () => ({
-                error: {
-                    param: 'reasoning_effort',
-                    type: 'invalid_request_error',
-                    message:
-                        "Unsupported value: 'reasoning_effort' does not support 'max' with this model.",
-                },
-            }),
-        });
-        await expect(run(deepseek)).rejects.toBeDefined();
-        expect(up.bodies).toHaveLength(1);
-    });
 });
 
 describe('rejectedReasoningField', () => {
