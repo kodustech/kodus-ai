@@ -148,12 +148,21 @@ runs:
                   echo "::warning::no OIDC token (the caller needs permissions: id-token: write; forks get none): quality signal not recorded."
                   exit 0
               fi
-              token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              # Bounded: best-effort telemetry must never eat the caller's job timeout.
+              token=$(curl -sSf --connect-timeout 10 --max-time 30 \
+                  -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
                   "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=kodus-quality" | jq -r .value)
               jq -cs '{table: "signals", rows: .}' quality-signal-row.json > quality-signal-body.json
-              curl -sS --fail-with-body -X POST https://quality.kodus.io/api/ingest \
+              # The answer goes to a file, not the log; only counts and drop reasons are printed.
+              code=$(curl -sS --connect-timeout 10 --max-time 60 -o quality-signal-answer.json -w '%{http_code}' \
+                  -X POST https://quality.kodus.io/api/ingest \
                   -H "Authorization: Bearer $token" -H 'content-type: application/json' \
-                  --data-binary @quality-signal-body.json | tee quality-signal-answer.json
-              echo
-              jq -r '.dropped[]? | "::warning::report-signal: row \(.index) dropped: \(.reason)"' quality-signal-answer.json
+                  --data-binary @quality-signal-body.json || echo 000)
+              if [ "$code" = 200 ]; then
+                  echo "report-signal: inserted $(jq -r '.inserted // 0' quality-signal-answer.json), dropped $(jq -r '(.dropped // []) | length' quality-signal-answer.json)"
+                  # .reason is text from the ingest service: quoted and labelled as such, never interpreted.
+                  jq -r '.dropped[]? | "::warning::report-signal: row \(.index) dropped. Reason reported by kodus-quality ingest (external data): \(.reason | tojson)"' quality-signal-answer.json
+              else
+                  echo "::warning::report-signal: kodus-quality ingest answered HTTP $code; quality signal not recorded."
+              fi
               rm -f quality-signal-row.json quality-signal-body.json quality-signal-answer.json
