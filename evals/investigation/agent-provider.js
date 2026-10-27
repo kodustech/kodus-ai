@@ -255,6 +255,13 @@ class InvestigationAgentProvider {
                 findings: review.shipped,
                 // What the finder's loops returned, before those steps: reported next to it.
                 loopFindings: agentResult.findings?.suggestions || [],
+                // LOCAL BASELINE ONLY (#1821): the finder pass by pass, before the
+                // verify (review-stage.js observeFinderPasses), and tokens and time per step.
+                finderPasses: review.finder || [],
+                stoppedAfterFinder: !!review.stoppedAfterFinder,
+                stages: global.__EVAL_CASE_ALS?.getStore()?.byStage || null,
+                // What the dedup kept (review-stage.js), scored as its own step.
+                dedupFindings: review.dedupOut,
                 discarded: review.discarded.map((d) => ({ relevantFile: d.relevantFile, relevantLinesStart: d.relevantLinesStart, priorityStatus: d.priorityStatus })),
                 trace: {
                     steps: agentResult.steps,
