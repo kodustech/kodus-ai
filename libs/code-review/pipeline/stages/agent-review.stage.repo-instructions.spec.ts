@@ -297,4 +297,18 @@ describe('AgentReviewStage — instruction index cache', () => {
             codeManagementService.getRepositoryAllFiles,
         ).toHaveBeenCalledTimes(2);
     });
+
+    it('warns when the provider lookup fails', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockRejectedValue(new Error('502'));
+        const warn = jest.spyOn((stage as any).logger, 'warn');
+
+        await resolve(stage, withBase());
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('commit lookup failed'),
+            }),
+        );
+    });
 });

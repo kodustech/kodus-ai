@@ -499,7 +499,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             context.platformType,
                         )
                         .then((pr) => pr?.base?.sha || undefined)
-                        .catch(() => undefined);
+                        .catch((error) => {
+                            this.logger.warn({
+                                message: `[repo-instructions] PR#${prNumber}: target-branch commit lookup failed, listing without the index cache`,
+                                context: this.stageName,
+                                error,
+                                metadata: logMetadata,
+                            });
+                            return undefined;
+                        });
                 }
                 const indexKey = baseSha
                     ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
