@@ -487,10 +487,10 @@ export async function runAgentLoopViaCore(
                   ],
               };
 
-    // A finder run that ended without submitting a result did not finish
+    // A finder run that ended without submitting a result may not have finished
     // looking: it ran out of steps, or the provider cut its turn so the tools
-    // it asked for never ran (the runner records that as `tool.skipped`). A run
-    // that answered in prose is not incomplete; prose recovery owns it (#2171).
+    // it asked for never ran (the runner records that as `tool.skipped`). Prose
+    // recovery may still produce candidates for the provider to handle (#2171).
     // The runner makes an artifact of every requested result call, executed or
     // not, so a turn cut while writing submitResult leaves one holding raw,
     // unparseable input, an object that is no findings result (`{}`), or items

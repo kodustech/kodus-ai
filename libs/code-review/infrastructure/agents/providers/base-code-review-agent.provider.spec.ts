@@ -280,6 +280,31 @@ describe('a built-in agent without submitResult (#2171 QA)', () => {
         expect(out.hitHardLimit).toBe(false);
     });
 
+    it('does not mark a recovered finding incomplete after verification refutes it', async () => {
+        const candidate = makeHarnessResult().findings.suggestions[0];
+        runLoopMock.mockResolvedValue(
+            makeHarnessResult({
+                findings: { reasoning: 'looked at it', suggestions: [] },
+                submittedResult: false,
+                droppedByVerify: [candidate],
+                verification: {
+                    beforeCount: 1,
+                    afterCount: 0,
+                    droppedByVerifier: 1,
+                    unverified: 0,
+                    droppedByEvidenceFilter: 0,
+                    decisions: [],
+                },
+            }),
+        );
+
+        const out = await newAgent().execute(makeInput());
+
+        expect(out.suggestions).toEqual([]);
+        expect(out.hitHardLimit).toBe(false);
+        expect(out.finishReason).toBe('stop');
+    });
+
     it('accepts a submitted empty result as a clean review', async () => {
         runLoopMock.mockResolvedValue(
             makeHarnessResult({

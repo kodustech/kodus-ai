@@ -854,13 +854,14 @@ export abstract class BaseCodeReviewAgentProvider {
             // submitting a result: out of steps, or its turn truncated by the
             // provider. A run that finished with nothing to report is not one.
             // A per-agent timeout aborts the run and fails the agent above.
-            // Prose recovery runs before this check. A recovered finding is
-            // kept, but an unsubmitted run with no recovered findings cannot
-            // certify that the review was clean.
+            // Prose recovery runs before verification. A recovered candidate
+            // means the finder did produce a result, even when verification or
+            // path mapping later removes every suggestion.
             const endedWithoutResult =
                 agentResult.incompleteReason === undefined &&
                 agentResult.submittedResult === false &&
                 agentResult.finishReason !== 'error' &&
+                !agentResult.verification &&
                 suggestions.length === 0;
             const hitHardLimit =
                 agentResult.incompleteReason !== undefined ||
