@@ -36,6 +36,7 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
+    approvalPathsOf,
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
     evaluateApproval,
@@ -660,6 +661,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             files = liveFiles?.map((file) => ({
                                                 filename:
                                                     file.filename ?? file.path,
+                                                previous_filename:
+                                                    file.previous_filename,
                                             }));
                                             if (cacheKey && files?.length) {
                                                 if (
@@ -709,9 +712,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             );
                                             return;
                                         }
-                                        directoryChangedPaths = files.map(
-                                            (file) => file.filename,
-                                        );
+                                        directoryChangedPaths =
+                                            approvalPathsOf(files);
                                         resolvedConfig =
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
@@ -991,9 +993,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         );
                         return false;
                     }
-                    changedPaths = files
-                        .map((file) => file.filename ?? file.path)
-                        .filter((path): path is string => !!path);
+                    changedPaths = approvalPathsOf(files);
                 }
                 const decision = evaluateApproval({
                     approvalActive: true,

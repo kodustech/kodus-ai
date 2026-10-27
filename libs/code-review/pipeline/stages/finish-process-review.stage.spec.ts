@@ -244,6 +244,32 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(notificationService.emit).not.toHaveBeenCalled();
     });
 
+    it.each([
+        PlatformType.GITLAB,
+        PlatformType.FORGEJO,
+        PlatformType.AZURE_REPOS,
+    ])(
+        'asks %s to dismiss Kody approvals when a new review holds approval',
+        async (platformType) => {
+            await stage.execute(
+                makeContext({
+                    platformType,
+                    approvalDecision: {
+                        kind: 'hold',
+                        reason: 'Sensitive path changed.',
+                    },
+                }),
+            );
+
+            expect(
+                codeManagement.dismissOwnPullRequestApprovals,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ prNumber: 42 }),
+            );
+            expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        },
+    );
+
     it('dismisses Kody approvals when a new GitHub review holds approval', async () => {
         await stage.execute(
             makeContext({
@@ -330,22 +356,6 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         );
     });
 
-    it('does not attempt GitHub review dismissal on another provider', async () => {
-        await stage.execute(
-            makeContext({
-                platformType: PlatformType.GITLAB,
-                approvalDecision: {
-                    kind: 'hold',
-                    reason: 'Sensitive path changed.',
-                },
-            }),
-        );
-
-        expect(
-            codeManagement.dismissOwnPullRequestApprovals,
-        ).not.toHaveBeenCalled();
-        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-    });
 
     it('records a failed dismissal so an old GitHub approval is not silent', async () => {
         codeManagement.dismissOwnPullRequestApprovals.mockRejectedValueOnce(

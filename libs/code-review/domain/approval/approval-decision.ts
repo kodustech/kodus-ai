@@ -41,6 +41,26 @@ export function approvalPolicyFromConfig(
     };
 }
 
+/**
+ * The paths a PR changes, for the team path veto: a rename changes both its
+ * paths, so moving a file out of a sensitive path touches that path too.
+ */
+export function approvalPathsOf(
+    files: Array<{
+        filename?: string;
+        path?: string;
+        previous_filename?: string;
+    }>,
+): string[] {
+    return files.flatMap((file) => {
+        const path = file.filename ?? file.path;
+        const previous = file.previous_filename;
+        return [path, previous && previous !== path ? previous : undefined].filter(
+            (p): p is string => !!p,
+        );
+    });
+}
+
 /** Bitbucket PRs do not expose the label contract required by this policy. */
 export function approvalPolicyForPlatform(
     policy: ApprovalPolicy,

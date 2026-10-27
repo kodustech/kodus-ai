@@ -17,7 +17,6 @@ import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
 } from '@libs/code-review/domain/approval/approval-decision';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
     ICommentManagerService,
@@ -63,7 +62,6 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
 
         if (
             codeReviewConfig?.pullRequestApprovalActive &&
-            context.platformType === PlatformType.GITHUB &&
             (context.approvalDecision?.kind === 'hold' ||
                 context.approvalDecision?.kind === 'out-of-scope')
         ) {

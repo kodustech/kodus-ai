@@ -4353,6 +4353,7 @@ export class GithubService
             deletions: file.deletions,
             changes: file.changes,
             patch: file.patch,
+            previous_filename: file.previous_filename,
         }));
 
         if (cacheKey && result.length > 0) {

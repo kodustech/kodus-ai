@@ -131,6 +131,7 @@ import {
     orgListRepos,
     repoCreateHook,
     repoCreatePullReview,
+    repoDismissPullReview,
     repoDeleteHook,
     repoDownloadPullDiffOrPatch,
     repoEditHook,
@@ -2549,6 +2550,64 @@ export class ForgejoService implements Omit<
             });
             throw error;
         }
+    }
+
+    /**
+     * Dismisses the token user's approving reviews when a later review holds
+     * approval. Returns how many were dismissed.
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) throw new Error('No auth details');
+        const repoInfo = this.extractRepoInfo(
+            params.repository?.name ?? '',
+            'dismissOwnPullRequestApprovals',
+        );
+        if (!repoInfo) throw new Error('Invalid repository name');
+        const client = this.createForgejoClient(authDetail);
+        const path = {
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            index: params.prNumber,
+        };
+        const [me, reviews] = await Promise.all([
+            userGetCurrent({ client }),
+            this.paginate<ForgejoPullReview>(async (page, limit) => {
+                const result = await repoListPullReviews({
+                    client,
+                    path,
+                    query: { page, limit },
+                });
+                if (result.error) throw result.error;
+                return result.data ?? [];
+            }),
+        ]);
+        if (!me.data?.id) throw new Error('Unable to identify the token user');
+        const own = reviews.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                !review.dismissed &&
+                review.user?.id === me.data.id &&
+                review.id,
+        );
+        for (const review of own) {
+            const result = await repoDismissPullReview({
+                client,
+                path: { ...path, id: review.id! },
+                body: {
+                    message: 'Kody held automatic approval after a new review.',
+                },
+            });
+            if (result.error) throw result.error;
+        }
+        return own.length;
     }
 
     async approvePullRequest(params: {

@@ -1015,6 +1015,54 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const { orgName, token } = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const [projectId, reviewerId] = await Promise.all([
+            this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            ),
+            this.azureReposRequestHelper.getAuthenticatedUserId({
+                orgName,
+                token,
+            }),
+        ]);
+        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        await this.azureReposRequestHelper.votePullRequest({
+            orgName,
+            token,
+            projectId,
+            repositoryId: repository.id,
+            prId: prNumber,
+            reviewerId,
+            vote: AzurePullRequestVote.NoVote,
+        });
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -3950,7 +3998,7 @@ export class AzureReposService implements Omit<
                             AzureReposService['_generateFileDiffForAzure']
                         >
                     >
-                >
+                > & { previous_filename?: string }
             > = [];
             const failedFiles: Array<{ filePath: string; reason: string }> = [];
 
@@ -3960,7 +4008,16 @@ export class AzureReposService implements Omit<
                     validEntries[idx]?.originalPath;
                 if (result.status === 'fulfilled') {
                     if (result.value !== null) {
-                        successfulFiles.push(result.value);
+                        const { item, originalPath } = validEntries[idx];
+                        successfulFiles.push({
+                            ...result.value,
+                            previous_filename:
+                                item?.path &&
+                                originalPath &&
+                                originalPath !== item.path
+                                    ? originalPath
+                                    : undefined,
+                        });
                     }
                     // `value === null` means `_generateFileDiffForAzure`
                     // swallowed its own error and already logged it — no
