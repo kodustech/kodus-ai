@@ -3872,6 +3872,7 @@ export class ForgejoService implements Omit<
                 sha?: string;
                 size?: number;
             }> = [];
+            let truncated = false;
             for (let page = 1; page <= MAX_TREE_PAGES; page++) {
                 const result = await getTree({
                     client,
@@ -3881,9 +3882,25 @@ export class ForgejoService implements Omit<
                         sha: branch,
                     },
                     query: { recursive: true, page, per_page: TREE_PAGE_SIZE },
+                    throwOnError: true,
                 });
                 entries.push(...(result.data?.tree || []));
-                if (!result.data?.truncated) break;
+                truncated = !!result.data?.truncated;
+                if (!truncated) break;
+            }
+            if (truncated) {
+                this.logger.warn({
+                    message: `Repository tree has more than ${MAX_TREE_PAGES * TREE_PAGE_SIZE} entries; the listing stops there`,
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        teamId: params.organizationAndTeamData?.teamId,
+                        repositoryId: params.repository?.id,
+                        branch,
+                        entries: entries.length,
+                    },
+                });
             }
 
             let files = entries

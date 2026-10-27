@@ -5684,7 +5684,15 @@ export class GitlabService implements Omit<
                         message: `Error fetching directory ${scan.path || '/'}`,
                         context: GitlabService.name,
                         error: dirError,
-                        metadata: { scan, repository: repository.name },
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryId: repository.id,
+                            repository: repository.name,
+                            branch,
+                            scan,
+                        },
                     });
                     if (params.throwOnError) throw dirError;
                 }

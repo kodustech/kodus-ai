@@ -6194,6 +6194,21 @@ This is an experimental feature that generates committable changes. Review the d
                 return [];
             }
 
+            if (tree.truncated) {
+                this.logger.warn({
+                    message:
+                        'GitHub cut the repository tree; the listing is incomplete',
+                    context: GithubService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        entries: tree.tree.length,
+                    },
+                });
+            }
+
             const files = tree.tree
                 .filter((item) => item.type === 'blob')
                 .map((item) => this.transformRepositoryFile(item));

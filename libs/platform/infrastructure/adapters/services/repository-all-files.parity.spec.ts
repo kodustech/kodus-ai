@@ -276,9 +276,13 @@ const HOSTS: Array<{ name: string; make: (fake: Fake) => Made }> = [
             // entries remain.
             forgejoGetTree
                 .mockReset()
-                .mockImplementation(async ({ path, query }) => {
+                .mockImplementation(async ({ path, query, throwOnError }) => {
                     refs.push(path.sha);
-                    if (failWith) throw failWith;
+                    // The client answers a failed request with `error`, and
+                    // throws only when asked to.
+                    if (failWith && throwOnError) throw failWith;
+                    if (failWith)
+                        return { error: { message: failWith.message } };
                     const pageNumber = query?.page ?? 1;
                     const start = (pageNumber - 1) * PAGE_SIZE;
                     return {
