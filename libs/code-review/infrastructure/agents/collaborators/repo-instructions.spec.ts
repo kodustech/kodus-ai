@@ -729,6 +729,21 @@ describe('citesRepoInstruction', () => {
         expect(citesRepoInstruction(f, context)).toBe(false);
     });
 
+    // improvedCode is the model's own suggestion; a comment there citing the
+    // file does not make the finding about code that handles it.
+    it('finds one whose suggested code repeats the citation', () => {
+        expect(
+            citesRepoInstruction(
+                finding('CLAUDE.md requires the structured logger here.', {
+                    existingCode: "console.log('charge')",
+                    improvedCode:
+                        "// CLAUDE.md requires the logger\nlogger.info('charge')",
+                }),
+                context,
+            ),
+        ).toBe(true);
+    });
+
     it('still finds one when another sentence reasons from a file the code names', () => {
         expect(
             citesRepoInstruction(

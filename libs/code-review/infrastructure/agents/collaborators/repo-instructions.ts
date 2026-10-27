@@ -535,18 +535,20 @@ const CITED_AS_OBJECT =
 /**
  * Whether a finding reasons from an instruction file (see
  * `isRepoInstructionFile`): one of its sentences takes the file as the
- * authority for its claim. A file the finding's own code names is not a
- * citation: the finding is about code that handles that file.
+ * authority for its claim. A file the code under review names
+ * (`existingCode`) is not a citation: the finding is about code that handles
+ * that file.
  */
 export function citesRepoInstruction(
     finding: {
         suggestionContent?: string;
         existingCode?: string;
-        improvedCode?: string;
     },
     context: RepoInstructionsContext | undefined,
 ): boolean {
-    const code = `${finding.existingCode ?? ''}\n${finding.improvedCode ?? ''}`;
+    // Only the code under review: improvedCode is the model's suggestion
+    // and may repeat the citation in a comment.
+    const code = finding.existingCode ?? '';
     const sentences = (finding.suggestionContent ?? '').split(
         /(?<=[.!?;])\s+|\n+/,
     );
