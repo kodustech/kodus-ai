@@ -16,6 +16,9 @@ const sql = `with targets(pr) as (values (1233)), latest as (
             when "errorMessage" is null then 'none'
             else 'other' end as cause,
         case
+            when "errorMessage" ~* '429|rate.limit|too.many.requests' then 'rate_limit'
+            when "errorMessage" ~* 'timed.out|timeout' then 'timeout'
+            when "errorMessage" ~* 'fetch|network|connect' then 'network'
             when "errorMessage" ~* 'openai|anthropic|gemini|llm|model|api.key' then 'llm'
             when "errorMessage" ~* 'billing|license|credit|subscription|trial' then 'billing'
             when "errorMessage" ~* 'e2b|sandbox|container' then 'sandbox'
@@ -69,7 +72,7 @@ try {
     ).trim();
     const lines = output.split('\n');
     const allowed =
-        /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
+        /^status=(success|error|partial_error|skipped|in_progress|pending|other|missing),cause=(billing|auth|sandbox|model|network|provider|none|other),detail=(rate_limit|timeout|network|llm|billing|sandbox|git_provider|http_401|http_403|token|auth_other|no_change|pr_state|config|none|other),upstream=(fireworks|openai|anthropic|google|unknown),auth_kind=(http_401|http_403|missing|invalid|unknown)$/;
     if (
         lines.length < 1 ||
         lines.length > 1 ||
@@ -88,8 +91,8 @@ try {
 async function probeManagedModel(): Promise<void> {
     const key =
         process.env.API_FIREWORKS_API_KEY || process.env.FIREWORKS_API_KEY;
-    if (!key) {
-        console.log('approval-qa: managed-model=key_missing');
+    if (!key || key === 'preview-disabled') {
+        console.log('approval-qa: managed-model=not_configured');
         return;
     }
     try {
