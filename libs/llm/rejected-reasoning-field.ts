@@ -106,7 +106,7 @@ function sentBody(
  */
 export function rejectedReasoning(
     err: unknown,
-): { field: ReasoningField; off: boolean } | undefined {
+): { field: ReasoningField; off: boolean; refusedType?: string } | undefined {
     const status = extractHttpStatus(err);
     if (status !== 400 && status !== 422) return undefined;
     const body = sentBody(err);
@@ -118,7 +118,8 @@ export function rejectedReasoning(
         const field = m[1].toLowerCase() as ReasoningField;
         // Defined, not merely present: the SDK keeps `reasoning_effort:
         // undefined` in the recorded values, and JSON leaves it off the wire.
-        return body[field] !== undefined ? { field, off } : undefined;
+        if (body[field] === undefined) return undefined;
+        return { field, off, refusedType: thinkingType(body[field]) };
     }
     return undefined;
 }
@@ -190,8 +191,25 @@ export const REFUSAL_MEMORY_MS = 10 * 60 * 1000;
 
 const refusals = new Map<
     string,
-    Map<ReasoningField, { until: number; off: boolean }>
+    Map<ReasoningField, { until: number; off: boolean; refusedType?: string }>
 >();
+
+/** The `type` of a `thinking` value (`enabled`, `disabled`), else undefined. */
+function thinkingType(value: unknown): string | undefined {
+    const type = (value as { type?: unknown } | null)?.type;
+    return typeof type === 'string' ? type : undefined;
+}
+
+/** The `type` of the `thinking` the call carries in any provider option. */
+function sentThinkingType(params: {
+    providerOptions?: Record<string, unknown>;
+}): string | undefined {
+    for (const value of Object.values(params?.providerOptions ?? {})) {
+        const t = thinkingType((value as Record<string, unknown>)?.thinking);
+        if (t) return t;
+    }
+    return undefined;
+}
 
 function slotKey(slot: NormalizedModel | undefined, organizationId?: string) {
     if (!slot) return undefined;
@@ -209,6 +227,7 @@ export function rememberRefusal(
     field: ReasoningField,
     now = Date.now(),
     off = false,
+    refusedType?: string,
 ): void {
     const key = slotKey(slot, organizationId);
     if (!key) return;
@@ -222,8 +241,11 @@ export function rememberRefusal(
     }
     const fields =
         refusals.get(key) ??
-        new Map<ReasoningField, { until: number; off: boolean }>();
-    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off });
+        new Map<
+            ReasoningField,
+            { until: number; off: boolean; refusedType?: string }
+        >();
+    fields.set(field, { until: now + REFUSAL_MEMORY_MS, off, refusedType });
     refusals.set(key, fields);
 }
 
@@ -246,12 +268,23 @@ export function withoutRefusedFields<
     const carriesTools =
         Array.isArray(params?.tools) && params.tools.length > 0;
     let out = params;
-    for (const [field, { until, off }] of fields) {
+    for (const [field, { until, off, refusedType }] of fields) {
         if (until <= now) {
             fields.delete(field);
             continue;
         }
         if (off && !carriesTools) continue;
+        // A refusal of one `thinking` value is not a refusal of another: Together
+        // refuses `{type:'enabled'}` without a budget and accepts
+        // `{type:'disabled'}`, and dropping the disable turns reasoning on
+        // (#2267). Only the type that was refused is dropped.
+        if (
+            field === 'thinking' &&
+            refusedType &&
+            sentThinkingType(out) !== refusedType
+        ) {
+            continue;
+        }
         out =
             (off
                 ? withReasoningOff(out, field)

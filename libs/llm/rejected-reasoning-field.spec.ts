@@ -95,6 +95,9 @@ const deepseek = {
     reasoningEffort: 'high',
 };
 
+// What DeepSeek's toggle carries at effort high: the budget of that effort (#2267).
+const DEEPSEEK_THINKING = { type: 'enabled', budget_tokens: 40_000 };
+
 describe('a reasoning field the upstream refuses', () => {
     let up: ReturnType<typeof upstream> | undefined;
     afterEach(() => {
@@ -108,7 +111,7 @@ describe('a reasoning field the upstream refuses', () => {
         up = upstream({ refuses: ['thinking'] });
         await run(deepseek);
         expect(up.bodies).toHaveLength(2);
-        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[0].thinking).toEqual(DEEPSEEK_THINKING);
         expect(up.bodies[1].thinking).toBeUndefined();
         // Only the refused field goes: the effort the upstream did not refuse
         // still reaches it.
@@ -149,7 +152,7 @@ describe('a reasoning field the upstream refuses', () => {
             doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
         });
         await run(deepseek);
-        expect(up.bodies[3].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[3].thinking).toEqual(DEEPSEEK_THINKING);
     });
 
     it('is remembered per slot, not per host', async () => {
@@ -158,7 +161,7 @@ describe('a reasoning field the upstream refuses', () => {
         up.restore();
         up = upstream({});
         await run({ ...deepseek, model: 'deepseek-v4-pro' });
-        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[0].thinking).toEqual(DEEPSEEK_THINKING);
     });
 
     it('is remembered per organization', async () => {
@@ -167,7 +170,7 @@ describe('a reasoning field the upstream refuses', () => {
         up.restore();
         up = upstream({});
         await run(deepseek, 'org-2');
-        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[0].thinking).toEqual(DEEPSEEK_THINKING);
     });
 
     it('costs at most one extra request per call when calls run at once', async () => {
