@@ -7700,9 +7700,22 @@ This is an experimental feature that generates committable changes. Review the d
                     username: params.login,
                 });
             return data.permission === 'admin' || data.permission === 'write';
-        } catch {
+        } catch (error) {
             // Someone who isn't a collaborator answers 200 with `none`; an
             // error is the credential that couldn't look, not a no.
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    login: params.login,
+                    reason: summarizeProviderError(error),
+                },
+            });
             return undefined;
         }
     }

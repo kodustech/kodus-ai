@@ -40,13 +40,11 @@ const canWrite = (show: jest.Mock) =>
     });
 
 const failing = (status: number) =>
-    jest
-        .fn()
-        .mockRejectedValue(
-            Object.assign(new Error('nope'), {
-                cause: { response: { status } },
-            }),
-        );
+    jest.fn().mockRejectedValue(
+        Object.assign(new Error('nope'), {
+            cause: { response: { status } },
+        }),
+    );
 
 describe('GitlabService.userCanWrite', () => {
     it('counts Developer and above, inherited from the group too', async () => {
@@ -58,8 +56,40 @@ describe('GitlabService.userCanWrite', () => {
         ).resolves.toBe(false);
     });
 
-    it('is a no for someone who is not a member (404)', async () => {
-        await expect(canWrite(failing(404))).resolves.toBe(false);
+    it('is a no for someone who is not a member (404), without a warning', async () => {
+        const service = build(failing(404));
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+        await expect(
+            service.userCanWrite({
+                organizationAndTeamData,
+                repository: { id: '42' },
+                userId: 7,
+            }),
+        ).resolves.toBe(false);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('logs why it could not say, with the project and the user', async () => {
+        const service = build(failing(403));
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+        await service.userCanWrite({
+            organizationAndTeamData,
+            repository: { id: '42' },
+            userId: 7,
+        });
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    repositoryId: '42',
+                    userId: 7,
+                }),
+            }),
+        );
     });
 
     it("can't say when the credential can't look (401/403) or GitLab fails", async () => {

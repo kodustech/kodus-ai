@@ -83,6 +83,36 @@ describe('GithubService.userCanWrite', () => {
         await expect(failing(502)).resolves.toBeUndefined();
     });
 
+    it('logs why it could not say, with the repository and the user', async () => {
+        const service = build(
+            jest.fn().mockRejectedValue(
+                Object.assign(new Error('Resource not accessible'), {
+                    status: 403,
+                }),
+            ),
+        );
+        const warn = jest
+            .spyOn((service as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+
+        await service.userCanWrite({
+            organizationAndTeamData,
+            repository,
+            login: 'nina',
+        });
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    repositoryId: '42',
+                    login: 'nina',
+                    reason: expect.stringContaining('403'),
+                }),
+            }),
+        );
+    });
+
     it('cannot say without a login', async () => {
         const lookup = answering('admin');
         await expect(

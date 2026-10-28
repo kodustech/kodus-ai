@@ -282,6 +282,29 @@ async function businessValidationAction(
             diff,
         };
 
+        if (options.dryRun && structured) {
+            const dryRun = { dryRun: true, payload };
+            if (ctx.isAgent) {
+                await emitAgentEnvelope(
+                    buildAgentSuccessEnvelope(
+                        ctx.command,
+                        dryRun,
+                        ctx.startedAt,
+                    ),
+                    ctx.outputFile,
+                );
+            } else if (globalOpts.output) {
+                await fs.writeFile(
+                    globalOpts.output,
+                    JSON.stringify(dryRun, null, 2),
+                    'utf-8',
+                );
+            } else {
+                process.stdout.write(`${JSON.stringify(dryRun, null, 2)}\n`);
+            }
+            return;
+        }
+
         if (options.dryRun) {
             cliInfo(
                 chalk.cyan(

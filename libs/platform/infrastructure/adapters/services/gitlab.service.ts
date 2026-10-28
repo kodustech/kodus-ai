@@ -5267,7 +5267,23 @@ export class GitlabService implements Omit<
         } catch (error) {
             // Not a member answers 404; a credential that can't look (401/403)
             // can't say.
-            return providerErrorStatus(error) === 404 ? false : undefined;
+            if (providerErrorStatus(error) === 404) {
+                return false;
+            }
+            this.logger.warn({
+                message: "Could not read a user's level on the project",
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    userId: params.userId,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 

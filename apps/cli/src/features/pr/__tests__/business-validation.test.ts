@@ -61,7 +61,7 @@ function program(): Command {
         .addCommand(createPrCommand());
 }
 
-async function run(args: string[]): Promise<string> {
+async function run(args: string[], after: string[] = []): Promise<string> {
     const writes: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
         writes.push(String(chunk));
@@ -78,6 +78,7 @@ async function run(args: string[]): Promise<string> {
         'business-validation',
         '--task-id',
         'AB#8',
+        ...after,
     ]);
     return writes.join('');
 }
@@ -185,6 +186,22 @@ describe('kodus pr business-validation', () => {
             ok: false,
             error: { message: 'Task AB#8 was not found' },
         });
+    });
+
+    it('prints a dry run as JSON in structured mode, without calling the API', async () => {
+        vi.mocked(reviewService.triggerBusinessValidation).mockClear();
+        const output = JSON.parse(
+            await run(['--format', 'json'], ['--dry-run']),
+        );
+
+        expect(output).toMatchObject({
+            dryRun: true,
+            payload: { repository: 'acme/notes', taskId: 'AB#8' },
+        });
+        expect(reviewService.triggerBusinessValidation).not.toHaveBeenCalled();
+
+        const agent = JSON.parse(await run(['--agent'], ['--dry-run']));
+        expect(agent).toMatchObject({ ok: true, data: { dryRun: true } });
     });
 
     it('keeps the terminal text by default', async () => {
