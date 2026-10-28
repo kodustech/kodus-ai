@@ -270,4 +270,32 @@ describe('refresh order and batch budget', () => {
 
         expect(order()).toEqual(['done', 'broken']);
     });
+
+    it('puts a repository whose status read never settles last', async () => {
+        jest.useFakeTimers();
+        try {
+            const { cron, refresh, order } = build(
+                [
+                    { id: 'hung', name: 'hung' },
+                    { id: 'done', name: 'done' },
+                ],
+                { done: { complete: true, windowEnd: '2026-10-27T00:00:00Z' } },
+                {},
+            );
+            refresh.readStatus.mockImplementation(
+                async (_org: string, repositoryId: string) =>
+                    repositoryId === 'hung'
+                        ? new Promise(() => {})
+                        : { complete: true, windowEnd: '2026-10-27T00:00:00Z' },
+            );
+
+            const run = cron.handleCron();
+            await jest.advanceTimersByTimeAsync(10_000);
+            await run;
+
+            expect(order()).toEqual(['done', 'hung']);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });

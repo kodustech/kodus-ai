@@ -8,6 +8,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import {
     CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
     IConditionalApprovalAccessService,
@@ -31,6 +32,7 @@ import {
 // The run spends this many batches, finishing scans before refreshing others.
 const MAX_BATCHES_PER_RUN = 40;
 const STATUS_READ_CONCURRENCY = 10;
+const STATUS_READ_TIMEOUT_MS = 10_000;
 const RUN_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
@@ -124,9 +126,13 @@ export class RefreshCodeAreaRiskMapCron {
                     limit(async () => {
                         try {
                             return {
-                                status: await this.refresh.readStatus(
-                                    repo.organizationId,
-                                    repo.id,
+                                status: await runWithBoundedTimeout(
+                                    this.refresh.readStatus(
+                                        repo.organizationId,
+                                        repo.id,
+                                    ),
+                                    STATUS_READ_TIMEOUT_MS,
+                                    'code-area history status read',
                                 ),
                                 unreadable: false,
                             };
@@ -138,6 +144,7 @@ export class RefreshCodeAreaRiskMapCron {
                                 metadata: {
                                     organizationId: repo.organizationId,
                                     repositoryId: repo.id,
+                                    timeoutMs: STATUS_READ_TIMEOUT_MS,
                                 },
                                 error,
                             });
