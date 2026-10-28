@@ -110,7 +110,10 @@ export interface BusinessLogicTestResult {
     };
     /** The task references found in the PR, and where. */
     references: Array<
-        Pick<TaskReference, 'raw' | 'id' | 'kind' | 'source' | 'intent'>
+        Pick<TaskReference, 'raw' | 'id' | 'kind' | 'source' | 'intent'> & {
+            /** A lower-case key in prose (`gpt-5`): a task only where a tracker has that team. */
+            loose?: true;
+        }
     >;
     /** Which tracker was asked for each reference, with which tools, and what it said. */
     attempts: ResolutionAttempt[];
@@ -373,6 +376,9 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
                 kind: r.kind,
                 source: r.source,
                 intent: r.intent,
+                ...(r.kind === 'key' && r.loose
+                    ? { loose: true as const }
+                    : {}),
             })),
             attempts: validation.attempts,
             trackers: validation.trackers,

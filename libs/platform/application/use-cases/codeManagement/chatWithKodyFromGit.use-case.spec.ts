@@ -539,6 +539,55 @@ describe('ChatWithKodyFromGitUseCase', () => {
         expect(response).toContain('comment on this pull request is updated');
     });
 
+    it('does not say the comment was updated when the command posts the first one', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: true,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: true,
+            unseenFiles: [],
+        };
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        (useCase as any).businessLogicPublisher = {
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'created' }),
+        };
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(response).not.toContain('updated');
+        expect(response).toContain('Kody · Business Logic comment');
+    });
+
     describe('conversation plan gate', () => {
         const conversationPayload = () =>
             ({

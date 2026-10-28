@@ -2567,9 +2567,9 @@ export class ChatWithKodyFromGitUseCase {
                 : request,
         );
         if (!this.businessLogicPublisher) {
-            return replyFor(result.outcome, false);
+            return replyFor(result.outcome, 'none');
         }
-        // The same comment and check the review writes, edited in place (UC-34).
+        // The same comment the review writes, edited in place (UC-34).
         const published = await this.businessLogicPublisher.publish({
             request,
             result,
@@ -2585,7 +2585,7 @@ export class ChatWithKodyFromGitUseCase {
                       )
                     : undefined,
         });
-        return replyFor(published.outcome, published.comment !== 'none');
+        return replyFor(published.outcome, published.comment);
     }
 
     private async handleConversation(context: {

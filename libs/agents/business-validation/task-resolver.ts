@@ -134,23 +134,27 @@ export async function resolveTasks(
             found.push({ reference, task });
             continue;
         }
-        const missingFrom: TaskTracker[] = [];
+        const missingFrom: Array<{ tracker: TaskTracker; unread: boolean }> =
+            [];
         for (const { tracker, lookup } of missed) {
             // A tracker set up so it can't read a task is not one that can.
             readable ||= !(lookup.status === 'error' && lookup.setup);
             if (lookup.status === 'error') {
                 failed ||= !lookup.setup;
             } else {
-                missingFrom.push(tracker);
+                missingFrom.push({
+                    tracker,
+                    unread: lookup.status === 'not_found' && !!lookup.unread,
+                });
             }
         }
         // `SAA-999` where SAA is a Linear team is a typo worth telling the
         // author about; `UTF-8` is not (UC-14, UC-21).
-        for (const tracker of missingFrom) {
+        for (const { tracker, unread } of missingFrom) {
             if (looksIntended) {
                 break;
             }
-            looksIntended =
+            const owns =
                 (await tracker
                     .ownsReference?.(reference, context)
                     .catch((error) => {
@@ -161,9 +165,21 @@ export async function resolveTasks(
                         );
                         return undefined;
                     })) ?? false;
-            if (looksIntended) {
-                intended = { reference, tracker };
+            if (!owns) {
+                continue;
             }
+            if (unread) {
+                // The key is this tracker's, yet it answered in a shape
+                // nothing could read and no agent read it either: no proof
+                // the task is missing, so not a typo to tell the author. Its
+                // read is a failed one, so the screen and the unavailable
+                // message name this tracker.
+                failed = true;
+                markUnreadable(attempts, reference, tracker);
+                continue;
+            }
+            looksIntended = true;
+            intended = { reference, tracker };
         }
     }
 
@@ -294,6 +310,27 @@ function warn(
             reason: error instanceof Error ? error.message : String(error),
         },
     });
+}
+
+/** Turns the tracker's last miss on this reference into the failed read it was. */
+function markUnreadable(
+    attempts: ResolutionAttempt[],
+    reference: TaskReference,
+    tracker: TaskTracker,
+): void {
+    const label = referenceLabel(reference);
+    const attempt = [...attempts]
+        .reverse()
+        .find(
+            (a) =>
+                a.reference === label &&
+                a.tracker === tracker.name &&
+                a.status === 'not_found',
+        );
+    if (attempt) {
+        attempt.status = 'error';
+        attempt.message = `${tracker.name} answered in a form Kody couldn't read`;
+    }
 }
 
 function attemptOf(
