@@ -33,6 +33,8 @@ changed_paths="$(
 FILES=()
 while IFS= read -r file; do
     [[ "$file" == apps/* || "$file" == libs/* ]] || continue
+    # apps/cli runs its own vitest suite; the root jest Stryker drives can't.
+    [[ "$file" == apps/cli/* ]] && continue
     [[ "$file" == *.ts ]] || continue
     [[ "$file" =~ \.(spec|test|integration)\.ts$ ]] && continue
     [[ "$file" == *.d.ts ]] && continue
@@ -83,14 +85,14 @@ for f in "${FILES[@]}"; do
     stem="${f##*/}"
     stem="${stem%.ts}"
     prefix="${stem%%.*}"
-    for suffix in spec test integration; do
-        for cand in \
-            "${directory}/${stem}"*."${suffix}".ts \
-            "${directory}/${prefix}"*."${suffix}".ts \
-            "${directory}/__tests__/${stem}"*."${suffix}".ts \
-            "${directory}/__tests__/${prefix}"*."${suffix}".ts; do
-            add_spec "$cand"
-        done
+    # Only `.spec.ts`: the root jest's testMatch. A `.test.ts` is vitest
+    # (apps/cli) or e2e, and jest fails the dry run on it.
+    for cand in \
+        "${directory}/${stem}"*.spec.ts \
+        "${directory}/${prefix}"*.spec.ts \
+        "${directory}/__tests__/${stem}"*.spec.ts \
+        "${directory}/__tests__/${prefix}"*.spec.ts; do
+        add_spec "$cand"
     done
 done
 
