@@ -101,7 +101,7 @@ jobs:
                   MUTATION_STEP_OUTCOME: ${{ steps.run.outcome }}
               run: |
                   mkdir -p reports/mutation
-                  node -e 'require("fs").writeFileSync("reports/mutation/status.json", JSON.stringify({ outcome: process.env.MUTATION_STEP_OUTCOME }))'
+                  node -e 'const fs = require("fs"); const unreached = fs.existsSync("reports/mutation/unreached.json") ? JSON.parse(fs.readFileSync("reports/mutation/unreached.json", "utf8")) : []; fs.writeFileSync("reports/mutation/status.json", JSON.stringify({ outcome: process.env.MUTATION_STEP_OUTCOME, unreached }))'
 
             - name: Upload mutation shard
               if: always()

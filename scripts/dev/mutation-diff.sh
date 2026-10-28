@@ -45,6 +45,15 @@ if [ -z "${FILES[0]-}" ]; then
     exit 0
 fi
 
+# Changed files no scoped spec reaches go to the report instead of out of the
+# score: the CI shard puts this list in its status.json for the aggregator.
+UNREACHED_PATH="reports/mutation/unreached.json"
+rm -f "$UNREACHED_PATH"
+record_unreached() {
+    mkdir -p "${UNREACHED_PATH%/*}"
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))' "$UNREACHED_PATH" "$@"
+}
+
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"
 printf '  - %s\n' "${FILES[@]}"
 
@@ -85,9 +94,23 @@ for f in "${FILES[@]}"; do
     done
 done
 
+# Naming misses a spec that reaches a file through another module (a mapper
+# tested through its index), so the specs jest's dependency graph relates to
+# the changed files are added too, nearest first and capped: a hub file relates
+# to hundreds of specs.
+MAX_RELATED_SPECS="${MUTATION_MAX_RELATED_SPECS:-40}"
+related_specs="$(node scripts/dev/mutation-related-specs.cjs "$MAX_RELATED_SPECS" "${FILES[@]}")" || {
+    echo "[mutation:diff] Could not list the specs related to the changed files." >&2
+    exit 1
+}
+while IFS= read -r spec; do
+    [ -n "$spec" ] && add_spec "$spec"
+done <<< "$related_specs"
+
 if [ -z "${SPECS[0]-}" ]; then
     echo "[mutation:diff] None of the changed files have a nearby spec — nothing to validate."
     echo "                (That is itself a signal: this change added/edited untested production code.)"
+    record_unreached "${FILES[@]}"
     exit 0
 fi
 
@@ -135,5 +158,35 @@ if [ -z "$MUTATE" ]; then
     exit 0
 fi
 echo "[mutation:diff] Mutating shard ${SHARD_INDEX}/${SHARD_COUNT} from ${#MUTATE_GLOBS[@]} changed range(s)/file(s)."
+
+# Stryker runs only the scoped specs related to this shard's files
+# (enableFindRelatedTests) and aborts with "No tests were executed" when there
+# are none. Ask jest the same question first, so such a shard reports it.
+# jest takes literal paths: a route file's selector is its escaped glob, so the
+# shard's files are the changed files whose selector landed in it.
+SHARD_FILES=()
+IFS=',' read -r -a shard_selectors <<< "$MUTATE"
+for f in "${FILES[@]}"; do
+    escaped="$(glob_escape "$f")"
+    for selector in "${shard_selectors[@]}"; do
+        if [ "$selector" = "$escaped" ] || [ "${selector%%:*}" = "$f" ]; then
+            SHARD_FILES+=("$f")
+            break
+        fi
+    done
+done
+# jest exits 0 with an empty list when nothing relates; any other exit is a
+# discovery failure and fails the shard with jest's own diagnostic.
+if ! shard_specs="$(node node_modules/jest/bin/jest.js -c jest.stryker.config.ts \
+    --listTests --findRelatedTests "${SHARD_FILES[@]}")"; then
+    echo "[mutation:diff] Shard ${SHARD_INDEX}/${SHARD_COUNT}: jest could not list the specs for these files." >&2
+    exit 1
+fi
+if [ -z "$shard_specs" ]; then
+    echo "[mutation:diff] Shard ${SHARD_INDEX}/${SHARD_COUNT}: no scoped spec reaches these files — nothing to validate:"
+    printf '  - %s\n' "${SHARD_FILES[@]}"
+    record_unreached "${SHARD_FILES[@]}"
+    exit 0
+fi
 
 exec npx stryker run --mutate "$MUTATE"
