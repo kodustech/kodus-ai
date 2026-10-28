@@ -7679,6 +7679,57 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
+    /**
+     * Write or admin on the repository. A comment's `author_association`
+     * can't tell: COLLABORATOR and MEMBER come with read access too. GitHub
+     * folds maintain and custom roles into write, triage into read.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string; owner?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const owner =
+                params.repository.owner ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const { data } =
+                await octokit.rest.repos.getCollaboratorPermissionLevel({
+                    owner,
+                    repo: params.repository.name,
+                    username: params.login,
+                });
+            return data.permission === 'admin' || data.permission === 'write';
+        } catch (error) {
+            // Someone who isn't a collaborator answers 200 with `none`; an
+            // error is the credential that couldn't look, not a no.
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    login: params.login,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
+        }
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

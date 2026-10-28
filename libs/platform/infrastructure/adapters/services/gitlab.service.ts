@@ -102,6 +102,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import {
     isDeniedStatus,
+    providerErrorStatus,
     RepositoryAccessDiagnosis,
     summarizeProviderError,
     UNKNOWN_REPOSITORY_ACCESS,
@@ -5297,8 +5298,11 @@ export class GitlabService implements Omit<
     async userCanWrite(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
-        userId: string | number;
+        userId?: string | number;
     }): Promise<boolean | undefined> {
+        if (params.userId === undefined) {
+            return undefined;
+        }
         const authDetails = await this.getAuthDetails(
             params.organizationAndTeamData,
         );
@@ -5313,8 +5317,25 @@ export class GitlabService implements Omit<
             });
             return (member?.access_level ?? 0) >= 30;
         } catch (error) {
-            // Not a member answers 404; a credential that can't look, 401/403.
-            return isDeniedStatus(error) ? false : undefined;
+            // Not a member answers 404; a credential that can't look (401/403)
+            // can't say.
+            if (providerErrorStatus(error) === 404) {
+                return false;
+            }
+            this.logger.warn({
+                message: "Could not read a user's level on the project",
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    userId: params.userId,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 
