@@ -280,7 +280,7 @@ async function main() {
 
     // A subscription model has no production route: the finder would run
     // another model under its name (agent-provider.js resolveRoute).
-    if (false && TIER0[args.model]?.provider === 'codex_subscription') {
+    if (TIER0[args.model]?.provider === 'codex_subscription') {
         console.error(
             `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
                 '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',

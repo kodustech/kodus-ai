@@ -255,7 +255,7 @@ class InvestigationAgentProvider {
                 findings: review.shipped,
                 // What the finder's loops returned, before those steps: reported next to it.
                 loopFindings: agentResult.findings?.suggestions || [],
-                // LOCAL BASELINE ONLY (#1821): the finder pass by pass, before the
+                // The finder pass by pass, before the
                 // verify (review-stage.js observeFinderPasses), and tokens and time per step.
                 finderPasses: review.finder || [],
                 stoppedAfterFinder: !!review.stoppedAfterFinder,

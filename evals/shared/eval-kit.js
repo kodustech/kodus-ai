@@ -120,7 +120,7 @@ function tokensUsed() {
     return global.__EVAL_TOK;
 }
 
-// LOCAL BASELINE ONLY (#1821): tokens and time per review step, per PR.
+// Tokens and time per review step, per PR (#1821).
 // Every model call is counted under the step running when it was made (the
 // innermost inStage); a call outside every step goes under 'sem-etapa'. A step's
 // `ms` sums its runs, `spanMs` is first start to last end (runs can overlap: the
@@ -157,7 +157,7 @@ function inStage(name, fn) {
 
 // One answered call: its usage (libs/llm/ai-sdk-usage.ts AiSdkUsage) and time.
 function addCall(usage, ms) {
-    // LOCAL BASELINE ONLY (#1821): per-PR totals for the baseline comparison.
+    // Per-PR totals, for comparing two versions of the review (#1821).
     const c = global.__EVAL_CASE_ALS?.getStore();
     if (c) {
         c.in += usage?.inputTokens ?? 0; c.out += usage?.outputTokens ?? 0;

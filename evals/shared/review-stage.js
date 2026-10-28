@@ -139,7 +139,7 @@ function observeTheReview() {
     reviewObserved = true;
 }
 
-// ── The finder, pass by pass (LOCAL BASELINE ONLY, #1821) ────────────────────
+// ── The finder, pass by pass (#1821) ─────────────────────────────────────────
 // Production's finder is the generalist pass plus the synthesis-rescue pass; its
 // verify runs inside the same call (runFinderWithVerify) and only what it keeps
 // leaves. This records, without changing anything the model sees or the code
