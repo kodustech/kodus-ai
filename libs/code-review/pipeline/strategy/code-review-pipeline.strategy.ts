@@ -21,6 +21,7 @@ import { CreateSandboxStage } from '../stages/create-sandbox.stage';
 import { FetchChangedFilesStage } from '../stages/fetch-changed-files.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from '../stages/finish-comments.stage';
 import { RequestChangesOrApproveStage } from '../stages/finish-process-review.stage';
+import { DecidePrApprovalStage } from '../stages/decide-pr-approval.stage';
 import { InitialCommentStage } from '../stages/initial-comment.stage';
 import { LoadCiEvidenceStage } from '../stages/load-ci-evidence.stage';
 import { RunAnalyzersStage } from '../stages/run-analyzers.stage';
@@ -59,6 +60,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
         private readonly validateSuggestionsStage: ValidateSuggestionsStage,
         private readonly createFileCommentsStage: CreateFileCommentsStage,
         private readonly aggregateResultsStage: AggregateResultsStage,
+        private readonly decidePrApprovalStage: DecidePrApprovalStage,
         private readonly updateCommentsAndGenerateSummaryStage: UpdateCommentsAndGenerateSummaryStage,
         private readonly requestChangesOrApproveStage: RequestChangesOrApproveStage,
     ) {}
@@ -103,6 +105,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             this.validateSuggestionsStage,
             this.createFileCommentsStage,
             this.aggregateResultsStage,
+            this.decidePrApprovalStage,
             this.updateCommentsAndGenerateSummaryStage,
             this.requestChangesOrApproveStage,
         ];

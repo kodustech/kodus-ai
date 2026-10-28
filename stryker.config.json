@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed files in a PR). testRunner runs only tests related to each mutated file.",
+  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed lines in a PR). testRunner runs only tests related to each mutated file.",
   "packageManager": "pnpm",
   "testRunner": "jest",
   "jest": {
@@ -8,10 +8,12 @@
     "enableFindRelatedTests": true
   },
   "coverageAnalysis": "perTest",
+  "_ignoreStatic_comment": "Static mutants run every selected test and are excluded from this advisory PR score. The last changed-line run found 84 static mutants (3%) responsible for an estimated 99% of mutation time and hit the 25-minute job limit.",
+  "ignoreStatic": true,
   "mutate": [
     "libs/llm/resolve-model-slot.ts"
   ],
-  "concurrency": 2,
+  "concurrency": 4,
   "timeoutMS": 60000,
   "_thresholds_comment": "Advisory rollout: break=null never fails the process, so the CI job reports the score without blocking a PR. Once the team is comfortable, set break (e.g. 60) to make the gate enforce.",
   "thresholds": { "high": 80, "low": 60, "break": null },

@@ -109,6 +109,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { listingFailed } from '../repository-listing';
 
 @Injectable()
 export class BitbucketCloudService implements Omit<
@@ -2089,6 +2090,10 @@ export class BitbucketCloudService implements Omit<
 
             return prFilesWithDiffAndContents.map((file) => ({
                 filename: file.new?.path ?? file.old?.path,
+                previous_filename:
+                    file.new?.path && file.old?.path !== file.new.path
+                        ? file.old?.path
+                        : undefined,
                 sha: pr.source?.commit?.hash,
                 status: file.status,
                 additions: file.lines_added,
@@ -4255,13 +4260,14 @@ export class BitbucketCloudService implements Omit<
             };
 
             const userUuid = currentUserRes?.data?.uuid;
+            if (!userUuid) return null;
             const activities =
                 await this.getPaginatedResults<BitbucketActivity>(
                     bitbucketAPI,
                     activitiesRes,
                 );
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const activity of activities) {
                 if (activity.approval?.user?.uuid === userUuid) {
                     state = PullRequestReviewState.APPROVED;
@@ -4360,6 +4366,44 @@ export class BitbucketCloudService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const workspace = await this.getWorkspaceFromRepository(
+            organizationAndTeamData,
+            repository.id,
+        );
+        if (!workspace) throw new Error('Bitbucket workspace not found');
+        const bitbucketAPI = this.instanceBitbucketApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        await bitbucketAPI.pullrequests.deleteApproval({
+            pull_request_id: prNumber,
+            repo_slug: `{${repository.id}}`,
+            workspace: `{${workspace}}`,
+        });
+        return 1;
     }
 
     async approvePullRequest(params: {
@@ -4515,6 +4559,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4560,6 +4605,7 @@ export class BitbucketCloudService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -5618,6 +5664,7 @@ export class BitbucketCloudService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5633,7 +5680,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository ID is required',
+                );
             }
 
             const bitbucketAuthDetails = await this.getAuthDetails(
@@ -5647,7 +5697,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket authentication details not found',
+                );
             }
 
             const workspace = await this.getWorkspaceFromRepository(
@@ -5662,7 +5715,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Workspace not found for repository',
+                );
             }
 
             const bitbucketAPI =
@@ -5683,7 +5739,10 @@ export class BitbucketCloudService implements Omit<
                         metadata: { organizationAndTeamData, repository },
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5703,7 +5762,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository, branch },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'No commit found on the branch',
+                );
             }
 
             const fileResponse = await bitbucketAPI.source.read({
@@ -5772,7 +5834,11 @@ export class BitbucketCloudService implements Omit<
                 },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -6013,6 +6079,7 @@ export class BitbucketCloudService implements Omit<
             targetRefName: pullRequest?.destination?.branch?.name ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pullRequest?.destination?.branch?.name ?? '',
+                sha: pullRequest?.destination?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(

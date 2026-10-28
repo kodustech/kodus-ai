@@ -232,7 +232,9 @@ describe('KodyRulesTools.updateKodyRule', () => {
             status: KodyRulesStatus.ACTIVE,
             repositoryId: 'repo-1',
         } as any);
-        (mockKodyRulesService.updateRuleWithLogging as jest.Mock).mockResolvedValue({
+        (
+            mockKodyRulesService.updateRuleWithLogging as jest.Mock
+        ).mockResolvedValue({
             uuid: 'rule-789',
             title: 'Updated title',
             rule: 'Some rule body',
@@ -385,6 +387,68 @@ describe('KodyRulesTools rule listings', () => {
                 createdAt: '2026-10-01T10:00:00.000Z',
                 updatedAt: '2026-10-02T11:30:00.000Z',
             });
+            expect(() =>
+                definition.outputSchema.parse(result.structuredContent),
+            ).not.toThrow();
+        },
+    );
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s omits legacy null optional fields while preserving nullable fields',
+        async (_name, tool, args) => {
+            findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'rule-1',
+                        title: 'Avoid console.log',
+                        status: KodyRulesStatus.ACTIVE,
+                        repositoryId: 'repo-1',
+                        type: null,
+                        path: null,
+                        label: null,
+                        examples: null,
+                        scope: null,
+                        createdAt: null,
+                        updatedAt: null,
+                        reason: null,
+                        directoryId: null,
+                    },
+                ],
+            });
+            const definition = tool();
+            const result: any = await definition.execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.structuredContent.data[0]).toEqual(
+                expect.objectContaining({
+                    uuid: 'rule-1',
+                    reason: null,
+                    directoryId: null,
+                }),
+            );
+            for (const key of [
+                'type',
+                'path',
+                'label',
+                'examples',
+                'scope',
+                'createdAt',
+                'updatedAt',
+            ]) {
+                expect(result.structuredContent.data[0]).not.toHaveProperty(
+                    key,
+                );
+            }
             expect(() =>
                 definition.outputSchema.parse(result.structuredContent),
             ).not.toThrow();

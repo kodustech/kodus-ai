@@ -91,7 +91,7 @@ Una brecha le dice al autor que rehaga trabajo, así que Kody contrasta cada una
 
 ### Responder al comentario
 
-Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita, o nombra el requisito, su estado (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
+Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita, o nombra el requisito, su estado tal como lo escribe el comentario (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
 
 - **Discrepar**: "Está cubierto en `useDrag.ts`". Kody vuelve a comprobar lo que señalaste y lo marca como MET o dice qué revisó y lo mantiene.
 - **Aceptar un hallazgo** (alguien que no es el autor del PR: en GitHub, con permiso de escritura en el repositorio; en GitLab, Developer o superior en el repositorio; en Bitbucket, Azure Repos y Forgejo, un miembro de la organización que la plataforma lista): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores, aunque Kody redacte el requisito de forma un poco distinta, mientras el texto de la tarea no cambie; si la tarea se edita, hay que aceptar el requisito de nuevo.

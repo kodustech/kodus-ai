@@ -1,5 +1,6 @@
 import {
     CommitSchema,
+    ExpandedMergeRequestSchema,
     Gitlab,
     MergeRequestSchema,
     MergeRequestSchemaWithBasicLabels,
@@ -101,6 +102,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import {
     isDeniedStatus,
+    providerErrorStatus,
     RepositoryAccessDiagnosis,
     summarizeProviderError,
     UNKNOWN_REPOSITORY_ACCESS,
@@ -120,6 +122,7 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { listingFailed } from './repository-listing';
 
 /**
  * Award emojis are the one reaction source that costs a request per comment —
@@ -342,6 +345,7 @@ export class GitlabService implements Omit<
                 },
                 base: {
                     ref: mergeRequest.target_branch,
+                    sha: mergeRequest.diff_refs?.start_sha ?? '',
                     repo: {
                         name: params.repository.name,
                         id: projectId,
@@ -589,7 +593,8 @@ export class GitlabService implements Omit<
         }
 
         const gitlabAPI = this.instanceGitlabApi(authDetail);
-        const projectId = `${repository.owner}/${repository.name}`;
+        const projectId =
+            repository.id ?? `${repository.owner}/${repository.name}`;
 
         try {
             const issue = await gitlabAPI.Issues.show(issueNumber, {
@@ -2308,6 +2313,7 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
+                previous_filename: file.renamed_file ? file.old_path : undefined,
             };
         });
     }
@@ -2665,12 +2671,19 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Create the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.create(
-                repository.id,
-                prNumber,
-                body,
-            );
+            // Status and summary comments must not open resolvable threads.
+            // PR-level findings carry a suggestion and remain discussions.
+            const response = params.suggestion
+                ? await gitlabAPI.MergeRequestDiscussions.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  )
+                : await gitlabAPI.MergeRequestNotes.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  );
 
             return response;
         } catch (error) {
@@ -2683,6 +2696,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -2715,6 +2729,7 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -2963,9 +2978,10 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
         prNumber: number;
-        commentId: string;
+        commentId: string | number;
         body: string;
         noteId?: number;
+        threadId?: string | number;
     }): Promise<any | null> {
         try {
             const {
@@ -2975,6 +2991,7 @@ export class GitlabService implements Omit<
                 commentId,
                 body,
                 noteId,
+                threadId,
             } = params;
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -2983,14 +3000,21 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Update the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.editNote(
-                repository.id,
-                prNumber,
-                commentId,
-                noteId,
-                { body: body },
-            );
+            const response =
+                threadId != null
+                    ? await gitlabAPI.MergeRequestDiscussions.editNote(
+                          repository.id,
+                          prNumber,
+                          String(threadId),
+                          noteId ?? Number(commentId),
+                          { body },
+                      )
+                    : await gitlabAPI.MergeRequestNotes.edit(
+                          repository.id,
+                          prNumber,
+                          noteId ?? Number(commentId),
+                          { body },
+                      );
 
             return response;
         } catch (error) {
@@ -3420,14 +3444,15 @@ export class GitlabService implements Omit<
             // cleared, or erase the one the newer save surfaced (#2003 review).
             // The record carries when it was written, so the stale run is a
             // no-op instead of a blind wholesale replace.
-            const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
-                startedAt?: string;
-                recordedAt?: string;
-                failures?: Record<string, { reason: string; at: string }>;
-            }>(
-                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                organizationAndTeamData,
-            );
+            const stored =
+                await this.integrationConfigService.findIntegrationConfigFormatted<{
+                    startedAt?: string;
+                    recordedAt?: string;
+                    failures?: Record<string, { reason: string; at: string }>;
+                }>(
+                    IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                    organizationAndTeamData,
+                );
 
             // Compare observation STARTS, not write times (#2003 review): an
             // older run that finishes while a newer one is still reconciling
@@ -3442,8 +3467,7 @@ export class GitlabService implements Omit<
                     context: GitlabService.name,
                     serviceName: 'GitlabService recordWebhookCreationFailures',
                     metadata: {
-                        organizationId:
-                            organizationAndTeamData?.organizationId,
+                        organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
                     },
                 });
@@ -4391,7 +4415,7 @@ export class GitlabService implements Omit<
 
             return isApprovedByCurrentUser
                 ? PullRequestReviewState.APPROVED
-                : null;
+                : PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error fetching review status for MR #${params.prNumber}`,
@@ -4447,6 +4471,43 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it, so an
+     * MR Kody approved does not stay approved under an "approval held" note.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        if (!repository?.id || !prNumber) {
+            throw new Error(
+                'Repository and MR number are required to dismiss approval',
+            );
+        }
+        const gitlabAPI = this.instanceGitlabApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        const [approvalSettings, currentUser] = await Promise.all([
+            gitlabAPI.MergeRequestApprovals.showConfiguration(repository.id, {
+                mergerequestIId: prNumber,
+            }),
+            gitlabAPI.Users.showCurrentUser(),
+        ]);
+        const approvedByKody = (approvalSettings?.approved_by ?? []).some(
+            (approval) => approval?.user?.id === currentUser.id,
+        );
+        if (!approvedByKody) return 0;
+        await gitlabAPI.MergeRequestApprovals.unapprove(
+            repository.id,
+            prNumber,
+        );
+        return 1;
     }
 
     async approvePullRequest(params: {
@@ -4571,6 +4632,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4587,7 +4649,12 @@ export class GitlabService implements Omit<
                 { perPage: GITLAB_MAX_PER_PAGE },
             );
 
-            return discussions.flatMap((discussion) => discussion.notes);
+            return discussions.flatMap((discussion) =>
+                discussion.notes.map((note) => ({
+                    ...note,
+                    threadId: discussion.id,
+                })),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to get all comments in pull request',
@@ -4596,6 +4663,7 @@ export class GitlabService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -4963,6 +5031,8 @@ export class GitlabService implements Omit<
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<any[]> {
         try {
@@ -4980,8 +5050,26 @@ export class GitlabService implements Omit<
 
             const mergeRequests = await gitlabAPI.MergeRequests.all({
                 projectId: repository.id,
-                createdAfter: filters?.startDate,
-                createdBefore: filters?.endDate,
+                ...(filters?.maxResults
+                    ? {
+                          perPage: filters.maxResults,
+                          maxPages: 1,
+                          orderBy:
+                              filters.dateField === 'updated'
+                                  ? ('updated_at' as const)
+                                  : ('created_at' as const),
+                          sort: 'desc' as const,
+                      }
+                    : {}),
+                ...(filters?.dateField === 'updated'
+                    ? {
+                          updatedAfter: filters.startDate,
+                          updatedBefore: filters.endDate,
+                      }
+                    : {
+                          createdAfter: filters?.startDate,
+                          createdBefore: filters?.endDate,
+                      }),
             });
 
             return mergeRequests.map(
@@ -4990,6 +5078,7 @@ export class GitlabService implements Omit<
                     author_id: pr.author?.id.toString(),
                     author_name: pr.author?.name,
                     author_created_at: pr.created_at,
+                    updated_at: pr.updated_at,
                     repository: repository.name,
                     repositoryId: repository.id,
                     message: pr.description,
@@ -5209,8 +5298,11 @@ export class GitlabService implements Omit<
     async userCanWrite(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
-        userId: string | number;
+        userId?: string | number;
     }): Promise<boolean | undefined> {
+        if (params.userId === undefined) {
+            return undefined;
+        }
         const authDetails = await this.getAuthDetails(
             params.organizationAndTeamData,
         );
@@ -5225,8 +5317,25 @@ export class GitlabService implements Omit<
             });
             return (member?.access_level ?? 0) >= 30;
         } catch (error) {
-            // Not a member answers 404; a credential that can't look, 401/403.
-            return isDeniedStatus(error) ? false : undefined;
+            // Not a member answers 404; a credential that can't look (401/403)
+            // can't say.
+            if (providerErrorStatus(error) === 404) {
+                return false;
+            }
+            this.logger.warn({
+                message: "Could not read a user's level on the project",
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    userId: params.userId,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 
@@ -5548,6 +5657,7 @@ export class GitlabService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5564,7 +5674,10 @@ export class GitlabService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository ID is required',
+                );
             }
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -5579,7 +5692,10 @@ export class GitlabService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'GitLab authentication details not found',
+                );
             }
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
@@ -5606,83 +5722,56 @@ export class GitlabService implements Omit<
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
-            // Extract base directories from filePatterns
-            const baseDirectoriesRaw = this.extractBaseDirectoriesFromPatterns(
-                filePatterns || [],
-            );
-            const globChars = ['*', '?', '{', '}', '[', ']', '!'];
-            const hasRootOnlyPatterns = (filePatterns || []).some((pattern) => {
-                const normalized = pattern
-                    .replace(/^\/+/, '')
-                    .replace(/\\/g, '/');
-                const hasGlob = globChars.some((ch) => normalized.includes(ch));
-                const hasSlash = normalized.includes('/');
-                // Plain filename (no glob, no directory) -> needs root scan
-                return !hasGlob && !hasSlash;
-            });
-            // Include root as a base directory if patterns target files at repo root
-            const baseDirectories = hasRootOnlyPatterns
-                ? [''].concat(baseDirectoriesRaw.filter((dir) => dir !== ''))
-                : baseDirectoriesRaw;
+            const scans = this.treeScansFor(filePatterns || []);
+            const byPath = new Map<string, RepositoryFile>();
 
-            let allFiles: RepositoryFile[] = [];
+            for (const scan of scans) {
+                try {
+                    const trees =
+                        await gitlabAPI.Repositories.allRepositoryTrees(
+                            repository.id,
+                            {
+                                ref: branch,
+                                recursive: scan.recursive,
+                                perPage: 100,
+                                ...(scan.path ? { path: scan.path } : {}),
+                            },
+                        );
 
-            // If we have specific directories, search only them
-            if (baseDirectories.length > 0) {
-                // Search files from each specific directory
-                for (const baseDir of baseDirectories) {
-                    try {
-                        const options: any = {
-                            ref: branch,
-                            recursive: true, // deep search for subdirs
-                        };
-
-                        // For root scans (''), avoid recursion to keep it fast and match only top-level files
-                        if (!baseDir) {
-                            options.recursive = false;
-                        } else {
-                            options.path = baseDir;
-                        }
-
-                        const trees =
-                            await gitlabAPI.Repositories.allRepositoryTrees(
-                                repository.id,
-                                options,
-                            );
-
-                        const files = trees
-                            ?.filter((file) => file.type === 'blob')
-                            ?.map((file) => this.transformRepositoryFile(file));
-
-                        allFiles.push(...files);
-                    } catch (dirError) {
-                        this.logger.warn({
-                            message: `Error fetching directory ${baseDir}`,
-                            context: GitlabService.name,
-                            error: dirError,
-                            metadata: { baseDir, repository: repository.name },
-                        });
-                        // Continue to the next directory
+                    for (const file of trees ?? []) {
+                        if (file.type !== 'blob') continue;
+                        byPath.set(
+                            file.path,
+                            this.transformRepositoryFile(file),
+                        );
                     }
+                } catch (dirError) {
+                    this.logger.warn({
+                        message: `Error fetching directory ${scan.path || '/'}`,
+                        context: GitlabService.name,
+                        error: dirError,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            teamId: organizationAndTeamData?.teamId,
+                            repositoryId: repository.id,
+                            repository: repository.name,
+                            branch,
+                            scan,
+                        },
+                    });
+                    if (params.throwOnError) throw dirError;
                 }
-            } else {
-                // Fallback: if there are no specific patterns, search everything (original behavior)
-                const trees = await gitlabAPI.Repositories.allRepositoryTrees(
-                    repository.id,
-                    {
-                        ref: branch,
-                        recursive: true,
-                    },
-                );
-
-                allFiles = trees
-                    .filter((file) => file.type === 'blob')
-                    .map((file) => this.transformRepositoryFile(file));
             }
+
+            const allFiles = [...byPath.values()];
 
             // Filter files by patterns (if any pattern does not have a clear base directory)
             const filteredFiles: RepositoryFile[] = [];
@@ -5717,7 +5806,7 @@ export class GitlabService implements Omit<
                 metadata: {
                     ...params,
                     retrievedFilesCount: filteredFiles.length,
-                    baseDirectoriesSearched: baseDirectories,
+                    scans,
                 },
             });
 
@@ -5731,8 +5820,47 @@ export class GitlabService implements Omit<
                 metadata: params,
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
+    }
+
+    /**
+     * The tree listings that cover `patterns`: the whole tree, recursively,
+     * when a pattern can match at any depth (`**\/AGENTS.md`); otherwise each
+     * pattern's base directory, recursively, without one already covered by
+     * an ancestor, plus the root alone for plain root filenames.
+     */
+    private treeScansFor(
+        patterns: string[],
+    ): Array<{ path?: string; recursive: boolean }> {
+        const globChars = ['*', '?', '{', '}', '[', ']', '!'];
+        const normalized = patterns.map((pattern) =>
+            pattern.replace(/^\/+/, '').replace(/\\/g, '/'),
+        );
+        const anyDepth = normalized.some((pattern) => {
+            const first = pattern.split('/')[0];
+            return globChars.some((ch) => first.includes(ch));
+        });
+        if (!normalized.length || anyDepth) return [{ recursive: true }];
+
+        const dirs =
+            this.extractBaseDirectoriesFromPatterns(normalized).filter(Boolean);
+        const covered = (dir: string) =>
+            dirs.some((other) => other !== dir && dir.startsWith(`${other}/`));
+        const scans: Array<{ path?: string; recursive: boolean }> = dirs
+            .filter((dir) => !covered(dir))
+            .map((dir) => ({ path: dir, recursive: true }));
+
+        const rootFiles = normalized.some(
+            (pattern) =>
+                !pattern.includes('/') &&
+                !globChars.some((ch) => pattern.includes(ch)),
+        );
+        return rootFiles ? [{ recursive: false }, ...scans] : scans;
     }
 
     private extractBaseDirectoriesFromPatterns(patterns: string[]): string[] {
@@ -5912,6 +6040,12 @@ export class GitlabService implements Omit<
         repository: Partial<Repositories>,
         organizationAndTeamData: OrganizationAndTeamData,
     ): PullRequest {
+        const hasDiffRefs = (
+            value: MergeRequestSchema,
+        ): value is ExpandedMergeRequestSchema => 'diff_refs' in value;
+        const diffRefs = hasDiffRefs(mergeRequest)
+            ? mergeRequest.diff_refs
+            : undefined;
         return {
             id: mergeRequest?.id?.toString() ?? '',
             number: mergeRequest?.iid ?? -1,
@@ -5919,6 +6053,9 @@ export class GitlabService implements Omit<
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: mergeRequest?.title ?? '',
             body: mergeRequest?.description ?? '',
+            labels: (mergeRequest?.labels ?? []).map((label) =>
+                typeof label === 'string' ? label : label.name,
+            ),
             state:
                 this._prStateMap.get(
                     mergeRequest?.state as GitlabPullRequestState,
@@ -5947,16 +6084,7 @@ export class GitlabService implements Omit<
             sourceRefName: mergeRequest?.source_branch ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: mergeRequest?.source_branch ?? '',
-                // `diff_refs` is typed loosely by the client; the head sha
-                // lives there on a merge-request payload and falls back to
-                // the MR's own sha.
-                sha:
-                    (
-                        mergeRequest?.diff_refs as
-                            { head_sha?: string } | undefined
-                    )?.head_sha ??
-                    mergeRequest?.sha ??
-                    '',
+                sha: diffRefs?.head_sha ?? mergeRequest?.sha ?? '',
                 repo: {
                     id: mergeRequest?.source_project_id?.toString() ?? '',
                     name: '',
@@ -5967,6 +6095,7 @@ export class GitlabService implements Omit<
             targetRefName: mergeRequest?.target_branch ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: mergeRequest?.target_branch ?? '',
+                sha: diffRefs?.start_sha ?? '',
                 repo: {
                     id: repository?.id ?? '',
                     name: repository?.name ?? '',

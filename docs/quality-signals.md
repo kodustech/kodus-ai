@@ -1,6 +1,6 @@
 # Quality signals
 
-Every quality gate writes one row per run to BigQuery `kody-408918.quality.signals`. The
+Every quality gate writes one row per run to `quality.signals` in the analytics warehouse, through kodus-quality's `POST /api/ingest`. The
 dashboard and the daily digest read it. Nothing is computed there: the producer decides
 the status, the table records it.
 
@@ -66,9 +66,6 @@ Reusable workflows (`e2e-self-hosted-matrix`, `e2e-cloud`, `code-review-model-be
       value: ${{ steps.jest.outputs.failed }}
       unit: count
       meta: '{"total": ${{ steps.jest.outputs.total || 0 }}}'   # empty output would break the JSON
-      gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}   # a composite action cannot read vars
-      gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
-      gcp_project: ${{ vars.GCP_PROJECT }}
 ```
 
 3. Run the workflow once and put the row in the PR description.

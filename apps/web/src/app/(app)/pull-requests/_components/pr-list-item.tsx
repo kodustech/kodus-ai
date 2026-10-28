@@ -442,7 +442,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
         ? "merged"
         : latest.automationExecution?.status || "pending";
     const rowAccent =
-        rowStatus === "error"
+        latest.approvalReasonDeliveryFailure || rowStatus === "error"
             ? "border-l-danger/70"
             : rowStatus === "partial_error"
               ? "border-l-warning/70"
@@ -700,11 +700,33 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     </Tooltip>
                 </NextLink>
 
-                {/* Status column — "Merged" is a terminal state: a merged PR
-                    reads as "Merged", full stop (no review-status chip stacked
-                    next to it). Only when the PR is NOT merged do we surface the
-                    review-run status (success/error/skipped/…). */}
+                {/* The approval notice is separate from review execution status.
+                    Keep it visible even if the PR has since been merged. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {latest.approvalReasonDeliveryFailure && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Badge
+                                    tabIndex={0}
+                                    variant="helper"
+                                    className="bg-danger/10 text-danger ring-danger/40 whitespace-nowrap ring-1">
+                                    Approval note unverified
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm text-xs break-words normal-case">
+                                Kody could not confirm the{" "}
+                                {latest.approvalReasonDeliveryFailure
+                                    .decision === "hold"
+                                    ? "hold"
+                                    : "approval"}{" "}
+                                reason appeared on the PR. Kody's reason:{" "}
+                                {latest.approvalReasonDeliveryFailure.reason}
+                                {
+                                    " Check the repository integration permissions and the PR comments."
+                                }
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
                     {latest.merged ? (
                         <Badge variant="primary" className="whitespace-nowrap">
                             Merged

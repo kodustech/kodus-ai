@@ -1,0 +1,13 @@
+# Blind approval-risk labeling pilot
+
+Review the **snapshot diff** and the author's stated intent. Decide whether, **after a clean Kody review**, unattended approval would have been acceptable at that point. Use `hold` for a concrete material risk, `eligible` after inspecting the change and relevant context, and `uncertain` when evidence is insufficient. Explain the reason in one sentence. Do not read later commits, review comments, merge outcome, or SWRench labels until after recording your decision.
+
+| Case | Snapshot at PR opening (UTC)                                     | Reviewable diff                                                                                                                                          | Change described by author                                                                       | Your decision and reason |
+| ---- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------ |
+| A    | 2025-03-14 13:53:42 · `ce73214ce9b0140e5ca6a91741dc85e611926e9f` | [sympy/sympy#27763 diff](https://github.com/sympy/sympy/compare/1ae71856a825b29083f12af24040101bb6ca2926...ce73214ce9b0140e5ca6a91741dc85e611926e9f)     | Add a `parse_expr()` doc warning that it uses `eval()` and should not receive unsanitized input. |                          |
+| B    | 2025-03-06 21:49:55 · `5224812d50ae2f7c32dabfdaba9ff971bc085ed4` | [sympy/sympy#27708 diff](https://github.com/sympy/sympy/compare/715492717df410968e83efdd35a9ed135f2ec2de...5224812d50ae2f7c32dabfdaba9ff971bc085ed4)     | Fix `Q.finite(x**-1)` under `Q.real(x)` when division by zero is possible.                       |                          |
+| C    | 2025-04-11 11:40:45 · `daa73a54718bc5549f55a815c5b2b36106fcaac0` | [pydata/xarray#10219 diff](https://github.com/pydata/xarray/compare/aa9e2bd407a47cef1ec7f1d9498e4a1118bc440e...daa73a54718bc5549f55a815c5b2b36106fcaac0) | Let `DatasetView.map` honor `keep_attrs`, using the logic from `Dataset.map`.                    |                          |
+
+The descriptions summarize the authors' PR text returned by the GitHub API. These three base-to-head comparisons were checked against the GitHub API and returned `ahead`. Snapshot time is the PR creation time; all included commits predate it.
+
+Reply with `A: decision — reason`, `B: ...`, `C: ...`. After that, compare decisions and consult later review evidence to resolve disagreements. Cases that remain disputed become `uncertain` and stay out of the scored set.

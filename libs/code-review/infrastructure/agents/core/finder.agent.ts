@@ -49,6 +49,8 @@ import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agen
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import {
+    citesRepoInstruction,
+    isRepoInstructionFile,
     quotesRepoInstruction,
     type RepoInstructionsContext,
 } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
@@ -96,6 +98,13 @@ export interface FinderSuggestion {
     source?: { file: string; section?: string; quote: string };
 }
 
+const FINDER_LABELS = [
+    'bug',
+    'security',
+    'performance',
+    'repo_instruction',
+] as const;
+
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
 const SUBMIT_RESULT_SCHEMA: JSONSchema = {
     type: 'object',
@@ -113,15 +122,7 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                 properties: {
                     relevantFile: { type: 'string' },
                     language: { type: 'string' },
-                    label: {
-                        type: 'string',
-                        enum: [
-                            'bug',
-                            'security',
-                            'performance',
-                            'repo_instruction',
-                        ],
-                    },
+                    label: { type: 'string', enum: [...FINDER_LABELS] },
                     suggestionContent: { type: 'string' },
                     existingCode: { type: 'string' },
                     improvedCode: { type: 'string' },
@@ -211,6 +212,40 @@ function withConventionFields(tool: AgentTool): AgentTool {
 /** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
  *  Offered only when the PR has earlier suggestions: a first-round review sends
  *  exactly the tool it always did, so this change cannot move its recall. */
+/**
+ * The done-tool offering only `labels` (the agent's allowed labels, as its
+ * prompt states them). Labels the finder does not know are ignored; with none
+ * it knows, every label stays.
+ */
+function withLabels(
+    tool: AgentTool,
+    labels: readonly string[] | undefined,
+): AgentTool {
+    const offered = FINDER_LABELS.filter((l) => labels?.includes(l));
+    if (!offered.length) return tool;
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            label: { ...items.properties.label, enum: offered },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 function withRevisionField(tool: AgentTool): AgentTool {
     const schema = tool.inputSchema as any;
     const items = schema.properties.suggestions.items;
@@ -245,6 +280,8 @@ export interface BuildFinderSpecParams {
     fallbackModelId?: string;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
+    /** The labels the agent may report; the done-tool offers only these. */
+    labels?: readonly string[];
     coverageLedger: ProgressLedger;
     compressor?: Compressor;
     maxSteps?: number;
@@ -271,6 +308,7 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         ? withRevisionField(submitResultTool)
         : submitResultTool;
     if (params.acceptsConventions) doneTool = withConventionFields(doneTool);
+    doneTool = withLabels(doneTool, params.labels);
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Enable strict/structured tool calling on the done-tool for
@@ -690,6 +728,10 @@ export interface RunFinderWithVerifyParams {
     /** Forwarded to the LlmVerifier as evidence for `repo_instruction`
      *  candidates. */
     repoInstructions?: RepoInstructionsContext;
+    /** Hold a finding that cites an instruction file under another label to
+     *  the repo_instruction quote check. Off for custom agents, whose guides
+     *  can be the same files and take the convention check. Default on. */
+    checksInstructionCitations?: boolean;
     /** Second pass for convention findings (custom agents with linked guides).
      *  When set, `kind: 'convention'` findings take the quote check and the
      *  convention verifier instead of HV2. Absent → every finding takes HV2,
@@ -1038,6 +1080,7 @@ export async function verifyFindings(
         | 'usageRunName'
         | 'previousDecisions'
         | 'repoInstructions'
+        | 'checksInstructionCitations'
         | 'laneFocus'
     >,
     suggestions: FinderSuggestion[],
@@ -1049,6 +1092,63 @@ export async function verifyFindings(
     verdictByFinding: Map<FinderSuggestion, Verdict>;
     verifyUsage: VerifyUsage;
 }> {
+    // A finding that cites an instruction file under another label is a
+    // convention break too. Before verify, one quoting the target branch is
+    // relabeled repo_instruction, so the verifier judges it against the file
+    // (appliesTo, the changed line); one that does not (the setting is off,
+    // or it quotes the PR's own version) is dropped. A finding on the
+    // instruction file itself reviews that file and is left alone.
+    const preDropped: { candidate: FinderSuggestion; verdict: Verdict }[] = [];
+    let candidates = suggestions;
+    if (params.checksInstructionCitations !== false) {
+        const relabeled = new Map<FinderSuggestion, FinderSuggestion>();
+        const unsupported = new Set<FinderSuggestion>();
+        for (const f of suggestions) {
+            if (
+                f.label === 'repo_instruction' ||
+                !citesRepoInstruction(f, params.repoInstructions) ||
+                isRepoInstructionFile(f.relevantFile, params.repoInstructions)
+            ) {
+                continue;
+            }
+            if (
+                quotesRepoInstruction(
+                    f.suggestionContent,
+                    params.repoInstructions,
+                )
+            ) {
+                relabeled.set(f, { ...f, label: 'repo_instruction' });
+            } else {
+                unsupported.add(f);
+            }
+        }
+        if (relabeled.size || unsupported.size) {
+            candidates = suggestions
+                .filter((f) => !unsupported.has(f))
+                .map((f) => relabeled.get(f) ?? f);
+            const rationale = params.repoInstructions?.files?.length
+                ? 'It cites an instruction file without quoting it as merged on the target branch.'
+                : 'It cites an instruction file, and coding-agent instructions are off for this review.';
+            for (const candidate of unsupported) {
+                preDropped.push({
+                    candidate,
+                    verdict: { keep: false, rationale },
+                });
+            }
+            finderLogger.log({
+                message: `Findings citing an instruction file under another label: ${relabeled.size} relabeled repo_instruction, ${unsupported.size} dropped`,
+                context: 'finder.repo-instruction-citation',
+                metadata: {
+                    ...params.telemetryMetadata,
+                    agentName: params.agentName,
+                    instructionsOn: !!params.repoInstructions?.files?.length,
+                    relabeled: [...relabeled.keys()].map((f) => f.relevantFile),
+                    dropped: [...unsupported].map((f) => f.relevantFile),
+                },
+            });
+        }
+    }
+
     // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
     // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
     const verifier = new LlmVerifier(params.runner, {
@@ -1064,12 +1164,12 @@ export async function verifyFindings(
         laneFocus: params.laneFocus,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
-        { candidates: suggestions, verifier, concurrency: params.concurrency },
+        { candidates, verifier, concurrency: params.concurrency },
         ctx,
     );
 
     let kept = pass.kept;
-    let dropped = pass.dropped;
+    let dropped = [...preDropped, ...pass.dropped];
     let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
 
     // Per-finding verifier verdict (carries the verifier's investigation tool
@@ -1077,6 +1177,7 @@ export async function verifyFindings(
     const verdictByFinding = new Map<FinderSuggestion, Verdict>();
     pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
     pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+    preDropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
 
     // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
     // having investigated its file is not trusted blindly — it gets a thorough

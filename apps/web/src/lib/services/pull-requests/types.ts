@@ -167,6 +167,11 @@ export interface ReviewWarning {
 }
 
 export interface PullRequestExecution {
+    approvalReasonDeliveryFailure?: {
+        decision: "hold" | "approve";
+        reason: string;
+        occurredAt: string;
+    } | null;
     prId: string;
     prNumber: number;
     title: string;

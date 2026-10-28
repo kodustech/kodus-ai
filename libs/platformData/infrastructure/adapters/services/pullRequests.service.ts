@@ -7,6 +7,7 @@ import {
 import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
+    IApprovalReasonDeliveryFailure,
     ICommit,
     IFile,
     IPullRequests,
@@ -103,6 +104,20 @@ export class PullRequestsService implements IPullRequestsService {
 
     getNativeCollection() {
         throw new Error('Method not implemented.');
+    }
+
+    setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: IApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
+            organizationId,
+            repositoryId,
+            prNumber,
+            failure,
+        );
     }
 
     //#region Create
@@ -374,6 +389,18 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        return this.pullRequestsRepository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+            organizationId,
+            prRefs,
+            status,
+        );
+    }
+
     findFileWithSuggestions(
         prnumber: number,
         repositoryName: string,
@@ -497,14 +524,21 @@ export class PullRequestsService implements IPullRequestsService {
 
     async addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         try {
-            const existingPR = await this.findByNumberAndRepositoryName(
+            // Resolved by ID first, with the name as a guarded fallback: a
+            // name hit is only taken when the stored row carries no id, or this
+            // repository's, so it stays safe in the #2059 case where two
+            // repositories of one organization share a name - while a legacy
+            // document that has no id is still appended to instead of missed
+            // (#2076 review).
+            const existingPR = await this.findExistingPullRequest(
                 pullRequestNumber,
-                repositoryName,
+                { id: repositoryId, name: repositoryName },
                 organizationAndTeamData,
             );
 
@@ -514,6 +548,7 @@ export class PullRequestsService implements IPullRequestsService {
                     context: PullRequestsService.name,
                     metadata: {
                         pullRequestNumber,
+                        repositoryId,
                         repositoryName,
                         organizationAndTeamData,
                     },
@@ -521,17 +556,13 @@ export class PullRequestsService implements IPullRequestsService {
                 return null;
             }
 
-            const existingPrLevelSuggestions =
-                existingPR.prLevelSuggestions || [];
-            const updatedPrLevelSuggestions = [
-                ...existingPrLevelSuggestions,
-                ...prLevelSuggestions,
-            ];
-
-            return this.update(existingPR, {
-                prLevelSuggestions: updatedPrLevelSuggestions,
-                updatedAt: new Date().toISOString(),
-            });
+            // Appended atomically to the document the identity lookup
+            // resolved: nothing is re-read between that decision and the
+            // write, so a concurrent writer's append survives (#2076 review).
+            return this.appendPrLevelSuggestions(
+                existingPR,
+                prLevelSuggestions,
+            );
         } catch (error) {
             this.logger.error({
                 message: `Failed to add PR level suggestions to PR#${pullRequestNumber}`,
@@ -539,6 +570,7 @@ export class PullRequestsService implements IPullRequestsService {
                 error,
                 metadata: {
                     pullRequestNumber,
+                    repositoryId,
                     repositoryName,
                     suggestionsCount: prLevelSuggestions.length,
                     organizationAndTeamData,
@@ -547,14 +579,22 @@ export class PullRequestsService implements IPullRequestsService {
             return null;
         }
     }
-    //#endregion
 
-    //#region Update
     async update(
         pullRequest: PullRequestsEntity,
         updateData: Partial<IPullRequests>,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.update(pullRequest, updateData);
+    }
+
+    async appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null> {
+        return this.pullRequestsRepository.appendPrLevelSuggestions(
+            pullRequest,
+            suggestions,
+        );
     }
 
     async updateFile(
@@ -748,12 +788,16 @@ export class PullRequestsService implements IPullRequestsService {
             platformType,
         );
 
-        const existingPR =
-            await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                pullRequest?.number,
-                repository.name,
-                organizationAndTeamData,
-            );
+        // Identity is the repository ID — the column the unique index
+        // (`number_1_repository.id_1_organizationId_1`) already enforces — not
+        // the repository name (see `findExistingPullRequest`). The name is only
+        // a fallback: for a provider that hands us no id, and for a stored
+        // document whose id column is absent or differently formatted.
+        const existingPR = await this.findExistingPullRequest(
+            pullRequest?.number,
+            repository,
+            organizationAndTeamData,
+        );
 
         if (!existingPR) {
             return this.handleInitialPullRequest(
@@ -818,12 +862,39 @@ export class PullRequestsService implements IPullRequestsService {
         });
 
         if (prLevelSuggestions && prLevelSuggestions.length > 0) {
-            await this.addPrLevelSuggestions(
-                pullRequest.number,
-                repository.name,
-                prLevelSuggestions,
-                organizationAndTeamData,
-            );
+            // Append to the record the identity lookup already resolved rather
+            // than looking it up again by repository name: in the #2059 scenario
+            // two repositories of one organization share a name, and a name
+            // lookup can return the OTHER repository's document, splitting this
+            // save's suggestions onto a foreign record (#2076 review).
+            //
+            // Appended in one atomic statement, targeted at the document the
+            // identity lookup already resolved. A re-read followed by a
+            // whole-array `$set` dropped whatever a concurrent writer (the
+            // review stage, or a second webhook) appended between the read and
+            // the write, and re-resolving by name could land on another
+            // repository's record (#2076 review). Appending stays non-fatal:
+            // the main save is already committed, so a rejection here is logged
+            // and the event still reported as handled.
+            try {
+                await this.appendPrLevelSuggestions(
+                    existingPR,
+                    prLevelSuggestions,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to append PR level suggestions',
+                    context: PullRequestsService.name,
+                    error,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        repositoryId: existingPR.repository?.id,
+                        suggestionsCount: prLevelSuggestions.length,
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+            }
         }
 
         return this.handleExistingPullRequest(
@@ -1042,6 +1113,120 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
         }
+    }
+
+    /**
+     * The stored PR this save must UPDATE, or null when it is a PR we have not
+     * seen before.
+     *
+     * Identity is the repository ID — the column the unique index
+     * (`number_1_repository.id_1_organizationId_1`) already enforces — not the
+     * repository name: two repositories in one organization can share a name
+     * across owners or providers, and matching on the name merged their records
+     * (#2059).
+     *
+     * The name is the fallback, used in two cases: a provider that hands us no
+     * id at all, and an id lookup that MISSED because the stored document
+     * carries no id (or a different representation of it) — retrying by name
+     * before creating keeps those documents updated instead of duplicated.
+     * With neither an id nor a name there is nothing to bound the query to, so
+     * the name lookup is never issued on its own: `{number, organizationId}`
+     * alone can match a DIFFERENT repository's PR and contaminate it — the path
+     * the previous TypeError used to abort (#2076 review).
+     */
+    private async findExistingPullRequest(
+        pullRequestNumber: number,
+        repository: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<any> {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast, so a numeric provider id (GitHub webhook
+        // `repository.id`, GitLab `project.id`) must be stringified here too or
+        // the query never matches the stored value and the id key is a silent
+        // no-op (#2076 review).
+        const repositoryId = repository?.id ? String(repository.id) : undefined;
+
+        if (repositoryId) {
+            const byId =
+                await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repositoryId,
+                    organizationAndTeamData,
+                );
+            if (byId) {
+                return byId;
+            }
+        }
+
+        if (repository?.name) {
+            const byName =
+                await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                    pullRequestNumber,
+                    repository.name,
+                    organizationAndTeamData,
+                );
+
+            // No name hit: this pull request has not been stored yet, which is
+            // the normal case, so there is nothing to name. Returning here also
+            // keeps the warning below honest - it used to fire on every new
+            // pull request, with `storedRepositoryId: undefined`, because a
+            // missed name lookup fell through to it (#2076 review).
+            if (!byName) {
+                return undefined;
+            }
+
+            // A name hit is this pull request's document only when the stored
+            // row carries no id (a legacy document) or carries THIS repository's
+            // id. A non-empty, different id means the row belongs to another
+            // repository that merely shares the name; updating it would rewrite
+            // its `repository.id` from this payload and hand it this save's
+            // suggestions — the cross-repository contamination of #2059
+            // (#2076 review).
+            const storedId = byName.repository?.id;
+            const sameRepository =
+                !repositoryId || !storedId || String(storedId) === repositoryId;
+
+            if (sameRepository) {
+                return byName;
+            }
+
+            // A name hit owned by a DIFFERENT repository is worth naming: two
+            // repositories of one organization share a name, this save is about
+            // the other one, and the document is left alone on purpose
+            // (#2076 review).
+            this.logger.warn({
+                message:
+                    'Skipping the name match for a pull request: the stored document belongs to a different repository id',
+                context: PullRequestsService.name,
+                metadata: {
+                    pullRequestNumber,
+                    repositoryId,
+                    storedRepositoryId: storedId,
+                    organizationAndTeamData,
+                },
+            });
+
+            return undefined;
+        }
+
+        // No identity at all: nothing bounds the query, so nothing is looked
+        // up. With an id or a name, a miss is simply a pull request whose
+        // review has not been stored yet, which is the normal case rather than
+        // something to warn about (#2076 review).
+        if (!repositoryId && !repository?.name) {
+            this.logger.warn({
+                message:
+                    'Saving a pull request with no repository id and no repository name; skipping the identity lookup',
+                context: PullRequestsService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    number: pullRequestNumber,
+                },
+            });
+        }
+
+        return null;
     }
 
     private async handleInitialPullRequest(

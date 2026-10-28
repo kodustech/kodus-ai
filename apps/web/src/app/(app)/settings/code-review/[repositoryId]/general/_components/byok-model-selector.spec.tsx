@@ -1,8 +1,9 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@components/ui/tooltip";
 import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import { testBYOKModel } from "@services/organizationParameters/fetch";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import {
     CodeReviewModelDataProvider,
@@ -118,6 +119,29 @@ beforeAll(() => {
 });
 
 describe("BYOKModelSelectorSection — byokModelId re-key", () => {
+    it("tests the provider model name instead of the stored BYOK entry id", async () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModelId: {
+                        value: "gpt-4o",
+                        level: FormattedConfigLevel.REPOSITORY,
+                    },
+                })}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole("button", { name: "Test model" }));
+
+        await waitFor(() => {
+            expect(testBYOKModel).toHaveBeenCalledWith({
+                provider: "openai",
+                model: "GPT-4o",
+            });
+            expect(screen.getByText("Works on your provider")).toBeInTheDocument();
+        });
+    });
+
     it("writes the id override to byokModelId.value (not the legacy byokModel)", async () => {
         render(<Harness config={scopedConfig({})} />);
 

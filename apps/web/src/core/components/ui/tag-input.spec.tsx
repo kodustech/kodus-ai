@@ -23,4 +23,20 @@ describe("TagInput", () => {
 
         expect(onTagsChange).toHaveBeenCalledWith(["**/*.test.ts"]);
     });
+
+    it("stops adding tags at the configured limit while keeping removal available", () => {
+        const onTagsChange = jest.fn();
+        render(
+            <TagInput
+                tags={["ready", "verified"]}
+                maxTags={2}
+                onTagsChange={onTagsChange}
+                placeholder="Add a label"
+            />,
+        );
+
+        expect(screen.getByPlaceholderText("Add a label")).toBeDisabled();
+        fireEvent.click(screen.getByRole("button", { name: "Remove ready" }));
+        expect(onTagsChange).toHaveBeenCalledWith(["verified"]);
+    });
 });

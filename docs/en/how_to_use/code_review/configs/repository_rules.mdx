@@ -18,7 +18,7 @@ Repository rule files are imported **verbatim** — no LLM conversion. The front
 - **Automatic Detection**: Repository rules are detected and synchronized in every connected repository; there is nothing to enable
 - **Import now**: On the repository's **Kody Rules → Configuration** sheet, **Import rule files now** reads every rule file on the default branch
 - **Web Application**: Synchronized rules appear on the repository's **Code review → Kody Rules** page, with the **Auto-sync** origin (rules imported from coding-agent files before they stopped converting show **Agent file** instead)
-- **Real-time Updates**: Changes to rule files are synced when Pull Requests are merged
+- **Real-time Updates**: Changes to rule files are synced when Pull Requests are merged into the default branch
 
 ## File Location
 
@@ -161,7 +161,7 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 ## Setup Requirements
 
 1. **Create rule files**: Place `.md` files that follow the template in `.kody/rules/**` or `rules/**`. Files in `.rules/**` and `docs/coding-standards/**` that follow the template are imported too.
-2. **Merge them**: A rule file syncs when a Pull Request that adds, changes, renames or removes it is merged. Removing the file removes its rule.
+2. **Merge them**: A rule file syncs when a Pull Request that adds, changes, renames or removes it is merged into the default branch. Removing the file removes its rule.
 3. **Existing files**: To import rule files that are already on the default branch, use **Import rule files now** in the repository's **Kody Rules → Configuration** sheet.
 
 New rules land active, or in **Pending review** when **Kody knowledge approval** is on.

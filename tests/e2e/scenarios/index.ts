@@ -2,6 +2,7 @@ import type { Scenario } from '../lib/types.js';
 import centralizedConfigSync from './centralized-config-sync.js';
 import cockpitAnalytics from './cockpit-analytics.js';
 import codeReviewBasic from './code-review-basic.js';
+import conditionalApprovalProvider from './conditional-approval-provider.js';
 import codeReviewVertexByok from './code-review-vertex-byok.js';
 import crossRepoConfig from './cross-repo-config.js';
 import conversationVertexByok from './conversation-vertex-byok.js';
@@ -41,6 +42,7 @@ export const allScenarios: Record<string, Scenario> = {
     [onboardingWebhookRegistration.id]: onboardingWebhookRegistration,
     [finishOnboardingSlo.id]: finishOnboardingSlo,
     [codeReviewBasic.id]: codeReviewBasic,
+    [conditionalApprovalProvider.id]: conditionalApprovalProvider,
     [codeReviewVertexByok.id]: codeReviewVertexByok,
     [crossRepoConfig.id]: crossRepoConfig,
     [conversationVertexByok.id]: conversationVertexByok,

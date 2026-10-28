@@ -19,6 +19,12 @@ export type SuggestionSeverityBreakdown = Record<
     number
 >;
 
+export interface IApprovalReasonDeliveryFailure {
+    decision: 'hold' | 'approve';
+    reason: string;
+    occurredAt: string;
+}
+
 export interface SuggestionCountsBySeverity {
     // deliveryStatus === 'sent' — comment posted on the PR.
     sent: number;
@@ -52,6 +58,7 @@ export interface SuggestionCountsBySeverity {
 
 export interface IPullRequests {
     uuid?: string;
+    approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
     title: string;
     status: string;
     merged: boolean;

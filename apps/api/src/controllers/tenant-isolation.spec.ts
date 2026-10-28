@@ -39,6 +39,27 @@ describe('tenant isolation — organizationId comes from the principal', () => {
         );
     });
 
+    it('scopes code-area history to the principal organization', async () => {
+        const controller: any = Object.create(
+            CodeManagementController.prototype,
+        );
+        controller.request = {
+            user: { organization: { uuid: principalOrg } },
+        };
+        const execute = jest.fn().mockResolvedValue({ map: null });
+        controller.getAreaRiskMapUseCase = { execute };
+
+        await controller.getAreaRiskMap({
+            repositoryId: 'repo',
+            teamId: 'team',
+        });
+        expect(execute).toHaveBeenCalledWith({
+            organizationId: principalOrg,
+            repositoryId: 'repo',
+            teamId: 'team',
+        });
+    });
+
     it('current-user ignores a query-supplied organizationId', async () => {
         const controller: any = Object.create(
             CodeManagementController.prototype,

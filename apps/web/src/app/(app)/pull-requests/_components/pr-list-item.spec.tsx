@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 // @ts-nocheck
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { TooltipProvider } from "@components/ui/tooltip";
 
 import { PrListItem, ReviewNotices } from "./pr-list-item";
@@ -89,6 +89,39 @@ describe("PrListItem — suggestion count link", () => {
         renderRow(execution());
 
         expect(countLink()).toHaveAttribute("href", "/pull-requests/repo-1/42");
+    });
+});
+
+describe("PrListItem — conditional approval notice", () => {
+    it("keeps an actionable unverified note visible after the review succeeds and the PR merges", async () => {
+        renderRow(
+            execution({
+                merged: true,
+                automationExecution: { status: "success" },
+                approvalReasonDeliveryFailure: {
+                    decision: "hold",
+                    reason: "A person must approve this path.",
+                    occurredAt: "2026-10-24T00:00:00.000Z",
+                },
+            }),
+        );
+
+        expect(
+            screen.getByText("Approval note unverified"),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Merged")).toBeInTheDocument();
+        fireEvent.focus(screen.getByText("Approval note unverified"));
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "A person must approve this path.",
+        );
+    });
+
+    it("does not show the notice when the PR has no delivery failure", () => {
+        renderRow(execution({ approvalReasonDeliveryFailure: null }));
+
+        expect(
+            screen.queryByText("Approval note unverified"),
+        ).not.toBeInTheDocument();
     });
 });
 

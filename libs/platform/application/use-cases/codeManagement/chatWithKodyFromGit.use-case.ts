@@ -749,9 +749,11 @@ export class ChatWithKodyFromGitUseCase {
 
     /**
      * Who may waive a requirement: someone with write access who did not open
-     * the PR. GitHub says how the commenter relates to the repository; the
-     * other platforms are asked for the organization's members, and a
-     * commenter outside them, or a list that can't be read, may not.
+     * the PR. GitHub and GitLab are asked for the commenter's permission on
+     * the repository; the other platforms for the organization's members. A
+     * commenter outside them may not. A lookup that fails or can't say throws,
+     * so the reply says access couldn't be checked and accepts nothing,
+     * instead of telling a reviewer they lack write access.
      */
     private async senderAccess(
         params: WebhookParams,
@@ -761,35 +763,53 @@ export class ChatWithKodyFromGitUseCase {
         const sender = replySender(params, this.getSender(params));
         const isAuthor = isPullRequestAuthor(params, sender);
         if (params.platformType === PlatformType.GITHUB) {
+            // The association rules out a contributor or a stranger, but
+            // COLLABORATOR and MEMBER come with read access too: ask for the
+            // permission.
             const association = params.payload?.comment?.author_association;
-            return {
-                isAuthor,
-                ...(typeof association === 'string'
-                    ? {
-                          canWrite: [
-                              'OWNER',
-                              'MEMBER',
-                              'COLLABORATOR',
-                          ].includes(association),
-                      }
-                    : {}),
-            };
+            if (
+                !sender.login ||
+                (typeof association === 'string' &&
+                    !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association))
+            ) {
+                return { isAuthor, canWrite: false };
+            }
         }
-        if (params.platformType === PlatformType.GITLAB && sender.id) {
-            // Listed members include Guests and Reporters: ask for the level.
+        if (
+            (params.platformType === PlatformType.GITHUB && sender.login) ||
+            (params.platformType === PlatformType.GITLAB && sender.id)
+        ) {
+            // GitLab's listed members include Guests and Reporters: ask for
+            // the level.
             return {
                 isAuthor,
                 canWrite: await this.codeManagementService
                     .userCanWrite(
                         {
                             organizationAndTeamData,
-                            repository: { id: String(repository.id) },
-                            userId: sender.id as string | number,
+                            repository: {
+                                id: String(repository.id),
+                                ...(params.platformType === PlatformType.GITHUB
+                                    ? {
+                                          name: repository.name,
+                                          owner: repository.owner,
+                                      }
+                                    : {}),
+                            },
+                            ...(params.platformType === PlatformType.GITHUB
+                                ? { login: sender.login }
+                                : { userId: sender.id as string | number }),
                         },
-                        PlatformType.GITLAB,
+                        params.platformType,
                     )
-                    // Unverified is no: a failed lookup must not let anyone accept.
-                    .then((canWrite) => canWrite === true)
+                    .then((canWrite) => {
+                        if (canWrite === undefined) {
+                            throw new Error(
+                                `${params.platformType} could not say whether the commenter can write`,
+                            );
+                        }
+                        return canWrite;
+                    })
                     .catch((error) => {
                         this.logAccessFailure(
                             error,
@@ -797,7 +817,7 @@ export class ChatWithKodyFromGitUseCase {
                             organizationAndTeamData,
                             repository,
                         );
-                        return false;
+                        throw error;
                     }),
             };
         }
@@ -813,7 +833,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     repository,
                 );
-                return undefined;
+                throw error;
             });
         const id = bareId(sender.id);
         const login = sender.login?.toLowerCase();
@@ -831,7 +851,7 @@ export class ChatWithKodyFromGitUseCase {
         };
     }
 
-    /** A lookup that failed reads as no access; the log tells it from a real no. */
+    /** A lookup that failed accepts nothing; the log says why. */
     private logAccessFailure(
         error: Error,
         params: WebhookParams,
@@ -841,7 +861,7 @@ export class ChatWithKodyFromGitUseCase {
         const sender = replySender(params, this.getSender(params));
         this.logger.error({
             message:
-                "Could not read the commenter's access: treated as no write access",
+                "Could not read the commenter's access: nothing was accepted",
             context: ChatWithKodyFromGitUseCase.name,
             error,
             metadata: {
@@ -2567,9 +2587,9 @@ export class ChatWithKodyFromGitUseCase {
                 : request,
         );
         if (!this.businessLogicPublisher) {
-            return replyFor(result.outcome, false);
+            return replyFor(result.outcome, 'none');
         }
-        // The same comment and check the review writes, edited in place (UC-34).
+        // The same comment the review writes, edited in place (UC-34).
         const published = await this.businessLogicPublisher.publish({
             request,
             result,
@@ -2585,7 +2605,7 @@ export class ChatWithKodyFromGitUseCase {
                       )
                     : undefined,
         });
-        return replyFor(published.outcome, published.comment !== 'none');
+        return replyFor(published.outcome, published.comment);
     }
 
     private async handleConversation(context: {

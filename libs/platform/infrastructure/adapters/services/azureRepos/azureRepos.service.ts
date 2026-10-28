@@ -119,6 +119,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import { listingFailed } from '../repository-listing';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -942,7 +943,7 @@ export class AzureReposService implements Omit<
                 return null;
             }
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const reviewer of reviewers || []) {
                 if (
                     reviewer.id === currentUserId &&
@@ -1012,6 +1013,54 @@ export class AzureReposService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const { orgName, token } = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const [projectId, reviewerId] = await Promise.all([
+            this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            ),
+            this.azureReposRequestHelper.getAuthenticatedUserId({
+                orgName,
+                token,
+            }),
+        ]);
+        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        await this.azureReposRequestHelper.votePullRequest({
+            orgName,
+            token,
+            projectId,
+            repositoryId: repository.id,
+            prId: prNumber,
+            reviewerId,
+            vote: AzurePullRequestVote.NoVote,
+        });
+        return 1;
     }
 
     async approvePullRequest(params: {
@@ -3949,7 +3998,7 @@ export class AzureReposService implements Omit<
                             AzureReposService['_generateFileDiffForAzure']
                         >
                     >
-                >
+                > & { previous_filename?: string }
             > = [];
             const failedFiles: Array<{ filePath: string; reason: string }> = [];
 
@@ -3959,7 +4008,16 @@ export class AzureReposService implements Omit<
                     validEntries[idx]?.originalPath;
                 if (result.status === 'fulfilled') {
                     if (result.value !== null) {
-                        successfulFiles.push(result.value);
+                        const { item, originalPath } = validEntries[idx];
+                        successfulFiles.push({
+                            ...result.value,
+                            previous_filename:
+                                item?.path &&
+                                originalPath &&
+                                originalPath !== item.path
+                                    ? originalPath
+                                    : undefined,
+                        });
                     }
                     // `value === null` means `_generateFileDiffForAzure`
                     // swallowed its own error and already logged it — no
@@ -5780,6 +5838,7 @@ export class AzureReposService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5799,7 +5858,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Azure Repos authentication details not found',
+                );
             }
 
             const { orgName, token } = authDetails;
@@ -5816,7 +5878,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Project ID not found for repository',
+                );
             }
 
             const {
@@ -5840,7 +5905,10 @@ export class AzureReposService implements Omit<
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5913,7 +5981,11 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -6128,6 +6200,7 @@ export class AzureReposService implements Omit<
             targetRefName: pr?.targetRefName ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pr?.targetRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeTargetCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

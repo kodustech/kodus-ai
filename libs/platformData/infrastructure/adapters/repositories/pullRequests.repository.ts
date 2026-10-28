@@ -19,6 +19,7 @@ import {
     IPullRequestsRepository,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
+    IApprovalReasonDeliveryFailure,
     IFile,
     IPullRequests,
     IPullRequestUserMapping,
@@ -48,6 +49,28 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     getNativeCollection() {
         return this.pullRequestsModel.db.collection('pullRequests');
+    }
+
+    async setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: IApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                number: prNumber,
+                // Clearing a notice that does not exist should leave the PR
+                // untouched, including its updatedAt timestamp.
+                ...(failure === null
+                    ? { approvalReasonDeliveryFailure: { $ne: null } }
+                    : {}),
+            },
+            { $set: { approvalReasonDeliveryFailure: failure } },
+        );
+        return failure === null || result.matchedCount > 0;
     }
 
     //#region Create
@@ -168,13 +191,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
     async findByNumberAndRepositoryId(
         pullRequestNumber: number,
-        repositoryName: string,
+        repositoryId: string,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const pullRequest = await this.pullRequestsModel
             .findOne({
                 'number': pullRequestNumber,
-                'repository.id': repositoryName,
+                'repository.id': repositoryId,
                 'organizationId': organizationAndTeamData.organizationId,
             })
             .lean();
@@ -357,10 +380,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     private unresolvedSentCond(severity?: string) {
         const conds: Record<string, any>[] = [
             {
-                $eq: [
-                    '$files.suggestions.deliveryStatus',
-                    DeliveryStatus.SENT,
-                ],
+                $eq: ['$files.suggestions.deliveryStatus', DeliveryStatus.SENT],
             },
             {
                 $ne: [
@@ -1406,6 +1426,95 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         return result;
     }
 
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        const uniqueRefs = [
+            ...new Map(
+                prRefs
+                    .filter(
+                        (ref) =>
+                            ref.repositoryId &&
+                            Number.isInteger(ref.pullRequestNumber),
+                    )
+                    .map((ref) => [
+                        `${ref.repositoryId}:${ref.pullRequestNumber}`,
+                        ref,
+                    ]),
+            ).values(),
+        ];
+        const matches: IPullRequestWithDeliveredSuggestions[] = [];
+        // The unique (organizationId, repository.id, number) index means a
+        // page of 100 references can match at most 100 whole PR documents.
+        for (let offset = 0; offset < uniqueRefs.length; offset += 100) {
+            const page = uniqueRefs.slice(offset, offset + 100);
+            const docs = await this.pullRequestsModel
+                .find(
+                    {
+                        organizationId,
+                        status,
+                        $or: page.map((ref) => ({
+                            'repository.id': ref.repositoryId,
+                            'number': ref.pullRequestNumber,
+                        })),
+                        $nor: [
+                            {
+                                files: {
+                                    $elemMatch: {
+                                        suggestions: {
+                                            $elemMatch: {
+                                                'deliveryStatus': {
+                                                    $in: [
+                                                        true,
+                                                        'sent',
+                                                        'implemented',
+                                                    ],
+                                                },
+                                                'comment.id': {
+                                                    $exists: true,
+                                                    $ne: null,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        'number': 1,
+                        'organizationId': 1,
+                        'status': 1,
+                        'provider': 1,
+                        'repository.id': 1,
+                        'repository.name': 1,
+                    },
+                )
+                .sort({ _id: 1 })
+                .limit(page.length)
+                .lean()
+                .maxTimeMS(MONGO_QUERY_MAX_TIME_MS)
+                .exec();
+            matches.push(
+                ...docs.map((doc) => ({
+                    _id: String(doc._id),
+                    number: doc.number,
+                    organizationId: doc.organizationId,
+                    status: doc.status,
+                    provider: doc.provider,
+                    repository: {
+                        id: doc.repository.id,
+                        name: doc.repository.name,
+                    },
+                    suggestions: [],
+                })),
+            );
+        }
+        return matches;
+    }
+
     async findByOrganizationAndRepositoryWithStatusAndSyncedFlag(
         organizationId: string,
         repository: Pick<Repository, 'id' | 'fullName'>,
@@ -2044,6 +2153,30 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const doc = await this.pullRequestsModel.findOneAndUpdate(
             filter,
             { $set: updateData },
+            { new: true },
+        );
+        return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
+    }
+
+    async appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null> {
+        // Appended in one statement, targeted at the document the identity
+        // lookup resolved: a re-read followed by a whole-array `$set` drops
+        // whatever a concurrent writer added between the read and the write,
+        // and a target resolved by repository NAME can be another repository's
+        // document when two of them share one (#2076 review).
+        const filter: Record<string, unknown> = { _id: pullRequest.uuid };
+        if (pullRequest.organizationId) {
+            filter.organizationId = pullRequest.organizationId;
+        }
+        const doc = await this.pullRequestsModel.findOneAndUpdate(
+            filter,
+            {
+                $push: { prLevelSuggestions: { $each: suggestions } },
+                $set: { updatedAt: new Date().toISOString() },
+            },
             { new: true },
         );
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;

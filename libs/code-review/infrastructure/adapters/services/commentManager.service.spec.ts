@@ -137,6 +137,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
             observabilityService as any,
             permissionValidationService,
             codeManagementService as any,
+            {} as any,
         );
     });
 
@@ -539,6 +540,111 @@ describe('CommentManagerService.generateSummaryPR', () => {
     });
 });
 
+describe('CommentManagerService GitLab status note reuse (#1721)', () => {
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    } as any;
+    const repository = { id: 'repo-1', name: 'repo' };
+    const createIssueComment = jest.fn();
+    const updateIssueComment = jest.fn();
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        { createIssueComment, updateIssueComment } as any,
+        {} as any,
+    );
+
+    beforeEach(() => {
+        createIssueComment.mockReset();
+        updateIssueComment.mockReset();
+        jest.spyOn(
+            service as any,
+            'generatePullRequestSummaryMarkdown',
+        ).mockResolvedValue('# Code Review Started');
+    });
+
+    const publish = (previous?: { commentId: number; noteId: number }) =>
+        service.createInitialComment(
+            organizationAndTeamData,
+            42,
+            repository,
+            [],
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            undefined,
+            previous,
+        );
+
+    it('returns the plain note ID for the end-of-review update', async () => {
+        createIssueComment.mockResolvedValue({ id: 11 });
+
+        await expect(publish()).resolves.toMatchObject({
+            commentId: 11,
+            noteId: 11,
+        });
+        expect(updateIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('edits the prior note on a later push instead of posting another', async () => {
+        updateIssueComment.mockResolvedValue({ id: 11 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 11, noteId: 11 });
+        expect(updateIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                commentId: 11,
+                noteId: 11,
+                body: '# Code Review Started',
+            }),
+        );
+        expect(createIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('creates a new note if the stored note can no longer be edited', async () => {
+        updateIssueComment.mockResolvedValue(null);
+        createIssueComment.mockResolvedValue({ id: 12 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates a replacement note when editing the stored note rejects', async () => {
+        updateIssueComment.mockRejectedValue(new Error('note not found'));
+        createIssueComment.mockResolvedValue({ id: 12 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces the edit error if creating a replacement also fails', async () => {
+        const editError = new Error('GitLab token expired');
+        updateIssueComment.mockRejectedValue(editError);
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish({ commentId: 11, noteId: 11 })).rejects.toBe(
+            editError,
+        );
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails when a new status note cannot be published', async () => {
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish()).rejects.toThrow(
+            'Could not create initial review status for PR#42',
+        );
+    });
+});
+
 // repeatedCodeReviewSuggestionClustering was migrated from the legacy
 // STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
 // structured result is JSON.stringify'd and fed through LLMResponseProcessor
@@ -571,6 +677,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
             parametersService,
             {} as any,
             observabilityService,
+            {} as any,
             {} as any,
             {} as any,
         );
@@ -662,6 +769,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
 describe('CommentManagerService — pure helpers', () => {
     const svc = () =>
         new CommentManagerService(
+            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -827,6 +935,7 @@ describe('CommentManagerService — pure helpers', () => {
                     {} as any,
                     {} as any,
                     {} as any,
+                    {} as any,
                 ) as any
             ).generatePullRequestFinishSummaryMarkdown(
                 { organizationId: 'org' },
@@ -860,6 +969,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -912,6 +1022,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -1134,6 +1245,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             parametersService,
             {} as any,
             { runLLMInSpan: jest.fn(), runAiSdkLLMInSpan: jest.fn() } as any,
+            {} as any,
             {} as any,
             {} as any,
         );
@@ -1932,6 +2044,7 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
                 {} as any,
                 {} as any,
                 {} as any,
+                {} as any,
             ) as any
         ).llmResponseProcessor;
     const org = { organizationId: 'o', teamId: 't' } as any;
@@ -1988,6 +2101,7 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
             {} as any,
             {} as any,
             { createReviewComment } as any,
+            {} as any,
         ) as any;
         const result = svc.createReviewCommentWithRetry({
             organizationAndTeamData: { organizationId: 'o', teamId: 't' },
@@ -2066,6 +2180,7 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
             {} as never,
             {} as never,
             codeManagementService,
+            {} as any,
         );
     });
 
@@ -2218,6 +2333,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
         return { svc, createReviewComment };
     };
@@ -2297,6 +2413,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
 
         const result = await svc.createLineComments(

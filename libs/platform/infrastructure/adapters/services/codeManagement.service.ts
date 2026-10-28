@@ -722,6 +722,7 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             file: any;
             pullRequest: any;
+            suppressNotFoundLogs?: boolean;
         },
         type?: PlatformType,
     ) {
@@ -1007,6 +1008,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: Partial<Repository>;
             prNumber: number;
+            includeLabels?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequest | null> {
@@ -1124,6 +1126,12 @@ export class CodeManagementService implements ICodeManagementService {
                 excludePatterns?: string[];
                 maxFiles?: number;
             };
+            /**
+             * Throw a `RepositoryListingError` instead of returning `[]` when the
+             * repository cannot be listed, so a failure is not read as a
+             * repository without the files.
+             */
+            throwOnError?: boolean;
         },
         type?: PlatformType,
     ): Promise<RepositoryFile[]> {
@@ -1255,6 +1263,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: { name: string; id: string };
             prNumber: number;
+            failOnError?: boolean;
         },
         type?: PlatformType,
     ) {
@@ -1417,6 +1426,8 @@ export class CodeManagementService implements ICodeManagementService {
                 endDate: string;
                 number?: number;
                 branch?: string;
+                dateField?: 'created' | 'updated';
+                maxResults?: number;
             };
         },
         type?: PlatformType,
@@ -1552,8 +1563,9 @@ export class CodeManagementService implements ICodeManagementService {
     async userCanWrite(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string };
-            userId: string | number;
+            repository: { id: string; name?: string; owner?: string };
+            userId?: string | number;
+            login?: string;
         },
         type?: PlatformType,
     ): Promise<boolean | undefined> {
@@ -1725,6 +1737,25 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getReviewStatusByPullRequest(params);
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // Every host implements it; one that does not must fail the step
+        // rather than leave Kody's approval in place under a hold.
+        if (!provider?.dismissOwnPullRequestApprovals) {
+            throw new Error(`Approval dismissal is unavailable on ${type}`);
+        }
+        return provider.dismissOwnPullRequestApprovals(params);
     }
 
     async addReactionToPR(params: {

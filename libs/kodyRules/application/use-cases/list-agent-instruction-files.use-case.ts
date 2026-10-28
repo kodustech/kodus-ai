@@ -90,6 +90,7 @@ export class ListAgentInstructionFilesUseCase {
                             ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
                         ],
                     },
+                    throwOnError: true,
                 }),
             ),
         );

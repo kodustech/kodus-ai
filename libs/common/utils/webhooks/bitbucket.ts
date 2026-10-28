@@ -75,6 +75,7 @@ export class BitbucketMappedPlatform implements IMappedPlatform {
                         defaultBranch: 'master',
                     },
                     ref: payload?.pullrequest?.toRef?.displayId,
+                    sha: payload?.pullrequest?.toRef?.latestCommit,
                 },
             };
         } else {
@@ -99,6 +100,7 @@ export class BitbucketMappedPlatform implements IMappedPlatform {
                             payload?.pullrequest?.destination?.branch?.name,
                     },
                     ref: payload?.pullrequest?.destination?.branch?.name,
+                    sha: payload?.pullrequest?.destination?.commit?.hash,
                 },
             };
         }

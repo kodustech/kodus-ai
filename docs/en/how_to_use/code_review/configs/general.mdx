@@ -163,7 +163,23 @@ commits:
 ### PR Workflow
 
 #### Auto-approve PRs
-**Enable Pull Request Approval** — Kody approves PRs when no issues are found.
+**Automatic PR approval** — After a clean automated review, Kody can approve the PR. This
+does not merge it.
+
+**Conditional approval (Beta)** is available to Teams and Enterprise organizations with beta
+access. You can limit eligible PRs by label or author. Within each filter, any listed value
+matches; when both filters are set, both must match. A file matching **Paths requiring human
+approval** always prevents automatic approval. **Assess PR risk** uses Kody's built-in criteria
+and available code history: only PRs assessed as low risk are approved automatically. If risk
+cannot be assessed for the current commit, Kody leaves approval to a person. **Additional team
+guidance** is optional and adds context to that assessment.
+
+Kody attempts to post a reason on the PR for conditional approval decisions. If it cannot verify
+that the reason was published, the Cockpit PR list shows **Approval note unverified** with the
+reason Kody tried to post. Check the PR comments and repository integration permissions.
+
+Bitbucket does not use approval labels. Azure Repos requires human approval while labels are
+configured.
 
 **Platforms:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 

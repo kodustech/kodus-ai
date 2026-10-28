@@ -862,6 +862,33 @@ class CodeReviewConfigWithoutLLMProviderDto {
     pullRequestApprovalActive?: boolean;
 
     @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(50)
+    @IsString({ each: true })
+    approvalLabels?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(50)
+    @IsString({ each: true })
+    approvalAuthors?: string[];
+
+    @IsOptional()
+    @IsBoolean()
+    approvalRiskActive?: boolean;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(4000)
+    approvalRiskInstructions?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(100)
+    @IsString({ each: true })
+    approvalSensitivePaths?: string[];
+
+    @IsOptional()
     @IsBoolean()
     kodusConfigFileOverridesWebPreferences?: boolean;
 

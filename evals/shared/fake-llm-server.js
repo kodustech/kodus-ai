@@ -121,7 +121,8 @@ function decide(body) {
 
     const format = body.response_format;
     if (format?.type === 'json_schema' && format.json_schema?.schema) {
-        return { text: JSON.stringify(instanceOf(format.json_schema.schema)) };
+        const prefer = promptText(body).includes('EVAL_FORCE_MEDIUM_RISK') ? ['medium'] : [];
+        return { text: JSON.stringify(instanceOf(format.json_schema.schema, format.json_schema.schema, 0, prefer)) };
     }
     return { text: '{}' };
 }

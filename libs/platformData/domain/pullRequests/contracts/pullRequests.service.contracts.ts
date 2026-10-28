@@ -57,6 +57,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
 
     addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,

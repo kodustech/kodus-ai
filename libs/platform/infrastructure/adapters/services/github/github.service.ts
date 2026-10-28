@@ -4,6 +4,7 @@ import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
@@ -138,6 +139,7 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { listingFailed } from '../repository-listing';
 
 interface GitHubAuthResponse {
     token: string;
@@ -571,7 +573,9 @@ export class GithubService
                 // the installation token is a live credential and must not be
                 // persisted in clear. Every
                 // reader already decrypt()s authToken.
-                authToken: installationToken ? encrypt(installationToken) : null,
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -3593,7 +3597,9 @@ export class GithubService
                 // the installation token is a live credential and must not be
                 // persisted in clear. Every
                 // reader already decrypt()s authToken.
-                authToken: installationToken ? encrypt(installationToken) : null,
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -4347,6 +4353,7 @@ export class GithubService
             deletions: file.deletions,
             changes: file.changes,
             patch: file.patch,
+            previous_filename: file.previous_filename,
         }));
 
         if (cacheKey && result.length > 0) {
@@ -5588,6 +5595,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -5623,6 +5631,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            throw error;
         }
     }
 
@@ -6099,6 +6108,7 @@ This is an experimental feature that generates committable changes. Review the d
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -6114,7 +6124,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is required',
+                );
             }
 
             const authDetails = await this.getGithubAuthDetails(
@@ -6128,7 +6141,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'GitHub authentication details not found',
+                );
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
@@ -6155,7 +6171,10 @@ This is an experimental feature that generates committable changes. Review the d
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -6174,6 +6193,21 @@ This is an experimental feature that generates committable changes. Review the d
                 });
 
                 return [];
+            }
+
+            if (tree.truncated) {
+                this.logger.warn({
+                    message:
+                        'GitHub cut the repository tree; the listing is incomplete',
+                    context: GithubService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        entries: tree.tree.length,
+                    },
+                });
             }
 
             const files = tree.tree
@@ -6227,7 +6261,11 @@ This is an experimental feature that generates committable changes. Review the d
                 metadata: params,
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -6494,7 +6532,7 @@ This is an experimental feature that generates committable changes. Review the d
         );
 
         if (!allReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
         const myReviews = allReviews
@@ -6510,10 +6548,19 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
         if (!myReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
-        const lastReview = myReviews.at(-1);
+        // A comment review does not undo an approval on GitHub, so Kody's
+        // state is its latest approval, change request or dismissal.
+        const lastReview =
+            myReviews
+                .filter((review) =>
+                    ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(
+                        review.state,
+                    ),
+                )
+                .at(-1) ?? myReviews.at(-1);
 
         switch (lastReview?.state) {
             case 'APPROVED':
@@ -6529,6 +6576,84 @@ This is an experimental feature that generates committable changes. Review the d
             default:
                 return null;
         }
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        if (!repository?.name || !repository.id || !prNumber) {
+            throw new Error(
+                'Repository and PR number are required to dismiss approval',
+            );
+        }
+        const githubAuth = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            organizationAndTeamData,
+            githubAuth,
+        );
+        const graphQLWithAuth = await this.instanceGraphQL(
+            organizationAndTeamData,
+        );
+        const identity: { viewer: { login: string; id: string } } =
+            await graphQLWithAuth('query { viewer { login id } }');
+        const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+            owner: githubAuth.org,
+            repo: repository.name,
+            pull_number: prNumber,
+            per_page: 100,
+        });
+        const ownApprovals = reviews.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                review.user?.login === identity.viewer.login &&
+                review.user?.node_id === identity.viewer.id,
+        );
+        for (const review of ownApprovals) {
+            const reviewId = review.id;
+            const timeoutMs = 15_000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                await runWithBoundedTimeout(
+                    octokit.rest.pulls.dismissReview({
+                        owner: githubAuth.org,
+                        repo: repository.name,
+                        pull_number: prNumber,
+                        review_id: reviewId,
+                        message:
+                            'Kody held automatic approval after a new review.',
+                        request: { signal: controller.signal },
+                    }),
+                    timeoutMs,
+                    `GitHub approval dismissal review=${reviewId}`,
+                );
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'GitHub approval dismissal failed; review state is unverified',
+                    context: GithubService.name,
+                    error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        repositoryId: repository.id,
+                        prNumber,
+                        reviewId,
+                        timeoutMs,
+                    },
+                });
+                throw error;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+        return ownApprovals.length;
     }
 
     async checkIfPullRequestShouldBeApproved(params: {
@@ -6810,6 +6935,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -6838,6 +6964,7 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -7103,6 +7230,8 @@ This is an experimental feature that generates committable changes. Review the d
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<PullRequest[]> {
         try {
@@ -7121,7 +7250,10 @@ This is an experimental feature that generates committable changes. Review the d
                 ? new Date(filters.endDate).getTime()
                 : null;
 
-            // The list comes back sorted by created_at desc, so once we hit a PR
+            const dateField =
+                filters?.dateField === 'updated' ? 'updated_at' : 'created_at';
+            let collected = 0;
+            // The list comes back sorted by the selected date desc, so once we hit a PR
             // older than startDate every remaining page is older too — stop
             // paginating instead of pulling the whole repo history into memory
             // (dozens of useless pages on large repos) just to filter by date.
@@ -7131,14 +7263,17 @@ This is an experimental feature that generates committable changes. Review the d
                     owner: githubAuthDetail.org,
                     repo: repository.name,
                     state: 'all',
-                    sort: 'created',
+                    sort:
+                        filters?.dateField === 'updated'
+                            ? 'updated'
+                            : 'created',
                     direction: 'desc',
                     per_page: 100,
                 },
                 (response, done) => {
                     const inWindow: typeof response.data = [];
                     for (const pr of response.data) {
-                        const prTime = new Date(pr.created_at).getTime();
+                        const prTime = new Date(pr[dateField]).getTime();
                         if (startTime !== null && prTime < startTime) {
                             done();
                             break;
@@ -7147,6 +7282,14 @@ This is an experimental feature that generates committable changes. Review the d
                             continue;
                         }
                         inWindow.push(pr);
+                        collected += 1;
+                        if (
+                            filters?.maxResults &&
+                            collected >= filters.maxResults
+                        ) {
+                            done();
+                            break;
+                        }
                     }
                     return inWindow;
                 },
@@ -7533,6 +7676,57 @@ This is an experimental feature that generates committable changes. Review the d
             });
 
             return false;
+        }
+    }
+
+    /**
+     * Write or admin on the repository. A comment's `author_association`
+     * can't tell: COLLABORATOR and MEMBER come with read access too. GitHub
+     * folds maintain and custom roles into write, triage into read.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string; owner?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const owner =
+                params.repository.owner ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const { data } =
+                await octokit.rest.repos.getCollaboratorPermissionLevel({
+                    owner,
+                    repo: params.repository.name,
+                    username: params.login,
+                });
+            return data.permission === 'admin' || data.permission === 'write';
+        } catch (error) {
+            // Someone who isn't a collaborator answers 200 with `none`; an
+            // error is the credential that couldn't look, not a no.
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    login: params.login,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 
@@ -8274,6 +8468,11 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            labels: (pullRequest?.labels ?? [])
+                .map((label) =>
+                    typeof label === 'string' ? label : label?.name,
+                )
+                .filter((label): label is string => !!label),
             state:
                 this._prStateMap.get(
                     pullRequest?.state as RestEndpointMethodTypes['pulls']['get']['response']['data']['state'],

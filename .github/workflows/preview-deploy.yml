@@ -57,6 +57,22 @@ on:
                 default: auto
                 type: choice
                 options: [auto, cloud, self-hosted, both, none]
+            approval_smoke:
+                description: Run the approval and area-map smoke in Runo
+                required: false
+                default: false
+                type: boolean
+            provider_approval_smoke:
+                description: Test conditional approval on GitLab, Bitbucket and Azure QA repos
+                required: false
+                default: false
+                type: boolean
+            provider_approval_target:
+                description: Provider to test (all by default)
+                required: false
+                default: all
+                type: choice
+                options: [all, gitlab, bitbucket, azure-devops]
     pull_request:
         # labeled/unlabeled: a preview:* label is a decision — act on it.
         # Labels applied by this workflow's own token never re-trigger it.
@@ -218,6 +234,9 @@ jobs:
                   # variable also enables the managed OpenAI models, so use a
                   # key with a spending limit.
                   PREVIEW_OPENAI_EMBEDDINGS_KEY: ${{ secrets.PREVIEW_OPENAI_EMBEDDINGS_KEY }}
+                  # E2E Fireworks credential, used only for a manually dispatched
+                  # provider approval smoke; regular public previews stay neutralized.
+                  PREVIEW_FIREWORKS_QA_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   HEAD_REF: ${{ steps.target.outputs.branch }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
               run: |
@@ -294,6 +313,16 @@ jobs:
                     echo "OpenAI: the dedup guard has embeddings"
                   else
                     echo "::notice::PREVIEW_OPENAI_EMBEDDINGS_KEY is not set — the dedup guard runs without embeddings and vetoes low-overlap merges"
+                  fi
+                  if [ "${{ inputs.provider_approval_smoke }}" = 'true' ]; then
+                    : "${PREVIEW_FIREWORKS_QA_KEY:?BYOK_FIREWORKS_API_KEY is required for managed trial review QA}"
+                    grep -v '^API_FIREWORKS_API_KEY=' .env > "$RUNNER_TEMP/env.no-fireworks"
+                    {
+                      cat "$RUNNER_TEMP/env.no-fireworks"
+                      printf 'API_FIREWORKS_API_KEY=%s\n' "$PREVIEW_FIREWORKS_QA_KEY"
+                    } > .env
+                    rm -f "$RUNNER_TEMP/env.no-fireworks"
+                    echo 'Fireworks: provider approval QA uses the E2E credential'
                   fi
                   # billing exists in the cloud shape only
                   case " $PROFILES " in *" cloud "*)
@@ -380,10 +409,90 @@ jobs:
                       "docker compose -f docker-compose.dev.yml -f docker-compose.preview.yml -f $overlay --profile mcp ps" || true
                   done
 
+            - name: Smoke approval and area map on Runo
+              if: steps.up.outcome == 'success' && steps.env.outputs.configured == 'true' && inputs.approval_smoke == true
+              env:
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  PROFILES: ${{ steps.decide.outputs.profiles }}
+              run: |
+                  set -euo pipefail
+                  for profile in $PROFILES; do
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "docker exec kodus_api pnpm run smoke:preview:approval-map"
+                    if [ "$profile" = cloud ]; then
+                      $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                        "docker exec kodus_api pnpm run seed:preview:cockpit-demo"
+                    fi
+                    # The wiring eval uses a fake licensed beta tenant; leave the preview API gate unchanged.
+                    $RUNO exec --branch "$HEAD_REF" --profile "$profile" -- \
+                      "BETA_FEATURES=true node evals/wiring-smoke.js --only=approval-risk"
+                  done
+
+            - name: Smoke conditional approval on real providers
+              if: steps.env.outputs.configured == 'true' && inputs.provider_approval_smoke == true && steps.up.outcome == 'success'
+              env:
+                  URLS: ${{ steps.up.outputs.urls }}
+                  CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.PREVIEW_SEED_PASSWORD }}
+                  RUNO_SERVER: ${{ vars.PREVIEW_RUNO_SERVER }}
+                  RUNO_TOKEN: ${{ secrets.PREVIEW_RUNO_TOKEN }}
+                  HEAD_REF: ${{ steps.target.outputs.branch }}
+                  GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
+                  GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  GL_TEST_REPO_CLOUD: ${{ secrets.GL_TEST_REPO_CLOUD }}
+                  BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
+                  BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
+                  BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  BB_TEST_REPO_CLOUD: ${{ secrets.BB_TEST_REPO_CLOUD }}
+                  AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
+                  AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
+                  AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
+                  AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+                  AZ_TEST_REPO_CLOUD: ${{ secrets.AZ_TEST_REPO_CLOUD }}
+              run: |
+                  set -euo pipefail
+                  for entry in $URLS; do
+                    case "$entry" in cloud=*) CLOUD_WEB_BASE_URL="${entry#cloud=}" ;; esac
+                  done
+                  : "${CLOUD_WEB_BASE_URL:?cloud preview URL is required}"
+                  : "${CLOUD_TENANT_PAID_PASSWORD:?preview login is required}"
+                  export CLOUD_WEB_BASE_URL
+                  export CLOUD_API_BASE_URL="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
+                  npm ci --prefix tests/e2e
+                  failed=0
+                  for provider in gitlab bitbucket azure-devops; do
+                    if [ '${{ inputs.provider_approval_target }}' != 'all' ] && [ "$provider" != '${{ inputs.provider_approval_target }}' ]; then
+                      continue
+                    fi
+                    echo "Testing conditional approval on $provider"
+                    # Each provider gets a fresh Teams trial. The regular preview
+                    # login may have no seats or remaining review credits after
+                    # earlier QA runs; a trial has enough for these two PRs.
+                    export CLOUD_TENANT_PAID_EMAIL="preview-approval-${{ github.run_id }}-$provider@kodus.io"
+                    if ! $RUNO exec --branch "$HEAD_REF" --profile cloud -- \
+                      "PREVIEW_SEED_EMAIL=$CLOUD_TENANT_PAID_EMAIL pnpm run seed:preview >/dev/null 2>&1"; then
+                      echo "::error::could not seed isolated $provider QA tenant"
+                      failed=1
+                      continue
+                    fi
+                    (cd tests/e2e && ./node_modules/.bin/tsx cli/run-scenario.ts conditional-approval-provider --target cloud --provider "$provider" --license paid) || failed=1
+                  done
+                  exit "$failed"
+
+            - name: Upload provider approval evidence
+              if: always() && inputs.provider_approval_smoke == true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: preview-provider-approval-evidence
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
+
             - name: Comment the preview link
-              if: always() && github.event_name != 'workflow_dispatch' && steps.env.outputs.configured == 'true'
+              if: always() && steps.env.outputs.configured == 'true'
               uses: actions/github-script@v9.0.0
               env:
+                  PR_NUMBER: ${{ inputs.pr_number }}
                   URLS: ${{ steps.up.outputs.urls }}
                   OUTCOME: ${{ steps.up.outcome }}
                   PROFILES: ${{ steps.decide.outputs.profiles }}
@@ -392,6 +501,7 @@ jobs:
               with:
                   script: |
                       const marker = '## Preview Environment';
+                      const prNumber = Number(process.env.PR_NUMBER) || context.issue.number;
                       const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
                       const stamp = `_Updated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · [logs](${runUrl})_`;
                       const wanted = (process.env.PROFILES || '').split(' ').filter(Boolean);
@@ -425,7 +535,7 @@ jobs:
                       const comments = await github.paginate(github.rest.issues.listComments, {
                         owner: context.repo.owner,
                         repo: context.repo.repo,
-                        issue_number: context.issue.number,
+                        issue_number: prNumber,
                         per_page: 100,
                       });
                       const existing = comments.find((c) => c.body.includes(marker));
@@ -440,7 +550,7 @@ jobs:
                         await github.rest.issues.createComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
-                          issue_number: context.issue.number,
+                          issue_number: prNumber,
                           body,
                         });
                       }

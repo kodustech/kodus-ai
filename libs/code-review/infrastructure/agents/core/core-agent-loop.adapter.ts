@@ -218,6 +218,7 @@ export function finderRunEnvironment(
             providerOptions,
             previousDecisions: input.previousDecisions,
             repoInstructions: input.repoInstructions,
+            checksInstructionCitations: input.conventionGuides === undefined,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
             usageRunName: input.usageRunName,
@@ -280,24 +281,24 @@ export async function runAgentLoopViaCore(
 
     // The ledger is read back below for the coverage summary.
     const finderSpec = buildFinderAgentSpec({
-            systemPrompt: input.systemPrompt,
-            modelId: specModelId,
-            fallbackModelId,
-            usageRunName: input.usageRunName,
-            agentName: input.agentName,
-            tools,
-            coverageLedger,
-            compressor: contextWindowTokens
-                ? new ContextWindowCompressor(contextWindowTokens, {
-                      overheadTokens,
-                  })
-                : undefined,
-            maxSteps: input.maxSteps ?? 20,
-            providerOptions,
-            acceptsRevisions: !!input.previousDecisions?.length,
-            acceptsConventions: !!readGuide,
-        });
-
+        systemPrompt: input.systemPrompt,
+        modelId: specModelId,
+        fallbackModelId,
+        usageRunName: input.usageRunName,
+        agentName: input.agentName,
+        tools,
+        labels: input.allowedLabels,
+        coverageLedger,
+        compressor: contextWindowTokens
+            ? new ContextWindowCompressor(contextWindowTokens, {
+                  overheadTokens,
+              })
+            : undefined,
+        maxSteps: input.maxSteps ?? 20,
+        providerOptions,
+        acceptsRevisions: !!input.previousDecisions?.length,
+        acceptsConventions: !!readGuide,
+    });
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
@@ -486,10 +487,10 @@ export async function runAgentLoopViaCore(
                   ],
               };
 
-    // A finder run that ended without submitting a result did not finish
+    // A finder run that ended without submitting a result may not have finished
     // looking: it ran out of steps, or the provider cut its turn so the tools
-    // it asked for never ran (the runner records that as `tool.skipped`). A run
-    // that answered in prose is not incomplete; prose recovery owns it (#2171).
+    // it asked for never ran (the runner records that as `tool.skipped`). Prose
+    // recovery may still produce candidates for the provider to handle (#2171).
     // The runner makes an artifact of every requested result call, executed or
     // not, so a turn cut while writing submitResult leaves one holding raw,
     // unparseable input, an object that is no findings result (`{}`), or items

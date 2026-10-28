@@ -24,6 +24,10 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
+import type {
+    ApprovalDecision,
+    ApprovalRiskAssessment,
+} from '@libs/code-review/domain/approval/approval-decision';
 import {
     AnalysisContext,
     AutomaticReviewStatus,
@@ -46,6 +50,8 @@ export type PullRequestType = {
             fullName: string;
         };
         ref: string;
+        /** The target branch's commit, when the host's pull request has it. */
+        sha?: string;
     };
     head?: {
         sha: string;
@@ -233,6 +239,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     businessLogicPrBodyHash?: string;
 
     lineComments?: CommentResult[];
+
+    /** Approval policy result for this reviewed head; reused by the finish stage. */
+    approvalDecision?: ApprovalDecision;
+    approvalRisk?: ApprovalRiskAssessment;
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;

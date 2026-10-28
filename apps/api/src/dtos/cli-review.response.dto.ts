@@ -188,7 +188,7 @@ export class CliBusinessValidationResponseDto {
         description:
             'The verdict as text: one line per requirement, then the status.',
         example:
-            'AB#8 · Compact density toggle (Azure DevOps)\n  MET            AC-1 Persists per user src/settings/density.ts:14\n  MISSING        AC-2 Defaults to comfortable density.ts:6\n\nstatus: issues_found (--json for the full verdict)',
+            'AB#8 · Compact density toggle (Azure DevOps)\n  MET            AC-1 Persists per user src/settings/density.ts:14\n  MISSING        AC-2 Defaults to comfortable density.ts:6\n\nstatus: issues_found (--format json for the full verdict)',
     })
     result: string;
 

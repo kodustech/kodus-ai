@@ -18,7 +18,7 @@ Arquivos de regras do repositório são importados **verbatim** — sem convers�
 - **Detecção Automática**: As regras do repositório são detectadas e sincronizadas em todo repositório conectado; não há nada para habilitar
 - **Importar agora**: No painel **Kody Rules → Configuration** do repositório, **Import rule files now** lê todos os arquivos de regras da branch padrão
 - **Aplicação Web**: As regras sincronizadas aparecem na página **Code review → Kody Rules** do repositório, com a origem **Auto-sync** (regras importadas de arquivos de agentes de código antes de pararem de ser convertidas mostram **Agent file**)
-- **Atualizações em Tempo Real**: As alterações nos arquivos de regras são sincronizadas quando Pull Requests são mesclados
+- **Atualizações em Tempo Real**: As alterações nos arquivos de regras são sincronizadas quando Pull Requests são mesclados na branch padrão
 
 ## Localização dos Arquivos
 
@@ -161,7 +161,7 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 ## Requisitos de Configuração
 
 1. **Criar arquivos de regras**: Coloque arquivos `.md` que seguem o template em `.kody/rules/**` ou `rules/**`. Arquivos em `.rules/**` e `docs/coding-standards/**` que seguem o template também são importados.
-2. **Fazer o merge**: Um arquivo de regra sincroniza quando um Pull Request que o adiciona, altera, renomeia ou remove é mesclado. Remover o arquivo remove a regra correspondente.
+2. **Fazer o merge**: Um arquivo de regra sincroniza quando um Pull Request que o adiciona, altera, renomeia ou remove é mesclado na branch padrão. Remover o arquivo remove a regra correspondente.
 3. **Arquivos existentes**: Para importar arquivos de regras que já estão na branch padrão, use **Import rule files now** no painel **Kody Rules → Configuration** do repositório.
 
 Novas regras entram ativas, ou em **Pending review** quando **Kody knowledge approval** está ativado.

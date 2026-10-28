@@ -1,5 +1,4 @@
 import { useSuspenseGetConnections } from "@services/setup/hooks";
-import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
 import { safeArray } from "src/core/utils/safe-array";
@@ -17,9 +16,7 @@ function useCodeManagementPlatforms(): Set<string> {
 
     return new Set(
         safeArray(connections)
-            .filter(
-                (c) => c.category === "CODE_MANAGEMENT" && c.hasConnection,
-            )
+            .filter((c) => c.category === "CODE_MANAGEMENT" && c.hasConnection)
             .map((c) => c.platformName),
     );
 }
@@ -34,10 +31,13 @@ export function useShouldHideRequestChanges(): boolean {
     const platforms = useCodeManagementPlatforms();
 
     // All connected platforms are GitLab → feature unsupported everywhere.
-    return platforms.size > 0 && !platforms.has(PlatformType.GITHUB)
-        && !platforms.has(PlatformType.BITBUCKET)
-        && !platforms.has(PlatformType.AZURE_REPOS)
-        && !platforms.has(PlatformType.FORGEJO);
+    return (
+        platforms.size > 0 &&
+        !platforms.has(PlatformType.GITHUB) &&
+        !platforms.has(PlatformType.BITBUCKET) &&
+        !platforms.has(PlatformType.AZURE_REPOS) &&
+        !platforms.has(PlatformType.FORGEJO)
+    );
 }
 
 /**
@@ -49,4 +49,13 @@ export function useShouldHideRequestChanges(): boolean {
 export function useShouldHideHiddenComments(): boolean {
     const platforms = useCodeManagementPlatforms();
     return platforms.size > 0 && !platforms.has(PlatformType.GITHUB);
+}
+
+/** These providers do not expose PR labels for conditional approval. */
+export function useApprovalLabelsUnavailable(): boolean {
+    const platforms = useCodeManagementPlatforms();
+    return (
+        platforms.has(PlatformType.BITBUCKET) ||
+        platforms.has(PlatformType.AZURE_REPOS)
+    );
 }

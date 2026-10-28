@@ -63,12 +63,17 @@ describe('#1844 flow: summary generation failure -> auto-approve decision', () =
                 .mockResolvedValue(PullRequestReviewState.PENDING),
             requestChangesPullRequest: jest.fn().mockResolvedValue(undefined),
         };
-        const notificationService = { emit: jest.fn().mockResolvedValue(undefined) };
+        const notificationService = {
+            emit: jest.fn().mockResolvedValue(undefined),
+        };
         const prAuthorResolver = { resolve: jest.fn().mockResolvedValue(null) };
         const stage = new RequestChangesOrApproveStage(
             codeManagement as any,
             notificationService as any,
             prAuthorResolver as any,
+            {
+                postApprovalReason: jest.fn().mockResolvedValue(undefined),
+            } as any,
         );
         return { stage, codeManagement, notificationService };
     };
@@ -78,7 +83,10 @@ describe('#1844 flow: summary generation failure -> auto-approve decision', () =
     const baseContext = () =>
         frozenContext({
             lastExecution: undefined,
-            organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' } as any,
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            } as any,
             repository: { id: 'repo-1', name: 'acme/api' } as any,
             pullRequest: {
                 number: 42,
