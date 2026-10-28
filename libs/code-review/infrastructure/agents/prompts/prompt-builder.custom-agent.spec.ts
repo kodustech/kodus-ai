@@ -99,12 +99,14 @@ afterAll(() => {
 
 describe('generalist prompts are byte-identical', () => {
     // sha256 of the prompts rendered on feat/custom-agents@d80afe38d (before
-    // the lane and prefix changes) for this exact input.
+    // the lane and prefix changes) for this exact input. The full, withGraph
+    // and self-contained ones were renewed when the finder was told to submit
+    // through submitResult instead of writing JSON in its reply.
     const BASE: Record<string, [any, string, string]> = {
         full: [
             input(),
             '4f67236a90cbf50ee3b36e581d2cc5f650253582b3897a6bf54a3b79f836c2bc',
-            '98ffa8eff25172be473cd935a6036243fc57daf863e6e45dd337e667851c2ed5',
+            '147bb6e4d50663140fbbc10169e40b4f2991c4544fd7dfa20edbab017da6e923',
         ],
         compact: [
             input({ adaptiveProfile: { compactPrompt: true } }),
@@ -113,8 +115,8 @@ describe('generalist prompts are byte-identical', () => {
         ],
         selfContained: [
             input({ remoteCommands: undefined }),
-            '52544dd1089b0f5cd65fc9fbb8f7322a3ce975de19a4678b25717a30d255f979',
-            '06a58f11c5e2f617fcfd0893d009cef63bbf08a30a98ee0b88b28a5e6ba2c2f7',
+            'a134971490f52180e0821b2b65cd09fc6cde95e38c5ba92aec6f5bec7dec483e',
+            '3fbfe8aaeba47eea4ba928a5b2d2045e2764c60eb4f04f8fb733b4993b33b68c',
         ],
         withGraph: [
             input({
@@ -123,7 +125,7 @@ describe('generalist prompts are byte-identical', () => {
                 linkedRepoAccess: undefined,
             }),
             '620249378123462aa69c5bccb81387f05955ccb75a928344a8fa55ddc6ea0134',
-            '63e7e9dc665c9953f1796d2659c5eb1a548d172ca9da7f51eba0da0744bea180',
+            '7fa3dd8c89d8161894149e0c14ed2d3fee85f974cf891b328210c771586cb38d',
         ],
     };
 

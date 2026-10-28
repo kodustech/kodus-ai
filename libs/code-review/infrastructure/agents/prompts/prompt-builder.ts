@@ -1056,13 +1056,11 @@ ${findingRules}    ${mixedLabelRules}
       7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
       5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
       1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
-    - Return only the JSON object inside markdown fences, no extra text.
+    - Submit your result by calling the submitResult tool with the arguments below; do not write them as JSON in your reply.
   </Rules>
 
   <OutputFormat>
-` +
-            '```' +
-            `json
+The submitResult arguments:
 {
   "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
   "suggestions": [
@@ -1080,9 +1078,6 @@ ${findingRules}    ${mixedLabelRules}
     }
   ]
 }
-` +
-            '```' +
-            `
   </OutputFormat>
 </ReviewTask>`
         );
@@ -1192,7 +1187,7 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
   </Role>
 
   <Mindset>
-    You are running without tools and without access to the repository.
+    You are running without repository tools and without access to the repository.
     You see only the diffs and any inlined file contents.
     Report findings only when the evidence is fully visible in what you see.
     "Might be" is not enough — if you cannot point to specific visible lines as proof, do NOT report it.
@@ -1215,7 +1210,7 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
       Do NOT ask questions you cannot answer from the visible code.
 
     PHASE 3 — RESPOND
-      Return a JSON object with your findings. Every finding must cite exact line numbers from the diff.
+      Submit your findings with the submitResult tool. Every finding must cite exact line numbers from the diff.
       Assign confidence honestly: 7+ only when the defect is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
 
     FORBIDDEN:
@@ -1297,7 +1292,7 @@ ${diffsSection}
 ${fileContentsSection}
 
   <Task>
-    You are running in self-contained mode. You have NO tools and NO access to the repository beyond the diffs and any inlined file contents shown above.
+    You are running in self-contained mode. You have NO repository tools and NO access to the repository beyond the diffs and any inlined file contents shown above. Your only tool is submitResult.
 
     Review these changes for ${taskDescription} that are self-evident from the diff alone.
 
@@ -1313,13 +1308,11 @@ ${fileContentsSection}
     - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
     - If in doubt, do NOT report it.
     - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.
-    - Return only the JSON object inside markdown fences, no extra text.
+    - Submit your result by calling the submitResult tool with the arguments below; do not write them as JSON in your reply.
   </Rules>
 
   <OutputFormat>
-` +
-            '```' +
-            `json
+The submitResult arguments:
 {
   "reasoning": "What you checked and why. Example: 'Looked at auth.ts line 42: new code dereferences user.email without checking if user is null. Parameter comes from an unchecked path in the same function. Reported.'",
   "suggestions": [
@@ -1337,9 +1330,6 @@ ${fileContentsSection}
     }
   ]
 }
-` +
-            '```' +
-            `
   </OutputFormat>
 </ReviewTask>`
         );
