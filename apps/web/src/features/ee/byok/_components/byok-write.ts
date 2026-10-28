@@ -124,12 +124,26 @@ export const findReusableCredential = (
 /**
  * Two spellings of one endpoint — a trailing slash, a capitalised host — are
  * the same upstream, and treating them as different would quietly split one
- * gateway's models across two credentials.
+ * gateway's models across two credentials. Only the scheme and host ignore
+ * case (URL lowercases them): a gateway may route by tenant in the path.
  */
-export const normalizeEndpoint = (value: unknown): string =>
-    typeof value === "string"
-        ? value.trim().replace(/\/+$/, "").toLowerCase()
-        : "";
+export const normalizeEndpoint = (value: unknown): string => {
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    if (!trimmed) return "";
+    try {
+        const url = new URL(trimmed);
+        url.pathname = stripTrailingSlashes(url.pathname);
+        return url.href;
+    } catch {
+        return stripTrailingSlashes(trimmed);
+    }
+};
+
+const stripTrailingSlashes = (value: string): string => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === "/") end--;
+    return value.slice(0, end);
+};
 
 /**
  * Split the {@link BYOKConnectInput} the connect/edit form emits into the v2

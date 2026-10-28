@@ -345,6 +345,19 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                 );
             });
 
+            it('treats a path that differs only in case as another endpoint', async () => {
+                // Paths are case-sensitive: a gateway that routes by tenant or
+                // account in the path serves a different upstream per casing.
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored('https://api.fireworks.ai/Inference/v1'),
+                );
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
             it('saves the repoint when a new key comes with it', async () => {
                 const { useCase, persisted } = buildUseCase(stored(fireworks));
 

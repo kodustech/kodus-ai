@@ -671,15 +671,30 @@ const credentialBaseURL = (cred: BYOKCredential): string | undefined => {
     return typeof value === 'string' ? value : undefined;
 };
 
-/** Compared without surrounding space, a trailing slash or case; no
- *  endpoint on either side counts as the provider's default. */
-const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean => {
-    const normalize = (value?: string) =>
-        (value ?? '').trim().replace(/\/+$/, '').toLowerCase();
-    return (
-        normalize(credentialBaseURL(next)) ===
-        normalize(credentialBaseURL(prior))
-    );
+/** No endpoint on either side counts as the provider's default. */
+const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean =>
+    normalizeEndpoint(credentialBaseURL(next)) ===
+    normalizeEndpoint(credentialBaseURL(prior));
+
+/** Scheme and host compare without case (URL lowercases them), and a
+ *  trailing slash is dropped; the path and query keep their case, since a
+ *  gateway may route by tenant in the path. */
+const normalizeEndpoint = (value?: string): string => {
+    const trimmed = (value ?? '').trim();
+    if (!trimmed) return '';
+    try {
+        const url = new URL(trimmed);
+        url.pathname = stripTrailingSlashes(url.pathname);
+        return url.href;
+    } catch {
+        return stripTrailingSlashes(trimmed);
+    }
+};
+
+const stripTrailingSlashes = (value: string): string => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === '/') end--;
+    return value.slice(0, end);
 };
 
 const hostOf = (value?: string): string | undefined => {
