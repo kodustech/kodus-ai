@@ -45,7 +45,7 @@ const bloco = (x) => `<comment id="${x.id}">\nFile: ${x.file}\nLines: ${x.lines[
     fs.mkdirSync(OUT, { recursive: true });
     let i = 0, feitos = 0, erros = 0;
     const um = async (q) => {
-        const file = path.join(OUT, `${q.k.replace('|', '__')}__${q.cid}.json`);
+        const file = path.join(OUT, `${q.k.replaceAll('|', '__')}__${q.cid}.json`);
         if (fs.existsSync(file)) return;
         const text = `${RUBRICA}\nThe comments below were written by an automated reviewer on one pull request. Rate every comment; return one item per comment id.\n\n${q.xs.map(bloco).join('\n\n')}`;
         for (let t = 1; t <= TENTATIVAS; t++) {
