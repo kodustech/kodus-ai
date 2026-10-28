@@ -25,11 +25,15 @@ def placar(k, D):
     m2 = json.load(open(f'{W}/fp/opus-out0.json')) if os.path.exists(f'{W}/fp/opus-out0.json') else {}
     n = {'TP': 0, 'FP nit': 0, 'FP hallucination': 0}; por_pr = {}; vistos = set()
     o = {x: {'comentarios': 0, 'tps': set(), 'FP nit': 0, 'FP hallucination': 0} for x in ORIG}
-    novos = 0
+    novos = 0; sem_julgamento = []
     for c, itens in com.items():
         a = {x['id']: x['match'] for x in m1.get(c, [])}; b = {x['id']: x['match'] for x in m2.get(c, [])}
         pr = {'comentarios': len(itens), 'tp': 0, 'fp': 0}
         for i in itens:
+            # A comment the first judge never answered is not a FP: the run is incomplete.
+            if i['id'] not in a:
+                sem_julgamento.append((c, i['id']))
+                continue
             iss = a.get(i['id'], 'new')
             if iss == 'new': iss = b.get(i['id'], 'new')
             assert iss == 'new' or iss.split('#')[0] == c, (c, iss)
@@ -43,6 +47,8 @@ def placar(k, D):
                 else: vistos.add(iss)
             n[cl] += 1; pr['tp' if cl == 'TP' else 'fp'] += 1
         por_pr[c] = pr
+    if sem_julgamento:
+        raise SystemExit(f'{k}: {len(sem_julgamento)} comments without a judgment (missing opus-out shard or item), e.g. {sem_julgamento[:3]}')
     tot = sum(len(v) for v in com.values())
     # uso por PR
     uso = {}
