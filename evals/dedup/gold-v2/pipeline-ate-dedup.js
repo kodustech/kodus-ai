@@ -14,7 +14,7 @@ require('tsconfig-paths/register');
  *
  * --ate=anchoring      para antes do dedup (sem chamada de modelo)
  * --sanitizador        tira, depois do parse, as sugestoes do gabarito do
- *                      sanitizador (evals/suggestion-sanitizer/dataset), como o
+ *                      sanitizador (evals/dedup/gold-v2/sanitizer-dataset), como o
  *                      stage faz antes do anchoring; so com --fonte=gold
  *
  *   RECALL_MODEL=<id> node evals/dedup/gold-v2/pipeline-ate-dedup.js --model=<gold model> --fonte=... --versao=<rotulo> [--par=4] [--ate=anchoring] [--prs=<lista.json>] [--prefixo=09.10.26]
@@ -35,7 +35,7 @@ const GOLD = arg('model'), FONTE = arg('fonte'), VERSAO = arg('versao'), PAR = N
 const SO_ANCHORING = arg('ate') === 'anchoring';
 const SANITIZA = process.argv.includes('--sanitizador');
 const SEM_PROBLEMA = SANITIZA
-    ? JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'suggestion-sanitizer', 'dataset', `${GOLD}.json`), 'utf8')).semProblema
+    ? JSON.parse(fs.readFileSync(path.join(__dirname, 'sanitizer-dataset', `${GOLD}.json`), 'utf8')).semProblema
     : {};
 const MODELO = process.env.RECALL_MODEL || (SO_ANCHORING ? '-' : undefined);
 if (!GOLD || !FONTE || !VERSAO || !MODELO) { console.error('RECALL_MODEL=<id> --model= --fonte=pool:<pool>|gold --versao='); process.exit(2); }

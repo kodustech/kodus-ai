@@ -24,10 +24,10 @@ const { DEDUP_CONTENT_THRESHOLD, DEDUP_EMBEDDING_LOW, DEDUP_EMBEDDING_HIGH } = {
 const FLAGS = process.argv.slice(2).filter((a) => a.startsWith('--'));
 const [VERSAO, ...ARGS] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 // --sem-sanitizador: tira as sugestoes que o sanitizador descarta antes do dedup
-// (evals/suggestion-sanitizer/dataset/<model>.json), dos dois lados.
+// (evals/dedup/gold-v2/sanitizer-dataset/<model>.json), dos dois lados.
 const SEM_SANITIZADOR = FLAGS.includes('--sem-sanitizador');
 const foraDoDedup = (model) => {
-    const f = path.join(__dirname, '..', '..', 'suggestion-sanitizer', 'dataset', `${model}.json`);
+    const f = path.join(__dirname, 'sanitizer-dataset', `${model}.json`);
     return SEM_SANITIZADOR && fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).semProblema : {};
 };
 const DIR = path.join(__dirname, 'dedup-real', VERSAO);
