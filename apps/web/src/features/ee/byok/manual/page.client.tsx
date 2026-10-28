@@ -83,6 +83,8 @@ const ENDPOINT_NEEDS_KEY_MESSAGE =
     "No key is stored for this endpoint — paste its API key.";
 const ENDPOINT_CHANGED_MESSAGE =
     "The stored key stays with its old endpoint — paste the API key for this one.";
+// The field error under a key that the message above already explains.
+const KEY_REQUIRED_MESSAGE = "Paste the API key for this endpoint.";
 
 // Every provider label starts with a letter that sounds the way it reads.
 const articleFor = (label: string): "a" | "an" =>
@@ -491,14 +493,14 @@ export function ByokManualPageClient({
         if (endpointNeedsKey && !hasNewCredentials) {
             form.setError("apiKey", {
                 type: "manual",
-                message: ENDPOINT_NEEDS_KEY_MESSAGE,
+                message: KEY_REQUIRED_MESSAGE,
             });
             return null;
         }
         if (endpointChanged && !hasNewCredentials) {
             form.setError("apiKey", {
                 type: "manual",
-                message: ENDPOINT_CHANGED_MESSAGE,
+                message: KEY_REQUIRED_MESSAGE,
             });
             return null;
         }
