@@ -21,6 +21,7 @@ import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/inter
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import { PlatformType } from '@libs/core/domain/enums';
 
 @Injectable()
 export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -351,11 +352,19 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
             },
         });
 
+        const previousStatusNote =
+            context.platformType === PlatformType.GITLAB
+                ? await this.findPreviousStatusNote(context)
+                : undefined;
+
         return this.updateContext(context, (draft) => {
             draft.prCommits = newCommits;
             draft.prAllCommits = allCommits;
             if (lastExecutionResult) {
                 draft.lastExecution = lastExecutionResult;
+            }
+            if (previousStatusNote) {
+                draft.previousStatusNote = previousStatusNote;
             }
             if (orphanedBaseCommit) {
                 draft.orphanedBaseCommit = orphanedBaseCommit;
@@ -368,6 +377,49 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                 forceFullRerun,
             };
         });
+    }
+
+    // The status note the latest finished run posted, so the next run edits it
+    // on GitLab (#1721). A partial or failed run posts one too; only the last
+    // SUCCESS is lastExecution. A failed lookup posts a new note, as before.
+    private async findPreviousStatusNote(
+        context: CodeReviewPipelineContext,
+    ): Promise<CodeReviewPipelineContext['previousStatusNote']> {
+        try {
+            const previous =
+                await this.automationExecutionService.findLatestExecutionByFilters(
+                    {
+                        status: [
+                            AutomationStatus.SUCCESS,
+                            AutomationStatus.PARTIAL_ERROR,
+                            AutomationStatus.ERROR,
+                        ],
+                        teamAutomation: { uuid: context.teamAutomationId },
+                        pullRequestNumber: context.pullRequest.number,
+                        repositoryId: context?.repository?.id,
+                    },
+                );
+            const data = previous?.dataExecution;
+            return data?.commentId
+                ? {
+                      commentId: data.commentId,
+                      noteId: data.noteId,
+                      threadId: data.threadId,
+                  }
+                : undefined;
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read the previous status note for PR#${context.pullRequest.number}`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository.name,
+                    pullRequestNumber: context.pullRequest.number,
+                },
+            });
+            return undefined;
+        }
     }
 
     private async shouldForceFullRerun(

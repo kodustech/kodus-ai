@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { PlatformType } from '@libs/core/domain/enums';
 import { ValidateNewCommitsStage } from './validate-new-commits.stage';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
@@ -253,6 +254,97 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
         expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+    });
+
+    // #1721, QA MR !68: lastExecution is the last SUCCESS, so a partial
+    // review's status note was never edited and each later review posted one.
+    describe('status note of the previous review', () => {
+        const lookup = (partial: unknown) =>
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    Array.isArray(filters.status)
+                        ? partial
+                        : {
+                              uuid: 'exec-ok',
+                              dataExecution: {
+                                  lastAnalyzedCommit: 'sha-1',
+                                  commentId: 11,
+                                  noteId: 11,
+                              },
+                          },
+            );
+
+        beforeEach(() => {
+            mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+                false,
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'sha-1' }, { sha: 'sha-2' }],
+            );
+        });
+
+        it('carries the note of a later partial review on GitLab', async () => {
+            context.platformType = PlatformType.GITLAB;
+            lookup({
+                uuid: 'exec-partial',
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: { commentId: 22, noteId: 22 },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toEqual({
+                commentId: 22,
+                noteId: 22,
+                threadId: undefined,
+            });
+            expect(result.lastExecution?.commentId).toBe(11);
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: [
+                        AutomationStatus.SUCCESS,
+                        AutomationStatus.PARTIAL_ERROR,
+                        AutomationStatus.ERROR,
+                    ],
+                    pullRequestNumber: 1,
+                    repositoryId: 'repo-1',
+                }),
+            );
+        });
+
+        it('leaves the note to lastExecution when the lookup fails', async () => {
+            context.platformType = PlatformType.GITLAB;
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) => {
+                    if (Array.isArray(filters.status)) throw new Error('db');
+                    return {
+                        uuid: 'exec-ok',
+                        dataExecution: { lastAnalyzedCommit: 'sha-1' },
+                    };
+                },
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+
+        it('does not look it up outside GitLab', async () => {
+            context.platformType = PlatformType.GITHUB;
+            lookup({ dataExecution: { commentId: 22, noteId: 22 } });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('orphaned baseCommit detection (rebase / force-push)', () => {
