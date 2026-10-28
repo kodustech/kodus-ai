@@ -91,7 +91,7 @@ Kody 还会读取任务所链接的内容：
 
 ### 回复评论
 
-回复 Business Logic 评论并提及 `@kody`。当评论发在该评论的讨论串中（GitLab、Bitbucket、Azure Repos）、引用了该评论，或指明了某个需求、其状态（MISSING、PARTIAL）或任务 ID 时，Kody 才会将其视为回复；其他评论会交给聊天处理。
+回复 Business Logic 评论并提及 `@kody`。当评论发在该评论的讨论串中（GitLab、Bitbucket、Azure Repos）、引用了该评论，或指明了某个需求、评论中写出的状态（MISSING、PARTIAL）或任务 ID 时，Kody 才会将其视为回复；其他评论会交给聊天处理。
 
 - **提出异议**："这在 `useDrag.ts` 中已经覆盖了"。Kody 会重新检查你指出的内容，要么将其标记为 MET，要么说明它查看了什么并保留原状态。
 - **接受某项发现**（PR 作者以外的人：在 GitHub 上需对仓库有写权限；在 GitLab 上需在仓库中拥有 Developer 或更高权限；在 Bitbucket、Azure Repos 和 Forgejo 上需是平台列出的组织成员）："键盘重新排序不在范围内，已移至 SAA-102"。Kody 确认 SAA-102 存在，将该行标记为 **ACCEPTED** 并注明接受者，该行不再需要修复。只要任务文本没有变化，即使 Kody 对需求的措辞略有不同，这一决定在之后的重新检查中也保持不变；任务被编辑后，需要重新接受该需求。

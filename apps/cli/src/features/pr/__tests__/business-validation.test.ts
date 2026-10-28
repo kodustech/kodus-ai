@@ -111,6 +111,29 @@ describe('kodus pr business-validation', () => {
         });
     });
 
+    it('reads --format json after the subcommand too, as the docs write it', async () => {
+        const writes: string[] = [];
+        vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+            writes.push(String(chunk));
+            return true;
+        });
+        await program().parseAsync([
+            'node',
+            'kodus',
+            'pr',
+            'business-validation',
+            '--task-id',
+            'AB#8',
+            '--format',
+            'json',
+        ]);
+
+        expect(JSON.parse(writes.join(''))).toMatchObject({
+            task: 'AB#8',
+            status: 'issues_found',
+        });
+    });
+
     it('wraps the same verdict in the agent envelope with --agent', async () => {
         const output = JSON.parse(await run(['--agent']));
 
