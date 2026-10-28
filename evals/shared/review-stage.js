@@ -170,7 +170,12 @@ const findingKey = (f) => [f.relevantFile, f.relevantLinesStart ?? '', f.relevan
 function observeFinderPasses() {
     if (finderObserved) return;
     const loaded = CONSUMERS.filter((c) => require.cache[require.resolve(path.join(LIBS, c))]);
-    if (loaded.length) throw new Error(`observeFinderPasses ran after ${loaded.join(', ')} loaded: the finder would not be observed`);
+    if (loaded.length) {
+        // Only a run measuring per step (run-recall.js sets the case store) needs
+        // the passes; an eval that loads the engine first runs unobserved.
+        if (global.__EVAL_CASE_ALS) throw new Error(`observeFinderPasses ran after ${loaded.join(', ')} loaded: the finder would not be observed`);
+        return;
+    }
     const { inStage } = require('./eval-kit');
 
     swapExports(VERIFY_PASS_PATH, (real) => ({
