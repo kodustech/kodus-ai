@@ -101,13 +101,17 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         const callArgs =
             mockPullRequestService.aggregateAndSaveDataStructure.mock.calls[0];
         // Signature: (pullRequest, repository, enrichedFiles, prioritized,
-        //            unused, platformType, organizationAndTeamData, commits)
+        //            unused, platformType, organizationAndTeamData, commits,
+        //            prLevelSuggestions, options)
         const enrichedFiles = callArgs[2];
         const orgAndTeam = callArgs[6];
 
         expect(enrichedFiles).toHaveLength(1);
         expect(enrichedFiles[0].filename).toBe('src/foo.ts');
         expect(orgAndTeam.organizationId).toBe('org-A');
+        // The pull request here is the one the review started with: the save
+        // keeps a close or merge stored while it ran.
+        expect(callArgs[9]).toEqual({ keepStoredState: true });
     });
 
     it('persists when the context (incl. pullRequest) is Immer-frozen (regression)', async () => {

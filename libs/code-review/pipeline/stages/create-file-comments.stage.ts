@@ -605,6 +605,10 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             platformType,
             organizationAndTeamData,
             pullRequestCommits as unknown as ICommit[],
+            undefined,
+            // `pullRequest` is the PR as the review found it: a close or merge
+            // processed while the review ran stays.
+            { keepStoredState: true },
         );
     }
 }
