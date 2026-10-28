@@ -997,6 +997,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
         platformType: PlatformType,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        previousGitlabNote?: { commentId: number; noteId: number },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             let commentBody: string;
@@ -1041,18 +1042,56 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                 ].join('\n');
             }
 
-            const comment = await this.codeManagementService.createIssueComment(
-                {
-                    organizationAndTeamData,
-                    prNumber,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
-                    },
-                    body: commentBody,
+            const commentRequest = {
+                organizationAndTeamData,
+                prNumber,
+                repository: {
+                    name: repository.name,
+                    id: repository.id,
                 },
-                undefined,
-            );
+                body: commentBody,
+            };
+            let updated = null;
+            let updateError: Error | undefined;
+            if (platformType === PlatformType.GITLAB && previousGitlabNote) {
+                try {
+                    updated =
+                        await this.codeManagementService.updateIssueComment({
+                            ...commentRequest,
+                            ...previousGitlabNote,
+                        });
+                } catch (error) {
+                    updateError =
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error));
+                    this.logger.warn({
+                        message: `Could not update GitLab status note for PR#${prNumber}; creating a replacement`,
+                        context: CommentManagerService.name,
+                        error: updateError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            prNumber,
+                            noteId: previousGitlabNote.noteId,
+                        },
+                    });
+                }
+            }
+            const comment =
+                updated ??
+                (await this.codeManagementService.createIssueComment(
+                    commentRequest,
+                    undefined,
+                ));
+            if (!comment) {
+                throw (
+                    updateError ??
+                    new Error(
+                        `Could not create initial review status for PR#${prNumber}`,
+                    )
+                );
+            }
 
             if (
                 PlatformType.GITHUB === platformType &&
@@ -1094,10 +1133,10 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
             // Extract platform-specific IDs
             switch (platformType) {
                 case PlatformType.GITLAB:
-                    // GitLab uses noteId
-                    noteId = comment?.notes?.[0]?.id
-                        ? Number(comment.notes[0].id)
-                        : null;
+                    // Plain MR notes return id directly; legacy discussions
+                    // returned notes[0].id.
+                    noteId = comment?.notes?.[0]?.id ?? comment?.id ?? null;
+                    noteId = noteId == null ? null : Number(noteId);
                     break;
                 case PlatformType.AZURE_REPOS:
                     // Azure Repos uses threadId
