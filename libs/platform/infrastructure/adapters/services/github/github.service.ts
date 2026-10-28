@@ -6551,7 +6551,16 @@ This is an experimental feature that generates committable changes. Review the d
             return PullRequestReviewState.NONE;
         }
 
-        const lastReview = myReviews.at(-1);
+        // A comment review does not undo an approval on GitHub, so Kody's
+        // state is its latest approval, change request or dismissal.
+        const lastReview =
+            myReviews
+                .filter((review) =>
+                    ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(
+                        review.state,
+                    ),
+                )
+                .at(-1) ?? myReviews.at(-1);
 
         switch (lastReview?.state) {
             case 'APPROVED':
