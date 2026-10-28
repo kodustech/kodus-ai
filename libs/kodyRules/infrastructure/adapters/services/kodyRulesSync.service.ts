@@ -290,8 +290,13 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
+        // Spared from the delete: the record a rename is re-keying. In
+        // centralized-config mode that re-key lands later through a PR, so
+        // the record can still sit on the old path when this runs.
+        keepUuid?: string;
     }): Promise<void> {
-        const { organizationAndTeamData, repositoryId, sourcePath } = params;
+        const { organizationAndTeamData, repositoryId, sourcePath, keepUuid } =
+            params;
         let toDelete: Partial<IKodyRule>[];
         try {
             const entity = await this.kodyRulesService.findByOrganizationId(
@@ -303,7 +308,10 @@ export class KodyRulesSyncService {
                 entity,
                 repositoryId,
                 sourcePath,
-            ).filter((r) => r.status !== KodyRulesStatus.DELETED);
+            ).filter(
+                (r) =>
+                    r.status !== KodyRulesStatus.DELETED && r.uuid !== keepUuid,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Failed to load rules for soft-delete by sourcePath',
@@ -780,6 +788,18 @@ export class KodyRulesSyncService {
                   dto,
                   this.systemUserInfo,
               );
+
+        // A rename re-keys the newest old-path record in place (above);
+        // any other record still on the old path would stay live for a
+        // file that no longer exists.
+        if (previousPath) {
+            await this.deleteRuleBySourcePath({
+                organizationAndTeamData,
+                repositoryId: repository.id,
+                sourcePath: previousPath,
+                keepUuid: existing?.uuid,
+            });
+        }
 
         // In centralized PR mode the mutation returns PR metadata, not the
         // entity; fall back to the known uuid or look the rule up again.
