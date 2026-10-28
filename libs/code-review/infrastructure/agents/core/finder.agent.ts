@@ -440,33 +440,6 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
  *  submitResult call into RunState.artifacts in step order). The LAST artifact
  *  is the finder's final output. Falls back to [] if the agent never finalized
  *  (budget-exhausted). No hand re-scan of steps — that is the runner's job. */
-// TEMP_LOG_MEMORY: whether the team's memory rules are in the system prompt
-// a finder pass actually runs with, and where. Remove with TEMP_LOG_NEW_FINDER.
-function tempLogMemoryInPrompt(
-    spec: AgentSpec,
-    pass: string,
-    telemetryMetadata?: LangfuseTelemetryMetadata,
-): void {
-    const prompt = spec.systemPrompt ?? '';
-    const marker = '## Memory Rules (Team Conventions)';
-    const at = prompt.indexOf(marker);
-    const section = at < 0 ? '' : prompt.slice(at).split('\n\n')[0];
-    const titles = [...section.matchAll(/^- \*\*(.+?)\*\*:/gm)].map((m) => m[1]);
-    finderLogger.log({
-        message: `TEMP_LOG_MEMORY ${pass}: memorySection=${at >= 0} memories=${titles.length} at=${at}/${prompt.length}`,
-        context: 'finder',
-        metadata: {
-            organizationId: telemetryMetadata?.organizationId,
-            teamId: telemetryMetadata?.teamId,
-            pullRequestId: telemetryMetadata?.pullRequestId,
-            pass,
-            titles,
-            before: at < 0 ? undefined : prompt.slice(Math.max(0, at - 120), at),
-            after: at < 0 ? undefined : prompt.slice(at + section.length, at + section.length + 120),
-        },
-    });
-}
-
 /** The findings of the submits before `latest`, in the order they came. */
 function earlierSubmittedFindings(
     state: RunState,
@@ -510,19 +483,6 @@ export function extractFindings(
           ? 'structured'
           : 'artifact-unusable';
     if (artifact) {
-        // TEMP_LOG_NEW_FINDER: the fields the model itself sent per finding,
-        // before any mapping fills defaults.
-        const submits = state.artifacts
-            .filter((a) => a.type === FINDER_DONE_TOOL)
-            .map((a) => (a.payload as { suggestions?: unknown })?.suggestions);
-        finderLogger.log({
-            message: `TEMP_LOG_NEW_FINDER raw submitResult: ${submits.length} submits, ${submits.map((s) => (Array.isArray(s) ? s.length : typeof s)).join('/')} suggestions`,
-            context: 'finder',
-            metadata: {
-                organizationId: telemetryMetadata?.organizationId,
-                submits,
-            },
-        });
         if (clean) {
             const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
             // A model that submits its findings and then submits again with
@@ -1422,7 +1382,6 @@ export async function runFinderWithVerify(
             : null;
 
     const baseT0 = Date.now();
-    if (!params.skipBasePass) tempLogMemoryInPrompt(params.finderSpec, 'base', params.telemetryMetadata);
     const finderState = params.skipBasePass
         ? EMPTY_BASE_FINDER_STATE
         : await params.runner.run(
@@ -1723,22 +1682,6 @@ export async function runFinderWithVerify(
         const unverifiedSet = new Set(unverified.map((u) => u.finding));
         kept = kept.filter((f) => !unverifiedSet.has(f));
     }
-
-    // TEMP_LOG_NEW_FINDER: what the verify embedded in the finder received
-    // and kept.
-    finderLogger.log({
-        message: `TEMP_LOG_NEW_FINDER verify: in=${suggestions.length} kept=${kept.length} refuted=${dropped.length} unverified=${unverified.length} quoteRejected=${route.rejected.length}`,
-        context: 'finder',
-        metadata: {
-            organizationId: params.telemetryMetadata?.organizationId,
-            teamId: params.telemetryMetadata?.teamId,
-            refuted: dropped.map((d) => ({
-                relevantFile: d.candidate.relevantFile,
-                relevantLinesStart: d.candidate.relevantLinesStart,
-                rationale: d.verdict.rationale,
-            })),
-        },
-    });
 
     return {
         reasoning,
@@ -2356,7 +2299,6 @@ export async function runRecallPasses(
         // review demorou": uma passada barata que espera 90s no provedor custa
         // o mesmo em token que uma de 9s, e so uma delas e o gargalo.
         const t0 = Date.now();
-        tempLogMemoryInPrompt(spec, label, params.telemetryMetadata);
         const inicioRelativo = t0 - FINDER_T0;
         const state = await params.runner.run(
             spec,

@@ -1410,27 +1410,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 });
             }
 
-            // TEMP_LOG_NEW_FINDER: what the finder delivered and what each
-            // deterministic step kept. Remove with the stop below.
-            this.logger.log({
-                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: finder=${finderSuggestions.length} kodyRules=${anchoringInput.length - (finderSuggestions.length - parsed.discarded.length)} parseDiscarded=${parsed.discarded.length} anchored=${anchoredSuggestions.length} labelReplaced=${JSON.stringify(labeled.replaced)} categoryOff=${labeled.discarded.length}`,
-                context: this.stageName,
-                metadata: {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    teamId: context.organizationAndTeamData?.teamId,
-                    prNumber,
-                    removedFields: parsed.removedFields,
-                    finderRaw: finderSuggestions,
-                    afterLabel: labeled.suggestions,
-                    discarded: allDiscarded.map((s) => ({
-                        relevantFile: s.relevantFile,
-                        relevantLinesStart: s.relevantLinesStart,
-                        relevantLinesEnd: s.relevantLinesEnd,
-                        priorityStatus: s.priorityStatus,
-                    })),
-                },
-            });
             const validatedSuggestions = labeled.suggestions;
 
             // Verify/Discover removed — was hurting recall across all models.
@@ -1538,17 +1517,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             );
             let deduped = dedup.deduped;
             const dedupTrace = dedup.dedupTrace;
-            // TEMP_LOG_NEW_FINDER: the repeat check and the dedup, in and out.
-            this.logger.log({
-                message: `TEMP_LOG_NEW_FINDER PR#${prNumber}: repeats in=${repeatCheck.kept.length + repeatCheck.repeats.length} discarded=${repeatCheck.repeats.length}; dedup in=${severityNormalized.length} out=${deduped.length}`,
-                context: this.stageName,
-                metadata: {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    teamId: context.organizationAndTeamData?.teamId,
-                    prNumber,
-                },
-            });
             // A custom agent's findings the dedup merged into another
             // comment, which posts in their place: neither posted as the
             // agent's nor dropped, so the outcome log counts them apart.
