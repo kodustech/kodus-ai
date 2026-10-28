@@ -464,16 +464,13 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 }
                 return managed;
             }
-            const byId = cred.id ? existingById.get(cred.id) : undefined;
-            const byProvider =
-                !byId && cred.provider
-                    ? (existingByProvider.get(cred.provider) ?? undefined)
-                    : undefined;
+            const byId = existingById.get(cred.id);
             // A stored key only stays with the endpoint it was saved for.
             // Repointing a credential — or a new one on another endpoint
             // borrowing by provider — needs its key typed again; a blank
             // field would otherwise send the old key to the new host.
-            const candidate = byId ?? byProvider;
+            const candidate =
+                byId ?? existingByProvider.get(cred.provider) ?? undefined;
             const prior =
                 candidate && sameEndpoint(cred, candidate)
                     ? candidate
@@ -681,14 +678,10 @@ const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean =>
  *  gateway may route by tenant in the path. */
 const normalizeEndpoint = (value?: string): string => {
     const trimmed = (value ?? '').trim();
-    if (!trimmed) return '';
-    try {
-        const url = new URL(trimmed);
-        url.pathname = stripTrailingSlashes(url.pathname);
-        return url.href;
-    } catch {
-        return stripTrailingSlashes(trimmed);
-    }
+    if (!URL.canParse(trimmed)) return trimmed;
+    const url = new URL(trimmed);
+    url.pathname = stripTrailingSlashes(url.pathname);
+    return url.href;
 };
 
 const stripTrailingSlashes = (value: string): string => {
@@ -697,10 +690,5 @@ const stripTrailingSlashes = (value: string): string => {
     return value.slice(0, end);
 };
 
-const hostOf = (value?: string): string | undefined => {
-    try {
-        return value ? new URL(value).host : undefined;
-    } catch {
-        return undefined;
-    }
-};
+const hostOf = (value?: string): string | undefined =>
+    value && URL.canParse(value) ? new URL(value).host : undefined;

@@ -358,6 +358,88 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                 expect(createOrUpdateConfig).not.toHaveBeenCalled();
             });
 
+            it('logs which credential and hosts a refusal was about', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                (useCase as any).request.user.organization = { uuid: 'org-1' };
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow('apiKey is required');
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: 'CreateOrUpdateOrganizationParametersUseCase',
+                    metadata: {
+                        organizationId: 'org-1',
+                        provider: 'openai_compatible',
+                        credentialId: 'cred-gw',
+                        priorCredentialId: 'cred-gw',
+                        matchedBy: 'id',
+                        host: 'api.together.ai',
+                        priorHost: 'api.fireworks.ai',
+                    },
+                });
+            });
+
+            it('logs a provider match, and no host for an endpoint that is unset', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                const renamed = resubmit('');
+                renamed.credentials[0].id = 'cred-renamed';
+                renamed.models[0].credentialId = 'cred-renamed';
+
+                await expect(saveByok(useCase, renamed)).rejects.toThrow(
+                    'apiKey is required',
+                );
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        metadata: expect.objectContaining({
+                            credentialId: 'cred-renamed',
+                            priorCredentialId: 'cred-gw',
+                            matchedBy: 'provider',
+                            host: undefined,
+                            priorHost: 'api.fireworks.ai',
+                        }),
+                    }),
+                );
+            });
+
+            it('logs nothing when the stored key is kept', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+
+                await saveByok(useCase, resubmit('', fireworks));
+
+                expect((useCase as any).logger.warn).not.toHaveBeenCalled();
+            });
+
+            it('treats a baseURL that is not a string as no endpoint', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+                const odd = resubmit('');
+                odd.credentials[0].settings = { baseURL: 42 };
+
+                await expect(saveByok(useCase, odd)).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the key on a legacy endpoint that does not parse as a URL, left as it was', async () => {
+                const existing = stored('legacy-gateway');
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(useCase, resubmit('', 'legacy-gateway'));
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
             it('saves the repoint when a new key comes with it', async () => {
                 const { useCase, persisted } = buildUseCase(stored(fireworks));
 
