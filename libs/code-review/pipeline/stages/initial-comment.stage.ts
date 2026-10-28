@@ -110,7 +110,8 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         }
 
-        const previous = context.lastExecution;
+        // A partial run's note too, not only the last SUCCESS (#1721).
+        const previous = context.previousStatusNote ?? context.lastExecution;
         const previousCommentId = Number(previous?.commentId);
         const previousNoteId = Number(previous?.noteId);
         // A later run with an opening-only end message never writes its

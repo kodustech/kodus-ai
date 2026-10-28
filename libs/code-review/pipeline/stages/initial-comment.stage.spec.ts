@@ -55,6 +55,47 @@ describe('InitialCommentStage GitLab status note reuse (#1721)', () => {
         expect(createInitialComment.mock.calls[0][8]).toBeUndefined();
     });
 
+    // QA MR !68: a review that ended partial_error is no lastExecution (that
+    // is the last SUCCESS), and each later review posted another note.
+    it('reuses the note of a preceding partial review', async () => {
+        await (stage as any).executeStage({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pullRequest: { number: 42 },
+            repository: { id: 'repo-1', name: 'repo' },
+            changedFiles: [],
+            platformType: PlatformType.GITLAB,
+            previousStatusNote: { commentId: 22, noteId: 22 },
+        } as CodeReviewPipelineContext);
+
+        expect(createInitialComment.mock.calls[0][8]).toEqual({
+            commentId: 22,
+            noteId: 22,
+        });
+    });
+
+    it('prefers the latest finished run over an older success', async () => {
+        await (stage as any).executeStage({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pullRequest: { number: 42 },
+            repository: { id: 'repo-1', name: 'repo' },
+            changedFiles: [],
+            platformType: PlatformType.GITLAB,
+            lastExecution: { commentId: 11, noteId: 11 },
+            previousStatusNote: { commentId: 22, noteId: 22 },
+        } as CodeReviewPipelineContext);
+
+        expect(createInitialComment.mock.calls[0][8]).toEqual({
+            commentId: 22,
+            noteId: 22,
+        });
+    });
+
     it('preserves the first summary when a later push only posts a start message', async () => {
         const notes = new Map<number, string>();
         let nextId = 11;
