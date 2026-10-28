@@ -255,6 +255,110 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
 
+        describe('same credential id, endpoint repointed', () => {
+            const fireworks = 'https://api.fireworks.ai/inference/v1';
+            const stored = (baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey: encrypt('sk-fireworks'),
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+            const resubmit = (apiKey: string, baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey,
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+
+            it('refuses to keep the stored key for a new host', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow(
+                    'apiKey is required for the openai_compatible BYOK credential',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when the endpoint is removed', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(saveByok(useCase, resubmit(''))).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when an endpoint is added', async () => {
+                const { useCase, createOrUpdateConfig } =
+                    buildUseCase(stored());
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the stored key when the endpoint is only spelled differently', async () => {
+                const existing = stored(fireworks);
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(
+                    useCase,
+                    resubmit('', 'https://API.fireworks.ai/inference/v1/'),
+                );
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
+            it('saves the repoint when a new key comes with it', async () => {
+                const { useCase, persisted } = buildUseCase(stored(fireworks));
+
+                await saveByok(
+                    useCase,
+                    resubmit('sk-together', 'https://api.together.ai/v1'),
+                );
+
+                expect(decrypt(persisted.value.credentials[0].apiKey)).toBe(
+                    'sk-together',
+                );
+            });
+        });
+
         it('matches by provider across an id change when the endpoint is the same', async () => {
             const priorCipher = encrypt('sk-fireworks');
             const existing = v2({

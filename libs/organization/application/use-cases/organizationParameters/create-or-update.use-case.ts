@@ -411,8 +411,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     /**
      * v2 encrypt/keep. For each incoming credential, encrypt/keep its secret
      * fields against the matching prior credential (matched by `id`, else by
-     * `provider` on the same endpoint): a blank/empty field keeps the prior ciphertext, a real value
-     * is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
+     * `provider`) on the same endpoint: a blank/empty field keeps the prior
+     * ciphertext, a real value is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
      * models[] / routing / version pass through untouched — field-level encrypt
      * only, no re-encryption of untouched ciphertext.
      */
@@ -469,15 +469,16 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 !byId && cred.provider
                     ? (existingByProvider.get(cred.provider) ?? undefined)
                     : undefined;
-            // A credential that names its own endpoint only inherits a key
-            // from one on the same endpoint: the org's only OpenAI-compatible
-            // gateway is still the wrong key for a second gateway saved next
-            // to it.
-            const lendable =
-                byProvider && sameEndpointOrUnset(cred, byProvider)
-                    ? byProvider
+            // A stored key only stays with the endpoint it was saved for.
+            // Repointing a credential — or a new one on another endpoint
+            // borrowing by provider — needs its key typed again; a blank
+            // field would otherwise send the old key to the new host.
+            const candidate = byId ?? byProvider;
+            const prior =
+                candidate && sameEndpoint(cred, candidate)
+                    ? candidate
                     : undefined;
-            if (byProvider && !lendable) {
+            if (candidate && !prior) {
                 this.logger.warn({
                     message:
                         'BYOK save: refused to reuse a stored key across endpoints',
@@ -486,13 +487,13 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                         organizationId: this.request?.user?.organization?.uuid,
                         provider: cred.provider,
                         credentialId: cred.id,
-                        priorCredentialId: byProvider.id,
+                        priorCredentialId: candidate.id,
+                        matchedBy: byId ? 'id' : 'provider',
                         host: hostOf(credentialBaseURL(cred)),
-                        priorHost: hostOf(credentialBaseURL(byProvider)),
+                        priorHost: hostOf(credentialBaseURL(candidate)),
                     },
                 });
             }
-            const prior = byId ?? lendable;
             const encrypted = this.encryptCredentialSecrets(cred, prior);
             // Auth-path integrity: after encrypt/keep, a non-managed credential
             // must carry a usable secret (a kept ciphertext counts). Bedrock
@@ -670,17 +671,15 @@ const credentialBaseURL = (cred: BYOKCredential): string | undefined => {
     return typeof value === 'string' ? value : undefined;
 };
 
-/** Same rule as the web's `findReusableCredential`: the endpoint only counts
- *  when the incoming credential carries one, compared without a trailing
- *  slash or case. */
-const sameEndpointOrUnset = (
-    next: BYOKCredential,
-    prior: BYOKCredential,
-): boolean => {
+/** Compared without surrounding space, a trailing slash or case; no
+ *  endpoint on either side counts as the provider's default. */
+const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean => {
     const normalize = (value?: string) =>
         (value ?? '').trim().replace(/\/+$/, '').toLowerCase();
-    const wanted = normalize(credentialBaseURL(next));
-    return !wanted || normalize(credentialBaseURL(prior)) === wanted;
+    return (
+        normalize(credentialBaseURL(next)) ===
+        normalize(credentialBaseURL(prior))
+    );
 };
 
 const hostOf = (value?: string): string | undefined => {
