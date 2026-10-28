@@ -312,6 +312,33 @@ describe('TestByokModelUseCase', () => {
             );
         });
 
+        it("finds a model only the named gateway serves in that gateway's catalog", async () => {
+            const { useCase, connectionUseCase, getModels } = build({
+                configValue: twoGateways,
+            });
+            getModels.execute.mockImplementation(
+                async (_p: string, _o: unknown, _b: unknown, id?: string) => ({
+                    models:
+                        id === 'cred-b'
+                            ? [{ id: 'only-on-b', name: 'B' }]
+                            : [{ id: 'only-on-a', name: 'A' }],
+                    exercisedCredential: true,
+                }),
+            );
+
+            const res = await useCase.execute({
+                provider: 'openai_compatible',
+                model: 'only-on-b',
+                credentialId: 'cred-b',
+                organizationAndTeamData: org,
+            });
+
+            expect(res).toEqual(
+                expect.objectContaining({ ok: true, verifiedBy: 'catalog' }),
+            );
+            expect(connectionUseCase.execute).not.toHaveBeenCalled();
+        });
+
         it('refuses an id that is not saved instead of probing another gateway', async () => {
             const { useCase, connectionUseCase } = build({
                 configValue: twoGateways,
