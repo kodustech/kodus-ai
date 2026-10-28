@@ -64,7 +64,62 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
         );
     });
 
-    describe('formatKodyRules — path applicability', () => {
+    describe('formatKodyRules — simple rules', () => {
+        it('emits a single rule with title, UUID, and description', () => {
+            const rules = [
+                {
+                    uuid: 'aaaa-1111',
+                    title: 'No console.log',
+                    rule: 'Avoid console.log in production code.',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                },
+            ];
+            const changedFiles = [{ filename: 'src/foo.ts' }];
+
+            const out = formatRules(rules, changedFiles);
+
+            expect(out).toContain('Team Rules to Validate (1 rules)');
+            expect(out).toContain('### Rule 1: No console.log');
+            expect(out).toContain('**UUID**: `aaaa-1111`');
+            expect(out).toContain(
+                '**Description**: Avoid console.log in production code.',
+            );
+        });
+
+        it('numbers multiple rules sequentially', () => {
+            const rules = [
+                {
+                    uuid: 'r1',
+                    title: 'Rule One',
+                    rule: 'one',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                },
+                {
+                    uuid: 'r2',
+                    title: 'Rule Two',
+                    rule: 'two',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                },
+                {
+                    uuid: 'r3',
+                    title: 'Rule Three',
+                    rule: 'three',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                },
+            ];
+
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+
+            expect(out).toContain('### Rule 1: Rule One');
+            expect(out).toContain('### Rule 2: Rule Two');
+            expect(out).toContain('### Rule 3: Rule Three');
+            expect(out).toContain('Team Rules to Validate (3 rules)');
+        });
+
         it('returns empty string when no rules match changed files (path filter)', () => {
             const rules = [
                 {
@@ -80,6 +135,120 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
 
             const out = formatRules(rules, changedFiles);
             expect(out).toBe('');
+        });
+
+        it('includes the file scope marker for per-file rules', () => {
+            const rules = [
+                {
+                    uuid: 'r-file',
+                    title: 'File scope',
+                    rule: 'x',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    scope: KodyRulesScope.FILE,
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+            expect(out).toContain('**Scope**: Per-file');
+        });
+
+        it('includes the PR-level scope marker for pull-request rules', () => {
+            const rules = [
+                {
+                    uuid: 'r-pr',
+                    title: 'PR scope',
+                    rule: 'every PR must have tests',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+            expect(out).toContain('**Scope**: Pull request level');
+        });
+    });
+
+    describe('formatKodyRules — examples', () => {
+        it('renders correct and incorrect examples as fenced code blocks', () => {
+            const rules = [
+                {
+                    uuid: 'r-ex',
+                    title: 'Naming',
+                    rule: 'use camelCase',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    examples: [
+                        { isCorrect: true, snippet: 'const fooBar = 1;' },
+                        { isCorrect: false, snippet: 'const foo_bar = 1;' },
+                    ],
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+
+            expect(out).toContain('**Examples**:');
+            expect(out).toContain('- Correct:');
+            expect(out).toContain('const fooBar = 1;');
+            expect(out).toContain('- Incorrect:');
+            expect(out).toContain('const foo_bar = 1;');
+        });
+    });
+
+    describe('formatKodyRules — external file reference', () => {
+        it('says a reference file is inlined, and promises no tool to fetch it', () => {
+            const rules = [
+                {
+                    uuid: 'r-ext',
+                    title: 'External convention',
+                    rule: 'follow the company guide',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    sourcePath: 'docs/conventions.md',
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+
+            expect(out).toContain('**Reference**: `docs/conventions.md`');
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
+        });
+
+        it('says the same for a cross-repo-shaped source path — there is no fetch either way', () => {
+            const rules = [
+                {
+                    uuid: 'r-ext-cross',
+                    title: 'Cross-repo convention',
+                    rule: 'follow the company guide',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    sourcePath: 'kodustech/design-system/docs/conventions.md',
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+
+            expect(out).toContain(
+                '**Reference**: `kodustech/design-system/docs/conventions.md`',
+            );
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
+        });
+
+        it('appends the section anchor to the Reference line when sourceAnchor is set', () => {
+            const rules = [
+                {
+                    uuid: 'r-ext-anchor',
+                    title: 'External anchored convention',
+                    rule: 'follow the company guide',
+                    type: KodyRulesType.STANDARD,
+                    status: 'active',
+                    sourcePath: 'docs/conventions.md',
+                    sourceAnchor: 'Naming',
+                },
+            ];
+            const out = formatRules(rules, [{ filename: 'a.ts' }]);
+
+            expect(out).toContain(
+                '**Reference**: `docs/conventions.md` (section: Naming)',
+            );
         });
     });
 
@@ -150,6 +319,58 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
                 expect(matches(path, pattern)).toBe(expected);
             },
         );
+    });
+
+    describe('getCategoryPrompt — composition with per-request rules', () => {
+        it('includes the base rules-checking instructions when no rules are passed', () => {
+            const out = (provider as any).getCategoryPrompt({
+                kodyRules: [],
+                changedFiles: [],
+            });
+            expect(out).toContain('Focus: Team Rules & Conventions');
+            expect(out).not.toContain('Team Rules to Validate');
+        });
+
+        it('appends the formatted rules block when rules are passed via input', () => {
+            const out = (provider as any).getCategoryPrompt({
+                kodyRules: [
+                    {
+                        uuid: 'r1',
+                        title: 'Test',
+                        rule: 'x',
+                        type: KodyRulesType.STANDARD,
+                        status: 'active',
+                    },
+                ],
+                changedFiles: [{ filename: 'a.ts' }],
+            });
+            expect(out).toContain('Focus: Team Rules & Conventions');
+            expect(out).toContain('Team Rules to Validate (1 rules)');
+            expect(out).toContain('### Rule 1: Test');
+        });
+
+        it('does not leak rules across calls (no shared state)', () => {
+            // First call: rules present.
+            (provider as any).getCategoryPrompt({
+                kodyRules: [
+                    {
+                        uuid: 'r1',
+                        title: 'LeakCheck',
+                        rule: 'x',
+                        type: KodyRulesType.STANDARD,
+                        status: 'active',
+                    },
+                ],
+                changedFiles: [{ filename: 'a.ts' }],
+            });
+            // Second call with no rules: must NOT mention the previous rule.
+            const out = (provider as any).getCategoryPrompt({
+                kodyRules: [],
+                changedFiles: [{ filename: 'b.ts' }],
+            });
+            expect(out).not.toContain('LeakCheck');
+            expect(out).not.toContain('Team Rules to Validate');
+        });
     });
 
     describe('execute — short-circuits before calling LLM', () => {
