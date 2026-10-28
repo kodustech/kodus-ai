@@ -255,6 +255,10 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
+                  # The judge the nightly and weekly runs use: the key above is
+                  # OpenAI's, and the judge's default model is Anthropic's.
+                  JUDGE_MODEL: gpt-5.6-luna
+                  JUDGE_REASONING_EFFORT: low
                   JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   # The panel's experiments API: the result goes there, and code it
