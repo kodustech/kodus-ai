@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // suggestion-enrichment: production's AgentReviewStage.enrichFinderSuggestions on
 // the 150 findings of the enrichment dataset (evals/enrichment/dataset), each with
-// its file at the PR head, scored on what ships: the title after the stage
-// resolves it and the fix after the publication gate (README.md).
+// its file at the PR head, scored on what the step writes: the title after the
+// stage resolves it and the fix before the publication gate (README.md).
 //
 //   node evals/suggestion-enrichment/run.js [--model=<id>] [--judge=<id>] [--set=controlled|full] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
 //
@@ -46,14 +46,16 @@ const changedFileOf = (item, files) => ({
     patch: item.context.filePatch,
 });
 
-// What the enrichment step leaves, as the comment ships it: the title the stage
-// resolves (fullSuggestionTitle) and the fix the publication gate keeps (checkFix).
-function shipped(out) {
+// What the enrichment step leaves: the title the stage resolves
+// (fullSuggestionTitle) and the fix it wrote. The publication gate (checkFix)
+// runs after this step and is not scored here; what it would cut is recorded.
+function written(out) {
     const { fullSuggestionTitle } = require('../../libs/common/utils/codeManagement/suggestion-title.ts');
     const { checkFix } = require('../../libs/code-review/infrastructure/agents/engine/is-usable-fix.ts');
     const title = fullSuggestionTitle({ summary: out.oneSentenceSummary, body: out.suggestionContent });
-    const code = out.improvedCode && checkFix(out.existingCode, out.improvedCode, out.language) === null ? out.improvedCode : null;
-    return { title, code, wroteTitle: !!out.oneSentenceSummary };
+    const code = out.improvedCode || null;
+    const gateCut = code ? checkFix(out.existingCode, code, out.language) : null;
+    return { title, code, gateCut, wroteTitle: !!out.oneSentenceSummary };
 }
 
 async function enrichCase(env, item) {
@@ -61,7 +63,7 @@ async function enrichCase(env, item) {
     const { context, codeManagement } = await teamContext(env);
     const stage = buildAgentReviewStage({ permissionService: env.permissionService, codeManagement });
     const [out] = await stage.enrichFinderSuggestions([suggestionOf(item)], context, [changedFileOf(item, headFiles())]);
-    return shipped(out);
+    return written(out);
 }
 
 async function grade(judgeSlot, c, answer) {
@@ -92,9 +94,11 @@ function scoreCase(c, answer, verdict) {
         titleFormatOk: titleFormatOk(answer.title),
         titleNamesProblem: verdict.titleNamesProblem,
         wroteTitle: answer.wroteTitle,
-        shipsCode: !!answer.code,
+        wroteCode: !!answer.code,
+        code: answer.code,
+        gateCut: answer.gateCut,
         judge: { fix: verdict.fix, fixReason: verdict.fixReason, titleReason: verdict.titleReason },
-        shippedTitle: answer.title,
+        resolvedTitle: answer.title,
     };
 }
 
@@ -197,6 +201,8 @@ async function main() {
     const checks = scored.reduce((n, r) => n + r.total, 0);
     metrics.checks = { right: hits, total: checks, value: checks ? hits / checks : null };
     const errored = results.filter((r) => r.unmeasured).length;
+    // Not scored: the fixes the publication gate would strip after this step.
+    metrics.gateCut = { passed: scored.filter((r) => r.fix && r.gateCut).length, all: scored.filter((r) => r.gateCut).length };
     const result = {
         eval: 'suggestion-enrichment',
         question: evalQuestion('evals/suggestion-enrichment'),
@@ -215,7 +221,7 @@ async function main() {
         fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
     }
     console.log(
-        `suggestion-enrichment: ${METRICS.map((m) => `${m} ${metrics[m].right}/${metrics[m].total}`).join(' · ')} · judge ${JUDGE} · ${errored} of ${results.length} findings did not measure`,
+        `suggestion-enrichment: ${METRICS.map((m) => `${m} ${metrics[m].right}/${metrics[m].total}`).join(' · ')} · judge ${JUDGE} · the gate would cut ${metrics.gateCut.all} fixes, ${metrics.gateCut.passed} of them passed · ${errored} of ${results.length} findings did not measure`,
     );
     if (errored > results.length * 0.05) {
         console.error(`not measured: ${errored} of ${results.length} findings failed (see above)`);
@@ -252,4 +258,4 @@ if (require.main === module) {
         });
 }
 
-module.exports = { shipped, scoreCase, metricsOf, belowFloors, suggestionOf, changedFileOf };
+module.exports = { written, scoreCase, metricsOf, belowFloors, suggestionOf, changedFileOf };

@@ -1,24 +1,24 @@
 /**
- * suggestion-enrichment scores what ships: the title the stage resolves, the fix
- * the publication gate keeps, and each metric over the cases it covers.
+ * suggestion-enrichment scores what the step writes: the title the stage resolves,
+ * the fix before the publication gate, and each metric over the cases it covers.
  */
-const { shipped, scoreCase, metricsOf, belowFloors } = require('./run');
+const { written, scoreCase, metricsOf, belowFloors } = require('./run');
 const { casesOf } = require('./catalog');
 
 const pass = { titleNamesProblem: true, titleReason: '', fix: 'PASS', fixReason: '' };
 
 describe('suggestion-enrichment scoring', () => {
-    it('ships the model title without a trailing period, or the first sentence when it wrote none', () => {
-        expect(shipped({ oneSentenceSummary: 'Total ignores quantity.', suggestionContent: 'x' }).title).toBe('Total ignores quantity');
-        const fallback = shipped({ suggestionContent: 'The total ignores the quantity. It is wrong.' });
+    it('resolves the model title without a trailing period, or the first sentence when it wrote none', () => {
+        expect(written({ oneSentenceSummary: 'Total ignores quantity.', suggestionContent: 'x' }).title).toBe('Total ignores quantity');
+        const fallback = written({ suggestionContent: 'The total ignores the quantity. It is wrong.' });
         expect(fallback.title).toBe('The total ignores the quantity');
         expect(fallback.wroteTitle).toBe(false);
     });
 
-    it('ships no code the publication gate drops', () => {
-        expect(shipped({ existingCode: 'a = 1', improvedCode: 'a = 1', language: 'python' }).code).toBeNull();
-        expect(shipped({ existingCode: 'a = 1', improvedCode: 'a = 2', language: 'python' }).code).toBe('a = 2');
-        expect(shipped({ existingCode: 'a = 1' }).code).toBeNull();
+    it('scores the fix the step wrote and records what the publication gate would cut', () => {
+        expect(written({ existingCode: 'a = 1', improvedCode: 'a = 1', language: 'python' })).toMatchObject({ code: 'a = 1', gateCut: 'noop-fix' });
+        expect(written({ existingCode: 'a = 1', improvedCode: 'a = 2', language: 'python' })).toMatchObject({ code: 'a = 2', gateCut: null });
+        expect(written({ existingCode: 'a = 1' })).toMatchObject({ code: null, gateCut: null });
     });
 
     it('counts a title right only when the judge passes it and it fits 80 characters', () => {

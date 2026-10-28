@@ -10,8 +10,10 @@ Drives production's `AgentReviewStage.enrichFinderSuggestions` (`agent-review.st
 `enrich-suggestions.ts`) on each finding as the review hands it over after the severity
 step: the five lean fields, with its file at the PR head and the file's diff as
 FetchChangedFilesStage leaves them, and the org's model routed as production routes it
-(`evals/shared/review-stage.js`). It scores what ships: the title the stage resolves
-(`fullSuggestionTitle`) and the fix the publication gate keeps (`checkFix`).
+(`evals/shared/review-stage.js`). It scores what the step writes: the title the stage
+resolves (`fullSuggestionTitle`) and the fix before the publication gate (`checkFix`). The
+gate runs after this step and is not scored here; each run reports how many fixes it would
+cut and how many of those the judge passed.
 
 The cases are the enrichment dataset of #1821 (`evals/enrichment/dataset/items.json`):
 150 confirmed findings from the gold v3 reviews, each with Astra's reference (the defect,
@@ -23,8 +25,8 @@ checkouts; the step's input built from them equals, on all 150 findings, the inp
 research runs measured.
 
 Three metrics, each over the cases it covers:
-- **fix:** of the 100 fixable findings, the share whose shipped fix the judge passes.
-- **noCode:** of the 50 others, the share shipped with no code.
+- **fix:** of the 100 fixable findings, the share whose fix the judge passes.
+- **noCode:** of the 50 others, the share written with no code.
 - **title:** of all 150, the share whose title names the problem (judge) and has the format
   the prompt asks for: one line, 80 characters or fewer, no trailing period.
 
@@ -32,5 +34,5 @@ The judge (`judge.js`, shared with the research grader in `evals/enrichment`) is
 nightly's judge, `gpt-5.6-luna` (`JUDGE_MODEL`), with the references; the floors hold
 under it only.
 
-Deliberate break: a step that writes no fix and no title ships every finding with no code
+Deliberate break: a step that writes no fix and no title leaves every finding with no code
 and its first sentence as the title. noCode goes to 100%, fix to 0%, below every floor.

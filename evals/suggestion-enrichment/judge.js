@@ -2,7 +2,7 @@
 // (evals/enrichment/judge.js): the deterministic title check, which items need a
 // fix, and the judge's prompt and verdict. The judge sees the finding, Astra's
 // reference (evals/enrichment/dataset/references), the cited code, the file
-// window and the answer that ships.
+// window and the answer the step wrote.
 const { z } = require('zod');
 
 // One line, 80 characters or fewer, no trailing period: the title the prompt asks
