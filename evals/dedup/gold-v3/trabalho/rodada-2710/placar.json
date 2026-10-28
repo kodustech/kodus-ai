@@ -32,6 +32,39 @@
    "f2": 29.6
   }
  },
+ "novo-dsm": {
+  "faltamJulgar": 0,
+  "finder": {
+   "comentarios": 96,
+   "tp": 41,
+   "fp": 55,
+   "totalTp": 121,
+   "recall": 33.9,
+   "precisao": 42.7,
+   "f1": 37.8,
+   "f2": 35.3
+  },
+  "dedup": {
+   "comentarios": 88,
+   "tp": 40,
+   "fp": 48,
+   "totalTp": 121,
+   "recall": 33.1,
+   "precisao": 45.5,
+   "f1": 38.3,
+   "f2": 35.0
+  },
+  "final": {
+   "comentarios": 81,
+   "tp": 39,
+   "fp": 42,
+   "totalTp": 121,
+   "recall": 32.2,
+   "precisao": 48.1,
+   "f1": 38.6,
+   "f2": 34.5
+  }
+ },
  "novo-gpt": {
   "faltamJulgar": 0,
   "finder": {
@@ -195,6 +228,39 @@
    "precisao": 34.7,
    "f1": 26.5,
    "f2": 23.3
+  }
+ },
+ "prod-dsm": {
+  "faltamJulgar": 0,
+  "finder": {
+   "comentarios": 77,
+   "tp": 41,
+   "fp": 36,
+   "totalTp": 121,
+   "recall": 33.9,
+   "precisao": 53.2,
+   "f1": 41.4,
+   "f2": 36.5
+  },
+  "dedup": {
+   "comentarios": 73,
+   "tp": 38,
+   "fp": 35,
+   "totalTp": 121,
+   "recall": 31.4,
+   "precisao": 52.1,
+   "f1": 39.2,
+   "f2": 34.1
+  },
+  "final": {
+   "comentarios": 66,
+   "tp": 34,
+   "fp": 32,
+   "totalTp": 121,
+   "recall": 28.1,
+   "precisao": 51.5,
+   "f1": 36.4,
+   "f2": 30.9
   }
  },
  "prod-gpt": {
