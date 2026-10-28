@@ -661,6 +661,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean },
     ): Promise<IPullRequests | null> {
         // Gate from issue #1107 / fix A. Very large PRs hit the BSON
         // 16MB document cap and waste the worker on every webhook
@@ -696,6 +697,7 @@ export class PullRequestsService implements IPullRequestsService {
                     organizationAndTeamData,
                     commits,
                     prLevelSuggestions,
+                    options,
                 ),
                 PullRequestsService.SAVE_TIMEOUT_MS,
                 `aggregateAndSaveDataStructure (PR#${pullRequest?.number})`,
@@ -725,6 +727,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean },
     ): Promise<IPullRequests | null> {
         const organizationId = organizationAndTeamData?.organizationId;
 
@@ -812,11 +815,18 @@ export class PullRequestsService implements IPullRequestsService {
             );
         }
 
+        // The review passes the PR as it was when it started: a close or merge
+        // stored meanwhile must not be overwritten with `open`.
+        const lifecycle = options?.keepStoredState
+            ? {}
+            : {
+                  status: await this.identifyPullRequestStatus(pullRequest),
+                  merged: this.extractMergedStatus(pullRequest),
+                  closedAt: this.extractClosedAt(pullRequest),
+              };
         await this.update(existingPR, {
-            status: await this.identifyPullRequestStatus(pullRequest),
-            merged: this.extractMergedStatus(pullRequest),
+            ...lifecycle,
             updatedAt: new Date().toISOString(),
-            closedAt: this.extractClosedAt(pullRequest),
             user: await this.extractUser(
                 pullRequest.user,
                 organizationAndTeamData,
