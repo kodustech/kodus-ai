@@ -63,6 +63,7 @@ import {
     findReusableCredential,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
+    normalizeEndpoint,
 } from "../_components/byok-write";
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
@@ -77,10 +78,15 @@ import {
 } from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
-import { planAccountChanged } from "./plan-account";
 
 const ENDPOINT_NEEDS_KEY_MESSAGE =
     "No key is stored for this endpoint — paste its API key.";
+const ENDPOINT_CHANGED_MESSAGE =
+    "The stored key stays with its old endpoint — paste the API key for this one.";
+
+// Every provider label starts with a letter that sounds the way it reads.
+const articleFor = (label: string): "a" | "an" =>
+    /^[aeiou]/i.test(label) ? "an" : "a";
 
 const confirmEnvOverride = (): Promise<boolean> =>
     new Promise((resolve) => {
@@ -170,20 +176,20 @@ export function ByokManualPageClient({
     // Whether the locked provider has any key to reuse. Two gateways of one
     // provider are two credentials, so this alone does not say WHICH key —
     // `targetCred` below does, once the endpoint is known.
+    const lockedProviderCreds = (existing?.credentials ?? []).filter(
+        (c) => !c.managed && c.provider === lockedProvider,
+    );
     const providerHasStoredKey =
-        !!lockedProvider &&
-        (existing?.credentials ?? []).some(
-            (c) => !c.managed && c.provider === lockedProvider,
-        );
+        !!lockedProvider && lockedProviderCreds.length > 0;
     // The credential an ADD opens on: the one named by ?credential=, else the
     // provider's only credential. With several and none named, none — the user
     // types the endpoint, and the key follows from it.
     const initialCred =
         !isEditing && lockedProvider
             ? (presetCred ??
-              findReusableCredential(existing?.credentials, {
-                  provider: lockedProvider,
-              }))
+              (lockedProviderCreds.length === 1
+                  ? lockedProviderCreds[0]
+                  : undefined))
             : undefined;
     // The endpoint that credential already points at — so ADDING a model to a
     // connected custom-endpoint provider shows the URL its models actually hit,
@@ -414,16 +420,6 @@ export function ByokManualPageClient({
     const awsAccessKeyId = form.watch("awsAccessKeyId");
     const awsSecretAccessKey = form.watch("awsSecretAccessKey");
 
-    // A plan/variant whose endpoint is a DIFFERENT account than the stored one
-    // (Kimi Developer API on api.moonshot.ai vs Kimi Code Plan on api.kimi.com —
-    // separate billing, separate keys) can't reuse the stored key. Detect the
-    // account switch by endpoint host and force the plan's own key to be entered.
-    const planNeedsNewKey = planAccountChanged(
-        isEditing,
-        currentBaseURL,
-        watchedBaseURL,
-    );
-
     // The stored credential this add writes into and tests against, read from
     // the endpoint on screen — the same rule the save uses, so the key shown is
     // always the key the save will keep. A different endpoint is a different
@@ -440,9 +436,14 @@ export function ByokManualPageClient({
     // A connected provider, but no credential on this endpoint: its key has to
     // be pasted here.
     const endpointNeedsKey = !isEditing && providerHasStoredKey && !targetCred;
+    // Repointing the edited model's credential: its stored key belongs to the
+    // old endpoint, and the save refuses to carry it over.
+    const endpointChanged =
+        isEditing &&
+        normalizeEndpoint(watchedBaseURL) !== normalizeEndpoint(currentBaseURL);
     // The stored key is the one in play: the key field is hidden, so anything
     // typed into it earlier (for another endpoint) must not be used.
-    const usingStoredKey = keyIsStored && !planNeedsNewKey && !showKeyInput;
+    const usingStoredKey = keyIsStored && !endpointChanged && !showKeyInput;
 
     // Models already enabled on this credential — hidden from the "Add model"
     // dropdown so it never offers a duplicate. Another gateway of the same
@@ -461,9 +462,9 @@ export function ByokManualPageClient({
     // because apiKey is always empty for that provider.
     const hasCredsForTest =
         // A stored key (edit, or add-to-existing-provider) is enough to save — the
-        // save reuses it and the probe is skipped when no new key is typed. But a
-        // plan switch to a different account needs a fresh key, not the stored one.
-        (keyIsStored && !planNeedsNewKey) ||
+        // save reuses it and the probe is skipped when no new key is typed. But an
+        // edit that moves the endpoint needs that endpoint's key.
+        (keyIsStored && !endpointChanged) ||
         providerHasCredentials({
             provider,
             apiKey,
@@ -482,16 +483,6 @@ export function ByokManualPageClient({
 
         const data = form.getValues();
 
-        // Switched to a plan on a different account without pasting that account's
-        // key — the stored key belongs to the old account and would fail auth.
-        if (planNeedsNewKey && !data.apiKey.trim()) {
-            form.setError("apiKey", {
-                type: "manual",
-                message:
-                    "This plan uses a different account — paste its API key.",
-            });
-            return null;
-        }
         // A key typed while the endpoint had none stored stops counting once the
         // endpoint lands on a stored credential: the field is hidden and the
         // save keeps that credential's key, so the test must use it too.
@@ -501,6 +492,13 @@ export function ByokManualPageClient({
             form.setError("apiKey", {
                 type: "manual",
                 message: ENDPOINT_NEEDS_KEY_MESSAGE,
+            });
+            return null;
+        }
+        if (endpointChanged && !hasNewCredentials) {
+            form.setError("apiKey", {
+                type: "manual",
+                message: ENDPOINT_CHANGED_MESSAGE,
             });
             return null;
         }
@@ -734,12 +732,16 @@ export function ByokManualPageClient({
             storedSettings: targetSettings,
             formSettings: nextCredentialSettings,
         });
+        // A key typed for the credential being written. Hidden while the
+        // stored key is in play, so anything left in the field then is stale.
+        const typedApiKey = usingStoredKey ? undefined : newConfig.apiKey;
         const blob: BYOKConfig =
             isEditing && editModel
                 ? buildByokBlob(existing, {
                       kind: "edit-model",
                       modelId: editModel.id,
                       model: modelFields,
+                      apiKey: typedApiKey,
                       credentialSettings,
                   })
                 : existingCred
@@ -747,6 +749,7 @@ export function ByokManualPageClient({
                         kind: "add-existing-provider",
                         credentialId: existingCred.id,
                         model: modelFields,
+                        apiKey: typedApiKey,
                         credentialSettings,
                     })
                   : buildByokBlob(existing, {
@@ -815,7 +818,7 @@ export function ByokManualPageClient({
                             {isEditing
                                 ? `Edit ${editLabel}`
                                 : lockedProviderLabel
-                                  ? `Add a ${lockedProviderLabel} model`
+                                  ? `Add ${articleFor(lockedProviderLabel)} ${lockedProviderLabel} model`
                                   : "Configure a model manually"}
                         </Page.Title>
                     </div>
@@ -898,9 +901,9 @@ export function ByokManualPageClient({
                                 </CardHeader>
                                 <CardContent className="flex flex-col gap-4">
                                     {/* Show the key field when the user opened it OR the
-                                    plan moved to a different account. Derived (not
-                                    sticky state) so switching back to the stored
-                                    account restores the "using stored key" view. */}
+                                    endpoint has no stored key. Derived (not sticky
+                                    state) so returning to the stored endpoint
+                                    restores the "using stored key" view. */}
                                     {!usingStoredKey ? (
                                         <ErrorBoundary
                                             resetKeys={[provider, model]}
@@ -910,12 +913,9 @@ export function ByokManualPageClient({
                                                     {ENDPOINT_NEEDS_KEY_MESSAGE}
                                                 </p>
                                             )}
-                                            {planNeedsNewKey && (
+                                            {endpointChanged && (
                                                 <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
-                                                    This plan runs on a
-                                                    different account than your
-                                                    stored key — paste the key
-                                                    for this plan.
+                                                    {ENDPOINT_CHANGED_MESSAGE}
                                                 </p>
                                             )}
                                             <Suspense fallback={null}>

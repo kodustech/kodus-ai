@@ -60,6 +60,8 @@ export type BuildV2Edit =
           kind: "add-existing-provider";
           credentialId: string;
           model: BYOKModelFields;
+          /** A key typed for the credential, or omitted to keep the stored one. */
+          apiKey?: string;
           /** Provider-scoped settings for the REUSED credential. Omit to keep
            *  the stored ones; pass an object (possibly empty) to REPLACE them. */
           credentialSettings?: Record<string, unknown>;
@@ -75,6 +77,9 @@ export type BuildV2Edit =
           kind: "edit-model";
           modelId: string;
           model: BYOKModelFields;
+          /** A key typed for the credential — required by the server when the
+           *  endpoint changes. Omit to keep the stored one. */
+          apiKey?: string;
           /** Provider-scoped settings for the edited model's credential. Omit to
            *  keep the stored ones; pass an object (possibly empty) to REPLACE. */
           credentialSettings?: Record<string, unknown>;
@@ -92,28 +97,28 @@ export type BuildV2Edit =
  * rewrote the first one's endpoint and hung its model off that credential, so
  * an org could never hold two gateways at once.
  *
- * The endpoint only enters the comparison when the incoming save carries one.
- * A provider whose endpoint is fixed sends no `baseURL` and keeps reusing its
- * single credential, exactly as before. Without an endpoint, two credentials
- * of the provider are ambiguous and neither is reused.
+ * The endpoints have to match, and no endpoint is an endpoint too: a
+ * provider whose endpoint is fixed sends no `baseURL` and keeps reusing its
+ * credential, while a blank URL never lands on a gateway that has one — its
+ * key would follow the save to wherever the URL ends up. Without an endpoint,
+ * two credentials of the provider are ambiguous and neither is reused.
  */
 export const findReusableCredential = (
     credentials: BYOKCredential[] | undefined,
     next: { provider: string; settings?: Record<string, unknown> },
 ): BYOKCredential | undefined => {
     const wanted = normalizeEndpoint(next.settings?.baseURL);
-    const sameProvider = (credentials ?? []).filter(
+    const onEndpoint = (credentials ?? []).filter(
         (credential) =>
-            !credential.managed && credential.provider === next.provider,
+            !credential.managed &&
+            credential.provider === next.provider &&
+            normalizeEndpoint(credential.settings?.baseURL) === wanted,
     );
 
     if (!wanted) {
-        return sameProvider.length === 1 ? sameProvider[0] : undefined;
+        return onEndpoint.length === 1 ? onEndpoint[0] : undefined;
     }
-    return sameProvider.find(
-        (credential) =>
-            normalizeEndpoint(credential.settings?.baseURL) === wanted,
-    );
+    return onEndpoint[0];
 };
 
 /**
@@ -121,7 +126,7 @@ export const findReusableCredential = (
  * the same upstream, and treating them as different would quietly split one
  * gateway's models across two credentials.
  */
-const normalizeEndpoint = (value: unknown): string =>
+export const normalizeEndpoint = (value: unknown): string =>
     typeof value === "string"
         ? value.trim().replace(/\/+$/, "").toLowerCase()
         : "";
@@ -272,7 +277,7 @@ export const buildByokBlob = (
         case "add-existing-provider": {
             const credentials = (existing?.credentials ?? []).map((c) =>
                 c.id === edit.credentialId
-                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    ? keepCredential(c, edit.apiKey, edit.credentialSettings)
                     : keepCredential(c),
             );
             const models = [...(existing?.models ?? [])];
@@ -308,7 +313,7 @@ export const buildByokBlob = (
             );
             const credentials = (existing?.credentials ?? []).map((c) =>
                 edited && c.id === edited.credentialId
-                    ? keepCredential(c, undefined, edit.credentialSettings)
+                    ? keepCredential(c, edit.apiKey, edit.credentialSettings)
                     : keepCredential(c),
             );
             const models = (existing?.models ?? []).map((m) =>
