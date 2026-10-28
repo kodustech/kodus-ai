@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { isAxiosError } from 'axios';
 import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -2605,14 +2606,7 @@ export class ForgejoService implements Omit<
                     message: 'Kody held automatic approval after a new review.',
                 },
             });
-            const failure = result as {
-                status?: number;
-                response?: { status?: number };
-            };
-            if (
-                result.error &&
-                (failure.response?.status ?? failure.status) === 403
-            ) {
+            if (isAxiosError(result) && result.response?.status === 403) {
                 // Forgejo lets only a repository admin dismiss a review, the
                 // same role it needs to create the webhook automatically.
                 throw new Error(
@@ -3147,9 +3141,25 @@ export class ForgejoService implements Omit<
                 },
             );
 
-            if (reviews.length === 0) return PullRequestReviewState.NONE;
-
-            const latestReview = reviews[reviews.length - 1];
+            // Kody's own state: the token user's reviews that still count. A
+            // human's approval is not Kody's, and a later comment review does
+            // not undo an approval on Forgejo.
+            const me = await userGetCurrent({ client });
+            if (!me.data?.id) return null;
+            const own = reviews.filter(
+                (review) =>
+                    review.user?.id === me.data.id && !review.dismissed,
+            );
+            const latestReview = own
+                .filter((review) =>
+                    ['APPROVED', 'REQUEST_CHANGES'].includes(review.state ?? ''),
+                )
+                .at(-1);
+            if (!latestReview) {
+                return own.length
+                    ? PullRequestReviewState.COMMENTED
+                    : PullRequestReviewState.NONE;
+            }
 
             switch (latestReview.state) {
                 case 'APPROVED':

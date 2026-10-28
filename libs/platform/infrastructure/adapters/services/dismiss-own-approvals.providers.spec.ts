@@ -189,7 +189,9 @@ describe('Forgejo — dismissOwnPullRequestApprovals', () => {
         jest.mocked(repoListPullReviews).mockResolvedValue({
             data: [{ id: 10, state: 'APPROVED', user: { id: 1 } }],
         } as any);
+        // The SDK returns the AxiosError itself when it does not throw.
         jest.mocked(repoDismissPullReview).mockResolvedValue({
+            isAxiosError: true,
             error: { message: 'Must be repo admin' },
             response: { status: 403 },
         } as any);
@@ -285,5 +287,53 @@ describe('Bitbucket Data Center — reading Kody approval for dismissal', () => 
             '/projects/PRJ/repos/api/pull-requests/7/participants/kody',
             { status: 'UNAPPROVED' },
         );
+    });
+});
+
+// approvedOnHost and the cron's before/after checks read this: it must be
+// Kody's own state, not the last review by anyone.
+describe('Forgejo — getReviewStatusByPullRequest reads Kody own reviews', () => {
+    const service = () =>
+        make(ForgejoService, {
+            getAuthDetails: jest.fn().mockResolvedValue({}),
+            extractRepoInfo: () => ({ owner: 'acme', repo: 'api' }),
+            createForgejoClient: () => ({}),
+            paginate: async (fetchPage: (p: number, l: number) => unknown) =>
+                fetchPage(1, 50),
+            logger: { error: jest.fn(), warn: jest.fn(), log: jest.fn() },
+        });
+
+    beforeEach(() => {
+        jest.mocked(userGetCurrent).mockResolvedValue({ data: { id: 1 } } as any);
+    });
+
+    it.each([
+        [
+            'a human approves after Kody reviewed',
+            [
+                { state: 'COMMENT', user: { id: 1 } },
+                { state: 'APPROVED', user: { id: 2 } },
+            ],
+            PullRequestReviewState.COMMENTED,
+        ],
+        [
+            'someone comments after Kody approved',
+            [
+                { state: 'APPROVED', user: { id: 1 } },
+                { state: 'COMMENT', user: { id: 2 } },
+            ],
+            PullRequestReviewState.APPROVED,
+        ],
+        [
+            'Kody approval was dismissed',
+            [{ state: 'APPROVED', user: { id: 1 }, dismissed: true }],
+            PullRequestReviewState.NONE,
+        ],
+    ])('when %s', async (_label, data, expected) => {
+        jest.mocked(repoListPullReviews).mockResolvedValue({ data } as any);
+
+        expect(
+            await (service() as any).getReviewStatusByPullRequest(params),
+        ).toBe(expected);
     });
 });
