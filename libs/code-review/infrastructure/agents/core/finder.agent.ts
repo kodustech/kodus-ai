@@ -512,6 +512,12 @@ function findingsFromText(
                 telemetryMetadata,
             );
             if (clean) {
+                // A whole result written as the final answer is the finder's
+                // result, as much as a submitResult call is (#2171). JSON in
+                // an earlier step was only part of its investigation.
+                if (i === state.steps.length - 1) {
+                    (state as any).__findingsOutcome = 'text';
+                }
                 return {
                     reasoning: clean.reasoning ?? '',
                     suggestions: (clean.suggestions ??

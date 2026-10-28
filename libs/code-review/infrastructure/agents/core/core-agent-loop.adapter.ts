@@ -499,11 +499,16 @@ export async function runAgentLoopViaCore(
     const published = [...r.finderState.artifacts]
         .reverse()
         .find((a) => a.type === FINDER_DONE_TOOL);
-    const submitted = !!published && isWholeResult(published.payload);
+    const submittedByTool = !!published && isWholeResult(published.payload);
+    // A whole result the finder wrote as its final answer instead of calling
+    // the tool is a result too: extractFindings read it as one. A cut turn
+    // stays truncated either way.
+    const submitted =
+        submittedByTool || (r.finderState as any).__findingsOutcome === 'text';
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'
-            : !submitted &&
+            : !submittedByTool &&
                 r.finderState.status !== 'error' &&
                 r.finderState.trace.some((e) => e.kind === 'tool.skipped')
               ? 'truncated'
