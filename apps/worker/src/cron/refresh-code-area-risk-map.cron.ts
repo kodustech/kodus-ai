@@ -34,6 +34,10 @@ const MAX_BATCHES_PER_RUN = 40;
 const STATUS_READ_CONCURRENCY = 10;
 const STATUS_READ_TIMEOUT_MS = 10_000;
 const RUN_INTERVAL_MS = 2 * 60 * 60 * 1000;
+// The lock expires after RUN_INTERVAL_MS, and a run that outlived it would
+// race the next one over the same repository's cursor. No batch starts after
+// this, which leaves the last one time to finish (ten PRs, with 429 retries).
+const RUN_DEADLINE_MS = 90 * 60 * 1000;
 
 @Injectable()
 export class RefreshCodeAreaRiskMapCron {
@@ -64,6 +68,7 @@ export class RefreshCodeAreaRiskMapCron {
             },
         );
         if (!lock) return;
+        const deadline = Date.now() + RUN_DEADLINE_MS;
 
         try {
             const teams = await this.teams.findTeamsWithIntegrations({
@@ -116,10 +121,12 @@ export class RefreshCodeAreaRiskMapCron {
             }
             if (!repositories.length) return;
 
-            // Never scanned first, then unfinished scans, then complete ones
+            // Unfinished scans first, then never scanned, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
-            // weeks while finished repositories were refreshed. A status that
-            // could not be read goes last instead of passing as never scanned.
+            // weeks while finished repositories were refreshed, and a scan the
+            // last run's budget cut short must not wait behind every repository
+            // never scanned. A status that could not be read goes last instead
+            // of passing as never scanned.
             const limit = pLimit(STATUS_READ_CONCURRENCY);
             const statuses = await Promise.all(
                 repositories.map((repo) =>
@@ -154,7 +161,7 @@ export class RefreshCodeAreaRiskMapCron {
                 ),
             );
             const rank = ({ status, unreadable }: (typeof statuses)[number]) =>
-                unreadable ? 3 : !status ? 0 : status.complete ? 2 : 1;
+                unreadable ? 3 : !status ? 1 : status.complete ? 2 : 0;
             // A complete scan's window ends where its last refresh began.
             const age = ({ status }: (typeof statuses)[number]) =>
                 (status?.complete ? status.windowEnd : status?.cursorEnd) ?? '';
@@ -171,7 +178,9 @@ export class RefreshCodeAreaRiskMapCron {
 
             let batches = 0;
             for (const { repo } of ordered) {
-                if (batches >= MAX_BATCHES_PER_RUN) break;
+                if (batches >= MAX_BATCHES_PER_RUN || Date.now() >= deadline) {
+                    break;
+                }
                 try {
                     // An unfinished scan keeps going: a batch always moves the
                     // cursor, even through an empty week or unmerged PRs. It
@@ -190,7 +199,8 @@ export class RefreshCodeAreaRiskMapCron {
                     } while (
                         result?.complete === false &&
                         result.failed === false &&
-                        batches < MAX_BATCHES_PER_RUN
+                        batches < MAX_BATCHES_PER_RUN &&
+                        Date.now() < deadline
                     );
                 } catch (error) {
                     this.logger.warn({

@@ -112,8 +112,8 @@ it('filters unsupported providers before choosing repository pages', async () =>
 });
 
 // A repository's first scan needs many batches (ten PRs each); one batch per
-// visit in a fixed rotation left it incomplete for weeks. Unscanned and
-// incomplete repositories go first and keep batching within the run's budget;
+// visit in a fixed rotation left it incomplete for weeks. Incomplete and
+// unscanned repositories go first and keep batching within the run's budget;
 // complete ones are refreshed stalest first.
 describe('refresh order and batch budget', () => {
     const build = (
@@ -175,7 +175,7 @@ describe('refresh order and batch budget', () => {
         return { cron, refresh, order };
     };
 
-    it('scans unscanned, then incomplete, then the stalest complete repository', async () => {
+    it('scans incomplete, then unscanned, then the stalest complete repository', async () => {
         const { cron, order } = build(
             [
                 { id: 'fresh', name: 'fresh' },
@@ -203,7 +203,8 @@ describe('refresh order and batch budget', () => {
 
         await cron.handleCron();
 
-        expect(order()).toEqual(['never', 'partial', 'stale', 'fresh']);
+        // A scan the last run's budget cut short goes on before any new one.
+        expect(order()).toEqual(['partial', 'never', 'stale', 'fresh']);
     });
 
     it('keeps batching an incomplete repository until its scan completes', async () => {
@@ -239,6 +240,39 @@ describe('refresh order and batch budget', () => {
         await cron.handleCron();
 
         expect(order()).toEqual(['quiet', 'quiet', 'quiet']);
+    });
+
+    it('starts no batch once the run passes its deadline, well inside the lock', async () => {
+        let now = 0;
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        try {
+            const { cron, refresh, order } = build(
+                [
+                    { id: 'slow', name: 'slow' },
+                    { id: 'next', name: 'next' },
+                ],
+                {
+                    slow: {
+                        complete: false,
+                        cursorEnd: '2026-10-20T00:00:00Z',
+                    },
+                },
+                {},
+            );
+            // Each batch takes 40 minutes and never completes the scan.
+            refresh.refreshOneBatch.mockImplementation(async () => {
+                now += 40 * 60 * 1000;
+                return { complete: false, processed: 10, failed: false };
+            });
+
+            await cron.handleCron();
+
+            // Batches start at 0, 40 and 80 minutes; none at 120, when the
+            // two-hour lock would let the next run in.
+            expect(order()).toEqual(['slow', 'slow', 'slow']);
+        } finally {
+            clock.mockRestore();
+        }
     });
 
     it('stops batching a repository whose PRs could not be read', async () => {
