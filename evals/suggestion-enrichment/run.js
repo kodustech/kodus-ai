@@ -7,7 +7,7 @@
 //   node evals/suggestion-enrichment/run.js [--model=<id>] [--judge=<id>] [--set=controlled|full] [--cases=<id,id>] [--limit=N] [--concurrency=N] [--gate] [--output=<file>]
 //
 // --set    controlled and full are the same 150 findings: one set, cheap enough to run whole
-// --judge  the model that grades the answers (default claude-opus-5.5@api, the judge the floors hold under)
+// --judge  the model that grades the answers (default JUDGE_MODEL, else gpt-5.6-luna: the nightly's judge, the one the floors hold under)
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
@@ -18,7 +18,7 @@ const { refusal } = require('../funnel/stage-run');
 const { casesOf } = require('./catalog');
 const { titleFormatOk, VERDICT, SYSTEM, judgePrompt } = require('./judge');
 
-const DEFAULT_JUDGE = 'claude-opus-5.5@api';
+const DEFAULT_JUDGE = process.env.JUDGE_MODEL || 'gpt-5.6-luna';
 const METRICS = ['fix', 'noCode', 'title'];
 
 const parseArgs = (argv) =>
@@ -111,7 +111,7 @@ function metricsOf(results) {
 }
 
 function belowFloors(metrics, target) {
-    return METRICS.filter((m) => Number.isFinite(target[m]?.floor) && metrics[m].value !== null && metrics[m].value < target[m].floor).map(
+    return [...METRICS, 'checks'].filter((m) => Number.isFinite(target[m]?.floor) && metrics[m].value !== null && metrics[m].value < target[m].floor).map(
         (m) => `${m} ${(metrics[m].value * 100).toFixed(1)}% < ${target[m].floor * 100}%`,
     );
 }
@@ -190,6 +190,12 @@ async function main() {
     await Promise.all(Array.from({ length: Math.max(1, Number(args.concurrency) || 4) }, worker));
 
     const metrics = metricsOf(results);
+    // The headline the nightly alerts on: every check of every finding, its code
+    // and its title, the same count it pools for the confirming run.
+    const scored = results.filter((r) => !r.unmeasured);
+    const hits = scored.reduce((n, r) => n + r.hits, 0);
+    const checks = scored.reduce((n, r) => n + r.total, 0);
+    metrics.checks = { right: hits, total: checks, value: checks ? hits / checks : null };
     const errored = results.filter((r) => r.unmeasured).length;
     const result = {
         eval: 'suggestion-enrichment',
@@ -198,7 +204,7 @@ async function main() {
         judge: JUDGE,
         set: SET,
         runs: 1,
-        metric: { name: 'of the fixable findings, a fix the judge passes', value: metrics.fix.value, floor: TARGET.fix?.floor ?? null, baseline: TARGET.fix?.observed ?? null },
+        metric: { name: 'of the checks, the right code and a title that names the problem', value: metrics.checks.value, floor: TARGET.checks?.floor ?? null, baseline: TARGET.checks?.observed ?? null },
         metrics,
         cases: results,
         tokens: tokensUsed(),
@@ -221,7 +227,7 @@ async function main() {
         return 2;
     }
     if (!args.gate) return 0;
-    if (!METRICS.some((m) => Number.isFinite(TARGET[m]?.floor))) {
+    if (![...METRICS, 'checks'].some((m) => Number.isFinite(TARGET[m]?.floor))) {
         console.log(`ungated: no floor for ${MODEL} in evals/suggestion-enrichment/targets.json`);
         return 0;
     }

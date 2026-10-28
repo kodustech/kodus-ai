@@ -134,6 +134,8 @@ const TIER0 = {
     'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'claude-opus-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-opus-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
+    // The nightly's judge (JUDGE_MODEL), on the OpenAI key the nightly sets for it.
+    'gpt-5.6-luna': { provider: 'openai', byokNative: true, keyEnvs: ['JUDGE_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
     // GPT-6 and Sonnet 5.5 through the same OpenRouter account as the tier-0
     // Kimi, each pinned to its first-party upstream with fallbacks off. The

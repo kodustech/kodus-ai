@@ -1,9 +1,9 @@
 # suggestion-enrichment
 
 > - **Answers:** Does the enrichment write a fix that the judge passes, no code where none fits, and a title that names the problem?
-> - **Runs:** on demand and in experiments (`evals/experiment.js --step=enrichment`); two of its findings on the scripted model on every PR (`evals/wiring-smoke.js`).
+> - **Runs:** nightly on the controlled set when the enrichment changes (`evals/nightly-evals.js`); weekly on every tier-0 model (`evals/weekly.js`); in experiments (`evals/experiment.js --step=enrichment`); two of its findings on the scripted model on every PR (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/suggestion-enrichment/run.js --model=<id> [--judge=<id>] [--gate]`
-> - **Gate:** `--gate` fails when the fix, no-code or title share is below that model's floor in `targets.json` (`sets.controlled.models`); a model with none, or a judge other than the one the floors hold under, reports ungated.
+> - **Gate:** `--gate` fails when the share of checks right (the headline the nightly alerts on: the code and the title of every finding), or the fix, no-code or title share, is below that model's floor in `targets.json` (`sets.controlled.models`); a model with none, or a judge other than the one the floors hold under (`gpt-5.6-luna`, the nightly's), reports ungated.
 > - **Cost:** one enrichment call and one judge call per finding, 150 of each.
 
 Drives production's `AgentReviewStage.enrichFinderSuggestions` (`agent-review.stage.ts`,
@@ -28,8 +28,9 @@ Three metrics, each over the cases it covers:
 - **title:** of all 150, the share whose title names the problem (judge) and has the format
   the prompt asks for: one line, 80 characters or fewer, no trailing period.
 
-The judge (`judge.js`, shared with the research grader in `evals/enrichment`) is Opus 5.5
-with the references; the floors hold under it only.
+The judge (`judge.js`, shared with the research grader in `evals/enrichment`) is the
+nightly's judge, `gpt-5.6-luna` (`JUDGE_MODEL`), with the references; the floors hold
+under it only.
 
 Deliberate break: a step that writes no fix and no title ships every finding with no code
 and its first sentence as the title. noCode goes to 100%, fix to 0%, below every floor.
