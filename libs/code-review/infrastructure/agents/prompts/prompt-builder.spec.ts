@@ -653,11 +653,8 @@ describe('tiered diffs (#2205)', () => {
         expect(prompt).toContain('const added = 1;');
     });
 
-    it.each([
-        ['compact', buildCompactUserPrompt],
-        ['self-contained', buildSelfContainedUserPrompt],
-    ])('applies the same tiers in the %s prompt', (_name, build) => {
-        const prompt = (build as any)(
+    it('applies the same tiers in the compact prompt', () => {
+        const prompt = buildCompactUserPrompt(
             baseInput({
                 changedFiles: [
                     promptFile('src/generated.ts', 'generated'),
@@ -673,6 +670,29 @@ describe('tiered diffs (#2205)', () => {
 
         expect(prompt).toContain('### src/generated.ts [optional, +1 -0]');
         expect(prompt).not.toContain('const generated = 1;');
+        expect(prompt).toContain('### src/critical.ts [CRITICAL]');
+    });
+
+    it('keeps the body of an optional file in the self-contained prompt', () => {
+        // Self-contained reviews get no tools, so hunk headers alone would
+        // leave nothing to review and no readFile to recover the source.
+        const prompt = buildSelfContainedUserPrompt(
+            baseInput({
+                changedFiles: [
+                    promptFile('src/generated.ts', 'generated'),
+                    promptFile('src/critical.ts', 'criticalLine'),
+                ],
+                fileTiers: tiered([
+                    ['src/generated.ts', 'optional'],
+                    ['src/critical.ts', 'critical'],
+                ]),
+            }),
+            meta,
+        );
+
+        expect(prompt).toContain('### src/generated.ts\n');
+        expect(prompt).toContain('const generated = 1;');
+        // The priority label costs nothing and still helps the reviewer.
         expect(prompt).toContain('### src/critical.ts [CRITICAL]');
     });
 });

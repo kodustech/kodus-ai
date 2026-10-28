@@ -1259,7 +1259,19 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles, input.fileTiers);
+        // A self-contained review has no tools, so an optional file rendered
+        // as hunk headers alone would leave the reviewer nothing to inspect
+        // and no readFile to recover the body: formatDiffs documents that
+        // shortcut as "the agent can still readFile on demand", which is
+        // false on this path. Keep the priority labels, drop the truncation.
+        const labelOnlyTiers = input.fileTiers
+            ? new Map(
+                  [...input.fileTiers].filter(
+                      ([, tier]) => tier !== 'optional',
+                  ),
+              )
+            : undefined;
+        const diffsSection = formatDiffs(input.changedFiles, labelOnlyTiers);
         const fileContentsSection = formatInlineFileContents(
             input.changedFiles,
         );
