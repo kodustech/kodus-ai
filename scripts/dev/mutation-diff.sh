@@ -45,6 +45,15 @@ if [ -z "${FILES[0]-}" ]; then
     exit 0
 fi
 
+# Changed files no scoped spec reaches go to the report instead of out of the
+# score: the CI shard puts this list in its status.json for the aggregator.
+UNREACHED_PATH="reports/mutation/unreached.json"
+rm -f "$UNREACHED_PATH"
+record_unreached() {
+    mkdir -p "${UNREACHED_PATH%/*}"
+    node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify(process.argv.slice(2)))' "$UNREACHED_PATH" "$@"
+}
+
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"
 printf '  - %s\n' "${FILES[@]}"
 
@@ -101,6 +110,7 @@ done <<< "$related_specs"
 if [ -z "${SPECS[0]-}" ]; then
     echo "[mutation:diff] None of the changed files have a nearby spec — nothing to validate."
     echo "                (That is itself a signal: this change added/edited untested production code.)"
+    record_unreached "${FILES[@]}"
     exit 0
 fi
 
@@ -152,10 +162,18 @@ echo "[mutation:diff] Mutating shard ${SHARD_INDEX}/${SHARD_COUNT} from ${#MUTAT
 # Stryker runs only the scoped specs related to this shard's files
 # (enableFindRelatedTests) and aborts with "No tests were executed" when there
 # are none. Ask jest the same question first, so such a shard reports it.
+# jest takes literal paths: a route file's selector is its escaped glob, so the
+# shard's files are the changed files whose selector landed in it.
 SHARD_FILES=()
 IFS=',' read -r -a shard_selectors <<< "$MUTATE"
-for selector in "${shard_selectors[@]}"; do
-    SHARD_FILES+=("${selector%%:*}")
+for f in "${FILES[@]}"; do
+    escaped="$(glob_escape "$f")"
+    for selector in "${shard_selectors[@]}"; do
+        if [ "$selector" = "$escaped" ] || [ "${selector%%:*}" = "$f" ]; then
+            SHARD_FILES+=("$f")
+            break
+        fi
+    done
 done
 # jest exits 0 with an empty list when nothing relates; any other exit is a
 # discovery failure and fails the shard with jest's own diagnostic.
@@ -167,6 +185,7 @@ fi
 if [ -z "$shard_specs" ]; then
     echo "[mutation:diff] Shard ${SHARD_INDEX}/${SHARD_COUNT}: no scoped spec reaches these files — nothing to validate:"
     printf '  - %s\n' "${SHARD_FILES[@]}"
+    record_unreached "${SHARD_FILES[@]}"
     exit 0
 fi
 
