@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { isAxiosError } from 'axios';
 import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -131,6 +132,7 @@ import {
     orgListRepos,
     repoCreateHook,
     repoCreatePullReview,
+    repoDismissPullReview,
     repoDeleteHook,
     repoDownloadPullDiffOrPatch,
     repoEditHook,
@@ -155,8 +157,12 @@ import {
     repoCreatePullRequest,
 } from '@llamaduck/forgejo-ts';
 import { Client, createClient } from '@llamaduck/forgejo-ts/client';
+import { listingFailed } from './repository-listing';
 
 const FORGEJO_REACTIONS_CONCURRENCY = 5;
+
+const TREE_PAGE_SIZE = 1000;
+const MAX_TREE_PAGES = 100;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.FORGEJO, 'codeManagement')
@@ -2547,6 +2553,71 @@ export class ForgejoService implements Omit<
         }
     }
 
+    /**
+     * Dismisses the token user's approving reviews when a later review holds
+     * approval. Returns how many were dismissed.
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) throw new Error('No auth details');
+        const repoInfo = this.extractRepoInfo(
+            params.repository?.name ?? '',
+            'dismissOwnPullRequestApprovals',
+        );
+        if (!repoInfo) throw new Error('Invalid repository name');
+        const client = this.createForgejoClient(authDetail);
+        const path = {
+            owner: repoInfo.owner,
+            repo: repoInfo.repo,
+            index: params.prNumber,
+        };
+        const [me, reviews] = await Promise.all([
+            userGetCurrent({ client }),
+            this.paginate<ForgejoPullReview>(async (page, limit) => {
+                const result = await repoListPullReviews({
+                    client,
+                    path,
+                    query: { page, limit },
+                });
+                if (result.error) throw result.error;
+                return result.data ?? [];
+            }),
+        ]);
+        if (!me.data?.id) throw new Error('Unable to identify the token user');
+        const own = reviews.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                !review.dismissed &&
+                review.user?.id === me.data.id &&
+                review.id,
+        );
+        for (const review of own) {
+            const result = await repoDismissPullReview({
+                client,
+                path: { ...path, id: review.id! },
+                body: {
+                    message: 'Kody held automatic approval after a new review.',
+                },
+            });
+            if (isAxiosError(result) && result.response?.status === 403) {
+                // Forgejo lets only a repository admin dismiss a review, the
+                // same role it needs to create the webhook automatically.
+                throw new Error(
+                    `Forgejo refused to dismiss Kody's approval on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
+                );
+            }
+            if (result.error) throw result.error;
+        }
+        return own.length;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
@@ -3070,9 +3141,25 @@ export class ForgejoService implements Omit<
                 },
             );
 
-            if (reviews.length === 0) return PullRequestReviewState.NONE;
-
-            const latestReview = reviews[reviews.length - 1];
+            // Kody's own state: the token user's reviews that still count. A
+            // human's approval is not Kody's, and a later comment review does
+            // not undo an approval on Forgejo.
+            const me = await userGetCurrent({ client });
+            if (!me.data?.id) return null;
+            const own = reviews.filter(
+                (review) =>
+                    review.user?.id === me.data.id && !review.dismissed,
+            );
+            const latestReview = own
+                .filter((review) =>
+                    ['APPROVED', 'REQUEST_CHANGES'].includes(review.state ?? ''),
+                )
+                .at(-1);
+            if (!latestReview) {
+                return own.length
+                    ? PullRequestReviewState.COMMENTED
+                    : PullRequestReviewState.NONE;
+            }
 
             switch (latestReview.state) {
                 case 'APPROVED':
@@ -3830,34 +3917,76 @@ export class ForgejoService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
             );
-            if (!authDetail) return [];
+            if (!authDetail)
+                return listingFailed(
+                    params.throwOnError,
+                    'Forgejo authentication details not found',
+                );
 
             const repoInfo = this.extractRepoInfo(
                 params.repository.name,
                 'getRepositoryAllFiles',
             );
-            if (!repoInfo) return [];
+            if (!repoInfo)
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is not owner/repo',
+                );
 
             const client = this.createForgejoClient(authDetail);
 
-            const branch = params.filters?.branch || 'main';
-            const result = await getTree({
-                client,
-                path: {
-                    owner: repoInfo.owner,
-                    repo: repoInfo.repo,
-                    sha: branch,
-                },
-                query: { recursive: true },
-            });
+            const branch =
+                params.filters?.branch ||
+                (await this.getDefaultBranch({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: params.repository,
+                }));
 
-            const tree = result.data;
-            let files = (tree?.tree || [])
+            // A recursive tree comes in pages; `truncated` says more remain.
+            const entries: Array<{
+                path?: string;
+                type?: string;
+                sha?: string;
+                size?: number;
+            }> = [];
+            let truncated = false;
+            for (let page = 1; page <= MAX_TREE_PAGES; page++) {
+                const result = await getTree({
+                    client,
+                    path: {
+                        owner: repoInfo.owner,
+                        repo: repoInfo.repo,
+                        sha: branch,
+                    },
+                    query: { recursive: true, page, per_page: TREE_PAGE_SIZE },
+                    throwOnError: true,
+                });
+                entries.push(...(result.data?.tree || []));
+                truncated = !!result.data?.truncated;
+                if (!truncated) break;
+            }
+            if (truncated) {
+                this.logger.warn({
+                    message: `Repository tree has more than ${MAX_TREE_PAGES * TREE_PAGE_SIZE} entries; the listing stops there`,
+                    context: ForgejoService.name,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        teamId: params.organizationAndTeamData?.teamId,
+                        repositoryId: params.repository?.id,
+                        branch,
+                        entries: entries.length,
+                    },
+                });
+            }
+
+            let files = entries
                 .filter((item) => item.type === 'blob')
                 .map((item) => ({
                     path: item.path,
@@ -3897,7 +4026,11 @@ export class ForgejoService implements Omit<
                 context: ForgejoService.name,
                 error,
             });
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -4631,7 +4764,13 @@ export class ForgejoService implements Omit<
                                 return null;
                             }
 
-                            const reactions = result.data ?? [];
+                            // Forgejo answers a comment without reactions with
+                            // a `null` body, which the SDK returns as `{}`; a
+                            // non-array here means no reactions, and iterating
+                            // it would throw and lose the whole PR's counts.
+                            const reactions = Array.isArray(result?.data)
+                                ? result.data
+                                : [];
                             let thumbsUp = 0;
                             let thumbsDown = 0;
                             for (const reaction of reactions) {

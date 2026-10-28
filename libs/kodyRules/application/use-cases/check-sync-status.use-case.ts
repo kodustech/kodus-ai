@@ -33,6 +33,9 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { ONBOARDING_IMPORT_REMOVED_REASON } from '@libs/core/infrastructure/database/mongo/kody-rules/freeze-agent-file-rules';
+import { CacheService } from '@libs/core/cache/cache.service';
+
+const GENERATOR_FLAG_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class CheckSyncStatusUseCase {
@@ -51,6 +54,7 @@ export class CheckSyncStatusUseCase {
         private readonly request: Request & {
             user: { organization: { uuid: string } };
         },
+        private readonly cacheService: CacheService,
     ) {}
 
     async execute(
@@ -65,13 +69,45 @@ export class CheckSyncStatusUseCase {
             teamId: teamId,
         };
 
-        const syncStatusFlags = {
-            kodyRulesGeneratorEnabledFirstTime: true,
-            removedOnboardingImports: await this.countRemovedOnboardingImports(
+        // Read on every call: a restore runs outside the API and could not
+        // clear a cached count.
+        const removedOnboardingImports =
+            await this.countRemovedOnboardingImports(
                 organizationAndTeamData.organizationId,
-            ),
-        };
+            );
 
+        const cacheKey = `check-sync-status:${organizationAndTeamData.organizationId}:${teamId}:${repositoryId || 'no-repo'}`;
+        const cached = await this.cacheService.getFromCache<{
+            kodyRulesGeneratorEnabledFirstTime: boolean;
+        }>(cacheKey);
+        if (cached) {
+            return {
+                kodyRulesGeneratorEnabledFirstTime:
+                    cached.kodyRulesGeneratorEnabledFirstTime,
+                removedOnboardingImports,
+            };
+        }
+
+        const kodyRulesGeneratorEnabledFirstTime =
+            await this.generatorEnabledFirstTime(
+                organizationAndTeamData,
+                teamId,
+                repositoryId,
+            );
+        await this.cacheService.addToCache(
+            cacheKey,
+            { kodyRulesGeneratorEnabledFirstTime },
+            GENERATOR_FLAG_TTL_MS,
+        );
+
+        return { kodyRulesGeneratorEnabledFirstTime, removedOnboardingImports };
+    }
+
+    private async generatorEnabledFirstTime(
+        organizationAndTeamData: OrganizationAndTeamData,
+        teamId: string,
+        repositoryId?: string,
+    ): Promise<boolean> {
         try {
             const codeReviewConfigs: CodeReviewParameter =
                 await this.getCodeReviewConfigs(organizationAndTeamData);
@@ -83,7 +119,7 @@ export class CheckSyncStatusUseCase {
 
             // Se não encontrou o repositório, retorna configuração padrão
             if (!currentRepositoryConfig) {
-                return syncStatusFlags;
+                return true;
             }
 
             const rules =
@@ -105,10 +141,7 @@ export class CheckSyncStatusUseCase {
                 ),
             );
 
-            syncStatusFlags.kodyRulesGeneratorEnabledFirstTime =
-                !hasPastReviewRules;
-
-            return syncStatusFlags;
+            return !hasPastReviewRules;
         } catch (error) {
             this.logger.error({
                 message: 'Error checking sync status',
@@ -121,7 +154,7 @@ export class CheckSyncStatusUseCase {
                 },
             });
 
-            return syncStatusFlags;
+            return true;
         }
     }
 

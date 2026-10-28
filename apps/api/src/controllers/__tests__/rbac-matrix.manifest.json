@@ -563,7 +563,18 @@
   {
     "key": "codeManagement.controller.ts#getWebhookCreationFailures",
     "httpMethod": "GET",
-    "urlPath": "/code-management/webhook-failures",
+    "urlPath": "/code-management/hook-failures",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "codeManagement.controller.ts#getWebhookStatus",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/hook-status",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",

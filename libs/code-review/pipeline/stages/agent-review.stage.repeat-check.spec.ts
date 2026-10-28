@@ -146,10 +146,12 @@ let runSpy: jest.SpyInstance;
 let repeatAnswer: unknown;
 beforeEach(() => {
     repeatAnswer = { verdicts: [] };
-    runSpy = jest.spyOn(LLM, 'run').mockImplementation((async (req: any) =>
-        req.spanName === 'code-review::repeat-check'
-            ? repeatAnswer
-            : { groups: [], unique: [0, 1, 2, 3] }) as any);
+    runSpy = jest
+        .spyOn(LLM, 'run')
+        .mockImplementation((async (req: any) =>
+            req.spanName === 'code-review::repeat-check'
+                ? repeatAnswer
+                : { groups: [], unique: [0, 1, 2, 3] }) as any);
 });
 afterEach(() => {
     runSpy.mockRestore();
@@ -157,9 +159,12 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — repeat check (#2097)', () => {
-    it('reads the whole history and keeps a rule repeat older than the prompts\' history out of the review', async () => {
+    it("reads the whole history and keeps a rule repeat older than the prompts' history out of the review", async () => {
         const recent = Array.from({ length: 3 }, (_, i) =>
-            earlier({ suggestionId: `recent-${i}`, relevantFile: 'src/other.ts' }),
+            earlier({
+                suggestionId: `recent-${i}`,
+                relevantFile: 'src/other.ts',
+            }),
         );
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([
             ...recent,
@@ -234,7 +239,15 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         });
         const { stage, reviewOrchestrator } = makeStage([applied]);
         reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
-        repeatAnswer = { verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'old-bug' }] };
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
 
         const result = await run(stage, makeContext([applied]));
 
@@ -266,6 +279,52 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         );
     });
 
+    it('links a kept finding when the repeat check identifies the earlier suggestion', async () => {
+        const applied = earlier({
+            suggestionId: 'old-bug',
+            outcome: 'implemented',
+            suggestionContent: 'Return early when user is missing.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
+
+        const result = await run(stage, makeContext([applied]));
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBe('old-bug');
+        expect(comment.suggestionContent).toMatch(
+            /^\*\*Revises an earlier Kody suggestion\*\* on `src\/user\.ts:10`/,
+        );
+    });
+
+    it('leaves an unrelated finding unlinked', async () => {
+        const applied = earlier({ suggestionId: 'old-bug' });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
+        repeatAnswer = {
+            verdicts: [
+                { finding: 0, verdict: 'different_problem', earlierId: null },
+            ],
+        };
+
+        const result = await run(stage, makeContext([applied]));
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBeUndefined();
+        expect(comment.suggestionContent).not.toContain(
+            'Revises an earlier Kody suggestion',
+        );
+    });
+
     it('a PR without history is not checked', async () => {
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([
             ruleComment,
@@ -278,7 +337,7 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         expect(published(result)).toHaveLength(1);
     });
 
-    it('falls back to the prompts\' history when the whole history cannot be read', async () => {
+    it("falls back to the prompts' history when the whole history cannot be read", async () => {
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([]);
         historyUseCase.execute.mockRejectedValue(new Error('Mongo down'));
         reviewOrchestrator.execute.mockResolvedValue(envelope([ruleFinding]));

@@ -126,6 +126,61 @@ describe('GithubService', () => {
         ).resolves.toBe(PullRequestReviewState.NONE);
     });
 
+    it.each([
+        [
+            'a comment review after Kody approved',
+            ['APPROVED', 'COMMENTED'],
+            PullRequestReviewState.APPROVED,
+        ],
+        [
+            'an approval that was dismissed',
+            ['DISMISSED', 'COMMENTED'],
+            PullRequestReviewState.DISMISSED,
+        ],
+        [
+            'a change request after an approval',
+            ['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'],
+            PullRequestReviewState.CHANGES_REQUESTED,
+        ],
+        [
+            'only comment reviews',
+            ['COMMENTED', 'COMMENTED'],
+            PullRequestReviewState.COMMENTED,
+        ],
+    ])('reads Kody state from %s', async (_scenario, states, expected) => {
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            org: 'kodustech',
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue({
+            paginate: jest.fn().mockResolvedValue([
+                ...states.map((state, index) => ({
+                    state,
+                    submitted_at: `2026-10-0${index + 1}T00:00:00Z`,
+                    user: { login: 'kody-ai[bot]', node_id: 'kody-id' },
+                })),
+                {
+                    state: 'APPROVED',
+                    submitted_at: '2026-10-09T00:00:00Z',
+                    user: { login: 'reviewer', node_id: 'other-id' },
+                },
+            ]),
+            rest: { pulls: { listReviews: jest.fn() } },
+        });
+        jest.spyOn(service as any, 'instanceGraphQL').mockResolvedValue(
+            jest.fn().mockResolvedValue({
+                viewer: { login: 'kody-ai[bot]', id: 'kody-id' },
+            }),
+        );
+
+        await expect(
+            service.getReviewStatusByPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'kodus' },
+                prNumber: 42,
+            }),
+        ).resolves.toBe(expected);
+    });
+
     it('dismisses only Kody approvals when a later review holds the PR', async () => {
         const dismissReview = jest.fn().mockResolvedValue({});
         jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({

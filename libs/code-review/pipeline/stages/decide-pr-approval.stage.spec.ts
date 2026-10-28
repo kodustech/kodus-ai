@@ -228,6 +228,21 @@ it('checks sensitive paths across the complete PR on an incremental review', asy
     expect(LLM.run).not.toHaveBeenCalled();
 });
 
+it('holds a PR that moves a file out of a sensitive path', async () => {
+    codeManagement.getFilesByPullRequestId.mockResolvedValueOnce([
+        {
+            filename: 'libs/ledger.ts',
+            previous_filename: 'secrets/ledger.ts',
+            status: 'renamed',
+        },
+    ]);
+    const result = await stage.execute(
+        context({ approvalSensitivePaths: ['secrets/**'] }),
+    );
+    expect(result.approvalDecision?.kind).toBe('hold');
+    expect(result.approvalDecision?.reason).toContain('secrets/ledger.ts');
+});
+
 it('holds when the complete PR diff cannot be loaded', async () => {
     codeManagement.getFilesByPullRequestId.mockResolvedValueOnce(null);
     const result = await stage.execute(context({ approvalRiskActive: true }));

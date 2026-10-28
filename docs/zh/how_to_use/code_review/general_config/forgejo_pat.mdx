@@ -36,6 +36,8 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 Forgejo 
 | `notification` | **读取** | 查看通知 |
 | `user` | **读取** | 读取基本用户信息 |
 
+令牌用户还必须是 Kody 审查的**每个仓库的管理员**。Forgejo 只允许仓库管理员创建 webhook 和驳回审查；否则 Kody 无法自动注册 webhook，也无法在后续审查保留批准时撤回自己的批准。
+
 ---
 
 ## 将令牌添加到 Kody

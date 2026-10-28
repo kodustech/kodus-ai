@@ -94,6 +94,11 @@ function depth(scope: string | null): number {
     return scope ? scope.split('/').length : 0;
 }
 
+function dirOf(path: string): string | null {
+    const slash = path.lastIndexOf('/');
+    return slash > 0 ? path.slice(0, slash) : null;
+}
+
 /**
  * Prose instruction files whose directory contains at least one changed file,
  * root files first, then deeper ones. Tool configuration files are dropped.
@@ -296,7 +301,8 @@ export async function collectRepoInstructions(params: {
 
     let index: string[];
     try {
-        index = (await params.listFiles()).map(normalize);
+        // A host can list one file twice; it takes one slot.
+        index = [...new Set((await params.listFiles()).map(normalize))];
     } catch (error) {
         return { ...EMPTY, error: errorMessage(error) };
     }
@@ -325,11 +331,25 @@ export async function collectRepoInstructions(params: {
         return contents.get(path) ?? null;
     };
 
-    // Governing files first; a pointer's targets go right after it and take
-    // the pointer's scope.
-    const queue: Array<{ path: string; appliesTo?: string }> = candidates.map(
-        (path) => ({ path }),
-    );
+    // Read nearest the change first, so a full budget drops the files
+    // furthest from it; a pointer's targets go right after it and take its
+    // place and scope. The prompt still lists them root first (`rank`).
+    const rank = new Map(candidates.map((path, i) => [path, i]));
+    const distance = (path: string) => {
+        const scope = scopeOf(path);
+        const gaps = changed
+            .filter((c) => governsByDirectory(scope, c))
+            .map((c) => depth(dirOf(c)) - depth(scope));
+        return gaps.length ? Math.min(...gaps) : Infinity;
+    };
+    const queue: Array<{ path: string; appliesTo?: string; rank: number }> = [
+        ...candidates,
+    ]
+        .sort(
+            (a, b) => distance(a) - distance(b) || rank.get(a)! - rank.get(b)!,
+        )
+        .map((path) => ({ path, rank: rank.get(path)! }));
+    const ranks = new Map<string, number>();
     const seen = new Set<string>(candidates);
     // A target can be named by pointers in several scopes; it applies to all
     // of them, and so do the files it points to.
@@ -339,7 +359,7 @@ export async function collectRepoInstructions(params: {
         files.length >= limits.maxFiles || total >= limits.maxTotalBytes;
 
     while (queue.length) {
-        const { path, appliesTo: inherited } = queue.shift()!;
+        const { path, appliesTo: inherited, rank: at } = queue.shift()!;
         if (budgetFull()) {
             dropped.push(path);
             continue;
@@ -394,7 +414,7 @@ export async function collectRepoInstructions(params: {
             }
         }
         queue.unshift(
-            ...targets.map((target) => ({ path: target, appliesTo })),
+            ...targets.map((target) => ({ path: target, appliesTo, rank: at })),
         );
         // A file that only points elsewhere holds no instruction of its own:
         // its targets are listed instead.
@@ -415,6 +435,7 @@ export async function collectRepoInstructions(params: {
         total += Buffer.byteLength(text);
         truncated = truncated || cut;
         files.push({ path, content: text, appliesTo, truncated: cut });
+        ranks.set(path, at);
     }
 
     // Spread each pointer's scopes to its targets until nothing changes; the
@@ -438,12 +459,19 @@ export async function collectRepoInstructions(params: {
 
     const used = new Set([...files.map((f) => f.path), ...dropped]);
     return {
-        files: files.map((file) => ({
-            ...file,
-            appliesTo: [...(scopes.get(file.path) ?? [file.appliesTo])].join(
-                ',',
-            ),
-        })),
+        files: files
+            .map((file, read) => ({ file, read }))
+            .sort(
+                (a, b) =>
+                    ranks.get(a.file.path)! - ranks.get(b.file.path)! ||
+                    a.read - b.read,
+            )
+            .map(({ file }) => ({
+                ...file,
+                appliesTo: [
+                    ...(scopes.get(file.path) ?? [file.appliesTo]),
+                ].join(','),
+            })),
         otherFiles: prose
             .filter((p) => !used.has(p))
             .slice(0, limits.maxOtherFiles),
@@ -479,6 +507,71 @@ function normalizeInstructionText(text: string): string {
 
 const trimPunctuation = (text: string): string =>
     text.replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/g, '');
+
+/**
+ * Whether `path` is a coding-agent instruction file, or a file the review
+ * collected as one (a pointer's target such as `docs/guide.md`).
+ */
+export function isRepoInstructionFile(
+    path: string | undefined,
+    context: RepoInstructionsContext | undefined,
+): boolean {
+    if (!path) return false;
+    const normalized = normalize(path);
+    return (
+        isAgentInstructionProseFile(normalized) ||
+        (context?.files ?? []).some((f) => normalize(f.path) === normalized)
+    );
+}
+
+// The file as the authority for a claim: its subject ("CLAUDE.md says",
+// "CLAUDE.md, added in this PR, requires") or the direct object of one
+// ("per CLAUDE.md", "violates the CLAUDE.md rule", "breaks `AGENTS.md`").
+const CITED_AS_SUBJECT =
+    /\u00a7F[`'"]?\W*(?:[\w-]+\W+){0,4}?(?:says|said|states|stated|requires|required|asks|forbids|mandates|prescribes|instructs|demands)\b/i;
+const CITED_AS_OBJECT =
+    /\b(?:per|according to|violates|violated|violating|violation of|breaks|breaking|contradicts|stated in|defined in|rule in|rules in)\s+(?:the\s+)?[`'"]?\u00a7F/i;
+
+/**
+ * Whether a finding reasons from an instruction file (see
+ * `isRepoInstructionFile`): one of its sentences takes the file as the
+ * authority for its claim. A file the code under review names
+ * (`existingCode`) is not a citation: the finding is about code that handles
+ * that file.
+ */
+export function citesRepoInstruction(
+    finding: {
+        suggestionContent?: string;
+        existingCode?: string;
+    },
+    context: RepoInstructionsContext | undefined,
+): boolean {
+    // Only the code under review: improvedCode is the model's suggestion
+    // and may repeat the citation in a comment.
+    const code = finding.existingCode ?? '';
+    const sentences = (finding.suggestionContent ?? '').split(
+        /(?<=[.!?;])\s+|\n+/,
+    );
+    return sentences.some((sentence) => {
+        let cited = false;
+        const marked = sentence.replace(/[\w./@-]+/g, (token) => {
+            const path = token.replace(/^@/, '').replace(/[.,:;]+$/, '');
+            if (
+                !path.includes('.') ||
+                !isRepoInstructionFile(path, context) ||
+                code.includes(path)
+            ) {
+                return token;
+            }
+            cited = true;
+            return '\u00a7F';
+        });
+        return (
+            cited &&
+            (CITED_AS_SUBJECT.test(marked) || CITED_AS_OBJECT.test(marked))
+        );
+    });
+}
 
 /**
  * Whether `text` (a finding's content) quotes one of the collected

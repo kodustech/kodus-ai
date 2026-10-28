@@ -638,6 +638,13 @@ export class BitbucketService implements Omit<
         return impl.approvePullRequest(params);
     }
 
+    async dismissOwnPullRequestApprovals(params: any): Promise<number> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.dismissOwnPullRequestApprovals(params);
+    }
+
     async requestChangesPullRequest(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,

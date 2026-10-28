@@ -583,24 +583,7 @@ export class KodyRulesController {
         @Query('repositoryId')
         repositoryId?: string,
     ) {
-        const cacheKey = `check-sync-status:${this.request.user.organization.uuid}:${teamId}:${repositoryId || 'no-repo'}`;
-
-        // Tenta buscar do cache primeiro
-        const cachedResult = await this.cacheService.getFromCache(cacheKey);
-        if (cachedResult) {
-            return cachedResult;
-        }
-
-        // If not in cache, execute the use case
-        const result = await this.checkSyncStatusUseCase.execute(
-            teamId,
-            repositoryId,
-        );
-
-        // Salva no cache por 15 minutos
-        await this.cacheService.addToCache(cacheKey, result, 900000); // 15 minutos em milissegundos
-
-        return result;
+        return this.checkSyncStatusUseCase.execute(teamId, repositoryId);
     }
 
     @ApiBearerAuth('jwt')

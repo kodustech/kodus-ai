@@ -189,6 +189,7 @@ import {
     normalizeEnvelope,
     LLM_ENVELOPE_TAG,
 } from '@libs/llm/structured-output-repair';
+import { CacheService } from '@libs/core/cache/cache.service';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -351,6 +352,8 @@ export function snapLinesToDiff(
  * - Agents investigate the codebase using sandbox tools before suggesting
  * - Results are stored in context.fileAnalysisResults for downstream stages
  */
+const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'AgentReviewStage';
@@ -404,6 +407,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the repeat check uses the history loaded for the prompts.
         @Optional()
         private readonly buildPreviousReviewDecisionsUseCase?: BuildPreviousReviewDecisionsUseCase,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the instruction index is listed on every review.
+        @Optional()
+        private readonly cacheService?: CacheService,
     ) {
         super();
     }
@@ -489,10 +496,48 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
         const startedAt = Date.now();
+        // The index is the same for every review against one target-branch
+        // commit, and listing it can take many paged calls (GitLab,
+        // Bitbucket); without the commit it is listed each time.
+        let baseSha: string | undefined = context.pullRequest?.base?.sha;
+        let indexCached = false;
 
         const result = await collectRepoInstructions({
             changedFiles: changedFiles.map((f) => f.filename),
             listFiles: async () => {
+                // GitLab's merge request and note payloads carry no
+                // target-branch commit; one PR lookup costs less than the
+                // paged listing it saves.
+                if (!baseSha && this.cacheService) {
+                    baseSha = await this.codeManagementService
+                        .getPullRequest(
+                            { organizationAndTeamData, repository, prNumber },
+                            context.platformType,
+                        )
+                        .then((pr) => pr?.base?.sha || undefined)
+                        .catch((error) => {
+                            this.logger.warn({
+                                message: `[repo-instructions] PR#${prNumber}: target-branch commit lookup failed, listing without the index cache`,
+                                context: this.stageName,
+                                error,
+                                metadata: logMetadata,
+                            });
+                            return undefined;
+                        });
+                }
+                const indexKey = baseSha
+                    ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
+                    : undefined;
+                if (indexKey && this.cacheService) {
+                    const cached =
+                        await this.cacheService.getFromCache<string[]>(
+                            indexKey,
+                        );
+                    if (cached) {
+                        indexCached = true;
+                        return cached;
+                    }
+                }
                 const files =
                     (await this.codeManagementService.getRepositoryAllFiles({
                         organizationAndTeamData,
@@ -503,8 +548,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
                             ],
                         },
+                        throwOnError: true,
                     })) ?? [];
-                return files.map((f: { path: string }) => f.path);
+                const paths = files.map((f: { path: string }) => f.path);
+                if (indexKey && this.cacheService) {
+                    await this.cacheService.addToCache(
+                        indexKey,
+                        paths,
+                        INSTRUCTION_INDEX_TTL_MS,
+                    );
+                }
+                return paths;
             },
             readFile: async (path) => {
                 const response =
@@ -536,6 +590,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             metadata: {
                 ...logMetadata,
                 ref,
+                baseSha,
+                indexCached,
                 durationMs: Date.now() - startedAt,
                 indexed: result.indexedCount,
                 listed: result.files.map((f) => f.path),
@@ -2856,9 +2912,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             telemetryMetadata: telemetryMeta,
             prNumber,
         });
+        for (const { finding, earlier } of result.revisions) {
+            if (!finding.revisesSuggestionId) {
+                finding.revisesSuggestionId = earlier.suggestionId;
+            }
+        }
 
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
@@ -3188,7 +3249,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // decided; any still left out falls to the safety net below.
             const leftOut =
                 groups.length || unique.length
-                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
+                    ? unclassifiedDedupIndices(
+                          suggestions.length,
+                          groups,
+                          unique,
+                      )
                     : [];
             // Kept in the dedup trace: a failed follow-up keeps those
             // suggestions as they were (a duplicate may reach the PR), the same

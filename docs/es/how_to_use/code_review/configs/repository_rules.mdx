@@ -14,7 +14,7 @@ Puedes crear Kody Rules personalizadas directamente en tu repositorio colocando 
 - **Detección Automática**: Las reglas del repositorio se detectan y sincronizan en todos los repositorios conectados; no hay nada que activar
 - **Importar ahora**: En el panel **Kody Rules → Configuration** del repositorio, **Import rule files now** lee todos los archivos de reglas de la rama por defecto
 - **Aplicación Web**: Las reglas sincronizadas aparecen en la página **Code review → Kody Rules** del repositorio, con el origen **Auto-sync** (las reglas importadas desde archivos para agentes de código antes de que dejaran de convertirse muestran **Agent file** en su lugar)
-- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se fusionan los Pull Requests
+- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se fusionan los Pull Requests en la rama por defecto
 
 ## Ubicación de los Archivos
 
@@ -157,7 +157,7 @@ Added new endpoint `/api/users/profile` with corresponding test file `tests/api/
 ## Requisitos de Configuración
 
 1. **Crear archivos de reglas**: Coloca archivos `.md` que sigan la plantilla en `.kody/rules/**` o `rules/**`. Los archivos de `.rules/**` y `docs/coding-standards/**` que siguen la plantilla también se importan.
-2. **Fusionarlos**: Un archivo de regla se sincroniza cuando se fusiona un Pull Request que lo agrega, modifica, renombra o elimina. Eliminar el archivo elimina su regla.
+2. **Fusionarlos**: Un archivo de regla se sincroniza cuando se fusiona en la rama por defecto un Pull Request que lo agrega, modifica, renombra o elimina. Eliminar el archivo elimina su regla.
 3. **Archivos existentes**: Para importar archivos de reglas que ya están en la rama por defecto, usa **Import rule files now** en el panel **Kody Rules → Configuration** del repositorio.
 
 Las reglas nuevas quedan activas, o en **Pending review** cuando **Kody knowledge approval** está activado.

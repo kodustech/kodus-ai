@@ -5,10 +5,12 @@
  *   1. Rules the onboarding import created from a repository file (origin
  *      `repo_file_sync`, stored at `repositoryId: "global"`, no
  *      `sourceRepositoryId`, a `sourcePath`) that are active, pending or
- *      paused are DELETED, unless the file is under `.kody/rules/`. Every
- *      onboarding import went through the LLM converter; outside
- *      `.kody/rules/` the files were coding-agent instructions (CLAUDE.md,
- *      .cursor/rules, Claude skills, ...), "approval" was a pre-checked box,
+ *      paused are DELETED, unless the file is in a Repository Rules location
+ *      (`.kody/rules/`, `.rules/`, `docs/coding-standards/`, `rules/**.md`),
+ *      where a file that follows the template is a Kody Rule. Elsewhere the
+ *      files were coding-agent instructions (CLAUDE.md, .cursor/rules, Claude
+ *      skills, ...) the LLM converter turned into rules, "approval" was a
+ *      pre-checked box,
  *      each repository's copy became its own org-wide rule, and the source
  *      repository was never stored to scope them back. The coding-agent
  *      instructions setting reads the same files per repository instead. Each
@@ -31,13 +33,37 @@ export const ONBOARDING_IMPORT_REMOVED_REASON =
 
 const REMOVABLE_STATUSES = new Set(['active', 'pending', 'paused']);
 
-const KODY_RULES_DIR = /(?:^|\/)\.kody\/rules\/./i;
+/** Where `dirPrefix` starts as a path segment, or -1 (as in kody-rule-file-parser.ts). */
+function dirSegmentEnd(pathLower: string, dirPrefix: string): number {
+    if (pathLower.startsWith(dirPrefix)) return dirPrefix.length;
+    const idx = pathLower.indexOf('/' + dirPrefix);
+    return idx >= 0 ? idx + 1 + dirPrefix.length : -1;
+}
 
-/** Imported from a file outside `.kody/rules/`. */
+/**
+ * A Repository Rules location: `.kody/rules/`, `.rules/`,
+ * `docs/coding-standards/`, or a `.md` file under `rules/`. A file there that
+ * follows the template is a Kody Rule, not a coding-agent file. Mirrors
+ * `isKodyRuleTemplateFile`, which this file cannot import, and also leaves
+ * out `.cursor/rules/`.
+ */
+function isRepositoryRulesLocation(sourcePath: string): boolean {
+    const lower = sourcePath.split('#')[0].replace(/\\/g, '/').toLowerCase();
+    for (const agentDir of ['.agents/rules/', '.claude/skills/', '.cursor/']) {
+        if (dirSegmentEnd(lower, agentDir) >= 0) return false;
+    }
+    for (const dir of ['.kody/rules/', '.rules/', 'docs/coding-standards/']) {
+        const end = dirSegmentEnd(lower, dir);
+        if (end >= 0 && lower.length > end) return true;
+    }
+    const rulesEnd = dirSegmentEnd(lower, 'rules/');
+    return rulesEnd >= 0 && lower.length > rulesEnd && lower.endsWith('.md');
+}
+
+/** Imported from a file outside the Repository Rules locations. */
 function isRemovableSource(sourcePath: unknown): boolean {
     if (typeof sourcePath !== 'string' || !sourcePath.trim()) return false;
-    const path = sourcePath.split('#')[0].replace(/\\/g, '/');
-    return !KODY_RULES_DIR.test(path);
+    return !isRepositoryRulesLocation(sourcePath);
 }
 
 function isOnboardingImport(rule: any): boolean {
@@ -185,4 +211,83 @@ export async function restoreAgentFileRules(
         `[freeze-agent-file-rules] restored ${restored} onboarding import(s)${opts.organizationId ? ` for org ${opts.organizationId}` : ''}.`,
     );
     return { restored };
+}
+
+/** Marks a rule `restoreTemplateOnboardingImports` brought back. */
+const RESTORED_MARK = 'restoredByTemplateMigration';
+
+/**
+ * Brings back the onboarding imports from Repository Rules locations that the
+ * first run of this migration removed (before those locations were spared).
+ */
+export async function restoreTemplateOnboardingImports(
+    db: Db,
+    opts: { log?: (msg: string) => void } = {},
+): Promise<{ restored: number; orgs: string[] }> {
+    const result = await rewriteRules(db, (rule) => {
+        if (
+            typeof rule?.sourcePath !== 'string' ||
+            !isRepositoryRulesLocation(rule.sourcePath)
+        ) {
+            return null;
+        }
+        const restored = restoreAgentFileRule(rule);
+        return restored ? { ...restored, [RESTORED_MARK]: true } : null;
+    });
+    opts.log?.(
+        `[freeze-agent-file-rules] restored ${result.changed} onboarding import(s) from Repository Rules locations across ${result.orgs.length} org(s).`,
+    );
+    return { restored: result.changed, orgs: result.orgs };
+}
+
+/**
+ * Undoes `restoreTemplateOnboardingImports`: removes again only the rules it
+ * restored (marked), so an install where the freeze already kept them is left
+ * alone. They stay restorable.
+ */
+export async function removeTemplateOnboardingImports(
+    db: Db,
+    opts: { log?: (msg: string) => void } = {},
+): Promise<{ removed: number }> {
+    const result = await rewriteRules(db, (rule) => {
+        if (rule?.[RESTORED_MARK] !== true) return null;
+        const { [RESTORED_MARK]: _mark, ...rest } = rule;
+        return {
+            ...rest,
+            status: 'deleted',
+            previousStatus: rule.status,
+            reason: ONBOARDING_IMPORT_REMOVED_REASON,
+        };
+    });
+    opts.log?.(
+        `[freeze-agent-file-rules] removed ${result.changed} onboarding import(s) from Repository Rules locations.`,
+    );
+    return { removed: result.changed };
+}
+
+async function rewriteRules(
+    db: Db,
+    change: (rule: any) => any | null,
+): Promise<{ changed: number; orgs: string[] }> {
+    const collection = db.collection('kodyRules');
+    let changed = 0;
+    const orgs: string[] = [];
+    for await (const doc of collection.find({})) {
+        const rules: any[] = Array.isArray(doc.rules) ? doc.rules : [];
+        let changedInDoc = 0;
+        const nextRules = rules.map((rule) => {
+            const next = change(rule);
+            if (!next) return rule;
+            changedInDoc += 1;
+            return next;
+        });
+        if (changedInDoc === 0) continue;
+        changed += changedInDoc;
+        if (doc.organizationId) orgs.push(String(doc.organizationId));
+        await collection.updateOne(
+            { _id: doc._id },
+            { $set: { rules: nextRules } },
+        );
+    }
+    return { changed, orgs };
 }

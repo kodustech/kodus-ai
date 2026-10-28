@@ -60,7 +60,7 @@ export const CODE_MANAGEMENT_API_PATHS = {
     GET_PULL_REQUESTS: pathToApiUrl("/code-management/get-prs-repo"),
 
     GET_WEBHOOK_CREATION_FAILURES: pathToApiUrl(
-        "/code-management/webhook-failures",
+        "/code-management/hook-failures",
     ),
 } as const;
 

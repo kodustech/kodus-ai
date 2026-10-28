@@ -752,6 +752,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         input.repoInstructions,
                         this.getAllowedSuggestionLabels(input),
                     ),
+                    allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
