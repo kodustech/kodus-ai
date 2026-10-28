@@ -1747,13 +1747,12 @@ export class CodeManagementService implements ICodeManagementService {
         const type = await this.getTypeIntegration(
             params.organizationAndTeamData,
         );
-        if (type !== PlatformType.GITHUB) {
-            return 0;
-        }
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
-        if (!provider.dismissOwnPullRequestApprovals) {
-            throw new Error('GitHub approval dismissal is unavailable');
+        // Every host implements it; one that does not must fail the step
+        // rather than leave Kody's approval in place under a hold.
+        if (!provider?.dismissOwnPullRequestApprovals) {
+            throw new Error(`Approval dismissal is unavailable on ${type}`);
         }
         return provider.dismissOwnPullRequestApprovals(params);
     }

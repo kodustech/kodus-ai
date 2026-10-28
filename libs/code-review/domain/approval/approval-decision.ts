@@ -41,6 +41,26 @@ export function approvalPolicyFromConfig(
     };
 }
 
+/**
+ * The paths a PR changes, for the team path veto: a rename changes both its
+ * paths, so moving a file out of a sensitive path touches that path too.
+ */
+export function approvalPathsOf(
+    files: Array<{
+        filename?: string;
+        path?: string;
+        previous_filename?: string;
+    }>,
+): string[] {
+    return files.flatMap((file) => {
+        const path = file.filename ?? file.path;
+        const previous = file.previous_filename;
+        return [path, previous && previous !== path ? previous : undefined].filter(
+            (p): p is string => !!p,
+        );
+    });
+}
+
 /** Bitbucket PRs do not expose the label contract required by this policy. */
 export function approvalPolicyForPlatform(
     policy: ApprovalPolicy,
@@ -146,4 +166,46 @@ export function evaluateApproval(input: {
         kind: 'approve',
         reason: input.risk.reason || 'Kody assessed low risk for this PR.',
     };
+}
+
+/**
+ * The cron's decision for the head Kody reviewed. With risk assessment on, a
+ * review approves only with an assessment, so an approval saved without one
+ * was made while it was off. When the host still shows that approval it stands
+ * for this head (scope and sensitive paths still apply) and the next commit is
+ * assessed, instead of holding a PR that was approved correctly. Nothing new is
+ * approved this way: a head reviewed without an assessment that Kody has not
+ * approved on the host is held until the next commit, and says so.
+ */
+export function evaluateReviewedHeadApproval(
+    input: Parameters<typeof evaluateApproval>[0] & {
+        reviewedDecision?: { kind?: string };
+        /** The host currently shows Kody's approval on this PR. */
+        approvedOnHost?: boolean;
+    },
+): ApprovalDecision {
+    const { reviewedDecision, approvedOnHost, ...rest } = input;
+    if (
+        rest.policy?.assessRisk &&
+        !rest.risk &&
+        reviewedDecision?.kind === 'approve' &&
+        approvedOnHost
+    ) {
+        return evaluateApproval({
+            ...rest,
+            policy: { ...rest.policy, assessRisk: false },
+        });
+    }
+    const decision = evaluateApproval(rest);
+    if (rest.policy?.assessRisk && !rest.risk && decision.kind === 'hold') {
+        return {
+            ...decision,
+            reason:
+                decision.reason ===
+                'Kody could not assess risk for the current PR head.'
+                    ? 'This commit was reviewed without a risk assessment; Kody assesses the next commit.'
+                    : decision.reason,
+        };
+    }
+    return decision;
 }

@@ -25,6 +25,8 @@ export interface ICommentManagerService {
         repository: { name: string; id: string },
         reason: string,
         kind: 'approve' | 'hold',
+        /** Update Kody's earlier reason note, but never open one. */
+        options?: { onlyIfPresent?: boolean },
     ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,

@@ -2312,6 +2312,7 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
+                previous_filename: file.renamed_file ? file.old_path : undefined,
             };
         });
     }
@@ -4455,6 +4456,43 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it, so an
+     * MR Kody approved does not stay approved under an "approval held" note.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        if (!repository?.id || !prNumber) {
+            throw new Error(
+                'Repository and MR number are required to dismiss approval',
+            );
+        }
+        const gitlabAPI = this.instanceGitlabApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        const [approvalSettings, currentUser] = await Promise.all([
+            gitlabAPI.MergeRequestApprovals.showConfiguration(repository.id, {
+                mergerequestIId: prNumber,
+            }),
+            gitlabAPI.Users.showCurrentUser(),
+        ]);
+        const approvedByKody = (approvalSettings?.approved_by ?? []).some(
+            (approval) => approval?.user?.id === currentUser.id,
+        );
+        if (!approvedByKody) return 0;
+        await gitlabAPI.MergeRequestApprovals.unapprove(
+            repository.id,
+            prNumber,
+        );
+        return 1;
     }
 
     async approvePullRequest(params: {

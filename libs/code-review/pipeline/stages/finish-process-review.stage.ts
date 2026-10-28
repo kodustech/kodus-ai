@@ -17,7 +17,6 @@ import {
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
 } from '@libs/code-review/domain/approval/approval-decision';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
     ICommentManagerService,
@@ -63,7 +62,6 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
 
         if (
             codeReviewConfig?.pullRequestApprovalActive &&
-            context.platformType === PlatformType.GITHUB &&
             (context.approvalDecision?.kind === 'hold' ||
                 context.approvalDecision?.kind === 'out-of-scope')
         ) {
@@ -77,10 +75,10 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             reason: context.approvalDecision.reason,
                         },
                     );
-                if (
-                    dismissed > 0 &&
-                    context.approvalDecision.kind === 'out-of-scope'
-                ) {
+                // Out of scope: a PR Kody approved says why it no longer is;
+                // one that never had a reason note keeps not getting one, but
+                // an earlier note (an old hold reason) is brought up to date.
+                if (context.approvalDecision.kind === 'out-of-scope') {
                     try {
                         await this.commentManagerService.postApprovalReason(
                             organizationAndTeamData,
@@ -88,6 +86,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             repository,
                             context.approvalDecision.reason,
                             'hold',
+                            { onlyIfPresent: dismissed === 0 },
                         );
                     } catch (error) {
                         this.logger.warn({
@@ -96,15 +95,20 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             error,
                             metadata: approvalMetadata,
                         });
-                        context = this.updateContext(context, (draft) => {
-                            draft.errors ??= [];
-                            draft.errors.push({
-                                stage: this.stageName,
-                                substage: 'approval-reason-publication',
-                                severity: 'partial',
-                                error,
+                        // Refreshing an old note on a PR with nothing to
+                        // dismiss is cosmetic: it must not mark the review
+                        // as completed with issues.
+                        if (dismissed > 0) {
+                            context = this.updateContext(context, (draft) => {
+                                draft.errors ??= [];
+                                draft.errors.push({
+                                    stage: this.stageName,
+                                    substage: 'approval-reason-publication',
+                                    severity: 'partial',
+                                    error,
+                                });
                             });
-                        });
+                        }
                     }
                 }
             } catch (error) {
