@@ -7669,6 +7669,43 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
+    /**
+     * Write or admin on the repository. A comment's `author_association`
+     * can't tell: COLLABORATOR and MEMBER come with read access too. GitHub
+     * folds maintain and custom roles into write, triage into read.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string; owner?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const owner =
+                params.repository.owner ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const { data } =
+                await octokit.rest.repos.getCollaboratorPermissionLevel({
+                    owner,
+                    repo: params.repository.name,
+                    username: params.login,
+                });
+            return data.permission === 'admin' || data.permission === 'write';
+        } catch (error) {
+            // Not a collaborator answers 404; a credential that can't look, 401/403.
+            return isDeniedStatus(error) ? false : undefined;
+        }
+    }
+
     async diagnoseRepositoryAccess(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };

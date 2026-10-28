@@ -68,7 +68,7 @@ export interface TriggerBusinessValidationResult {
     taskReference?: string;
     /** What a person or an agent reads: one line per requirement. */
     result: string;
-    /** The same verdict, structured (`--json`). */
+    /** The same verdict, structured (`--format json`, `--agent`). */
     verdict: CliBusinessVerdict;
 }
 

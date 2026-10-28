@@ -5245,8 +5245,11 @@ export class GitlabService implements Omit<
     async userCanWrite(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
-        userId: string | number;
+        userId?: string | number;
     }): Promise<boolean | undefined> {
+        if (params.userId === undefined) {
+            return undefined;
+        }
         const authDetails = await this.getAuthDetails(
             params.organizationAndTeamData,
         );

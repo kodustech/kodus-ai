@@ -1563,8 +1563,9 @@ export class CodeManagementService implements ICodeManagementService {
     async userCanWrite(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string };
-            userId: string | number;
+            repository: { id: string; name?: string; owner?: string };
+            userId?: string | number;
+            login?: string;
         },
         type?: PlatformType,
     ): Promise<boolean | undefined> {
