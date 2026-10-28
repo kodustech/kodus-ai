@@ -58,8 +58,11 @@ export async function resolveTasks(
         { reference: TaskReference; tracker: TaskTracker } | undefined;
     for (const reference of selected) {
         const capable = trackers.filter((t) => t.canRead(reference));
-        const missed: Array<{ tracker: TaskTracker; lookup: TrackerLookup }> =
-            [];
+        const missed: Array<{
+            tracker: TaskTracker;
+            lookup: TrackerLookup;
+            attempt: ResolutionAttempt;
+        }> = [];
         let hit: TrackerLookup | undefined;
         let hitBy: TaskTracker | undefined;
         for (const tracker of capable) {
@@ -67,13 +70,14 @@ export async function resolveTasks(
                 reference,
                 await tracker.read(reference, context),
             );
-            attempts.push(attemptOf(reference, tracker, lookup));
+            const attempt = attemptOf(reference, tracker, lookup);
+            attempts.push(attempt);
             if (lookup.status === 'found') {
                 hit = lookup;
                 hitBy = tracker;
                 break;
             }
-            missed.push({ tracker, lookup });
+            missed.push({ tracker, lookup, attempt });
         }
         // A record read without its description: the answer's shape moved,
         // and the agent may read it whole. Its title-only read stands if not.
@@ -108,7 +112,8 @@ export async function resolveTasks(
             if (second.status !== 'found') {
                 // The agent got answers and the task isn't there: a miss
                 // the typo check reads, not a tracker that is down.
-                attempts.push(attemptOf(reference, miss.tracker, second));
+                miss.attempt = attemptOf(reference, miss.tracker, second);
+                attempts.push(miss.attempt);
                 miss.lookup = second;
                 continue;
             }
@@ -134,9 +139,12 @@ export async function resolveTasks(
             found.push({ reference, task });
             continue;
         }
-        const missingFrom: Array<{ tracker: TaskTracker; unread: boolean }> =
-            [];
-        for (const { tracker, lookup } of missed) {
+        const missingFrom: Array<{
+            tracker: TaskTracker;
+            unread: boolean;
+            attempt: ResolutionAttempt;
+        }> = [];
+        for (const { tracker, lookup, attempt } of missed) {
             // A tracker set up so it can't read a task is not one that can.
             readable ||= !(lookup.status === 'error' && lookup.setup);
             if (lookup.status === 'error') {
@@ -145,12 +153,13 @@ export async function resolveTasks(
                 missingFrom.push({
                     tracker,
                     unread: lookup.status === 'not_found' && !!lookup.unread,
+                    attempt,
                 });
             }
         }
         // `SAA-999` where SAA is a Linear team is a typo worth telling the
         // author about; `UTF-8` is not (UC-14, UC-21).
-        for (const { tracker, unread } of missingFrom) {
+        for (const { tracker, unread, attempt } of missingFrom) {
             if (looksIntended) {
                 break;
             }
@@ -175,7 +184,8 @@ export async function resolveTasks(
                 // read is a failed one, so the screen and the unavailable
                 // message name this tracker.
                 failed = true;
-                markUnreadable(attempts, reference, tracker);
+                attempt.status = 'error';
+                attempt.message = `${tracker.name} answered in a form Kody couldn't read`;
                 continue;
             }
             looksIntended = true;
@@ -310,27 +320,6 @@ function warn(
             reason: error instanceof Error ? error.message : String(error),
         },
     });
-}
-
-/** Turns the tracker's last miss on this reference into the failed read it was. */
-function markUnreadable(
-    attempts: ResolutionAttempt[],
-    reference: TaskReference,
-    tracker: TaskTracker,
-): void {
-    const label = referenceLabel(reference);
-    const attempt = [...attempts]
-        .reverse()
-        .find(
-            (a) =>
-                a.reference === label &&
-                a.tracker === tracker.name &&
-                a.status === 'not_found',
-        );
-    if (attempt) {
-        attempt.status = 'error';
-        attempt.message = `${tracker.name} answered in a form Kody couldn't read`;
-    }
 }
 
 function attemptOf(
