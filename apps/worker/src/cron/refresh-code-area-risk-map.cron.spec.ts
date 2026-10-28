@@ -16,7 +16,10 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
         }),
     };
     const refresh = {
-        refreshOneBatch: jest.fn().mockResolvedValue({}),
+        readStatus: jest.fn().mockResolvedValue(null),
+        refreshOneBatch: jest
+            .fn()
+            .mockResolvedValue({ complete: true, processed: 0, failed: false }),
     };
     const codeManagement = {
         getTypeIntegration: jest.fn().mockResolvedValue(PlatformType.GITHUB),
@@ -70,7 +73,10 @@ it('filters unsupported providers before choosing repository pages', async () =>
         }),
     };
     const refresh = {
-        refreshOneBatch: jest.fn().mockResolvedValue({}),
+        readStatus: jest.fn().mockResolvedValue(null),
+        refreshOneBatch: jest
+            .fn()
+            .mockResolvedValue({ complete: true, processed: 0, failed: false }),
     };
     const codeManagement = {
         getTypeIntegration: jest
@@ -103,4 +109,227 @@ it('filters unsupported providers before choosing repository pages', async () =>
         repository: { id: 'repo-1', name: 'api' },
     });
     expect(release).toHaveBeenCalledTimes(1);
+});
+
+// A repository's first scan needs many batches (ten PRs each); one batch per
+// visit in a fixed rotation left it incomplete for weeks. Incomplete and
+// unscanned repositories go first and keep batching within the run's budget;
+// complete ones are refreshed stalest first.
+describe('refresh order and batch budget', () => {
+    const build = (
+        repositories: Array<{ id: string; name: string }>,
+        statuses: Record<string, unknown>,
+        batches: Record<
+            string,
+            Array<{ complete: boolean; processed: number; failed: boolean }>
+        >,
+    ) => {
+        const refresh = {
+            readStatus: jest.fn(async (_org: string, repositoryId: string) => {
+                const status = statuses[repositoryId];
+                if (status instanceof Error) throw status;
+                return status ?? null;
+            }),
+            refreshOneBatch: jest.fn(async ({ repository }) => {
+                const queue = batches[repository.id] ?? [];
+                return (
+                    queue.shift() ?? {
+                        complete: true,
+                        processed: 0,
+                        failed: false,
+                    }
+                );
+            }),
+        };
+        const cron = new RefreshCodeAreaRiskMapCron(
+            {
+                findTeamsWithIntegrations: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { uuid: 'team-1', organization: { uuid: 'org-1' } },
+                    ]),
+            } as any,
+            {
+                findOne: jest.fn().mockResolvedValue({
+                    configValue: {
+                        repositories: repositories.map((r) => ({
+                            ...r,
+                            isSelected: true,
+                        })),
+                    },
+                }),
+            } as any,
+            refresh as any,
+            {
+                acquire: jest.fn().mockResolvedValue({ release: jest.fn() }),
+            } as any,
+            { isEnabled: jest.fn().mockResolvedValue(true) } as any,
+            {
+                getTypeIntegration: jest
+                    .fn()
+                    .mockResolvedValue(PlatformType.GITLAB),
+            } as any,
+        );
+        const order = () =>
+            refresh.refreshOneBatch.mock.calls.map(([p]) => p.repository.id);
+        return { cron, refresh, order };
+    };
+
+    it('scans incomplete, then unscanned, then the stalest complete repository', async () => {
+        const { cron, order } = build(
+            [
+                { id: 'fresh', name: 'fresh' },
+                { id: 'stale', name: 'stale' },
+                { id: 'partial', name: 'partial' },
+                { id: 'never', name: 'never' },
+            ],
+            {
+                // A complete scan's cursor sits at its floor; staleness is
+                // when its window ended.
+                fresh: {
+                    complete: true,
+                    windowEnd: '2026-10-27T00:00:00Z',
+                    cursorEnd: '2026-09-01T00:00:00Z',
+                },
+                stale: {
+                    complete: true,
+                    windowEnd: '2026-10-01T00:00:00Z',
+                    cursorEnd: '2026-10-26T00:00:00Z',
+                },
+                partial: { complete: false, cursorEnd: '2026-10-20T00:00:00Z' },
+            },
+            {},
+        );
+
+        await cron.handleCron();
+
+        // A scan the last run's budget cut short goes on before any new one.
+        expect(order()).toEqual(['partial', 'never', 'stale', 'fresh']);
+    });
+
+    it('keeps batching an incomplete repository until its scan completes', async () => {
+        const { cron, order } = build(
+            [{ id: 'never', name: 'never' }],
+            {},
+            {
+                never: [
+                    { complete: false, processed: 10, failed: false },
+                    { complete: false, processed: 10, failed: false },
+                    { complete: true, processed: 4, failed: false },
+                ],
+            },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['never', 'never', 'never']);
+    });
+
+    it('keeps batching through empty weeks and unmerged PRs', async () => {
+        const { cron, order } = build(
+            [{ id: 'quiet', name: 'quiet' }],
+            {},
+            {
+                quiet: [
+                    { complete: false, processed: 0, failed: false },
+                    { complete: false, processed: 0, failed: false },
+                ],
+            },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['quiet', 'quiet', 'quiet']);
+    });
+
+    it('starts no batch once the run passes its deadline, well inside the lock', async () => {
+        let now = 0;
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        try {
+            const { cron, refresh, order } = build(
+                [
+                    { id: 'slow', name: 'slow' },
+                    { id: 'next', name: 'next' },
+                ],
+                {
+                    slow: {
+                        complete: false,
+                        cursorEnd: '2026-10-20T00:00:00Z',
+                    },
+                },
+                {},
+            );
+            // Each batch takes 40 minutes and never completes the scan.
+            refresh.refreshOneBatch.mockImplementation(async () => {
+                now += 40 * 60 * 1000;
+                return { complete: false, processed: 10, failed: false };
+            });
+
+            await cron.handleCron();
+
+            // Batches start at 0, 40 and 80 minutes; none at 120, when the
+            // two-hour lock would let the next run in.
+            expect(order()).toEqual(['slow', 'slow', 'slow']);
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
+    it('stops batching a repository whose PRs could not be read', async () => {
+        const { cron, order } = build(
+            [{ id: 'stuck', name: 'stuck' }],
+            {},
+            { stuck: [{ complete: false, processed: 0, failed: true }] },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['stuck']);
+    });
+
+    it('puts a repository whose status could not be read last', async () => {
+        const { cron, order } = build(
+            [
+                { id: 'broken', name: 'broken' },
+                { id: 'done', name: 'done' },
+            ],
+            {
+                broken: new Error('mongo unavailable'),
+                done: { complete: true, windowEnd: '2026-10-27T00:00:00Z' },
+            },
+            {},
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['done', 'broken']);
+    });
+
+    it('puts a repository whose status read never settles last', async () => {
+        jest.useFakeTimers();
+        try {
+            const { cron, refresh, order } = build(
+                [
+                    { id: 'hung', name: 'hung' },
+                    { id: 'done', name: 'done' },
+                ],
+                { done: { complete: true, windowEnd: '2026-10-27T00:00:00Z' } },
+                {},
+            );
+            refresh.readStatus.mockImplementation(
+                async (_org: string, repositoryId: string) =>
+                    repositoryId === 'hung'
+                        ? new Promise(() => {})
+                        : { complete: true, windowEnd: '2026-10-27T00:00:00Z' },
+            );
+
+            const run = cron.handleCron();
+            await jest.advanceTimersByTimeAsync(10_000);
+            await run;
+
+            expect(order()).toEqual(['done', 'hung']);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });
