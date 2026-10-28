@@ -79,7 +79,7 @@ const SCHEMA = {
 
 const INSTRUCTIONS = fs.readFileSync(path.join(__dirname, 'judge-prompt.md'), 'utf8');
 
-const { diffFor } = require('../gold/judge-context');
+const { diffFor } = require('./judge-context');
 
 function buildPrompt(caseId, suggestions) {
     // Stable per-judge shuffle, so position in the list carries no signal.
