@@ -995,9 +995,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     }
                     changedPaths = approvalPathsOf(files);
                 }
+                // A head approved while risk assessment was off keeps that
+                // approval only if the host still shows it; asked only then.
+                const approvedOnHost =
+                    !!policy?.assessRisk &&
+                    !lastExecution.dataExecution?.approvalRisk &&
+                    reviewedDecision?.kind === 'approve' &&
+                    (await runWithBoundedTimeout(
+                        this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval provider-status lookup',
+                    ).catch(() => null)) === PullRequestReviewState.APPROVED;
                 const decision = evaluateReviewedHeadApproval({
                     approvalActive: true,
                     reviewedDecision,
+                    approvedOnHost,
                     policy,
                     author:
                         currentPullRequest?.user?.login ??

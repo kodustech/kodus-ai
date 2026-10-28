@@ -340,6 +340,25 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         );
     });
 
+    it('does not mark the review partial when refreshing an old note fails', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            new Error('Comment lookup timed out'),
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(result.errors ?? []).toEqual([]);
+    });
+
     it('records a failed status comment after dismissing an out-of-scope approval', async () => {
         commentManager.postApprovalReason.mockRejectedValueOnce(
             new Error('Comment update failed'),

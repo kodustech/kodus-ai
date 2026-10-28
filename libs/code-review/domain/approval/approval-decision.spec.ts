@@ -117,8 +117,19 @@ describe('evaluateReviewedHeadApproval', () => {
             evaluateReviewedHeadApproval({
                 ...base,
                 reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
             }).kind,
         ).toBe('approve');
+    });
+
+    it('grants no new approval when the host does not show Kody approval yet', () => {
+        const decision = evaluateReviewedHeadApproval({
+            ...base,
+            reviewedDecision: { kind: 'approve' },
+            approvedOnHost: false,
+        });
+        expect(decision.kind).toBe('hold');
+        expect(decision.reason).toContain('next commit');
     });
 
     it('still holds a kept approval when a sensitive path or the scope changed', () => {
@@ -127,6 +138,7 @@ describe('evaluateReviewedHeadApproval', () => {
                 ...base,
                 policy: { ...base.policy, sensitivePaths: ['src/**'] },
                 reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
             }).kind,
         ).toBe('hold');
         expect(
@@ -134,6 +146,7 @@ describe('evaluateReviewedHeadApproval', () => {
                 ...base,
                 labels: [],
                 reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
             }).kind,
         ).toBe('out-of-scope');
     });

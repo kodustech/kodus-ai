@@ -2605,6 +2605,20 @@ export class ForgejoService implements Omit<
                     message: 'Kody held automatic approval after a new review.',
                 },
             });
+            const failure = result as {
+                status?: number;
+                response?: { status?: number };
+            };
+            if (
+                result.error &&
+                (failure.response?.status ?? failure.status) === 403
+            ) {
+                // Forgejo lets only a repository admin dismiss a review, the
+                // same role it needs to create the webhook automatically.
+                throw new Error(
+                    `Forgejo refused to dismiss Kody's approval on PR #${params.prNumber}: the token user must be an admin of ${repoInfo.owner}/${repoInfo.repo}.`,
+                );
+            }
             if (result.error) throw result.error;
         }
         return own.length;

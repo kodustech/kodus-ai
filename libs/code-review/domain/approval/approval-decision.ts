@@ -171,21 +171,25 @@ export function evaluateApproval(input: {
 /**
  * The cron's decision for the head Kody reviewed. With risk assessment on, a
  * review approves only with an assessment, so an approval saved without one
- * was given while it was off: it stands for this head (scope and sensitive
- * paths still apply) and the next commit is assessed, instead of holding a PR
- * that was approved correctly. A head reviewed without an assessment and not
- * approved is held until the next commit, and says so.
+ * was made while it was off. When the host still shows that approval it stands
+ * for this head (scope and sensitive paths still apply) and the next commit is
+ * assessed, instead of holding a PR that was approved correctly. Nothing new is
+ * approved this way: a head reviewed without an assessment that Kody has not
+ * approved on the host is held until the next commit, and says so.
  */
 export function evaluateReviewedHeadApproval(
     input: Parameters<typeof evaluateApproval>[0] & {
         reviewedDecision?: { kind?: string };
+        /** The host currently shows Kody's approval on this PR. */
+        approvedOnHost?: boolean;
     },
 ): ApprovalDecision {
-    const { reviewedDecision, ...rest } = input;
+    const { reviewedDecision, approvedOnHost, ...rest } = input;
     if (
         rest.policy?.assessRisk &&
         !rest.risk &&
-        reviewedDecision?.kind === 'approve'
+        reviewedDecision?.kind === 'approve' &&
+        approvedOnHost
     ) {
         return evaluateApproval({
             ...rest,

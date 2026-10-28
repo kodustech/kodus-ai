@@ -2796,12 +2796,13 @@ export class BitbucketDataCenterService implements Omit<
             );
 
             const pr = response.data;
-            const reviewers = pr.reviewers || [];
-
-            // Find the current user in the reviewers list
-            const userReview = reviewers.find(
-                (r: any) => r.user?.name === currentUser.id,
-            );
+            // approvePullRequest approves through /participants/{user}, which
+            // lists a user who is not a designated reviewer under
+            // `participants`, so both lists are read.
+            const userReview = [
+                ...(pr.reviewers || []),
+                ...(pr.participants || []),
+            ].find((r: any) => r.user?.name === currentUser.id);
 
             if (!userReview) return PullRequestReviewState.NONE;
 

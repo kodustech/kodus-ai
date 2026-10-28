@@ -95,15 +95,20 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                             error,
                             metadata: approvalMetadata,
                         });
-                        context = this.updateContext(context, (draft) => {
-                            draft.errors ??= [];
-                            draft.errors.push({
-                                stage: this.stageName,
-                                substage: 'approval-reason-publication',
-                                severity: 'partial',
-                                error,
+                        // Refreshing an old note on a PR with nothing to
+                        // dismiss is cosmetic: it must not mark the review
+                        // as completed with issues.
+                        if (dismissed > 0) {
+                            context = this.updateContext(context, (draft) => {
+                                draft.errors ??= [];
+                                draft.errors.push({
+                                    stage: this.stageName,
+                                    substage: 'approval-reason-publication',
+                                    severity: 'partial',
+                                    error,
+                                });
                             });
-                        });
+                        }
                     }
                 }
             } catch (error) {

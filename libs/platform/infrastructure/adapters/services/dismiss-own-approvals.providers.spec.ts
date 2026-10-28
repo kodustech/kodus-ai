@@ -185,6 +185,20 @@ describe('Forgejo — dismissOwnPullRequestApprovals', () => {
         );
     });
 
+    it('says the token user must be a repository admin when Forgejo refuses', async () => {
+        jest.mocked(repoListPullReviews).mockResolvedValue({
+            data: [{ id: 10, state: 'APPROVED', user: { id: 1 } }],
+        } as any);
+        jest.mocked(repoDismissPullReview).mockResolvedValue({
+            error: { message: 'Must be repo admin' },
+            response: { status: 403 },
+        } as any);
+
+        await expect(
+            (build() as any).dismissOwnPullRequestApprovals(params),
+        ).rejects.toThrow('must be an admin of acme/api');
+    });
+
     it('fails when a dismissal fails', async () => {
         jest.mocked(repoListPullReviews).mockResolvedValue({
             data: [{ id: 10, state: 'APPROVED', user: { id: 1 } }],
@@ -236,5 +250,40 @@ describe('every registered code management service', () => {
         const unused = host ? cloud : dataCenter;
         expect(used.dismissOwnPullRequestApprovals).toHaveBeenCalledWith(params);
         expect(unused.dismissOwnPullRequestApprovals).not.toHaveBeenCalled();
+    });
+});
+
+// Kody approves on Data Center through /participants/{user}: a user who is not
+// a designated reviewer is listed under `participants`, so the approval check
+// must read that list too, or the approval is never seen and never dismissed.
+describe('Bitbucket Data Center — reading Kody approval for dismissal', () => {
+    const build = (pr: Record<string, unknown>) => {
+        const put = jest.fn().mockResolvedValue({});
+        const service = make(BitbucketDataCenterService, {
+            getAuthDetails: jest.fn().mockResolvedValue({ username: 'kody' }),
+            getRepoConfig: jest
+                .fn()
+                .mockResolvedValue({ workspaceId: 'PRJ', name: 'api' }),
+            getCurrentUser: jest.fn().mockResolvedValue({ id: 'kody' }),
+            getAxiosInstance: () => ({
+                get: jest.fn().mockResolvedValue({ data: pr }),
+                put,
+            }),
+            logger: { error: jest.fn(), warn: jest.fn(), log: jest.fn() },
+        });
+        return { service, put };
+    };
+
+    it.each([
+        ['a participant', { reviewers: [], participants: [{ user: { name: 'kody' }, status: 'APPROVED' }] }],
+        ['a designated reviewer', { reviewers: [{ user: { name: 'kody' }, status: 'APPROVED' }], participants: [] }],
+    ])('dismisses an approval Kody gave as %s', async (_label, pr) => {
+        const { service, put } = build(pr);
+
+        expect(await service.dismissOwnPullRequestApprovals(params)).toBe(1);
+        expect(put).toHaveBeenCalledWith(
+            '/projects/PRJ/repos/api/pull-requests/7/participants/kody',
+            { status: 'UNAPPROVED' },
+        );
     });
 });
