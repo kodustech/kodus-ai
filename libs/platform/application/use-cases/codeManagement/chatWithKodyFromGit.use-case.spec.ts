@@ -380,17 +380,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
             canWrite: false,
         });
 
-        // A lookup that fails or can't say is a no.
+        // A lookup that fails or can't say throws: the reply says access
+        // couldn't be checked and accepts nothing, instead of "no write
+        // access" to someone who has it.
         jest.spyOn((useCase as any).logger, 'error').mockImplementation(
             () => undefined,
         );
         userCanWrite.mockRejectedValueOnce(new Error('502'));
-        await expect(access('OWNER', 'writer')).resolves.toMatchObject({
-            canWrite: false,
-        });
-        await expect(access('OWNER', 'unknown')).resolves.toMatchObject({
-            canWrite: false,
-        });
+        await expect(access('OWNER', 'writer')).rejects.toThrow('502');
+        await expect(access('OWNER', 'unknown')).rejects.toThrow(
+            /could not say/,
+        );
     });
 
     it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
@@ -414,8 +414,11 @@ describe('ChatWithKodyFromGitUseCase', () => {
         });
         await expect(access(8)).resolves.toMatchObject({ canWrite: false });
         await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
+        jest.spyOn((useCase as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
         getListMembers.mockRejectedValueOnce(new Error('403'));
-        await expect(access(7)).resolves.toMatchObject({ canWrite: false });
+        await expect(access(7)).rejects.toThrow('403');
     });
 
     it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
@@ -447,7 +450,8 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         expect(getListMembers).not.toHaveBeenCalled();
 
-        // A failed or empty level lookup is a no, never "unknown".
+        // A failed or empty level lookup throws, so nothing is accepted and
+        // the reply says access couldn't be checked.
         const gitlab = {
             platformType: PlatformType.GITLAB,
             payload: {
@@ -465,7 +469,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        ).rejects.toThrow('502');
         expect(logged).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({
@@ -482,7 +486,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        ).rejects.toThrow(/could not say/);
 
         getListMembers.mockResolvedValueOnce([]);
         await expect(

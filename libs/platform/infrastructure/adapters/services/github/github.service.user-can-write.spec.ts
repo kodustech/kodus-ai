@@ -64,7 +64,7 @@ describe('GithubService.userCanWrite', () => {
         await expect(can('none')).resolves.toBe(false);
     });
 
-    it('is a no for a user who is not a collaborator, unknown when GitHub fails', async () => {
+    it("can't say when the lookup fails: the credential couldn't look, not a no", async () => {
         const failing = (status: number) =>
             build(
                 jest
@@ -77,8 +77,9 @@ describe('GithubService.userCanWrite', () => {
                 repository,
                 login: 'nina',
             });
-        await expect(failing(404)).resolves.toBe(false);
-        await expect(failing(403)).resolves.toBe(false);
+        // Someone who isn't a collaborator answers 200 with `none`.
+        await expect(failing(404)).resolves.toBeUndefined();
+        await expect(failing(403)).resolves.toBeUndefined();
         await expect(failing(502)).resolves.toBeUndefined();
     });
 

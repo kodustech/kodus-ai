@@ -751,7 +751,9 @@ export class ChatWithKodyFromGitUseCase {
      * Who may waive a requirement: someone with write access who did not open
      * the PR. GitHub and GitLab are asked for the commenter's permission on
      * the repository; the other platforms for the organization's members. A
-     * commenter outside them, or a lookup that fails, may not.
+     * commenter outside them may not. A lookup that fails or can't say throws,
+     * so the reply says access couldn't be checked and accepts nothing,
+     * instead of telling a reviewer they lack write access.
      */
     private async senderAccess(
         params: WebhookParams,
@@ -800,8 +802,14 @@ export class ChatWithKodyFromGitUseCase {
                         },
                         params.platformType,
                     )
-                    // Unverified is no: a failed lookup must not let anyone accept.
-                    .then((canWrite) => canWrite === true)
+                    .then((canWrite) => {
+                        if (canWrite === undefined) {
+                            throw new Error(
+                                `${params.platformType} could not say whether the commenter can write`,
+                            );
+                        }
+                        return canWrite;
+                    })
                     .catch((error) => {
                         this.logAccessFailure(
                             error,
@@ -809,7 +817,7 @@ export class ChatWithKodyFromGitUseCase {
                             organizationAndTeamData,
                             repository,
                         );
-                        return false;
+                        throw error;
                     }),
             };
         }
@@ -825,7 +833,7 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     repository,
                 );
-                return undefined;
+                throw error;
             });
         const id = bareId(sender.id);
         const login = sender.login?.toLowerCase();
@@ -843,7 +851,7 @@ export class ChatWithKodyFromGitUseCase {
         };
     }
 
-    /** A lookup that failed reads as no access; the log tells it from a real no. */
+    /** A lookup that failed accepts nothing; the log says why. */
     private logAccessFailure(
         error: Error,
         params: WebhookParams,
@@ -853,7 +861,7 @@ export class ChatWithKodyFromGitUseCase {
         const sender = replySender(params, this.getSender(params));
         this.logger.error({
             message:
-                "Could not read the commenter's access: treated as no write access",
+                "Could not read the commenter's access: nothing was accepted",
             context: ChatWithKodyFromGitUseCase.name,
             error,
             metadata: {

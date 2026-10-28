@@ -7700,9 +7700,10 @@ This is an experimental feature that generates committable changes. Review the d
                     username: params.login,
                 });
             return data.permission === 'admin' || data.permission === 'write';
-        } catch (error) {
-            // Not a collaborator answers 404; a credential that can't look, 401/403.
-            return isDeniedStatus(error) ? false : undefined;
+        } catch {
+            // Someone who isn't a collaborator answers 200 with `none`; an
+            // error is the credential that couldn't look, not a no.
+            return undefined;
         }
     }
 

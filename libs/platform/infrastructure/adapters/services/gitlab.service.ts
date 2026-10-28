@@ -102,6 +102,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import {
     isDeniedStatus,
+    providerErrorStatus,
     RepositoryAccessDiagnosis,
     summarizeProviderError,
     UNKNOWN_REPOSITORY_ACCESS,
@@ -5264,8 +5265,9 @@ export class GitlabService implements Omit<
             });
             return (member?.access_level ?? 0) >= 30;
         } catch (error) {
-            // Not a member answers 404; a credential that can't look, 401/403.
-            return isDeniedStatus(error) ? false : undefined;
+            // Not a member answers 404; a credential that can't look (401/403)
+            // can't say.
+            return providerErrorStatus(error) === 404 ? false : undefined;
         }
     }
 
