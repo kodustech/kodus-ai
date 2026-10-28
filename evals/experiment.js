@@ -106,6 +106,16 @@ function finderResult(raw) {
 // turns its own result into the shared shape, `sets` is the folder of its sets
 // of its own (--set), and `teamConfig` says it takes --team-config.
 const STEP_EVALS = {
+    verify: {
+        smoke: ['funnel-verify'],
+        primary: {
+            id: 'funnel-verify',
+            label: 'Known bugs kept',
+            run: ['evals/funnel/verify/run.js'],
+            question: 'Of the known bugs reaching the verify in a real review, how many does it keep, and does it drop what matches no known bug?',
+        },
+        guards: [],
+    },
     dedup: {
         smoke: ['funnel-dedup'],
         primary: {

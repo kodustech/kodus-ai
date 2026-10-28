@@ -20,8 +20,13 @@ function casesOf() {
     });
 }
 
+// One entry per defined level (the panel lists at most 60): the 75 PRs are the
+// calls, the 205 suggestions what each call rates.
 function catalog() {
-    return casesOf().map((c) => ({ id: c.id, checks: c.checks }));
+    return LEVELS.map((level) => {
+        const count = items.filter((x) => x.severity === level).length;
+        return { id: level, group: 'defined level', count, checks: `Rates each of the ${count} suggestions whose text defines ${level} as ${level}, in the call of its PR` };
+    });
 }
 
 module.exports = { catalog, casesOf, LEVELS };

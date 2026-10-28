@@ -147,7 +147,7 @@ const STAGES = [
         name: 'Finder',
         short: 'Finds the bugs in the PR',
         group: 'The agents, side by side',
-        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds, with its lines and a fix. Verify then checks each one.',
+        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds: the file, the lines and what is wrong. Its step cap and the synthesis-rescue pass are set per model family. Verify then checks each one.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -159,6 +159,8 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.snapshot.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-model-profile.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/recall-passes.spec.ts',
                 ],
             },
             {
@@ -259,7 +261,7 @@ const STAGES = [
                 full: 'every such PR (14)',
             },
             nightly: 'shared',
-            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the severity step rates them low); what the finder reported before the filters is shown beside it.",
         },
     },
     {
@@ -279,6 +281,14 @@ const STAGES = [
                     'libs/llm/structured-output-repair.spec.ts',
                     'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: "The finder's five-field schema and its label normalization, deterministic",
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/parse-finder-schema.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/normalize-finder-label.spec.ts',
                 ],
             },
             {
@@ -537,6 +547,7 @@ const STAGES = [
                 specs: [
                     'libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts',
                     'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/severity-prompt.spec.ts',
                 ],
             },
             {
@@ -544,6 +555,22 @@ const STAGES = [
                 name: 'Keeps a crash and drops a naming nit at the default threshold',
                 wiring: ['funnel-severity'],
             },
+        ],
+        eval: {
+            path: 'evals/funnel/severity',
+            metric: 'of known bugs reaching severity kept above the threshold, and of its control checks right',
+            sets: FUNNEL_SETS,
+            nightly: 'shared',
+        },
+    },
+    {
+        id: 'severity-levels',
+        name: 'Severity levels',
+        short: 'Rates each finding at its defined level',
+        group: 'After the agents',
+        does: 'The rating itself: each suggestion gets critical, high, medium or low from the defined-level prompt, one call per PR. A wrong level moves a real bug under the team threshold or a nit above it.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
             {
                 kind: 'contract',
                 name: "Rates a PR's suggestions in one call and maps each level back",
@@ -551,10 +578,14 @@ const STAGES = [
             },
         ],
         eval: {
-            path: 'evals/funnel/severity',
-            metric: 'of known bugs reaching severity kept above the threshold, and of its control checks right',
-            sets: FUNNEL_SETS,
+            path: 'evals/severity-levels',
+            metric: 'of the 205 suggestions, rated at their defined level (and per level)',
+            sets: {
+                controlled: '205 suggestions labeled from their own text: 50 low, 70 medium, 50 high, 35 critical',
+                full: null,
+            },
             nightly: 'shared',
+            caveat: 'A critical rated high counts as wrong.',
         },
     },
     {
@@ -575,6 +606,15 @@ const STAGES = [
                 ],
             },
             {
+                kind: 'unit',
+                name: 'The publish gate: a fix that does not fit ships as a plain comment, and the title the stage resolves',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/is-usable-fix.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.bad-fix-gate.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.title.spec.ts',
+                ],
+            },
+            {
                 kind: 'contract',
                 name: 'Enriches each finding in one call and keeps it when the call fails',
                 wiring: ['suggestion-enrichment'],
@@ -582,14 +622,14 @@ const STAGES = [
         ],
         eval: {
             path: 'evals/suggestion-enrichment',
-            metric: 'of fixable findings, a fix the judge passes; of the others, no code; of all, a title that names the problem in 80 characters',
+            metric: 'of the checks, the right code (a fix the judge passes on the fixable findings, no code on the others) and a title that names the problem in 80 characters',
             sets: {
                 controlled:
                     'the 150 confirmed findings of the enrichment dataset, each with its file at the PR head',
                 full: null,
             },
             nightly: 'shared',
-            caveat: 'Graded by Opus 5.5 against Astra references: a floor holds only under that judge.',
+            caveat: "Graded by the nightly's judge (gpt-5.6-luna) against Astra references: a floor holds only under that judge.",
         },
     },
     {

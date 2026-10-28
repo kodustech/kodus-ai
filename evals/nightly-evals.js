@@ -79,6 +79,13 @@ const NIGHTLY_EVALS = [
         ],
     },
     {
+        id: 'severity-levels',
+        stage: 'severity-levels',
+        run: ['evals/severity-levels/run.js'],
+        sets: { controlled: [], full: null },
+        files: ['evals/severity-levels/targets.json', 'evals/severity-levels/catalog.js', 'evals/severity/dataset/items.json'],
+    },
+    {
         id: 'business-logic',
         stage: 'business-logic',
         run: ['evals/business-logic/run.js'],
