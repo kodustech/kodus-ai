@@ -501,10 +501,13 @@ export async function runAgentLoopViaCore(
         .find((a) => a.type === FINDER_DONE_TOOL);
     const submittedByTool = !!published && isWholeResult(published.payload);
     // A whole result the finder wrote as its final answer instead of calling
-    // the tool is a result too: extractFindings read it as one. A cut turn
-    // stays truncated either way.
+    // the tool is a result too, held to the same test: one that lost items to
+    // the schema is not whole. A cut turn stays truncated either way.
+    const finderState = r.finderState as any;
     const submitted =
-        submittedByTool || (r.finderState as any).__findingsOutcome === 'text';
+        submittedByTool ||
+        (finderState.__findingsOutcome === 'text' &&
+            isWholeResult(finderState.__textResult));
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
             ? 'budget-exhausted'

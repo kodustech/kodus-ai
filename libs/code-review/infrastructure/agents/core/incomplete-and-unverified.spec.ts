@@ -405,6 +405,26 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         ).toEqual(['a.ts', 'b.ts']);
     });
 
+    it('a text result that lost its findings to the schema is not a submitted result', async () => {
+        useModel(async () =>
+            finalText(
+                '```json\n' +
+                    JSON.stringify({
+                        reasoning: 'one finding',
+                        // No suggestionContent / existingCode / improvedCode:
+                        // the schema drops the item.
+                        suggestions: [{ relevantFile: 'a.ts' }],
+                    }) +
+                    '\n```',
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.findings.suggestions).toEqual([]);
+        expect(out.submittedResult).toBe(false);
+    });
+
     it('a cut turn stays truncated even when its text holds a whole result', async () => {
         useModel(async () => ({
             content: [

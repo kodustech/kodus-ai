@@ -507,16 +507,16 @@ function findingsFromText(
         const json = extractJsonFromText(text);
         if (!json) continue;
         try {
-            const clean = sanitizeFindingsResult(
-                JSON.parse(json),
-                telemetryMetadata,
-            );
+            const parsed = JSON.parse(json);
+            const clean = sanitizeFindingsResult(parsed, telemetryMetadata);
             if (clean) {
-                // A whole result written as the final answer is the finder's
-                // result, as much as a submitResult call is (#2171). JSON in
-                // an earlier step was only part of its investigation.
+                // A result written as the final answer is the finder's result,
+                // as much as a submitResult call is (#2171); the adapter holds
+                // the payload to the same whole-result test. JSON in an earlier
+                // step was only part of its investigation.
                 if (i === state.steps.length - 1) {
                     (state as any).__findingsOutcome = 'text';
+                    (state as any).__textResult = parsed;
                 }
                 return {
                     reasoning: clean.reasoning ?? '',
