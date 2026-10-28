@@ -10,8 +10,8 @@
 //   LocalSandboxService                   the checkout at the PR's head, with
 //     .createSandboxWithRepo              grep, read, listDir and exec
 //   AgentReviewStage                      the agents, then the anchoring, the
-//                                         repeat drop, dedup, severity and the
-//                                         formatter
+//                                         repeat drop, dedup, severity, the
+//                                         enrichment and the formatter
 //
 // The eval supplies data, and only data, through the services production reads
 // it from: the team's stored parameters and rules, the PR's files and commits

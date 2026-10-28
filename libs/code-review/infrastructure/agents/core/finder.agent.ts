@@ -1848,8 +1848,8 @@ export async function verifyFindings(
     }
 
     // Verify each finding (HV2 refute-to-drop, or path-feasibility when the
-    // knob is on) with the confidence SPLIT inside LlmVerifier:
-    // high-confidence → light depth, low-confidence → full depth.
+    // knob is on) at the light depth; the evidence gate below re-verifies at
+    // the full depth.
     const verifier = new LlmVerifier(params.runner, {
         recordCost: params.recordVerifyCost,
         modelId: params.modelId,

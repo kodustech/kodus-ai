@@ -386,8 +386,8 @@ for (const r of modeDrift) {
 // lands here. It is also the depth where BudgetPolicy short-circuits
 // (`maxSteps < 6`), which is why an unguided last step went unnoticed.
 const DEPTHS = [
-    { label: 'light (default, confidence >= 5)', maxSteps: 7 },
-    { label: 'full (confidence < 5, evidence gate)', maxSteps: 10 },
+    { label: 'light (every verify)', maxSteps: 7 },
+    { label: 'full (the evidence gate re-verify)', maxSteps: 10 },
 ];
 const emptyTools = { get: () => undefined, list: () => [] };
 const ledgerProblems = [];

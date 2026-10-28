@@ -1,7 +1,7 @@
 # prose-recovery
 
 > - **Answers:** When a finder run ends in prose only, does the prose recovery extract the findings the prose reports and leave out the hypotheses it dismissed?
-> - **Runs:** on demand, by hand (#1938); on the scripted model on every PR (`evals/wiring-smoke.js`).
+> - **Runs:** nightly when the recovery changes (`evals/nightly-evals.js`); weekly on every tier-0 model (`evals/weekly.js`); on the scripted model on every PR (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/prose-recovery/run.js --model=<id> [--gate]`
 > - **Gate:** `--gate` fails below the model's floor in `targets.json`; a model with none reports ungated.
 > - **Cost:** one recovery call per case, 32 calls.
