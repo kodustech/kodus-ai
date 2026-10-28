@@ -279,6 +279,35 @@ describe('#1786 off-schema robustness — json_object fallback must SIGNAL, not 
     });
 });
 
+describe('a code block quoted before the answer does not hide the answer', () => {
+    const answer = { suggestions: [{ id: '3', body: 'ok' }] };
+
+    it.each([
+        [
+            'a labeled non-JSON block, then bare JSON',
+            'The credential is read here:\n```ruby\n[ENV["KEY"] || "x"]\n```\n' +
+                JSON.stringify(answer),
+        ],
+        [
+            'an unlabeled block holding {}, then bare JSON',
+            'The call looks like:\n```\n{}\n```\n' + JSON.stringify(answer),
+        ],
+        [
+            'a labeled block, then a ```json block',
+            'Quoting the code:\n```ts\nconst a = { b: 1 };\n```\n```json\n' +
+                JSON.stringify(answer) +
+                '\n```',
+        ],
+    ])('recovers the answer after %s', async (_label, raw) => {
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(answer);
+    });
+
+    it('still rejects text whose only JSON is off-schema', async () => {
+        const raw = 'See:\n```\n{}\n```\n{"items":[{"id":"1","body":"x"}]}';
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toBeUndefined();
+    });
+});
+
 describe('#1786 off-schema robustness — SDK-error salvage stays non-degrading (Layer 2b)', () => {
     it('salvages a PARSE error whose text repairs to the CORRECT shape', async () => {
         const err = new NoObjectGeneratedError({

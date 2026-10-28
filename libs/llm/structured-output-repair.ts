@@ -430,22 +430,45 @@ export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const candidate = extractJsonFromText(rawText);
-    if (candidate == null) {
-        return undefined;
-    }
-    let value: unknown;
-    try {
-        value = JSON.parse(candidate);
-    } catch {
-        return undefined;
-    }
     const schema = asSchema(wire as any);
-    if (typeof schema.validate !== 'function') {
-        return value as T;
+    for (const candidate of jsonCandidates(rawText)) {
+        let value: unknown;
+        try {
+            value = JSON.parse(candidate);
+        } catch {
+            continue;
+        }
+        if (typeof schema.validate !== 'function') {
+            return value as T;
+        }
+        const r = await schema.validate(value);
+        if (r.success) return r.value as T;
     }
-    const r = await schema.validate(value);
-    return r.success ? (r.value as T) : undefined;
+    return undefined;
+}
+
+/**
+ * The places the answer can be in free-form text, best guess first. The first is
+ * what {@link extractJsonFromText} returns; when the model quotes a code block
+ * before its answer that is the quote, so the remaining candidates (each fenced
+ * block, last first, then the text with every fence removed) give the validating
+ * caller the answer to fall back on. A wrong candidate is harmless: the caller
+ * only keeps one that validates against its schema.
+ */
+function jsonCandidates(rawText: string): string[] {
+    const candidates: string[] = [];
+    const add = (candidate: string | null) => {
+        if (candidate != null && !candidates.includes(candidate)) {
+            candidates.push(candidate);
+        }
+    };
+    add(extractJsonFromText(rawText));
+    const fenced = [...rawText.matchAll(/```[^\n`]*\n?([\s\S]*?)```/g)];
+    for (const block of fenced.reverse()) {
+        add(extractJsonFromText(block[1]));
+    }
+    add(extractJsonFromText(rawText.replace(/```[\s\S]*?```/g, ' ')));
+    return candidates;
 }
 
 /**
