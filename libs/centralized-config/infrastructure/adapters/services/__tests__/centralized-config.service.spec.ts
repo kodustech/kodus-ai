@@ -922,6 +922,54 @@ describe('CentralizedConfigService', () => {
             ).rejects.toThrow();
         });
 
+        it('discoverConfigFiles resolves repositories whose stored name contains a slash (GitLab)', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'acme/my-repo/kodus-config.yml' },
+                {
+                    type: 'file',
+                    path: 'acme/platform/api/kodus-config.yml',
+                },
+                {
+                    type: 'file',
+                    path: 'acme/my-repo/src%2Fapi/kodus-config.yml',
+                },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [
+                    {
+                        id: 'r-1',
+                        name: 'acme/my-repo',
+                        full_name: 'acme/my-repo',
+                    },
+                    {
+                        id: 'r-2',
+                        name: 'acme/platform/api',
+                        full_name: 'acme/platform/api',
+                    },
+                ],
+            );
+
+            const discovered = await service.discoverConfigFiles({
+                organizationAndTeamData,
+                repository: { name: 'config-repo', id: 'repo-1' },
+            });
+
+            expect(
+                discovered.map((d) => [
+                    d.repositoryId,
+                    d.centralizedDirectoryPath,
+                    d.directoryPaths,
+                ]),
+            ).toEqual(
+                expect.arrayContaining([
+                    ['r-1', 'acme/my-repo', undefined],
+                    ['r-2', 'acme/platform/api', undefined],
+                    ['r-1', 'acme/my-repo/src%2Fapi', ['/src/api']],
+                ]),
+            );
+            expect(discovered).toHaveLength(3);
+        });
+
         // H5 — a `kodus-config.yml` more than one level below the repository
         // folder is dropped by discovery with nothing but a log line. Executed
         // rather than assumed: this is what a user who hand-writes
@@ -1172,6 +1220,51 @@ describe('CentralizedConfigService', () => {
     });
 
     describe('discoverKodyRulesFiles', () => {
+        it('resolves Kody rules of repositories whose stored name contains a slash (GitLab)', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                {
+                    path: 'acme/platform/api/.kody-rules/review/a.yml',
+                    type: 'file' as const,
+                },
+                {
+                    path: 'acme/platform/api/src%2Fv1/.kody-rules/review/b.yml',
+                    type: 'file' as const,
+                },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [
+                    {
+                        id: 'r-2',
+                        name: 'acme/platform/api',
+                        full_name: 'acme/platform/api',
+                    },
+                ],
+            );
+
+            const result = await service.discoverKodyRulesFiles({
+                organizationAndTeamData,
+                repository: { name: 'central-repo', id: 'central-repo-id' },
+            });
+
+            expect(
+                result.map((r) => [
+                    r.repositoryId,
+                    r.centralizedDirectoryPath,
+                    r.directoryPaths,
+                ]),
+            ).toEqual(
+                expect.arrayContaining([
+                    ['r-2', 'acme/platform/api/.kody-rules/review', undefined],
+                    [
+                        'r-2',
+                        'acme/platform/api/src%2Fv1/.kody-rules/review',
+                        ['/src/v1'],
+                    ],
+                ]),
+            );
+            expect(result).toHaveLength(2);
+        });
+
         it('should discover Kody rule files from centralized repository', async () => {
             const mockRepoTree = [
                 {
