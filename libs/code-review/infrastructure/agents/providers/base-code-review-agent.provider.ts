@@ -121,15 +121,6 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected abstract getIdentity(): ReviewAgentIdentity;
     /**
-     * Whether a run that ended without submitting a result and reported
-     * nothing counts as stopped early. Off for the built-in agents, whose
-     * prose answers prose recovery owns (#2171); a custom agent turns it on.
-     */
-    protected readsMissingResultAsIncomplete(): boolean {
-        return false;
-    }
-
-    /**
      * How the review warnings name this agent: its run name, unless the
      * agent has a name people gave it (a custom agent).
      */
@@ -863,14 +854,14 @@ export abstract class BaseCodeReviewAgentProvider {
             // submitting a result: out of steps, or its turn truncated by the
             // provider. A run that finished with nothing to report is not one.
             // A per-agent timeout aborts the run and fails the agent above.
-            // A custom agent that ended without submitting a result and
-            // reported nothing stopped early too: its silence is not a clean
-            // check. The generalist's prose answer stays with prose recovery.
+            // Prose recovery runs before verification. A recovered candidate
+            // means the finder did produce a result, even when verification or
+            // path mapping later removes every suggestion.
             const endedWithoutResult =
-                this.readsMissingResultAsIncomplete() &&
                 agentResult.incompleteReason === undefined &&
                 agentResult.submittedResult === false &&
                 agentResult.finishReason !== 'error' &&
+                !agentResult.verification &&
                 suggestions.length === 0;
             const hitHardLimit =
                 agentResult.incompleteReason !== undefined ||
