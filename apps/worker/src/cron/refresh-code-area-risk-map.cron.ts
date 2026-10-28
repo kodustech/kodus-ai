@@ -116,27 +116,47 @@ export class RefreshCodeAreaRiskMapCron {
 
             // Never scanned first, then unfinished scans, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
-            // weeks while finished repositories were refreshed.
+            // weeks while finished repositories were refreshed. A status that
+            // could not be read goes last instead of passing as never scanned.
             const limit = pLimit(STATUS_READ_CONCURRENCY);
             const statuses = await Promise.all(
                 repositories.map((repo) =>
-                    limit(() =>
-                        this.refresh
-                            .readStatus(repo.organizationId, repo.id)
-                            .catch(() => null),
-                    ),
+                    limit(async () => {
+                        try {
+                            return {
+                                status: await this.refresh.readStatus(
+                                    repo.organizationId,
+                                    repo.id,
+                                ),
+                                unreadable: false,
+                            };
+                        } catch (error) {
+                            this.logger.warn({
+                                message:
+                                    'Could not read code-area history status',
+                                context: RefreshCodeAreaRiskMapCron.name,
+                                metadata: {
+                                    organizationId: repo.organizationId,
+                                    repositoryId: repo.id,
+                                },
+                                error,
+                            });
+                            return { status: null, unreadable: true };
+                        }
+                    }),
                 ),
             );
-            const rank = (status: (typeof statuses)[number]) =>
-                !status ? 0 : status.complete ? 2 : 1;
+            const rank = ({ status, unreadable }: (typeof statuses)[number]) =>
+                unreadable ? 3 : !status ? 0 : status.complete ? 2 : 1;
+            // A complete scan's window ends where its last refresh began.
+            const age = ({ status }: (typeof statuses)[number]) =>
+                (status?.complete ? status.windowEnd : status?.cursorEnd) ?? '';
             const ordered = repositories
-                .map((repo, index) => ({ repo, status: statuses[index] }))
+                .map((repo, index) => ({ repo, read: statuses[index] }))
                 .sort(
                     (a, b) =>
-                        rank(a.status) - rank(b.status) ||
-                        (a.status?.cursorEnd ?? '').localeCompare(
-                            b.status?.cursorEnd ?? '',
-                        ) ||
+                        rank(a.read) - rank(b.read) ||
+                        age(a.read).localeCompare(age(b.read)) ||
                         `${a.repo.organizationId}:${a.repo.id}`.localeCompare(
                             `${b.repo.organizationId}:${b.repo.id}`,
                         ),
@@ -146,8 +166,11 @@ export class RefreshCodeAreaRiskMapCron {
             for (const { repo } of ordered) {
                 if (batches >= MAX_BATCHES_PER_RUN) break;
                 try {
-                    // An unfinished scan keeps going while it makes progress.
-                    let result: { complete: boolean; processed: number };
+                    // An unfinished scan keeps going: a batch always moves the
+                    // cursor, even through an empty week or unmerged PRs. It
+                    // stops when PRs could not be read, so an unreadable
+                    // repository does not spend the run's budget.
+                    let result: { complete: boolean; failed: boolean };
                     do {
                         result = await this.refresh.refreshOneBatch({
                             organizationAndTeamData: {
@@ -158,8 +181,8 @@ export class RefreshCodeAreaRiskMapCron {
                         });
                         batches++;
                     } while (
-                        !result?.complete &&
-                        result?.processed > 0 &&
+                        result?.complete === false &&
+                        result.failed === false &&
                         batches < MAX_BATCHES_PER_RUN
                     );
                 } catch (error) {

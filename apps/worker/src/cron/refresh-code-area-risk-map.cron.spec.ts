@@ -17,7 +17,9 @@ it('scans only eligible teams and releases the scheduler lock', async () => {
     };
     const refresh = {
         readStatus: jest.fn().mockResolvedValue(null),
-        refreshOneBatch: jest.fn().mockResolvedValue({}),
+        refreshOneBatch: jest
+            .fn()
+            .mockResolvedValue({ complete: true, processed: 0, failed: false }),
     };
     const codeManagement = {
         getTypeIntegration: jest.fn().mockResolvedValue(PlatformType.GITHUB),
@@ -72,7 +74,9 @@ it('filters unsupported providers before choosing repository pages', async () =>
     };
     const refresh = {
         readStatus: jest.fn().mockResolvedValue(null),
-        refreshOneBatch: jest.fn().mockResolvedValue({}),
+        refreshOneBatch: jest
+            .fn()
+            .mockResolvedValue({ complete: true, processed: 0, failed: false }),
     };
     const codeManagement = {
         getTypeIntegration: jest
@@ -115,16 +119,26 @@ describe('refresh order and batch budget', () => {
     const build = (
         repositories: Array<{ id: string; name: string }>,
         statuses: Record<string, unknown>,
-        batches: Record<string, Array<{ complete: boolean; processed: number }>>,
+        batches: Record<
+            string,
+            Array<{ complete: boolean; processed: number; failed: boolean }>
+        >,
     ) => {
         const refresh = {
-            readStatus: jest.fn(
-                async (_org: string, repositoryId: string) =>
-                    statuses[repositoryId] ?? null,
-            ),
+            readStatus: jest.fn(async (_org: string, repositoryId: string) => {
+                const status = statuses[repositoryId];
+                if (status instanceof Error) throw status;
+                return status ?? null;
+            }),
             refreshOneBatch: jest.fn(async ({ repository }) => {
                 const queue = batches[repository.id] ?? [];
-                return queue.shift() ?? { complete: true, processed: 0 };
+                return (
+                    queue.shift() ?? {
+                        complete: true,
+                        processed: 0,
+                        failed: false,
+                    }
+                );
             }),
         };
         const cron = new RefreshCodeAreaRiskMapCron(
@@ -146,7 +160,9 @@ describe('refresh order and batch budget', () => {
                 }),
             } as any,
             refresh as any,
-            { acquire: jest.fn().mockResolvedValue({ release: jest.fn() }) } as any,
+            {
+                acquire: jest.fn().mockResolvedValue({ release: jest.fn() }),
+            } as any,
             { isEnabled: jest.fn().mockResolvedValue(true) } as any,
             {
                 getTypeIntegration: jest
@@ -168,8 +184,18 @@ describe('refresh order and batch budget', () => {
                 { id: 'never', name: 'never' },
             ],
             {
-                fresh: { complete: true, cursorEnd: '2026-10-27T00:00:00Z' },
-                stale: { complete: true, cursorEnd: '2026-10-01T00:00:00Z' },
+                // A complete scan's cursor sits at its floor; staleness is
+                // when its window ended.
+                fresh: {
+                    complete: true,
+                    windowEnd: '2026-10-27T00:00:00Z',
+                    cursorEnd: '2026-09-01T00:00:00Z',
+                },
+                stale: {
+                    complete: true,
+                    windowEnd: '2026-10-01T00:00:00Z',
+                    cursorEnd: '2026-10-26T00:00:00Z',
+                },
                 partial: { complete: false, cursorEnd: '2026-10-20T00:00:00Z' },
             },
             {},
@@ -186,9 +212,9 @@ describe('refresh order and batch budget', () => {
             {},
             {
                 never: [
-                    { complete: false, processed: 10 },
-                    { complete: false, processed: 10 },
-                    { complete: true, processed: 4 },
+                    { complete: false, processed: 10, failed: false },
+                    { complete: false, processed: 10, failed: false },
+                    { complete: true, processed: 4, failed: false },
                 ],
             },
         );
@@ -198,15 +224,50 @@ describe('refresh order and batch budget', () => {
         expect(order()).toEqual(['never', 'never', 'never']);
     });
 
-    it('stops batching a repository that makes no progress', async () => {
+    it('keeps batching through empty weeks and unmerged PRs', async () => {
+        const { cron, order } = build(
+            [{ id: 'quiet', name: 'quiet' }],
+            {},
+            {
+                quiet: [
+                    { complete: false, processed: 0, failed: false },
+                    { complete: false, processed: 0, failed: false },
+                ],
+            },
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['quiet', 'quiet', 'quiet']);
+    });
+
+    it('stops batching a repository whose PRs could not be read', async () => {
         const { cron, order } = build(
             [{ id: 'stuck', name: 'stuck' }],
             {},
-            { stuck: [{ complete: false, processed: 0 }] },
+            { stuck: [{ complete: false, processed: 0, failed: true }] },
         );
 
         await cron.handleCron();
 
         expect(order()).toEqual(['stuck']);
+    });
+
+    it('puts a repository whose status could not be read last', async () => {
+        const { cron, order } = build(
+            [
+                { id: 'broken', name: 'broken' },
+                { id: 'done', name: 'done' },
+            ],
+            {
+                broken: new Error('mongo unavailable'),
+                done: { complete: true, windowEnd: '2026-10-27T00:00:00Z' },
+            },
+            {},
+        );
+
+        await cron.handleCron();
+
+        expect(order()).toEqual(['done', 'broken']);
     });
 });
