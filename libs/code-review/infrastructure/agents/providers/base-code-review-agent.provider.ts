@@ -409,7 +409,13 @@ export abstract class BaseCodeReviewAgentProvider {
             }
         }
 
-        let estimatedPromptTokens = estimatePromptTokens(input);
+        // Self-contained reviews have no tools, so buildSelfContainedUserPrompt
+        // keeps optional files' diffs in full; the estimate has to measure the
+        // same payload the builder sends (see estimatePromptTokens).
+        const selfContained = !input.remoteCommands;
+        let estimatedPromptTokens = estimatePromptTokens(input, {
+            selfContained,
+        });
 
         // Large-PR aggressive filter + priority tiering: when the estimated
         // prompt already exceeds the single-batch budget AND we're not in
@@ -438,7 +444,9 @@ export abstract class BaseCodeReviewAgentProvider {
 
             if (filteredFiles.length < filesBefore) {
                 input = { ...input, changedFiles: filteredFiles };
-                const filteredTokens = estimatePromptTokens(input);
+                const filteredTokens = estimatePromptTokens(input, {
+                    selfContained,
+                });
 
                 this.agentLogger.log({
                     message: `[AGENT] ${identity.name} large-PR aggressive filter dropped ${filesBefore - filteredFiles.length} low-signal files (tests/md/css): ${estimatedPromptTokens} → ${filteredTokens} prompt tokens`,
@@ -522,7 +530,9 @@ export abstract class BaseCodeReviewAgentProvider {
             // Re-estimate prompt tokens now that optional files will be
             // rendered as hunk headers only — this often brings a large
             // PR back under the single-batch budget.
-            estimatedPromptTokens = estimatePromptTokens(input);
+            estimatedPromptTokens = estimatePromptTokens(input, {
+                selfContained,
+            });
         }
 
         if (

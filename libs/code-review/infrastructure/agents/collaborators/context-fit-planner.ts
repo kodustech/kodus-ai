@@ -161,16 +161,24 @@ export function estimateNonDiffOverheadTokens(input: {
  * Estimate of the full input token count for the first LLM call:
  * diff content + callGraph + PR context + per-file coverage lines +
  * static overhead (system prompt + tool schemas).
+ *
+ * `selfContained` must match the builder the prompt goes through: without
+ * tools, `buildSelfContainedUserPrompt` keeps an optional file's diff in
+ * full, so counting it at hunk-header size would admit a request bigger than
+ * the budget that let it through.
  */
-export function estimatePromptTokens(input: {
-    changedFiles?: FileChange[];
-    callGraph?: string;
-    prTitle?: string;
-    prBody?: string;
-    fileTiers?: Map<string, CoverageTier>;
-    adaptiveProfile?: AdaptiveProfile;
-}): number {
-    const tiers = input.fileTiers;
+export function estimatePromptTokens(
+    input: {
+        changedFiles?: FileChange[];
+        callGraph?: string;
+        prTitle?: string;
+        prBody?: string;
+        fileTiers?: Map<string, CoverageTier>;
+        adaptiveProfile?: AdaptiveProfile;
+    },
+    options: { selfContained?: boolean } = {},
+): number {
+    const tiers = options.selfContained ? undefined : input.fileTiers;
     const diffChars = (input.changedFiles || []).reduce((sum, f) => {
         const diff = f.patchWithLinesStr ?? f.patch ?? '';
         if (tiers) {
