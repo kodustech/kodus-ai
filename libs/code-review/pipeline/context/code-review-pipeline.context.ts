@@ -123,6 +123,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         threadId?: any;
         lastAnalyzedCommit?: any;
     };
+    /** The status note of the latest finished run, partial or failed ones
+     *  included, which the next run edits (#1721). `lastExecution` is the
+     *  latest SUCCESS only, since it also decides what is reviewed again. */
+    previousStatusNote?: {
+        commentId?: any;
+        noteId?: any;
+        threadId?: any;
+    };
     pipelineMetadata?: {
         // Inherited from PipelineContext.pipelineMetadata — re-declared here
         // because TS treats the child shape as a full override of the parent,

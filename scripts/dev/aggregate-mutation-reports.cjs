@@ -11,6 +11,9 @@ if (!root || !Number.isInteger(shardCount) || shardCount < 1) {
 const counts = { killed: 0, timeout: 0, survived: 0, no_coverage: 0, other: 0 };
 const survivors = [];
 const missing = [];
+// Changed files no scoped spec reaches: no mutants, so not in the score, but
+// reported so a green score from the other shards doesn't hide them.
+const unreached = new Set();
 let reports = 0;
 let low = 60;
 
@@ -22,7 +25,10 @@ for (let index = 0; index < shardCount; index++) {
         missing.push(index);
         continue;
     }
-    const { outcome } = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+    const { outcome, unreached: files = [] } = JSON.parse(
+        fs.readFileSync(statusPath, 'utf8'),
+    );
+    for (const file of files) unreached.add(file);
     if (outcome !== 'success') {
         missing.push(index);
         continue;
@@ -67,7 +73,18 @@ const status = missing.length
       : score < low
         ? 'yellow'
         : 'green';
-const meta = { ...counts, valid, low, reports, shardCount, missing, survivors };
+const unreachedFiles = [...unreached].sort();
+const meta = {
+    ...counts,
+    valid,
+    low,
+    reports,
+    shardCount,
+    missing,
+    survivors,
+    unreached: unreachedFiles.length,
+    unreachedFiles: unreachedFiles.slice(0, 15),
+};
 const outputs = {
     status,
     value: status === 'infra' || score === null ? '' : String(score),

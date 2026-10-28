@@ -32,7 +32,7 @@ export const UNKNOWN_REPOSITORY_ACCESS: RepositoryAccessDiagnosis = {
 
 // Octokit sets `status`, axios `response.status`, gitbeaker v43
 // `cause.response.status`.
-function providerErrorStatus(error: any): number | undefined {
+export function providerErrorStatus(error: any): number | undefined {
     const status =
         error?.status ??
         error?.response?.status ??

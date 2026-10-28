@@ -101,7 +101,9 @@ export const TestResult = ({
                             <code>{r.raw}</code> in {SOURCE[r.source]} ·{" "}
                             {named && r.source !== "command"
                                 ? "not used: you named the task"
-                                : INTENT[r.intent]}
+                                : r.loose
+                                  ? "may be a name, not a task: read only where a connected tracker has that project"
+                                  : INTENT[r.intent]}
                         </span>
                     ))
                 ) : (

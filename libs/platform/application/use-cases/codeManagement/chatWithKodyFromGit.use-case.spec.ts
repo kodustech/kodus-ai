@@ -322,31 +322,75 @@ describe('ChatWithKodyFromGitUseCase', () => {
     });
 
     it('lets only people with write access waive a requirement on GitHub', async () => {
-        const access = (association?: string) =>
+        // GitHub sends COLLABORATOR for a read-only collaborator and MEMBER
+        // for any organization member, so the association can only rule out.
+        const permission: Record<string, boolean | undefined> = {
+            writer: true,
+            reader: false,
+        };
+        const userCanWrite = jest.fn(
+            async ({ login }: { login: string }) => permission[login],
+        );
+        (useCase as any).codeManagementService = { userCanWrite };
+        const access = (association: string | undefined, login = 'reader') =>
             (useCase as any).senderAccess(
                 {
                     platformType: PlatformType.GITHUB,
                     payload: {
-                        sender: { login: 'nina' },
+                        sender: { login },
                         issue: { user: { login: 'rafa' } },
                         comment: { author_association: association },
                     },
                 },
                 { organizationId: 'org-1' },
+                { id: 'repo-1', name: 'notes', owner: 'acme' },
             );
-        await expect(access('MEMBER')).resolves.toEqual({
+
+        await expect(access('COLLABORATOR', 'reader')).resolves.toEqual({
+            canWrite: false,
+            isAuthor: false,
+        });
+        await expect(access('MEMBER', 'reader')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        await expect(access('MEMBER', 'writer')).resolves.toEqual({
             canWrite: true,
             isAuthor: false,
         });
-        await expect(access('COLLABORATOR')).resolves.toMatchObject({
-            canWrite: true,
-        });
-        await expect(access('CONTRIBUTOR')).resolves.toMatchObject({
+        expect(userCanWrite).toHaveBeenCalledWith(
+            {
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repository: { id: 'repo-1', name: 'notes', owner: 'acme' },
+                login: 'writer',
+            },
+            PlatformType.GITHUB,
+        );
+
+        userCanWrite.mockClear();
+        await expect(access('CONTRIBUTOR', 'writer')).resolves.toMatchObject({
             canWrite: false,
         });
-        await expect(access('NONE')).resolves.toMatchObject({
+        await expect(access('NONE', 'writer')).resolves.toMatchObject({
             canWrite: false,
         });
+        expect(userCanWrite).not.toHaveBeenCalled();
+
+        // Without a login there is no one to ask: never the member list.
+        await expect(access('MEMBER', '')).resolves.toMatchObject({
+            canWrite: false,
+        });
+
+        // A lookup that fails or can't say throws: the reply says access
+        // couldn't be checked and accepts nothing, instead of "no write
+        // access" to someone who has it.
+        jest.spyOn((useCase as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
+        userCanWrite.mockRejectedValueOnce(new Error('502'));
+        await expect(access('OWNER', 'writer')).rejects.toThrow('502');
+        await expect(access('OWNER', 'unknown')).rejects.toThrow(
+            /could not say/,
+        );
     });
 
     it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
@@ -370,8 +414,11 @@ describe('ChatWithKodyFromGitUseCase', () => {
         });
         await expect(access(8)).resolves.toMatchObject({ canWrite: false });
         await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
+        jest.spyOn((useCase as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
         getListMembers.mockRejectedValueOnce(new Error('403'));
-        await expect(access(7)).resolves.toMatchObject({ canWrite: false });
+        await expect(access(7)).rejects.toThrow('403');
     });
 
     it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
@@ -403,7 +450,8 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         expect(getListMembers).not.toHaveBeenCalled();
 
-        // A failed or empty level lookup is a no, never "unknown".
+        // A failed or empty level lookup throws, so nothing is accepted and
+        // the reply says access couldn't be checked.
         const gitlab = {
             platformType: PlatformType.GITLAB,
             payload: {
@@ -421,7 +469,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        ).rejects.toThrow('502');
         expect(logged).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({
@@ -438,7 +486,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        ).rejects.toThrow(/could not say/);
 
         getListMembers.mockResolvedValueOnce([]);
         await expect(
@@ -537,6 +585,55 @@ describe('ChatWithKodyFromGitUseCase', () => {
             }),
         );
         expect(response).toContain('comment on this pull request is updated');
+    });
+
+    it('does not say the comment was updated when the command posts the first one', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: true,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: true,
+            unseenFiles: [],
+        };
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        (useCase as any).businessLogicPublisher = {
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'created' }),
+        };
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(response).not.toContain('updated');
+        expect(response).toContain('Kody · Business Logic comment');
     });
 
     describe('conversation plan gate', () => {

@@ -384,12 +384,14 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
      */
     /**
      * Whether one user can push to the repository (GitLab: Developer or
-     * above). Undefined when the provider can't say.
+     * above; GitHub: write or admin). Undefined when the provider can't say.
      */
     userCanWrite?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { id: string };
-        userId: string | number;
+        repository: { id: string; name?: string; owner?: string };
+        userId?: string | number;
+        /** GitHub reads the permission by login. */
+        login?: string;
     }): Promise<boolean | undefined>;
 
     diagnoseRepositoryAccess?(params: {

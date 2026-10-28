@@ -20,13 +20,28 @@ export interface ICodeAreaRiskMapService {
     ): Promise<void>;
 }
 
+export interface CodeAreaHistorySyncStatus {
+    source: string;
+    windowStart: string;
+    windowEnd: string;
+    cursorEnd: string;
+    discoveredMergedPrs: number;
+    complete: boolean;
+}
+
 export interface IRefreshCodeAreaRiskMapService {
     readStatus(
         organizationId: string,
         repositoryId: string,
-    ): Promise<Record<string, unknown> | null>;
+    ): Promise<CodeAreaHistorySyncStatus | null>;
     refreshOneBatch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
-    }): Promise<{ complete: boolean; processed: number; cursorEnd: string }>;
+    }): Promise<{
+        complete: boolean;
+        processed: number;
+        /** Some PR in the batch could not be read; the cursor moved past it. */
+        failed: boolean;
+        cursorEnd: string;
+    }>;
 }
