@@ -50,6 +50,35 @@ describe('submitResult schema', () => {
         expect(props.source.additionalProperties).toBe(false);
     });
 
+    it("asks a custom agent for the full finding, the finder for the five fields", () => {
+        const fullSpec = buildFinderAgentSpec({
+            systemPrompt: 's',
+            modelId: 'mock',
+            tools: new InMemoryToolRegistry([]),
+            coverageLedger: ledger,
+            acceptsConventions: true,
+            fullOutput: true,
+        });
+        const full = (fullSpec.tools.get('submitResult')!.inputSchema as any)
+            .properties.suggestions.items;
+        expect(full.required).toEqual([
+            'relevantFile',
+            'suggestionContent',
+            'existingCode',
+            'improvedCode',
+            'oneSentenceSummary',
+        ]);
+        expect(full.properties.severity.enum).toEqual([
+            'critical',
+            'high',
+            'medium',
+            'low',
+        ]);
+        expect(full.properties.kind.enum).toEqual(['bug', 'convention']);
+        expect(itemProps()).not.toHaveProperty('existingCode');
+        expect(itemProps()).not.toHaveProperty('severity');
+    });
+
     it('tells a custom agent how to cite an ast-grep rule match', () => {
         const props = itemProps(true);
         expect(props.kind.description).toContain('ast-grep');

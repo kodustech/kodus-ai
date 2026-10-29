@@ -12,6 +12,7 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import {
     currentDefaultWritingGuidelines,
     isDefaultWritingGuidelines,
@@ -739,24 +740,28 @@ ${rendered}
   </Commits>`;
 }
 
-/** Experiment knob `auditorRole` (#1821): reframes the generalist from
- *  "reviewer" (decides what deserves a comment) to "auditor" (lists every
- *  defect; a later stage decides what is posted). Only these two
- *  sentences change — the texts measured in the isolated recognition test. */
-export const AUDITOR_ROLE_SWAPS: ReadonlyArray<readonly [string, string]> = [
-    [
-        'Senior code reviewer specialized in finding correctness, security, and performance issues in one pass.',
-        'a defect auditor. Your job is to list every defect in the changed code (correctness, security, performance), not to decide which ones deserve a review comment.',
-    ],
-    [
-        'Find real, verifiable issues in the changed code in a single pass. You may report bug, security, or performance findings, but only when the evidence is concrete.',
-        'List every real defect you find in the changed code in a single pass, however small. Another stage decides what gets posted.',
-    ],
-];
-
-function applyAuditorRole(prompt: string): string {
-    return AUDITOR_ROLE_SWAPS.reduce((p, [from, to]) => p.replace(from, to), prompt);
+/** Custom agents keep the full output: their findings skip the enrichment
+ *  and the severity classifier, so the agent writes the snippet, the fix, the
+ *  title and the severity itself. */
+function customAgentSuggestionFields(outputLabelLine: string, confidenceExample: number): string {
+    return `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "language": "the file language",
+      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
+      "existingCode": "problematic code snippet from the diff",
+      "improvedCode": "fixed code snippet (only if fix is clear from context)",
+      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "severity": "critical|high|medium|low",
+      "confidence": ${confidenceExample}`;
 }
+
+const CUSTOM_AGENT_CONFIDENCE_RULE = `
+    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
+      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
+      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
+      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
+      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.`;
 
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         return withKnowledgeSection(
@@ -798,7 +803,7 @@ function buildSystemPromptBody(input: ReviewAgentInput, meta: PromptAgentMeta): 
             ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
             : '';
 
-        const prompt = `<CodeReviewAgent>
+        return `<CodeReviewAgent>
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
   <Role>
     You are ${identity.name}, ${identity.description}
@@ -816,7 +821,6 @@ ${overridesSection}${formatConventionFindingRules(meta.conventionGuides)}
 ${memoryRulesSection}
 ${repoInstructionsSection}
 </CodeReviewAgent>`;
-        return input.auditorRole ? applyAuditorRole(prompt) : prompt;
     }
 
 /**
@@ -1012,25 +1016,14 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                 : (taskDescriptions[categoryLabel] ??
                   'issues introduced by these changes');
 
-        // perFileVerdicts: same JSON shape, different instruction for `reasoning`
-        // plus one rule. Off = the production text, word for word.
-        const reasoningInstruction = input.perFileVerdicts
-            ? `One line per changed file, in the order of <Diffs>: '<path>: <each issue you found> | none — <why it is safe>'. Cover every changed file before finalizing. Example: 'impl.go: race in CreateDevice, count check and insert not atomic (reported) | api.go: none — only renames a handler.'`
-            : `For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'`;
-        const perFileRule = input.perFileVerdicts
-            ? `
-    - Deliver file by file: every changed file gets a verdict in "reasoning", and every issue named in a verdict MUST also be an entry in "suggestions" — an issue that is only in the reasoning is lost.`
-            : '';
         // Each finding carries only what finding the bug needs; fix, snippets,
         // severity and confidence are added by a later enrichment stage.
-        const suggestionFields = `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+        const suggestionFields = hasOwnLane(meta)
+            ? customAgentSuggestionFields(outputLabelLine, 8)
+            : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
       "suggestionContent": "the ONE problem: what is wrong and why it matters"`;
-        const importanceRule = input.noImportanceFilter
-            ? `
-    - Do not decide on your own that a real defect is too minor to report. If you concluded something is a real defect, it goes in "suggestions"; a later stage decides what is posted. Style and naming issues stay out.`
-            : '';
 
         // A custom agent kept to its lane gets the same task and rules scoped
         // to its focus; every other agent gets the defect hunt verbatim.
@@ -1090,8 +1083,8 @@ ${coverageIntro}${coverageTargets ? `${coverageTargets}\n` : ''}
     - Root cause must be in lines added or modified by this PR.
 ${findingRules}    ${mixedLabelRules}
     ${mixedLabelLensRules}
-    - ${ONE_PROBLEM_RULE}
-    - Return only the JSON object inside markdown fences, no extra text.${perFileRule}${importanceRule}
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
+    - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
   <OutputFormat>
@@ -1099,7 +1092,7 @@ ${findingRules}    ${mixedLabelRules}
             '```' +
             `json
 {
-  "reasoning": "${reasoningInstruction}",
+  "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
   "suggestions": [
     {
 ${suggestionFields}
@@ -1181,7 +1174,7 @@ ${compactTask}${compactCoverage}${coverageTargets ?? ''}</CoverageContract>
   <Rules>
     - Root cause must be in lines added or modified by this PR.
 ${compactThreshold}    - "Looks correct" is not a dismissal — explain why it cannot fail.
-    - ${ONE_PROBLEM_RULE}
+    - ${ONE_PROBLEM_RULE}${lane ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
     - Submit via the submitResult tool; do not print free-form JSON.
   </Rules>
 </ReviewTask>`;
@@ -1335,7 +1328,7 @@ ${fileContentsSection}
     - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.
     - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
     - If in doubt, do NOT report it.
-    - ${ONE_PROBLEM_RULE}
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? '\n    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.' : ''}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -1347,10 +1340,10 @@ ${fileContentsSection}
   "reasoning": "What you checked and why. Example: 'Looked at auth.ts line 42: new code dereferences user.email without checking if user is null. Parameter comes from an unchecked path in the same function. Reported.'",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+${hasOwnLane(meta) ? customAgentSuggestionFields(outputLabelLine, 6) : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "suggestionContent": "the ONE problem: what is wrong and why it matters"
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`}
     }
   ]
 }

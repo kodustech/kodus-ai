@@ -329,10 +329,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/agents/engine/repeat-check.ts', // REPEAT_CHECK_SCHEMA via jsonSchema(), pass-through, born strict (#2097)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
-        // Finder side passes (#1821), inline zod schemas.
-        'libs/code-review/infrastructure/agents/core/micro-agents.ts', // PLANNER_SCHEMA — all-required
-        'libs/code-review/infrastructure/agents/core/selector-shard.ts', // PLAN_SCHEMA — all-required
-        'libs/code-review/infrastructure/agents/core/scout-investigator.ts', // SCOUT_SCHEMA — `line` optional, converted by zodToStrictWireSchema
+        // Enrichment (#1821), inline zod schema.
         'libs/code-review/infrastructure/agents/engine/enrich-content.ts', // RESULT_ZOD — all-required
     ]);
 

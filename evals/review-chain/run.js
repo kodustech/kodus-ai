@@ -87,28 +87,6 @@ const BOUNDARIES = [
         note: "the finding's title, fixStatus and improvedCode in one call (#1821)",
     },
     {
-        phase: 'micro-agents',
-        files: ['libs/code-review/infrastructure/agents/core/micro-agents.ts'],
-        requires: ['schema'],
-        note: 'M3 lens planner (#1821)',
-    },
-    {
-        phase: 'selector-shard',
-        files: [
-            'libs/code-review/infrastructure/agents/core/selector-shard.ts',
-        ],
-        requires: ['schema'],
-        note: 'shard selector (#1821)',
-    },
-    {
-        phase: 'scout-investigator',
-        files: [
-            'libs/code-review/infrastructure/agents/core/scout-investigator.ts',
-        ],
-        requires: ['schema'],
-        note: 'scout pass (#1821)',
-    },
-    {
         phase: 'kody-rules-shard',
         files: [
             'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts',

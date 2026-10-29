@@ -7,7 +7,8 @@
  * legacy file is safe and lets the new path stop importing that file for it.
  */
 /**
- * Path-feasibility verifier (A/B knob `feasibilityVerify`) — the burden of
+ * Path-feasibility verifier (research only: evals/investigation/
+ * dedup-then-verify.js; production verifies with buildVerifierPrompt) — the burden of
  * proof INVERTED relative to buildVerifierPrompt below. HV2 keeps by default
  * and drops only on refutation; measured on the 30-PR light set it keeps ~99%
  * of candidates (84/85), so it does nothing for precision. This variant
@@ -148,25 +149,23 @@ Output JSON:
     };
 }
 
-
 /**
- * VERIFICADOR EM MODO SCORE — a pergunta da veracidade, feita por quem tem
- * ferramenta.
+ * SCORE-MODE VERIFIER — the veracity question, asked by a verifier with tools.
+ * Research only (evals/investigation/verify-etapa.js); production verifies
+ * with buildVerifierPrompt.
  *
- * Por que existe. O verificador de producao responde keep/drop e mantem 94-96%
- * do que ve, em dois modelos, com e sem o percurso do finder no bundle: medido,
- * dar mais contexto mexeu no raciocinio (as 188 racionalizacoes mudaram) e nao
- * no saldo (11 cortes viraram 10, e os cinco vereditos que viraram eram todos
- * falso positivo). O gargalo nao e o que ele sabe, e a regra de decisao —
- * refutar para derrubar, e "na duvida, mantenha". Uma saida binaria que diz
- * `true` 95% das vezes nao separa nada.
+ * Why it exists. The production verifier answers keep/drop and keeps 94-96% of
+ * what it sees, on two models, with and without the finder's walk in the
+ * bundle: more context changed the reasoning, not the outcome. The bottleneck
+ * is the decision rule (refute-to-drop, "when in doubt, keep"), not what the
+ * verifier knows. A binary answer that says `true` 95% of the time separates
+ * nothing.
  *
- * O prompt de veracidade, por outro lado, separa: devolve 0-100 e alimenta a
- * formula. Mas ele e CEGO — ve so o diff, e por isso a escala dele tem um 75
- * para "depende de um arquivo que nao esta aqui" e um 50 para "nao da para
- * saber daqui". Aqui essas duas notas mudam de sentido: com grep e readFile,
- * "nao esta no diff" deixa de ser resposta e vira tarefa. As ancoras abaixo
- * falam do que a INVESTIGACAO achou, nao do que estava visivel.
+ * The veracity prompt does separate: it returns 0-100. But the diff-only one
+ * is BLIND, so its 75 means "depends on a file not shown" and its 50 "cannot
+ * tell from here". With grep and readFile those anchors change meaning: "not
+ * in the diff" becomes a task, not an answer. The anchors below describe what
+ * the INVESTIGATION found, not what was visible.
  */
 export const VERACITY_SCORE_SCHEMA = {
     type: 'object',
@@ -242,95 +241,6 @@ Output JSON:
   "score": 0,
   "confidence": "high|medium|low",
   "rationale": "what you read and what it settled, citing file:line"
-}
-\`\`\`
-`,
-    };
-}
-
-
-/**
- * VERIFICADOR EM MODO FALHA — "voce consegue instanciar a falha?", com
- * ferramenta.
- *
- * Por que a pergunta muda. O modo score pergunta se a alegacao e VERDADEIRA, e
- * medido nos 188 grupos do GPT isso quase nao separa: a faixa 100 acerta 43%,
- * a 75-99 acerta 24% e a 50-74 acerta 29% — plano, e invertido no meio. A causa
- * nao e falta de evidencia (ele tem grep e readFile): e que os nossos falsos
- * positivos NAO SAO MENTIRAS. "falta validacao", "poderia vir null" sao
- * afirmacoes corretas sobre codigo que nao quebra. Nenhuma pergunta sobre
- * verdade separa um defeito de uma observacao correta e inerte.
- *
- * O que separa e exigir a FALHA: uma entrada concreta que chega naquele codigo
- * e produz a saida errada que a alegacao descreve. Um achado real sempre tem
- * uma; uma observacao inerte nunca tem.
- */
-export const FAILURE_SCORE_SCHEMA = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-        score: {
-            type: 'number',
-            description: '0-100: how concretely the failure can be instantiated.',
-        },
-        trigger: {
-            type: 'string',
-            description:
-                'The concrete input or state you walked, and the wrong outcome it produced. Empty when you could not construct one.',
-        },
-        rationale: {
-            type: 'string',
-            description: 'What you read, citing file:line.',
-        },
-    },
-    required: ['score', 'rationale'],
-};
-
-export function buildFailureVerifierPrompt(
-    evidenceBundle: string,
-): { system: string; prompt: string } {
-    return {
-        system: `You are checking ONE claim about a pull request. You have grep and readFile over the real repository.
-
-Do not ask whether the claim is TRUE. Ask whether it BREAKS.
-
-Most wrong findings in this system are not lies — they are correct statements about code that never fails: "no validation here", "this could be null", "missing rate limit". Each can be perfectly accurate and still describe nothing that goes wrong. A finding earns a comment when someone can be shown the failure, not when the observation is defensible.
-
-So: can you instantiate it? Name a concrete input, request or state that reaches this code and produces the wrong outcome the claim describes. Walk it through the real code, not through what the code ought to do.
-
-  100  you walked a concrete case end to end — this input, these lines, this
-       wrong result — and every step is in code you read
-  75   the failing path is real, but one step rests on a caller, a config or a
-       library you could not reach from here
-  50   you tried to build a failing case and could not close it, and nothing you
-       read rules it out either
-  25   the case you tried is blocked: a guard, a default, an earlier return or a
-       type you READ stops it before the wrong outcome
-  0    it cannot happen — you found what prevents it, or the symbol, call or
-       condition the claim names does not exist
-
-A claim that is true but produces no wrong outcome is a 25, not a 75. Being
-right is not the bar; breaking is.
-
-Do not lower the score because the trigger is rare, adversarial or concurrent.
-A race that needs two requests is still a failure you can instantiate.
-
-Return JSON only at the end.`,
-        prompt: `${evidenceBundle}
-
-You have 8 steps. The LAST one is your answer — submitting is itself a step — so
-you have 7 to investigate with. Spend them.
-
-In "trigger", write the concrete case you walked: the input or state, and the
-wrong outcome. If you could not construct one, leave it empty and say why in
-the rationale.
-
-Output JSON:
-\`\`\`json
-{
-  "score": 0,
-  "trigger": "the concrete input/state and the wrong outcome it produced",
-  "rationale": "what you read, citing file:line"
 }
 \`\`\`
 `,

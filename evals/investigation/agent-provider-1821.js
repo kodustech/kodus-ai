@@ -872,16 +872,6 @@ function buildCurrentPrompts(caseData) {
         // diff puts some PRs over 300k. Without it the window is managed by the
         // provider truncating, not by the harness compacting.
         contextWindowTokens: janelaDoModelo(),
-        // RECALL_GEN_PER_FILE=1: o generalista da um veredito por arquivo no
-        // reasoning e tem de listar em suggestions tudo que citar ali (#1821:
-        // o Sonnet ve o bug e nao entrega). So muda a instrucao de saida.
-        ...(process.env.RECALL_GEN_PER_FILE === '1' ? { perFileVerdicts: true } : {}),
-        // RECALL_GEN_NO_IMPORTANCE_FILTER=1: regra extra — defeito real nao sai
-        // por ser "menor"; a severidade diz o quanto importa (#1821).
-        ...(process.env.RECALL_GEN_NO_IMPORTANCE_FILTER === '1' ? { noImportanceFilter: true } : {}),
-        // RECALL_GEN_AUDITOR=1: papel de auditor no generalista (ganhou no teste
-        // isolado do Sonnet: +6 bugs reconhecidos, 0 perdidos) (#1821).
-        ...(process.env.RECALL_GEN_AUDITOR === '1' ? { auditorRole: true } : {}),
     };
 
     // Priority tiering, mirroring what the provider's execute() does in
@@ -978,9 +968,7 @@ function serializeResult(caseId, agentResult, remoteCommands, input, modelStats,
             anomalies: agentResult.anomalies,
             verification: agentResult.verification,
             recallPasses: agentResult.recallPasses,
-            shardPlan: agentResult.shardPlan || null,
             pipeline: pipeline || null,
-            scoutFlags: agentResult.scoutFlags,
             dedup: dedupTrace || null,
             // The candidate set as it stood before dedup/reducer, each item
             // tagged with the pass that produced it (`producedBy`). This is
@@ -1144,7 +1132,6 @@ class InvestigationAgentProvider {
             // so this section rendered EMPTY in every run we have measured — on
             // every model, including the big ones the blob is gated for.
             stage = 'build-call-graph';
-            let callGraphCtx = null;
             if (process.env.RECALL_CALL_GRAPH === '1' && repoHandle) {
                 const { buildPrCallGraph } = require('./build-pr-callgraph');
                 const cg = await buildPrCallGraph(
@@ -1153,51 +1140,12 @@ class InvestigationAgentProvider {
                     caseData.caseId,
                     (m) => console.log(m),
                 );
-                if (cg) {
-                    caseData.callGraph = cg.xml;
-                    callGraphCtx = cg.json;
-                }
-            }
-
-            // Braço xfile-grafo: o mesmo grafo, mas SO para o prompt da passada
-            // extra. Nao passa por caseData.callGraph, que liga a ferramenta de
-            // chamadores em todos os agentes e contaminaria o controle.
-            const extrasXfile = (process.env.RECALL_XFILE_EXTRAS || '')
-                .split(',').map((x) => x.trim()).filter((x) => x === 'grafo' || x === 'b');
-            let xfileCallGraph;
-            // RECALL_GRAFO_EXP=1: so monta o grafo (para as copias exp-p<N>g), sem
-            // ligar o agente cross-file extra.
-            if (extrasXfile.includes('grafo') || process.env.RECALL_GRAFO_EXP === '1') {
-                if (!repoHandle) throw new Error('RECALL_XFILE_EXTRAS=grafo exige RECALL_REAL_REPO=1');
-                const { buildPrCallGraph } = require('./build-pr-callgraph');
-                const cg = await buildPrCallGraph(caseData, repoHandle.dir, caseData.caseId, (m) => console.log(m));
-                // Sem grafo o braço mediria o agente sem grafo com outro nome:
-                // falha alto em vez de rodar calado.
-                if (!cg?.xml?.trim()) throw new Error(`grafo vazio para ${caseData.caseId}`);
-                xfileCallGraph = cg.xml;
+                if (cg) caseData.callGraph = cg.xml;
             }
 
             stage = 'build-prompts';
             const prompts = buildCurrentPrompts(caseData);
-            const { input, systemPrompt } = prompts;
-            let { userPrompt } = prompts;
-            // RECALL_SCOUT_JSON_PISTAS=1: troca SO o JSON dentro do <OutputFormat>
-            // do generalista pelo JSON de pistas do scout; o resto do prompt fica
-            // igual. So vale quando o scout e a unica passada que le este prompt —
-            // senao a troca contaminaria o generalista, o synthesis ou o
-            // investigador atual, e o erro e alto em vez de calado.
-            if (process.env.RECALL_SCOUT_JSON_PISTAS === '1') {
-                if (process.env.RECALL_SKIP_BASE_PASS !== '1' || process.env.RECALL_SKIP_SYNTHESIS !== '1' || process.env.RECALL_INVESTIGATOR_ONLY_VARIANTS !== '1') {
-                    throw new Error('RECALL_SCOUT_JSON_PISTAS exige SKIP_BASE_PASS, SKIP_SYNTHESIS e INVESTIGATOR_ONLY_VARIANTS');
-                }
-                const antes = userPrompt;
-                userPrompt = userPrompt.replace(
-                    /(<OutputFormat>\s*```json\n)[\s\S]*?(\n```\s*<\/OutputFormat>)/,
-                    '$1' + JSON.stringify({ flags: [{ relevantFile: 'path/to/file.ext', hint: 'WHAT changed and WHY it is worth a deep, focused look — one sentence.' }] }, null, 2) + '$2',
-                );
-                if (antes === userPrompt) throw new Error('RECALL_SCOUT_JSON_PISTAS: JSON do <OutputFormat> nao encontrado');
-            }
-
+            const { input, systemPrompt, userPrompt } = prompts;
             // Everything the PR debugger needs to say OK / NOT OK about the
             // steps BEFORE the model was called. Inferring these after the fact
             // is guesswork: whether the complete diff was used, how many files
@@ -1210,17 +1158,6 @@ class InvestigationAgentProvider {
                 filesInDataset: datasetFiles,
                 filesInFullDiff: fullFiles,
                 filesInPrompt: (input.changedFiles || []).length,
-                // A regua de tier precisa aparecer no artefato. Sem isso nao ha
-                // como, depois, distinguir "a regra nao mudou o resultado" de
-                // "a regra nunca ligou" — foi exatamente assim que passamos o
-                // dia medindo `low` contra `high` no deepseek sem saber que os
-                // dois produziam o mesmo payload.
-                // Lido da env, nao de `input`: existem DOIS objetos `input`
-                // aqui — o de buildCurrentPrompts (prompt do generalista) e o
-                // do loop adapter (onde o botao de fato entra). Ler o primeiro
-                // registrava null enquanto a regra rodava, que e pior do que
-                // nao registrar nada.
-                diffTierBudget: process.env.RECALL_DIFF_TIER_BUDGET || null,
                 filesWithEmptyPatch: (input.changedFiles || []).filter(
                     (f) => !String(f?.patchWithLinesStr || '').trim(),
                 ).length,
@@ -1237,26 +1174,6 @@ class InvestigationAgentProvider {
                 repoDir: repoHandle ? repoHandle.dir : null,
                 headSha: repoHandle ? repoHandle.sha : null,
             };
-
-            // RECALL_SHARD_ALT=1: a second shard draw over the SAME diff with
-            // the files in reverse order. Four runs of the identical config
-            // land on the same 34 goldens but swap 20 of them between runs, and
-            // the union of four reaches 46% — headroom no structural change has
-            // touched. File order decides what sits early in the context and
-            // the plan picks its symbols from there, so reversing decorrelates
-            // the second draw deliberately instead of relying on sampling
-            // noise. Only the shard repeats; the generalist runs once.
-            let shardAltPrompt;
-            if (process.env.RECALL_SHARD_ALT === '1') {
-                const files = [...(input.changedFiles || [])].reverse();
-                shardAltPrompt = buildCurrentPrompts({
-                    ...caseData,
-                    changedFiles: JSON.stringify(
-                        (parseMaybeJson(caseData.changedFiles) || []).slice().reverse(),
-                    ),
-                }).userPrompt;
-                if (!files.length) shardAltPrompt = undefined;
-            }
 
             stage = 'run-agent-loop';
             // runAgentLoop(input, secrets): `secrets` was split out of `input` so
@@ -1279,440 +1196,9 @@ class InvestigationAgentProvider {
                     // criticalTotal is 0 and the agent may finalize with the
                     // highest-priority file untouched.
                     fileTiers: input.fileTiers,
-                    // heavy força as passadas de resample (mais recall via
-                    // reamostragem). É EIXO DE REGIME: comparar heavy com normal
-                    // é o mesmo erro que comparar assinatura com API.
-                    ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
-                    // RECALL_CRITICAL_FILE_PASS=1: one whole-file finder pass per
-                    // critical-tier file, on top of the diff review. Same regime
-                    // caveat as heavy — it adds passes, so don't compare a run
-                    // with it against a run without it as if only quality moved.
-                    ...(process.env.RECALL_CRITICAL_FILE_PASS === '1'
-                        ? { criticalFilePasses: true }
-                        : {}),
-                    // RECALL_ATOMIC_HUNKS=1: one finder pass per diff hunk of
-                    // EVERY changed file (deterministic split, no scoring) — the
-                    // exhaustive version of RECALL_CRITICAL_FILE_PASS. Same
-                    // regime caveat: many more passes, don't compare bare.
-                    ...(process.env.RECALL_ATOMIC_HUNKS === '1'
-                        ? { atomicHunks: true }
-                        : {}),
-                    // RECALL_ATOMIC_FILES=1: one finder pass per changed FILE
-                    // (all its hunks together) — coarser than ATOMIC_HUNKS,
-                    // cost scales with file count instead of hunk count.
-                    ...(process.env.RECALL_ATOMIC_FILES === '1'
-                        ? { atomicFiles: true }
-                        : {}),
-                    // RECALL_CRITICAL_FILE_DEDICATED_PROMPT=1: every critical-
-                    // file/atomic pass gets a dedicated base (categories +
-                    // output-format reminder, no diff) instead of the full
-                    // userPrompt + "ignore the diffs above" hack.
-                    ...(process.env.RECALL_CRITICAL_FILE_DEDICATED_PROMPT === '1'
-                        ? { criticalFileDedicatedPrompt: true }
-                        : {}),
-                    // RECALL_EXPERT_PANEL=1: N role-specific passes over the
-                    // whole PR diff (language specialist per language present,
-                    // security, performance, QA, conditional DBA) + one
-                    // arbitration pass that reconciles their claims.
-                    ...(process.env.RECALL_EXPERT_PANEL === '1'
-                        ? { expertPanel: true }
-                        : {}),
-                    // RECALL_ROLE_ENSEMBLE=1: language specialist + security +
-                    // performance, merged DIRECTLY (no arbitration) — the
-                    // leaner, no-debate sibling of RECALL_EXPERT_PANEL.
-                    ...(process.env.RECALL_ROLE_ENSEMBLE === '1'
-                        ? { roleEnsemble: true }
-                        : {}),
-                    // RECALL_RECOGNITION_PANEL=1: 4 fixed roles chosen by
-                    // recognition-failure pattern (Contract Auditor,
-                    // Data-Flow/Reference Tracer, Cross-Method Consistency
-                    // Checker, Failure-Path Specialist), not topic — plus a
-                    // more adversarial skeptic arbitration. Different
-                    // experiment from RECALL_EXPERT_PANEL/RECALL_ROLE_ENSEMBLE.
-                    ...(process.env.RECALL_RECOGNITION_PANEL === '1'
-                        ? { recognitionPanel: true }
-                        : {}),
-                    // RECALL_EXPERT_PANEL_DEDICATED_PROMPT=1: every role +
-                    // arbitration pass gets a minimal diff-only base instead
-                    // of the full userPrompt. Works with any of the 3 panel
-                    // knobs above.
-                    ...(process.env.RECALL_EXPERT_PANEL_DEDICATED_PROMPT === '1'
-                        ? { expertPanelDedicatedPrompt: true }
-                        : {}),
-                    // O eval sempre registra o custo do verificador por achado.
-                    recordVerifyCost: true,
-                    // RECALL_PARALELO=1: microagentes comecam junto com o generalista.
-                    ...(process.env.RECALL_PARALELO === '1' ? { parallelMicroAgents: true } : {}),
-                    // RECALL_SCOUT_AGENTE=1: o scout roda pelo loop de agente (teto 1).
-                    ...(process.env.RECALL_SCOUT_AGENTE === '1' ? { scoutAgentLoop: true } : {}),
-                    // RECALL_SCOUT_ENXUTO=1: o scout recebe o prompt do generalista SEM
-                    // as secoes de instrucao que ele era mandado ignorar (<Task>,
-                    // <CoverageContract>, <Rules>, <OutputFormat>). Fica o contexto do
-                    // PR e o diff; a tarefa do scout vem depois, sem o "ignore".
-                    ...(process.env.RECALL_SCOUT_ENXUTO === '1'
-                        ? (() => {
-                              let enxuto = userPrompt;
-                              for (const tag of ['Task', 'CoverageContract', 'Rules', 'OutputFormat']) {
-                                  const antes = enxuto;
-                                  enxuto = enxuto.replace(new RegExp(`\\s*<${tag}>[\\s\\S]*?</${tag}>`), '');
-                                  if (antes === enxuto) throw new Error(`RECALL_SCOUT_ENXUTO: secao <${tag}> nao encontrada`);
-                              }
-                              return { scoutBasePromptOverride: enxuto };
-                          })()
-                        : {}),
-                    // RECALL_SCOUT_GRAFO=1 (exige RECALL_GRAFO_EXP=1): o grafo so no
-                    // prompt do scout. RECALL_INVESTIGATOR_STEPS=N: teto de passos
-                    // de cada investigador.
-                    ...(process.env.RECALL_SCOUT_GRAFO === '1'
-                        ? (() => {
-                              if (!xfileCallGraph) throw new Error('RECALL_SCOUT_GRAFO=1 exige RECALL_GRAFO_EXP=1');
-                              return { scoutCallGraph: xfileCallGraph };
-                          })()
-                        : {}),
-                    ...(process.env.RECALL_INVESTIGATOR_STEPS
-                        ? { investigatorMaxSteps: Number(process.env.RECALL_INVESTIGATOR_STEPS) }
-                        : {}),
-                    // RECALL_INVESTIGATOR_VARIANTS=foco,foco-cat: investigadores
-                    // reescritos sobre as mesmas pistas, ao lado do atual.
-                    ...(process.env.RECALL_INVESTIGATOR_VARIANTS
-                        ? { investigatorVariants: process.env.RECALL_INVESTIGATOR_VARIANTS.split(',').map((x) => x.trim()).filter(Boolean) }
-                        : {}),
-                    // RECALL_INVESTIGATOR_ONLY_VARIANTS=1: so as variantes, sem o atual.
-                    ...(process.env.RECALL_INVESTIGATOR_ONLY_VARIANTS === '1' ? { investigatorOnlyVariants: true } : {}),
-                    // RECALL_INVESTIGATOR_SECOND=1: segunda olhada (mesmo arquivo, outro
-                    // defeito) nos investigadores-variante que voltaram sem nada.
-                    ...(process.env.RECALL_INVESTIGATOR_SECOND === '1' ? { investigatorSecondLook: true } : {}),
-                    // O scout roda no mesmo esforco da rodada (GPT: low).
-                    ...(process.env.RECALL_SCOUT_INVESTIGATOR === '1' && process.env.RECALL_REASONING_EFFORT
-                        ? { scoutReasoningEffort: process.env.RECALL_REASONING_EFFORT }
-                        : {}),
-                    // RECALL_SCOUT_INVESTIGATOR=1: a cheap one-shot scout flags
-                    // a few suspicious spots, then one full pass per flag
-                    // investigates with dedicated tool budget.
-                    ...(process.env.RECALL_SCOUT_INVESTIGATOR === '1'
-                        ? { scoutInvestigator: true }
-                        : {}),
-                    // RECALL_SCOUT_THINKING=1: run the scout with reasoning
-                    // ("medium") instead of off. Independent of
-                    // RECALL_REASONING_EFFORT (which controls the
-                    // investigator/main pass, not the scout).
-                    ...(process.env.RECALL_SCOUT_THINKING === '1'
-                        ? { scoutThinking: true }
-                        : {}),
-                    // RECALL_SCOUT_RESAMPLE=1: 3 sequential, context-aware
-                    // scout rounds (cap 3 each) instead of 1 round (cap 5).
-                    ...(process.env.RECALL_SCOUT_RESAMPLE === '1'
-                        ? { scoutResample: true }
-                        : {}),
-                    // RECALL_SCOUT_SECOND_ROUND=1: run the scout in exactly 2
-                    // rounds instead of 1 — round 1 unchanged (cap 5), then one
-                    // follow-up round (cap 3) asking for OTHER spots. Isolates
-                    // the two variables RECALL_SCOUT_RESAMPLE conflated (shrunk
-                    // round-1 cap + two extra rounds).
-                    ...(process.env.RECALL_SCOUT_SECOND_ROUND === '1'
-                        ? { scoutSecondRound: true }
-                        : {}),
-                    // RECALL_SCOUT_LINE_HINT=1: ask the scout for the diff line
-                    // each flag is anchored to, not just the file.
-                    ...(process.env.RECALL_SCOUT_LINE_HINT === '1'
-                        ? { scoutLineHint: true }
-                        : {}),
-                    // RECALL_HYPOTHESIS_DRIVEN=1: scout names a specific,
-                    // falsifiable hypothesis instead of a vague flag; the
-                    // investigator confirms/refutes that exact hypothesis.
-                    ...(process.env.RECALL_HYPOTHESIS_DRIVEN === '1'
-                        ? { hypothesisDriven: true }
-                        : {}),
-                    // RECALL_INVESTIGATOR_GROUP_BY_FILE=1: 2+ scout flags on
-                    // the same file get ONE investigator pass instead of one
-                    // pass each.
-                    ...(process.env.RECALL_INVESTIGATOR_GROUP_BY_FILE === '1'
-                        ? { investigatorGroupByFile: true }
-                        : {}),
-                    // RECALL_SCOUT_CAP=<n>: overrides the scout's default cap
-                    // (5) for the single-scout path. `0` = UNCAPPED_SCOUT (ask
-                    // by objective, no number in the prompt, keep every flag) —
-                    // so test for presence, not truthiness.
-                    ...(process.env.RECALL_SCOUT_CAP !== undefined &&
-                    process.env.RECALL_SCOUT_CAP !== ''
-                        ? { scoutCap: Number(process.env.RECALL_SCOUT_CAP) }
-                        : {}),
-                    // RECALL_CHALLENGE_DISMISSALS=1: when an investigator clears
-                    // its flag after real reasoning, one follow-up pass argues
-                    // the opposite case against its own prior reasoning.
-                    ...(process.env.RECALL_CHALLENGE_DISMISSALS === '1'
-                        ? { challengeDismissals: true }
-                        : {}),
-                    // RECALL_SECOND_LOOK=1: when an investigator clears its
-                    // flag after making a tool call, one follow-up pass recaps
-                    // its own evidence and asks about a DIFFERENT defect in
-                    // the same file (not the same suspicion re-argued).
-                    ...(process.env.RECALL_SECOND_LOOK === '1'
-                        ? { secondLookSameFile: true }
-                        : {}),
-                    // RECALL_SECOND_LOOK_ALWAYS=1: fire the second look on
-                    // EVERY investigator pass that made a tool call, not just
-                    // the ones that cleared their flag. Requires
-                    // RECALL_SECOND_LOOK=1.
-                    ...(process.env.RECALL_SECOND_LOOK_ALWAYS === '1'
-                        ? { secondLookAlways: true }
-                        : {}),
-                    // RECALL_SELECTOR_SHARD=1: plan → grep the repo → one pass
-                    // per group of affected call sites. Requires
-                    // RECALL_REAL_REPO=1 (recorded fixtures cannot answer a
-                    // search for code the diff does not contain).
-                    ...(process.env.RECALL_SELECTOR_SHARD === '1'
-                        ? { selectorShard: true }
-                        : {}),
-                    // RECALL_GRAPH_SHARD=1: same shard pass, but the sites come
-                    // from the AST blast radius instead of an LLM plan plus a
-                    // grep. Costs one fewer LLM call per PR and reaches the
-                    // dependents grep structurally misses (USES_TYPE/INHERITS).
-                    // Requires RECALL_CALL_GRAPH=1 — without the graph there
-                    // are no sites, and the pass silently does nothing.
-                    // RECALL_SHARD_CAP / RECALL_SHARD_PER_WORKER: sites per PR
-                    // and sites per worker. Default 6/2 (3 workers).
-                    ...(process.env.RECALL_SHARD_CAP
-                        ? { shardCap: Number(process.env.RECALL_SHARD_CAP) }
-                        : {}),
-                    ...(process.env.RECALL_SHARD_PER_WORKER
-                        ? {
-                              shardPerWorker: Number(
-                                  process.env.RECALL_SHARD_PER_WORKER,
-                              ),
-                          }
-                        : {}),
-                    ...(shardAltPrompt ? { shardAltPrompt } : {}),
-                    // RECALL_SHARD_DEDICATED=1: shard workers get their own
-                    // base prompt instead of inheriting the generalist's.
-                    ...(process.env.RECALL_SHARD_DEDICATED === '1'
-                        ? { shardDedicatedPrompt: true }
-                        : {}),
-                    // RECALL_MICRO_AGENTS=1: 12 narrow passes, one per class of
-                    // defect, instead of the single broad pass.
-                    // RECALL_MICRO_MAX_STEPS=8: teto de passos so dos agentes de classe.
-                    ...(process.env.RECALL_MICRO_MAX_STEPS
-                        ? { microAgentMaxSteps: Number(process.env.RECALL_MICRO_MAX_STEPS) }
-                        : {}),
-                    // RECALL_SIM_PARALELA=1: simulacao na fase 0, sem <AlreadyRaised>.
-                    ...(process.env.RECALL_SIM_PARALELA === '1' ? { simulationParallel: true } : {}),
-                    // RECALL_MICRO_IDS=a,b,c: so estes agentes de classe.
-                    ...(process.env.RECALL_MICRO_IDS
-                        ? { microAgentIds: process.env.RECALL_MICRO_IDS.split(',').map((x) => x.trim()).filter(Boolean) }
-                        : {}),
-                    ...(/^(1|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
-                        ? { microAgents: true }
-                        : {}),
-                    // RECALL_MICRO_AGENTS=sim: the simulation pass INSTEAD of
-                    // the fifteen class agents — one pass that walks concrete
-                    // states through the change. Same knob on purpose: the two
-                    // are alternatives, never both.
-                    // RECALL_DIFF_TIER_BUDGET=<chars>:<tiers>
-                    // Ex.: "200000:warm,optional" — acima de 200k de diff, os
-                    // arquivos warm e optional entram no prompt como nome +
-                    // cabecalhos de hunk + aviso de que readFile traz o corpo.
-                    // Medido nos 30 PRs: essa regra corta 14% dos tokens do
-                    // conjunto e custa 2 goldens; so com `optional` corta 2% e
-                    // nao custa nenhum.
-                    ...(() => {
-                        const v = process.env.RECALL_DIFF_TIER_BUDGET;
-                        if (!v) return {};
-                        const [lim, tiers] = String(v).split(':');
-                        const summarize = String(tiers || '')
-                            .split(',')
-                            .map((x) => x.trim())
-                            .filter(Boolean);
-                        if (!summarize.length) return {};
-                        return {
-                            diffTierBudget: {
-                                thresholdChars: Number(lim) || 0,
-                                summarize,
-                            },
-                        };
-                    })(),
-                    // RECALL_FINDING_REASON=1: cada achado tem de trazer o
-                    // percurso que o produziu. Knob NOVO — declarado aqui em
-                    // vez de embutido noutro porque e ortogonal a arquitetura:
-                    // vale para generalista, microagentes e simulacao.
-                    ...(process.env.RECALL_FINDING_REASON === '1'
-                        ? { requireFindingReason: true }
-                        : {}),
-                    // 'sim' = so a simulacao; '1+sim' = os quinze E a
-                    // simulacao, que e o conjunto que se quer medir.
-                    // RECALL_MICRO_GRAPH=1: manda o blob <CallGraph> para os
-                    // doze agentes de classe E para a simulacao, logo abaixo
-                    // do diff. Exige RECALL_CALL_GRAPH=1, que e quem constroi o
-                    // blob — sem ele `caseData.callGraph` fica indefinido e a
-                    // flag nao faz nada, em silencio.
-                    ...(process.env.RECALL_MICRO_GRAPH === '1'
-                        ? { microAgentCallGraph: true }
-                        : {}),
-                    // RECALL_MICRO_EXP=id1,id2: agentes experimentais como passadas
-                    // extras (EXPERIMENTAL_AGENTS em micro-agents.ts).
-                    ...((extrasXfile.length || process.env.RECALL_MICRO_EXP)
-                        ? {
-                              microAgentExtras: [
-                                  ...extrasXfile.map((x) => `xfile-${x}`),
-                                  ...(process.env.RECALL_MICRO_EXP || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => `exp-${x}`),
-                              ],
-                              xfileCallGraph,
-                          }
-                        : {}),
-                    // RECALL_DEV_R1=<pool>: segunda rodada do dev-level (braços
-                    // exp-dev-<cat>-p<N>-r2). Le deste PR, no pool indicado, o que
-                    // a primeira rodada de cada categoria reportou — o mesmo
-                    // conjunto que foi julgado, sem gerar a primeira de novo.
-                    ...(process.env.RECALL_DEV_R1
-                        ? (() => {
-                              const arq = path.join(
-                                  process.env.POOL_ROOT || path.join(__dirname, 'pools'),
-                                  process.env.RECALL_DEV_R1,
-                                  `${caseData.caseId}.raw.txt`,
-                              );
-                              const r1 = JSON.parse(fs.readFileSync(arq, 'utf8'));
-                              const n = process.env.RECALL_DEV_R1_TETO || '3';
-                              const porCat = {};
-                              for (const cat of ['bug', 'security', 'performance']) {
-                                  porCat[cat] = (r1.trace?.preFilterCandidates || [])
-                                      .filter((c) => c.producedBy === `micro-exp-dev-${cat}-p${n}`)
-                                      .map((c) => ({
-                                          file: c.relevantFile,
-                                          line: c.relevantLinesStart,
-                                          summary: c.oneSentenceSummary,
-                                      }));
-                              }
-                              return { devLevelPriorFindings: porCat };
-                          })()
-                        : {}),
-                    // RECALL_MICRO_SO_EXTRAS=1: pula as passadas de classe e roda so
-                    // as copias experimentais delas (RECALL_MICRO_EXP=p1g,p1gnc).
-                    ...(process.env.RECALL_MICRO_SO_EXTRAS === '1' ? { microAgentsSoExtras: true } : {}),
-                    // RECALL_MICRO_TETO=4: teto de achados por agente de classe,
-                    // ordenados do mais seguro ao menos seguro.
-                    ...(process.env.RECALL_MICRO_TETO
-                        ? { microAgentTeto: Number(process.env.RECALL_MICRO_TETO) }
-                        : {}),
-                    ...(/^(sim|1\+sim)$/.test(process.env.RECALL_MICRO_AGENTS || '')
-                        ? {
-                              simulationAgent: true,
-                              // Written into the dataset by
-                              // inject-prior-findings.js; absent unless a
-                              // previous run was injected, so the same knob
-                              // measures both with and without.
-                              priorFindings:
-                                  parseMaybeJson(caseData.priorFindings) ||
-                                  undefined,
-                          }
-                        : {}),
-                    // RECALL_MICRO_PLANNER=1: route first — only the classes
-                    // the diff could contain get a pass.
-                    ...(process.env.RECALL_MICRO_PLANNER === '1'
-                        ? { microPlanner: true }
-                        : {}),
-                    ...(process.env.RECALL_GRAPH_SHARD === '1'
-                        ? {
-                              selectorShard: true,
-                              // Graph-only unless the grep shard is asked for
-                              // explicitly alongside it. Set both to measure
-                              // the hybrid (graph where it has sites, grep
-                              // elsewhere) instead of the substitution.
-                              graphSitesOnly:
-                                  process.env.RECALL_SELECTOR_SHARD !== '1',
-                              graphSites: require(
-                                  path.join(
-                                      __dirname,
-                                      '../../libs/code-review/infrastructure/agents/core/selector-shard.ts',
-                                  ),
-                              ).sitesFromCallGraph(
-                                  callGraphCtx,
-                                  (input.changedFiles || [])
-                                      .map((f) => f.filename)
-                                      .filter(Boolean),
-                                  Number(process.env.RECALL_GRAPH_DEPTH || 1),
-                              ),
-                          }
-                        : {}),
-                    // RECALL_PARALLEL_SCOUT=1: run the scout chain alongside
-                    // the base pass instead of after it (scheduling only).
-                    ...(process.env.RECALL_PARALLEL_SCOUT === '1'
-                        ? { parallelScout: true }
-                        : {}),
-                    // RECALL_SKIP_VERIFY=1: drop the verify stage (kept 98.2%
-                    // of candidates across 5 models, at one LLM call each).
-                    ...(process.env.RECALL_SKIP_VERIFY === '1'
-                        ? { skipVerify: true }
-                        : {}),
-                    // RECALL_SCOUT_VERDICT=1: scout runs FIRST and its flags
-                    // become a mandatory checklist on the generalist's prompt
-                    // (no per-flag investigators). Pair with RECALL_SCOUT_CAP.
-                    ...(process.env.RECALL_SCOUT_VERDICT === '1'
-                        ? { scoutVerdict: true }
-                        : {}),
-                    // RECALL_ADVERSARIAL=1: replace the review task with a
-                    // break-it task (see buildAdversarialPrompt).
-                    ...(process.env.RECALL_ADVERSARIAL === '1'
-                        ? { adversarial: true }
-                        : {}),
-                    // RECALL_FEASIBILITY_VERIFY=1: path-feasibility verify —
-                    // inverted burden of proof (keep only findings whose
-                    // trigger path is proven reachable+unguarded). Replaces
-                    // the HV2 refute-to-drop verifier for this run.
-                    ...(process.env.RECALL_FEASIBILITY_VERIFY === '1'
-                        ? { feasibilityVerify: true }
-                        : {}),
-                    // RECALL_SECOND_LOOK_FORCE_REPORT=1: removes secondLook's
-                    // "submit empty" escape hatch, forces its single most
-                    // plausible candidate instead. Requires RECALL_SECOND_LOOK=1.
-                    ...(process.env.RECALL_SECOND_LOOK_FORCE_REPORT === '1'
-                        ? { secondLookForceReport: true }
-                        : {}),
-                    // RECALL_FREEFORM=1: one independent full pass, minimal
-                    // senior-dev-style prompt (only anchoring kept).
-                    ...(process.env.RECALL_FREEFORM === '1'
-                        ? { freeformPass: true }
-                        : {}),
-                    // RECALL_FREEFORM_DEDICATED_PROMPT=1: freeform pass gets a
-                    // minimal diff-only base instead of the full userPrompt.
-                    // Requires RECALL_FREEFORM=1.
-                    ...(process.env.RECALL_FREEFORM_DEDICATED_PROMPT === '1'
-                        ? { freeformDedicatedPrompt: true }
-                        : {}),
-                    // RECALL_SCOUT_DEDICATED_PROMPT=1: scout gets a minimal
-                    // diff-only prompt instead of the full userPrompt.
-                    ...(process.env.RECALL_SCOUT_DEDICATED_PROMPT === '1'
-                        ? { scoutDedicatedPrompt: true }
-                        : {}),
-                    // RECALL_SCOUT_CALIBRATED_PROMPT=1: scout gets diff +
-                    // BUG/PERFORMANCE/SECURITY definitions, nothing else.
-                    ...(process.env.RECALL_SCOUT_CALIBRATED_PROMPT === '1'
-                        ? { scoutCalibratedPrompt: true }
-                        : {}),
-                    // RECALL_SCOUT_BY_CATEGORY=1: three parallel scouts, one
-                    // per category, each seeing ONLY that category's
-                    // definitions (cap 3 each, up to 9 total).
-                    ...(process.env.RECALL_SCOUT_BY_CATEGORY === '1'
-                        ? { scoutByCategory: true }
-                        : {}),
-                    ...(process.env.RECALL_CRITICAL_MAX_STEPS
-                        ? {
-                              criticalFileMaxSteps: Number(
-                                  process.env.RECALL_CRITICAL_MAX_STEPS,
-                              ),
-                          }
-                        : {}),
                     // RECALL_SKIP_SYNTHESIS=1: drop the synthesis-rescue pass.
-                    // Its job (catch what the main sweep skimmed past) may be
-                    // redundant once atomic-hunk passes already cover the whole
-                    // diff in isolation — test the two together, not assumed.
                     ...(process.env.RECALL_SKIP_SYNTHESIS === '1'
                         ? { skipSynthesisRescue: true }
-                        : {}),
-                    // RECALL_SKIP_BASE_PASS=1: skip the generalist pass
-                    // entirely (no LLM call) — final findings come only from
-                    // whatever recall passes are configured. Pair with
-                    // RECALL_SKIP_SYNTHESIS=1 for a genuine "panel only" test.
-                    ...(process.env.RECALL_SKIP_BASE_PASS === '1'
-                        ? { skipBasePass: true }
                         : {}),
                     agentName: `investigation-eval:${this.providerId}`,
                     // What makes a trace findable later: the case, and the
@@ -1724,16 +1210,7 @@ class InvestigationAgentProvider {
                         teamId: 'eval-team',
                         repositoryId: caseData.repositoryFullName,
                         pullRequestId: caseData.caseId,
-                        provider: [
-                            process.env.RECALL_MICRO_AGENTS === '1' && 'micro',
-                            process.env.RECALL_MICRO_PLANNER === '1' && 'planner',
-                            process.env.RECALL_SELECTOR_SHARD === '1' && 'shard',
-                            process.env.RECALL_GRAPH_SHARD === '1' && 'graph',
-                            process.env.RECALL_SKIP_BASE_PASS === '1' && 'nobase',
-                            `ms${process.env.RECALL_MAX_STEPS || 12}`,
-                        ]
-                            .filter(Boolean)
-                            .join('+'),
+                        provider: `ms${process.env.RECALL_MAX_STEPS || 12}`,
                     },
                 },
                 {
@@ -1817,81 +1294,7 @@ class InvestigationAgentProvider {
             const preFilterCandidates = (
                 agentResult.findings?.suggestions || []
             ).map((f) => ({ ...f }));
-            // RECALL_REDUCER=v2 — o reducer DE PRODUCAO
-            // (libs/.../engine/finding-reducer.ts): filtro de contrato,
-            // atribuidor, veracidade, formula e cota. Chamar o modulo de
-            // producao em vez de reimplementar aqui e o ponto: o que o
-            // benchmark mede passa a ser o que o cliente recebe. As duas
-            // chamadas rodam no MESMO `model` da revisao, igual ao dedup.
-            //
-            // Cota e limiar saem das constantes do modulo; RECALL_REDUCER_COTA
-            // e RECALL_REDUCER_LIMIAR existem so para varrer a curva sem
-            // recompilar, e nao devem ficar setados numa rodada de referencia.
-            if (process.env.RECALL_REDUCER === 'v2') {
-                const raw = agentResult.findings?.suggestions || [];
-                try {
-                    const { reduceFindings } = require(
-                        path.join(
-                            __dirname,
-                            '../../libs/code-review/infrastructure/agents/engine/finding-reducer.ts',
-                        ),
-                    );
-                    const { generateText, jsonSchema } = require('ai');
-                    const { readAiSdkUsage } = require(
-                        path.join(__dirname, '../../libs/llm/ai-sdk-usage.ts'),
-                    );
-                    const diff = (input.changedFiles || [])
-                        .map((f) => `--- ${f.filename}\n${f.patchWithLinesStr || f.patch || ''}`)
-                        .join('\n\n');
-                    let usadoInput = 0, usadoOutput = 0, usadoTotal = 0;
-                    const r = await reduceFindings({
-                        candidates: raw,
-                        diff,
-                        quota: process.env.RECALL_REDUCER_COTA
-                            ? Number(process.env.RECALL_REDUCER_COTA)
-                            : undefined,
-                        threshold: process.env.RECALL_REDUCER_LIMIAR
-                            ? Number(process.env.RECALL_REDUCER_LIMIAR)
-                            : undefined,
-                        log: (m) => console.log(`    ${caseData.caseId?.slice(0, 40) || ''} ${m}`),
-                        call: async ({ schema, prompt, runName }) => {
-                            const out = await chamadaEstruturada({
-                                model,
-                                modelId: process.env.RECALL_MODEL,
-                                nome: 'registrar',
-                                schema,
-                                prompt,
-                                extra: {
-                                    experimental_telemetry: {
-                                        isEnabled: true,
-                                        functionId: runName,
-                                        metadata: { caseId: caseData.caseId },
-                                    },
-                                },
-                            });
-                            const u = readAiSdkUsage(out.usage) || {};
-                            usadoInput += u.inputTokens || 0;
-                            usadoOutput += u.outputTokens || 0;
-                            usadoTotal += u.totalTokens || 0;
-                            return out.dados ?? {};
-                        },
-                    });
-                    agentResult.findings.suggestions = r.suggestions;
-                    agentResult.usage = {
-                        ...agentResult.usage,
-                        inputTokens: (agentResult.usage.inputTokens || 0) + usadoInput,
-                        outputTokens: (agentResult.usage.outputTokens || 0) + usadoOutput,
-                        totalTokens: (agentResult.usage.totalTokens || 0) + usadoTotal,
-                    };
-                    dedupTrace = { status: r.trace.status, before: raw.length, after: r.suggestions.length, reducer: r.trace };
-                } catch (e) {
-                    dedupTrace = {
-                        status: 'failed-keep-all',
-                        errorMessage: String(e?.message || e).slice(0, 300),
-                    };
-                    console.log(`    REDUCER FALHOU (mantendo tudo): ${dedupTrace.errorMessage}`);
-                }
-            } else if (process.env.RECALL_SKIP_DEDUP !== '1') {
+            if (process.env.RECALL_SKIP_DEDUP !== '1') {
                 const rawFindings = agentResult.findings?.suggestions || [];
                 if (rawFindings.length > 1) {
                     try {
@@ -1902,50 +1305,6 @@ class InvestigationAgentProvider {
                                 '../../libs/llm/ai-sdk-usage.ts',
                             ),
                         );
-                        const useReducer = process.env.RECALL_REDUCER === '1';
-                        if (useReducer) {
-                            // REDUCER: one pass over the WHOLE candidate set —
-                            // merges, drops on merit and orders by importance,
-                            // replacing verify (per-finding, blind to the rest)
-                            // and dedup (whole set, but only asks "same bug?").
-                            const { runReducer } = require('../dedup/reducer-runner.js');
-                            const r = await runReducer(rawFindings, { model });
-                            for (const [idx, from] of r.merged) {
-                                const rep = rawFindings[idx];
-                                if (!rep || !from.length) continue;
-                                const locs = from
-                                    .filter((d) => rawFindings[d])
-                                    .map((d) => {
-                                        const f = rawFindings[d];
-                                        return `${f.relevantFile}${f.relevantLinesStart ? ':' + f.relevantLinesStart : ''}`;
-                                    });
-                                if (locs.length) {
-                                    rep.suggestionContent = `${rep.suggestionContent || ''}\n\nAlso found in: ${[...new Set(locs)].join(', ')}`.trim();
-                                }
-                            }
-                            const beforeR = rawFindings.length;
-                            agentResult.findings.suggestions = r.kept
-                                .map((i) => rawFindings[i])
-                                .filter(Boolean);
-                            const ru = readAiSdkUsage(r.usage) || {};
-                            agentResult.usage = {
-                                ...agentResult.usage,
-                                inputTokens: (agentResult.usage.inputTokens || 0) + (ru.inputTokens || 0),
-                                outputTokens: (agentResult.usage.outputTokens || 0) + (ru.outputTokens || 0),
-                                totalTokens: (agentResult.usage.totalTokens || 0) + (ru.totalTokens || 0),
-                                cacheReadTokens: (agentResult.usage.cacheReadTokens || 0) + (ru.cacheReadTokens || 0),
-                                cacheWriteTokens: (agentResult.usage.cacheWriteTokens || 0) + (ru.cacheWriteTokens || 0),
-                                reasoningTokens: (agentResult.usage.reasoningTokens || 0) + (ru.reasoningTokens || 0),
-                            };
-                            dedupTrace = {
-                                status: 'reducer',
-                                before: beforeR,
-                                after: agentResult.findings.suggestions.length,
-                                merged: r.merged.size,
-                                dropped: r.dropped.length,
-                                noOp: !!r.noOp,
-                            };
-                        } else {
                         const dedupResult = await runDedup(rawFindings, undefined, {
                             model,
                             // RECALL_DEDUP_ROOT_CAUSE=1: also merge SYSTEMIC
@@ -2003,7 +1362,6 @@ class InvestigationAgentProvider {
                             groups: dedupResult.groups?.length ?? 0,
                             noOp: !!dedupResult.noOp,
                         };
-                        }
                     } catch (dedupError) {
                         dedupTrace = {
                             status: 'failed-keep-all',

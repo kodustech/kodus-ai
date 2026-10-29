@@ -26,11 +26,6 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import {
     buildVerifierPrompt,
-    buildFeasibilityVerifierPrompt,
-    buildVeracityScorePrompt,
-    VERACITY_SCORE_SCHEMA,
-    buildFailureVerifierPrompt,
-    FAILURE_SCORE_SCHEMA,
     VERIFIER_REPEAT_RULE,
     VERIFIER_REPO_INSTRUCTION_RULE,
     verifierLaneRule,
@@ -40,10 +35,7 @@ import {
     renderRepoInstructionFiles,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import type { RepoInstructionsContext } from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
-import {
-    LLM_ENVELOPE_TAG,
-    extractLastJsonObjectWith,
-} from '@libs/llm/structured-output-repair';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/structured-output-repair';
 import {
     recoverVerdictObject,
     verdictFromText,
@@ -96,14 +88,6 @@ export interface BuildVerifierSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
-    /** Path-feasibility mode (A/B knob): inverted burden of proof — see
-     *  buildFeasibilityVerifierPrompt. Default off = HV2 refute-to-drop. */
-    feasibilityMode?: boolean;
-    /** A/B: devolve um score 0-100 no lugar de keep/drop. Ver buildVeracityScorePrompt. */
-    scoreMode?: boolean;
-    /** A/B: pergunta se a FALHA pode ser instanciada, nao se a alegacao e
-     *  verdadeira. Ver buildFailureVerifierPrompt. */
-    failureMode?: boolean;
     /** System prompt override — the convention verifier passes its own. The
      *  HV2 prompt when absent. */
     systemPrompt?: string;
@@ -112,37 +96,15 @@ export interface BuildVerifierSpecParams {
 export function buildVerifierAgentSpec(
     params: BuildVerifierSpecParams,
 ): AgentSpec {
-    // The system prompt is static (the per-finding evidence goes in the
+    // The HV2 system prompt is static (the per-finding evidence goes in the
     // run prompt), so we build it once with a placeholder bundle.
-    const { system: hv2System } = params.failureMode
-        ? buildFailureVerifierPrompt('')
-        : params.scoreMode
-        ? buildVeracityScorePrompt('')
-        : params.feasibilityMode
-          ? buildFeasibilityVerifierPrompt('', 0)
-          : buildVerifierPrompt('', 0);
-    const system = params.systemPrompt ?? hv2System;
-    const submitTool = params.failureMode
-        ? {
-              ...submitVerdictTool,
-              description:
-                  'Submit your 0-100 score for how concretely the failure can be instantiated.',
-              inputSchema: FAILURE_SCORE_SCHEMA as JSONSchema,
-          }
-        : params.scoreMode
-        ? {
-              ...submitVerdictTool,
-              description:
-                  'Submit your 0-100 veracity score for the candidate finding.',
-              inputSchema: VERACITY_SCORE_SCHEMA as JSONSchema,
-          }
-        : submitVerdictTool;
+    const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
         // VALIDATED mode) so the verdict can't be omitted or emitted as prose.
         {
-            ...submitTool,
+            ...submitVerdictTool,
             strict: supportsStrictToolsForRun(
                 params.modelId,
                 params.fallbackModelId,
@@ -194,53 +156,25 @@ function repoInstructionEvidence(
     return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
 }
 
-/** O bundle de evidencia: os campos do achado que o verificador recebe.
- *  Extraido de `verifierPromptFor` porque o modo score usa o MESMO bundle com
- *  outro enunciado — se os dois divergirem, a comparacao entre eles mede o
- *  bundle em vez de medir a pergunta. `repoInstructions` is read only for a
+/** The evidence bundle: the finding's fields the verifier receives.
+ *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
+ *  file — see LlmVerifier.verify() (#2020). `laneFocus` (a custom agent kept
+ *  to its lane, #2172) adds the out-of-focus drop criterion; absent, the
+ *  prompt is unchanged. `repoInstructions` is read only for a
  *  `repo_instruction` candidate. */
 export function bundleFor(
     finding: FinderSuggestion,
-    includeReason = false,
-    outrosDoGrupo?: VerifierPromptOptions['outrosDoGrupo'],
     previousDecisions?: readonly PrDecisionRecord[],
-    options: {
-        laneFocus?: string;
-        repoInstructions?: RepoInstructionsContext;
-    } = {},
+    options: VerifierPromptOptions = {},
 ): string {
-    const walk = includeReason
-        ? (finding as { reason?: string }).reason
-        : undefined;
     const laneFocus =
         typeof options?.laneFocus === 'string' ? options.laneFocus : '';
-    const bundle = [
+    return [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
             ? `Lines: ${finding.relevantLinesStart}-${finding.relevantLinesEnd ?? finding.relevantLinesStart}`
             : '',
         `Claim: ${finding.suggestionContent}`,
-        walk ? `Walk that produced it (the finder's own trace — verify it, do not assume it is right):\n${walk}` : '',
-        outrosDoGrupo?.length
-            ? [
-                  `<OtherReportsOfTheSameDefect count="${outrosDoGrupo.length}">`,
-                  '  Other reviewers reported what looks like the SAME defect as the claim above.',
-                  '  These are NOT separate claims for you to judge — your verdict is about the one',
-                  '  claim above, and nothing else. Use them only as extra evidence: one of them may',
-                  '  name the line that settles it, or may be wrong in a way that exposes the claim.',
-                  ...outrosDoGrupo.map((o, i) => {
-                      const loc = `${o.relevantFile ?? '?'}${o.relevantLinesStart != null ? `:${o.relevantLinesStart}-${o.relevantLinesEnd ?? o.relevantLinesStart}` : ''}`;
-                      return [
-                          `  [${i + 1}] ${loc}`,
-                          `      claim: ${String(o.suggestionContent ?? '').slice(0, 600)}`,
-                          o.reason ? `      walk:  ${String(o.reason).slice(0, 600)}` : '',
-                      ]
-                          .filter(Boolean)
-                          .join('\n');
-                  }),
-                  '</OtherReportsOfTheSameDefect>',
-              ].join('\n')
-            : '',
         repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
@@ -248,7 +182,6 @@ export function bundleFor(
     ]
         .filter(Boolean)
         .join('\n');
-    return bundle;
 }
 
 export type VerifierPromptOptions = {
@@ -257,55 +190,18 @@ export type VerifierPromptOptions = {
     laneFocus?: string;
     /** Read only for a `repo_instruction` candidate. */
     repoInstructions?: RepoInstructionsContext;
-    /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
-    feasibilityMode?: boolean;
-    /** Inclui no bundle o percurso que PRODUZIU o achado (`reason`). Opt-in.
-     *
-     *  Sem ele o verificador recebe cinco campos — arquivo, linhas, severidade,
-     *  alegacao e trecho — e quatro passos de ferramenta para refutar. O
-     *  percurso, que ja cita as linhas de escrita e de leitura que o finder
-     *  seguiu, fica de fora, e o verificador gasta os quatro passos
-     *  redescobrindo o que ja estava escrito. Medido no DeepSeek sem ele: 120
-     *  de 125 grupos mantidos (96%).
-     *
-     *  Desligado por padrao — isto muda o prompt de producao, e o efeito em
-     *  recall e precisao nao esta medido. */
-    includeReason?: boolean;
-    /** Os OUTROS achados que o atribuidor juntou neste grupo, quando ha. Opt-in.
-     *
-     *  Hoje o grupo chega ao verificador como o representante mais uma lista de
-     *  `file:line` — ele ve que o defeito aparece em tres lugares mas so le uma
-     *  redacao. As outras podem descrever melhor, ou citar a linha que refuta.
-     *  O bloco vai DEPOIS do achado principal e rotulado como evidencia extra,
-     *  nao como alegacoes a julgar: o veredito continua sendo sobre um defeito
-     *  so, senao o verificador passa a responder duas perguntas ao mesmo tempo. */
-    outrosDoGrupo?: Array<{
-        relevantFile?: string;
-        relevantLinesStart?: number;
-        relevantLinesEnd?: number;
-        suggestionContent?: string;
-        reason?: string;
-    }>;
 };
 
-/** Format a finding into the verifier's per-run task prompt (HV2 evidence).
- *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify() (#2020). */
+/** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
 export function verifierPromptFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
     options: VerifierPromptOptions = {},
 ): string {
-    const bundle = bundleFor(
-        finding,
-        options.includeReason ?? false,
-        options.outrosDoGrupo,
-        previousDecisions,
-        { laneFocus: options.laneFocus, repoInstructions: options.repoInstructions },
-    );
-    return options.feasibilityMode
-        ? buildFeasibilityVerifierPrompt(bundle, 0).prompt
-        : buildVerifierPrompt(bundle, 0).prompt;
+    return buildVerifierPrompt(
+        bundleFor(finding, previousDecisions, options),
+        0,
+    ).prompt;
 }
 
 /** Extract the verdict from a verifier run: the run's materialized artifacts
@@ -406,36 +302,6 @@ export function extractVerdict(
     };
 }
 
-/** Recover the score-mode verdict a model wrote as TEXT instead of calling
- *  submitVerdict — the score-mode twin of `verdictFromText` (#1937).
- *
- *  Final step only, and the LAST object in it that carries `score`, for the same
- *  reason as there: an earlier step's JSON is the model thinking out loud, and a
- *  quoted example above the answer is not the answer. */
-function scoreFromText(
-    state: RunState,
-): { keep: true; score: number; rationale: string; confidence?: Verdict['confidence']; trigger?: string } | null {
-    const last = state.steps[state.steps.length - 1];
-    const text = last?.message.content;
-    if (typeof text !== 'string' || !text.trim()) return null;
-    const obj = extractLastJsonObjectWith(text, ['score']) as
-        | Record<string, unknown>
-        | null
-        | undefined;
-    const score = Number(obj?.score);
-    if (!Number.isFinite(score)) return null;
-    const conf = String(obj?.confidence ?? '');
-    return {
-        keep: true,
-        score,
-        ...(conf === 'high' || conf === 'medium' || conf === 'low'
-            ? { confidence: conf as Verdict['confidence'] }
-            : {}),
-        rationale: String(obj?.rationale ?? ''),
-        ...(obj?.trigger != null ? { trigger: String(obj.trigger) } : {}),
-    };
-}
-
 /** Flatten the verifier run's investigation tool calls into the generic
  *  Verdict.toolCalls shape (name/args/result). */
 function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
@@ -461,9 +327,6 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 }
 
 export interface LlmVerifierParams {
-    /** EXPERIMENTO (#1821, so o eval): marca em cada candidato o tempo e os
-     *  tokens desta verificacao (`verifyCost`, somado se verificado de novo). */
-    recordCost?: boolean;
     modelId: string;
     /** Failover target model id — threaded to the verifier spec so strict tool
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
@@ -489,20 +352,6 @@ export interface LlmVerifierParams {
      *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
      *  buckets them to `review` (verify is part of the review cost). */
     usageRunName?: string;
-    /** Path-feasibility mode (A/B knob) — see buildFeasibilityVerifierPrompt. */
-    feasibilityMode?: boolean;
-    /** A/B: devolve um score 0-100 no lugar de keep/drop. Ver buildVeracityScorePrompt. */
-    scoreMode?: boolean;
-    /** A/B: pergunta se a FALHA pode ser instanciada, nao se a alegacao e
-     *  verdadeira. Ver buildFailureVerifierPrompt. */
-    failureMode?: boolean;
-    /** A/B: manda o `reason` do achado junto no bundle. Ver verifierPromptFor. */
-    includeReason?: boolean;
-    /** A/B: resolve os outros membros do grupo para o bundle. Recebe o candidato
-     *  e devolve as outras redacoes do MESMO defeito. Ver verifierPromptFor. */
-    resolveGroupMembers?: (
-        candidate: FinderSuggestion,
-    ) => VerifierPromptOptions['outrosDoGrupo'];
     /** Suggestions already posted on THIS PR in a previous review round
      *  (issue #1313). `verify()` filters this down to the candidate's own file
      *  before rendering it as evidence — matching by line range is deliberately
@@ -557,9 +406,6 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
-            feasibilityMode: params.feasibilityMode,
-            scoreMode: params.scoreMode,
-            failureMode: params.failureMode,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
@@ -569,9 +415,6 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
-            feasibilityMode: params.feasibilityMode,
-            scoreMode: params.scoreMode,
-            failureMode: params.failureMode,
         });
     }
 
@@ -597,26 +440,13 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         // out of, and the finder sometimes names a file by its basename alone
         // (#2011 round B), which a per-file match never found (#2020).
         const matchingDecisions = this.params.previousDecisions;
-        const verifyT0 = Date.now();
         const state = await this.runner.run(
             spec,
             {
-                prompt: this.params.failureMode
-                    ? buildFailureVerifierPrompt(
-                          bundleFor(candidate, this.params.includeReason),
-                      ).prompt
-                    : this.params.scoreMode
-                    ? buildVeracityScorePrompt(
-                          bundleFor(candidate, this.params.includeReason),
-                      ).prompt
-                    : verifierPromptFor(candidate, matchingDecisions, {
-                          feasibilityMode: this.params.feasibilityMode,
-                          includeReason: this.params.includeReason,
-                          outrosDoGrupo:
-                              this.params.resolveGroupMembers?.(candidate),
-                          laneFocus: this.params.laneFocus,
-                          repoInstructions: this.params.repoInstructions,
-                      }),
+                prompt: verifierPromptFor(candidate, matchingDecisions, {
+                    laneFocus: this.params.laneFocus,
+                    repoInstructions: this.params.repoInstructions,
+                }),
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),
@@ -624,86 +454,10 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             ctx,
         );
         const u = state.usage;
-        if (this.params.recordCost) {
-            const c = candidate as FinderSuggestion & {
-                verifyCost?: { ms: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; calls: number };
-            };
-            const antes = c.verifyCost ?? { ms: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, calls: 0 };
-            c.verifyCost = {
-                ms: antes.ms + (Date.now() - verifyT0),
-                inputTokens: antes.inputTokens + (u.inputTokens ?? 0),
-                outputTokens: antes.outputTokens + (u.outputTokens ?? 0),
-                cacheReadTokens: antes.cacheReadTokens + (u.cacheReadTokens ?? 0),
-                calls: antes.calls + 1,
-            };
-        }
         this.accUsage.inputTokens += u.inputTokens ?? 0;
         this.accUsage.outputTokens += u.outputTokens ?? 0;
         this.accUsage.reasoningTokens += u.reasoningTokens ?? 0;
         this.accUsage.cacheReadTokens += u.cacheReadTokens ?? 0;
-        if (this.params.scoreMode || this.params.failureMode) {
-            // O artefato carrega { score, rationale }; `keep` nao existe nesta
-            // variante. O score vai em `confidence` como texto para caber no
-            // contrato Verdict sem invadi-lo — quem consome o modo score le dali.
-            for (let i = state.artifacts.length - 1; i >= 0; i--) {
-                const a = state.artifacts[i];
-                if (a.type !== VERIFY_DONE_TOOL) continue;
-                const raw = a.payload as {
-                    score?: unknown;
-                    confidence?: unknown;
-                    trigger?: unknown;
-                    rationale?: unknown;
-                };
-                const score = Number(raw?.score);
-                if (Number.isFinite(score)) {
-                    const conf = String(raw?.confidence ?? '');
-                    return {
-                        keep: true,
-                        score,
-                        ...(conf === 'high' || conf === 'medium' || conf === 'low'
-                            ? { confidence: conf }
-                            : {}),
-                        rationale: String(raw?.rationale ?? ''),
-                        ...(raw?.trigger != null
-                            ? { trigger: String(raw.trigger) }
-                            : {}),
-                        toolCalls: collectVerifierToolCalls(state),
-                        parseMode: 'tool',
-                    } as Verdict & { trigger?: string };
-                }
-            }
-            // O MESMO buraco do #1937, reaberto no modo score: o prompt pede
-            // "Return JSON only at the end" e a ForceTextFinalizePolicy forca
-            // TEXTO no ultimo passo, entao um modelo que nao esta sob tool use
-            // estrito (Anthropic e os openai_compatible — Kimi, GLM, DeepSeek)
-            // responde em prosa. Ler so o artefato descartava a nota inteira:
-            // 96 de 125 grupos no DeepSeek contra 2 de 132 no GPT.
-            const fromText = scoreFromText(state);
-            if (fromText) {
-                logger.log({
-                    message: `verifier score recovered from text (score=${fromText.score})`,
-                    context: 'VerifierAgent',
-                    metadata: {
-                        parseMode: 'text',
-                        ...this.params.telemetryMetadata,
-                    },
-                });
-                return {
-                    ...fromText,
-                    toolCalls: collectVerifierToolCalls(state),
-                    parseMode: 'text',
-                } as Verdict & { trigger?: string };
-            }
-            // Sem nota, o achado nao pode ser ranqueado nem descartado: quem
-            // consome trata `score` ausente como "nao sei" (50), igual a
-            // veracidade faz hoje.
-            return {
-                keep: true,
-                rationale: 'score ausente',
-                toolCalls: collectVerifierToolCalls(state),
-                parseMode: 'text',
-            };
-        }
         return extractVerdict(state, this.params.telemetryMetadata);
     }
 }

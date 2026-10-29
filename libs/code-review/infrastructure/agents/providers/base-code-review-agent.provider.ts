@@ -450,10 +450,7 @@ export abstract class BaseCodeReviewAgentProvider {
         // saw criticalTotal=0 and the agent could finalize without opening the
         // highest blast-radius file. Dropping tests/docs stays gated (it removes
         // real review surface); marking blast radius does not.
-        // TIER_EVERY_PR=0 restores the old bundled behavior for an A/B.
-        const shouldTierFiles =
-            input.changedFiles.length > 1 &&
-            process.env.TIER_EVERY_PR !== '0';
+        const shouldTierFiles = input.changedFiles.length > 1;
 
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
@@ -760,7 +757,6 @@ export abstract class BaseCodeReviewAgentProvider {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
                     outlineFirst: input.outlineFirst,
-                    requireFindingReason: input.requireFindingReason,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,

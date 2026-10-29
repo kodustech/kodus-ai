@@ -60,29 +60,6 @@ const suggestionSchema = z.object({
     // range-check here: an out-of-range value must not drop a real finding.
     confidence: lenient(z.number()),
     ruleUuid: lenient(z.string()), // Kody Rules: UUID of the violated rule
-    // O percurso que produziu ESTE achado, quando `requireFindingReason` esta
-    // ligado. Precisa estar aqui: o zod descarta campo desconhecido, entao sem
-    // a linha o modelo devolve o campo e o sanitizador o joga fora em silencio
-    // — foi o que aconteceu no primeiro run com a flag ligada, 0 de 21
-    // candidatos chegaram com reason.
-    reason: lenient(z.string()),
-    // EXPERIMENTO (#1821, so o eval liga). O nivel de desenvolvedor que
-    // reportaria este achado. Precisa estar declarado aqui pelo mesmo motivo
-    // que o `reason`: campo que o zod nao conhece e descartado em silencio, e
-    // o experimento mediria um campo que nunca chegou.
-    //
-    // Normalizado porque o modelo responde em varias grafias (junior/Junior/
-    // jr, mid/pleno/intermediate, senior/sr, expert/staff/principal). Valor desconhecido limpa o
-    // campo em vez de derrubar o achado — a mesma regra do `severity`.
-    developerLevel: z.preprocess((v) => {
-        const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
-        if (/^(jr|junior|j[uú]nior)$/.test(s)) return 'junior';
-        if (/^(mid|pleno|intermediate|mid-?level)$/.test(s)) return 'pleno';
-        if (/^(sr|senior|s[eê]nior)$/.test(s)) return 'senior';
-        if (/^(expert|especialista|staff|principal|architect)$/.test(s)) return 'expert';
-        if (/^(qa|quality[ -]?analy[sz](t|er)|tester)$/.test(s)) return 'qa';
-        return undefined;
-    }, z.enum(['junior', 'pleno', 'senior', 'expert', 'qa']).optional()),
     // Custom agents: 'convention' = the finding applies a team guide, quoted in
     // `source`; the quote is checked on the target branch before verify. An
     // off-schema value reads as absent instead of dropping the finding.
@@ -142,26 +119,7 @@ function parseStringifiedSuggestions(value: unknown): unknown {
             // try the next candidate
         }
     }
-    dumpUnparsedSuggestions(suggestions);
     return value;
-}
-
-/** Eval-only (RECALL_DEBUG_ENVELOPE_DIR): keep the raw string a model sent when
- *  it could not be parsed, so the shape can be fixed without re-running. */
-function dumpUnparsedSuggestions(raw: string): void {
-    const dir = process.env.RECALL_DEBUG_ENVELOPE_DIR;
-    if (!dir) return;
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const fs = require('fs');
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(
-            `${dir}/suggestions-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`,
-            raw,
-        );
-    } catch {
-        // diagnostics must never break a review
-    }
 }
 
 const KNOWN_ITEM_KEYS = new Set(Object.keys(suggestionSchema.shape));
