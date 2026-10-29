@@ -1378,6 +1378,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const parseDiscarded = new Set(
                 parsed.discarded.map((d) => d.index),
             );
+            for (const d of parsed.discarded) {
+                allDiscarded.push({
+                    ...finderSuggestions[d.index],
+                    priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+                    deliveryStatus: DeliveryStatus.NOT_SENT,
+                });
+            }
             if (parsed.discarded.length > 0) {
                 this.logger.warn({
                     message: `[PARSE-SCHEMA] PR#${prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,

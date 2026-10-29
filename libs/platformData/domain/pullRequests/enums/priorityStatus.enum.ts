@@ -14,4 +14,6 @@ export enum PriorityStatus {
     DISCARDED_BY_VERIFY_ERROR = 'discarded-by-verify-error',
     /** Its label is a category the team turned off (#1821). */
     DISCARDED_BY_CATEGORY = 'discarded-by-category',
+    /** A finder suggestion missing a required lean field (#1821). */
+    DISCARDED_BY_SCHEMA = 'discarded-by-schema',
 }

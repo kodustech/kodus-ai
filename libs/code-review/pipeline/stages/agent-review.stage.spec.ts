@@ -2,6 +2,7 @@ import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 
 // The stage's post-orchestrator helpers (severity reclassification + content
@@ -386,6 +387,11 @@ describe('D. input variants', () => {
 
         expect(result.validSuggestions).toHaveLength(0);
         expect(result.fileAnalysisResults).toBeDefined();
+        expect(result.discardedSuggestions).toEqual([
+            expect.objectContaining({
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+            }),
+        ]);
     });
 });
 

@@ -62,7 +62,7 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // 10: #2172 keeps a custom agent's findings below its own floor apart.
         // 11: anchoring drops a finding on a file the PR does not change (#1821).
         // 12: label normalization drops a category the team turned off (#1821).
-        expect(discardBlocks()).toHaveLength(12);
+        expect(discardBlocks()).toHaveLength(13);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(
