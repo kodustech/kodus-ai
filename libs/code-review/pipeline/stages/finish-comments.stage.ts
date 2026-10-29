@@ -44,6 +44,15 @@ import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/s
  */
 export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
 
+/** The steps of the PR summary: read the changes, ask the model, write it to the PR. */
+type SummaryStep = 'collect' | 'generate' | 'publish';
+
+const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
+    collect: 'Failed to collect the changes for the summary',
+    generate: 'Failed to generate summary',
+    publish: 'Failed to publish summary to the pull request',
+};
+
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'UpdateCommentsAndGenerateSummaryStage';
@@ -234,6 +243,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         }
 
         if (shouldGenerateOrUpdateSummary) {
+            // Which step of the summary failed. Only the model call may be
+            // read as an LLM failure: the steps around it talk to the git
+            // platform, and a 403 from it (no write access to the PR) is not
+            // "the API key is invalid" (see describe-pipeline-error.ts).
+            let summaryStep: SummaryStep = 'collect';
+
             try {
                 this.logger.log({
                     message: `Generating summary for PR#${pullRequest.number}`,
@@ -273,6 +288,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     }));
                 }
 
+                summaryStep = 'generate';
+
                 const summaryPR =
                     await this.commentManagerService.generateSummaryPR(
                         pullRequest,
@@ -294,6 +311,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         ).taskIdPattern,
                     );
 
+                summaryStep = 'publish';
+
                 await this.commentManagerService.updateSummarizationInPR(
                     organizationAndTeamData,
                     pullRequest.number,
@@ -304,7 +323,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // Terminal BYOK (suspended key / no credit) → warn: user's
                 // provider config, not a Kodus fault. Real fault stays error.
                 this.logger[llmErrorLogLevel(error)]({
-                    message: `Failed to generate summary for PR#${pullRequest.number}`,
+                    message: `${SUMMARY_STEP_FAILURE[summaryStep]} for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
                 });
@@ -326,7 +345,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     error: summaryError,
                     severity: 'partial',
                     metadata: {
-                        message: 'Failed to generate summary',
+                        message: SUMMARY_STEP_FAILURE[summaryStep],
                         reason: SUMMARY_GENERATION_FAILED_REASON,
                     },
                 };
@@ -335,12 +354,17 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 // 404") instead of the generic "unexpected error" fallback.
                 // Only fills the slot when no agent failure already claimed it
                 // — a core-agent failure is the more important thing to report.
+                // A failure outside the model call keeps only a classification
+                // attached where it was thrown; without one the slot stays
+                // empty and the run reports the platform's own message.
                 const classification =
                     getClassification(summaryError) ??
-                    classifyLLMError(
-                        summaryError,
-                        resolvedProvider(context, summaryError),
-                    );
+                    (summaryStep === 'generate'
+                        ? classifyLLMError(
+                              summaryError,
+                              resolvedProvider(context, summaryError),
+                          )
+                        : undefined);
 
                 // The pipeline context is Immer-frozen once an earlier stage
                 // (e.g. agent-review) ran updateContext, so a direct
@@ -356,7 +380,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     }
                     draft.errors.push(pipelineError);
 
-                    if (!draft.lastReviewError) {
+                    if (classification && !draft.lastReviewError) {
                         draft.lastReviewError = {
                             category: classification.category,
                             provider:
