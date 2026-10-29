@@ -33,6 +33,8 @@ export const FIRST_TOUCH_CAMPAIGN_PARAMS = [
 ] as const;
 
 export const FIRST_TOUCH_TEXT_MAX = 200;
+/** A cut click id no longer identifies the click: kept whole or dropped. */
+export const FIRST_TOUCH_GCLID_MAX = 255;
 export const FIRST_TOUCH_URL_MAX = 500;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Browser clocks drift; anything further ahead than this is not a real visit.
@@ -55,10 +57,11 @@ const LONE_SURROGATE =
 const EMAIL_LOCAL_CHAR = /[a-z0-9._%+-]/i;
 const EMAIL_DOMAIN = /[a-z0-9.-]+/iy;
 const EMAIL_TLD = /\.[a-z]{2,}/i;
-// '@' percent-encoded once or more (%40, %2540, ...): a UTM tagged with an
-// encoded address arrives here still encoded.
-const ENCODED_AT = /%(?:25)*40/gi;
+const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
+const NON_ASCII_ESCAPE = /%[89a-f][0-9a-f]/gi;
 const NOT_PRINTABLE_ASCII = /[^\x20-\x7e]/g;
+// Enough for any real nesting (an address encoded twice in an ad URL).
+const MAX_DECODE_PASSES = 4;
 const GCLID = /^[a-z0-9_-]+$/i;
 
 /**
@@ -114,16 +117,15 @@ function sanitize(input: unknown, now: Date): FirstTouch | null {
 }
 
 function sanitizeCampaignValue(key: string, value: unknown): string | null {
-    const text = sanitizeText(value);
-    if (!text) {
-        return null;
+    if (key === 'gclid') {
+        return typeof value === 'string' &&
+            value.length <= FIRST_TOUCH_GCLID_MAX &&
+            GCLID.test(value)
+            ? value
+            : null;
     }
 
-    if (key === 'gclid' && !GCLID.test(text)) {
-        return null;
-    }
-
-    return text.slice(0, FIRST_TOUCH_TEXT_MAX);
+    return sanitizeText(value);
 }
 
 function sanitizeText(value: unknown): string | null {
@@ -144,17 +146,12 @@ function sanitizeText(value: unknown): string | null {
 }
 
 /**
- * Whether the text has something shaped like local@domain.tld, with '@'
- * possibly percent-encoded. NFKC folds lookalikes (fullwidth @) and
- * everything outside printable ASCII is ignored, so no invisible or combining
- * character can split an address. Linear on purpose: the equivalent single
- * regex backtracks quadratically on long inputs such as a run of '%'.
+ * Whether the text has something shaped like local@domain.tld, however it is
+ * percent-encoded. Linear on purpose: the equivalent single regex backtracks
+ * quadratically on long inputs such as a run of '%'.
  */
 function containsEmail(value: string): boolean {
-    const text = value
-        .normalize('NFKC')
-        .replace(ENCODED_AT, '@')
-        .replace(NOT_PRINTABLE_ASCII, '');
+    const text = revealForEmailCheck(value);
     for (let at = text.indexOf('@'); at >= 0; at = text.indexOf('@', at + 1)) {
         if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
             continue;
@@ -173,6 +170,36 @@ function containsEmail(value: string): boolean {
  * campaign parameters (cleaned like the fields above); the referrer keeps no
  * query at all.
  */
+/**
+ * The text as an address would read in it: percent-escapes decoded (nested
+ * ones too, a bounded number of times; only the valid ASCII ones when the
+ * whole does not decode), lookalikes folded by NFKC, and everything outside
+ * printable ASCII dropped, so no encoding, invisible or combining character
+ * can split an address.
+ */
+function revealForEmailCheck(value: string): string {
+    let text = value;
+    for (let pass = 0; pass < MAX_DECODE_PASSES; pass++) {
+        let next: string;
+        try {
+            next = decodeURIComponent(text);
+        } catch {
+            next = text.replace(ASCII_ESCAPE, (_, hex: string) =>
+                String.fromCharCode(parseInt(hex, 16)),
+            );
+        }
+        if (next === text) {
+            break;
+        }
+        text = next;
+    }
+
+    return text
+        .normalize('NFKC')
+        .replace(NON_ASCII_ESCAPE, '')
+        .replace(NOT_PRINTABLE_ASCII, '');
+}
+
 function sanitizeUrl(
     value: unknown,
     keepCampaignParams: boolean,

@@ -189,7 +189,8 @@ describe("GTM first-touch tag", () => {
             "https://kodus.io/?utm_source=x" +
                 "&utm_term=jane%40%E2%80%8Bacme.com" + // zero-width space
                 "&utm_content=jane%40%CC%81acme.com" + // combining acute
-                "&utm_campaign=jane%EF%BC%A0acme.com", // fullwidth @
+                "&utm_campaign=jane%EF%BC%A0acme.com" + // fullwidth @
+                "&utm_medium=jane%252540example%25252ecom", // nested encoding
         );
 
         expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
@@ -220,11 +221,11 @@ describe("GTM first-touch tag", () => {
             "utm_campaign",
             "utm_term",
             "utm_content",
-            "gclid",
         ];
+        const gclid = "Cj0K_" + "a".repeat(225);
         visit(
             jar,
-            `https://kodus.io/${"p".repeat(400)}?${params.map((p) => `${p}=${long}`).join("&")}`,
+            `https://kodus.io/${"p".repeat(400)}?${params.map((p) => `${p}=${long}`).join("&")}&gclid=${gclid}`,
             `https://example.com/${"r".repeat(400)}`,
         );
 
@@ -235,9 +236,25 @@ describe("GTM first-touch tag", () => {
         expect(cookie!.value.length).toBeLessThan(3500);
 
         const touch = parseFirstTouchCookie(cookie!.value)!;
-        // The size fallback ran: shorter values, and the landing page without
-        // a query rather than one that disagrees with the fields.
+        // The size fallback ran: shorter values, the landing page without a
+        // query rather than one that disagrees with the fields, and the click
+        // id still whole.
         for (const p of params) expect(touch[p]).toBe("€".repeat(40));
+        expect(touch.gclid).toBe(gclid);
         expect(touch.landing_page).toBe(`https://kodus.io/${"p".repeat(99)}`);
+    });
+
+    it.each([
+        ["too long", "a".repeat(256)],
+        ["malformed", "abc%3Cscript%3E"],
+    ])("drops a gclid that is %s", (_label, gclid) => {
+        const jar = new CookieJar();
+        visit(jar, `https://kodus.io/?utm_source=x&gclid=${gclid}`);
+
+        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
+            utm_source: "x",
+            landing_page: "https://kodus.io/?utm_source=x",
+            captured_at: expect.any(String),
+        });
     });
 });

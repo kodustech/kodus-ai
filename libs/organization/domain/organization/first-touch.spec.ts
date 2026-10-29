@@ -1,4 +1,5 @@
 import {
+    FIRST_TOUCH_GCLID_MAX,
     FIRST_TOUCH_TEXT_MAX,
     FIRST_TOUCH_URL_MAX,
     sanitizeFirstTouch,
@@ -105,13 +106,14 @@ describe('sanitizeFirstTouch', () => {
         ).toEqual({ utm_source: 'newsletter' });
     });
 
-    it('drops emails whose @ is percent-encoded, once or more', () => {
+    it('drops emails hidden behind percent-encoding, nested or not', () => {
         expect(
             sanitizeFirstTouch(
                 {
                     utm_source: 'newsletter',
                     utm_term: 'jane%40acme.com',
                     utm_content: 'jane%252540Acme.com',
+                    utm_medium: 'jane%2540example%252ecom',
                     utm_campaign: '50%off',
                 },
                 now,
@@ -185,6 +187,18 @@ describe('sanitizeFirstTouch', () => {
             utm_source: 'google',
         });
         expect(JSON.stringify(result)).not.toMatch(/\\ud[89a-f]/i);
+    });
+
+    it('keeps a long gclid whole and drops one too long to be real', () => {
+        const gclid = 'Cj0K_' + 'a'.repeat(225);
+
+        expect(sanitizeFirstTouch({ gclid }, now)).toEqual({ gclid });
+        expect(
+            sanitizeFirstTouch(
+                { gclid: 'a'.repeat(FIRST_TOUCH_GCLID_MAX + 1) },
+                now,
+            ),
+        ).toBeNull();
     });
 
     it('drops a gclid with characters Google never uses', () => {
