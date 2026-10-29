@@ -71,4 +71,13 @@ describe('normalizeFinderLabels', () => {
         expect(out.suggestions).toHaveLength(2);
         expect(out.discarded).toEqual([]);
     });
+
+    it("leaves an exempt suggestion's label as it is", () => {
+        const agent = { label: 'custom_agent', customAgent: { id: 'a1' } };
+        const out = normalizeFinderLabels([agent], {
+            exempt: (s: any) => !!s.customAgent,
+        });
+        expect(out.suggestions[0]).toBe(agent);
+        expect(out.replaced).toEqual({});
+    });
 });

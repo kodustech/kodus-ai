@@ -24,7 +24,8 @@ const VALID = new Set<string>(VALID_FINDING_LABELS);
 export type NormalizeFinderLabelsOptions<T> = {
     /** Labels the team receives; a suggestion with any other is discarded. */
     allowed?: ReadonlySet<string>;
-    /** Suggestions the team's categories do not apply to (Kody Rules, custom agents). */
+    /** Suggestions left as they are: no label replaced, no category applied
+     *  (Kody Rules, custom agents). */
     exempt?: (s: T) => boolean;
 };
 
@@ -44,6 +45,12 @@ export function normalizeFinderLabels<T extends { label?: unknown }>(
     const kept: T[] = [];
     const discarded: T[] = [];
     for (const s of suggestions) {
+        // Kody Rules and custom agents keep their own label: a custom agent's
+        // names the agent on the comment.
+        if (exempt?.(s)) {
+            kept.push(s);
+            continue;
+        }
         const raw = typeof s.label === 'string' ? s.label : '';
         let label = raw.trim().toLowerCase();
         if (!VALID.has(label)) {
@@ -52,7 +59,7 @@ export function normalizeFinderLabels<T extends { label?: unknown }>(
             label = FALLBACK_FINDING_LABEL;
         }
         const out = label === s.label ? s : { ...s, label };
-        if (allowed && !allowed.has(label) && !exempt?.(s)) {
+        if (allowed && !allowed.has(label)) {
             discarded.push(out);
         } else {
             kept.push(out);
