@@ -36,7 +36,7 @@ function batchResult(over: Partial<ReviewAgentOutput> = {}): ReviewAgentOutput {
     };
 }
 
-function run(results: ReviewAgentOutput[]) {
+function run(results: Array<ReviewAgentOutput | Error>) {
     const queue = [...results];
     return runChunkedReview(makeInput(), {
         identity: {
@@ -49,7 +49,13 @@ function run(results: ReviewAgentOutput[]) {
         startTime: Date.now(),
         // Small enough that each file lands in its own batch.
         diffBudget: 3_000,
-        runBatch: async () => queue.shift() ?? batchResult(),
+        runBatch: async () => {
+            const next = queue.shift() ?? batchResult();
+            if (next instanceof Error) {
+                throw next;
+            }
+            return next;
+        },
         logger: { log: jest.fn(), error: jest.fn() },
     });
 }
@@ -103,5 +109,42 @@ describe('runChunkedReview — #2171', () => {
         expect(
             (out.discardedByVerifyError ?? []).map((s) => s.relevantFile),
         ).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    it('is incomplete when one batch threw and another finished', async () => {
+        const out = await run([
+            batchResult(),
+            new Error('provider rate limit'),
+        ]);
+
+        expect(out.hitHardLimit).toBe(true);
+        expect(out.finishReason).toBe('no-result');
+    });
+
+    it('keeps the findings of the batches that finished', async () => {
+        const out = await run([
+            batchResult({ suggestions: [{ relevantFile: 'src/a.ts' }] }),
+            new Error('timeout'),
+        ]);
+
+        expect(out.suggestions.map((s) => s.relevantFile)).toEqual([
+            'src/a.ts',
+        ]);
+        expect(out.hitHardLimit).toBe(true);
+    });
+
+    it('still throws when every batch failed and nothing was found', async () => {
+        await expect(
+            run([new Error('first'), new Error('second')]),
+        ).rejects.toThrow('first');
+    });
+
+    it('does not override a batch that was already cut short', async () => {
+        const out = await run([
+            batchResult({ hitHardLimit: true, finishReason: 'truncated' }),
+            new Error('timeout'),
+        ]);
+
+        expect(out.finishReason).toBe('truncated');
     });
 });
