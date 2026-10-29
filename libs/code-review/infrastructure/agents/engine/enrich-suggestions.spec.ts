@@ -54,7 +54,7 @@ describe('buildEnrichmentInput', () => {
 
 describe('enrichSuggestions', () => {
     const run = (suggestions: any[], enrich: jest.Mock, shouldEnrich = (s: any) => s.label !== 'kody_rules') =>
-        enrichSuggestions(suggestions, [file], { shouldEnrich, enrich: enrich as any });
+        enrichSuggestions(suggestions, [file], { shouldEnrich, enrich: enrich as any, organizationId: 'org-1' });
 
     it('writes the title, the cited code and a local fix', async () => {
         const enrich = jest.fn().mockResolvedValue({
@@ -135,6 +135,7 @@ describe('enrichSuggestions', () => {
             shouldEnrich: () => true,
             enrich: enrich as any,
             concurrency: 3,
+            organizationId: 'org-1',
         });
         expect(enrich).toHaveBeenCalledTimes(12);
         expect(peak).toBe(3);

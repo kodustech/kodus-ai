@@ -113,8 +113,9 @@ export async function enrichSuggestions(
         concurrency?: number;
         /** The model half; enrichOneShot unless a caller wraps it. */
         enrich?: typeof enrichOneShot;
-        /** The org the tokens are charged to. */
-        organizationId?: string;
+        /** The org the tokens are charged to. Required: a call without it is
+         *  missing from the org's Token Usage and credits. */
+        organizationId: string | undefined;
         /** Per-review attribution on each call's usage span. */
         usageAttrs?: Record<string, unknown>;
     },

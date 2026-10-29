@@ -159,11 +159,12 @@ export async function enrichOneShot(
         prebuiltModel?: unknown;
         telemetryMetadata?: LangfuseTelemetryMetadata;
         runName?: string;
-        /** Puts the call's tokens on the org's Token Usage and credits. */
-        organizationId?: string;
+        /** Puts the call's tokens on the org's Token Usage and credits.
+         *  Required, so no caller leaves it out by accident. */
+        organizationId: string | undefined;
         /** Per-review attribution on the usage span (teamId, prNumber). */
         attrs?: Record<string, unknown>;
-    } = {},
+    },
 ): Promise<ContentEnrichment | null> {
     const { system, user } = buildEnrichmentPrompt(input, false);
     const out = await LLM.run({
