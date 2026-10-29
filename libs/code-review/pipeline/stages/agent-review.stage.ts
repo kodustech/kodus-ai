@@ -7,6 +7,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
 import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import { enrichSuggestions } from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
+import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
@@ -1495,10 +1496,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
+            //
+            // The finder's suggestions carry no code: the cited lines, read
+            // from the PR head as the enrichment reads them, let the check
+            // match an earlier comment on the same code in another file.
+            const headFiles = new Map(
+                [...changedFiles, ...ignoredChangedFiles].map((f) => [
+                    f.filename,
+                    f,
+                ]),
+            );
+            const withCitedCode = severityNormalizedNonRules.map((s) => {
+                if (s.existingCode || isCustomAgentFinding(s)) return s;
+                const { existingCode } = enrichDeterministic(
+                    s,
+                    headFiles.get(s.relevantFile)?.fileContent ?? null,
+                );
+                return existingCode ? { ...s, existingCode } : s;
+            });
             const repeatCheck = await this.dropRepeats(
                 context,
                 [
-                    ...severityNormalizedNonRules,
+                    ...withCitedCode,
                     ...analyzerSuggestions,
                     ...kodyRulesWithSeverity,
                 ],

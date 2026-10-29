@@ -109,13 +109,16 @@ const makeStage = (wholeHistory: PrDecisionRecord[]) => {
     return { stage, reviewOrchestrator, historyUseCase };
 };
 
-const makeContext = (previousDecisions: PrDecisionRecord[]) =>
+const makeContext = (
+    previousDecisions: PrDecisionRecord[],
+    changedFiles: any[] = [{ filename: 'src/user.ts' }],
+) =>
     frozenContext({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'repo-1', fullName: 'acme/repo-1' },
         pullRequest: { number: 7 },
         platformType: 'GITHUB',
-        changedFiles: [{ filename: 'src/user.ts' }],
+        changedFiles,
         codeReviewConfig: {
             reviewOptions: {},
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
@@ -258,6 +261,46 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
                 priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
             }),
         ]);
+    });
+
+    it("matches a finder finding to an earlier comment on the same code in another file, by its cited lines", async () => {
+        const moved = earlier({
+            suggestionId: 'old-moved',
+            relevantFile: 'src/user.ts',
+            existingCode: 'const total = items.reduce((a, b) => a + b.price);',
+            suggestionContent: 'The reduce has no initial value.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([moved]);
+        // The finder's lean finding: lines and text, no code.
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([
+                {
+                    relevantFile: 'src/cart.ts',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    label: 'bug',
+                    suggestionContent: 'Empty carts throw a TypeError.',
+                },
+            ]),
+        );
+        const ctx = makeContext(
+            [moved],
+            [
+                {
+                    filename: 'src/cart.ts',
+                    fileContent:
+                        'export function total(items) {\nconst total = items.reduce((a, b) => a + b.price);\nreturn total;\n}\n',
+                },
+            ],
+        );
+
+        await run(stage, ctx);
+
+        const repeatCall = runSpy.mock.calls.find(
+            ([req]: any) => req.spanName === 'code-review::repeat-check',
+        );
+        expect(repeatCall).toBeDefined();
+        expect(JSON.stringify(repeatCall![0])).toContain('old-moved');
     });
 
     it('posts a bug the check does not match, with the revision link its finder chose', async () => {
