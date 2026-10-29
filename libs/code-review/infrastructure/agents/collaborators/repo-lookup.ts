@@ -116,6 +116,13 @@ const parentDirOf = (filePath: string): string => {
 const normalize = (p: string): string => p.replace(/^\.\//, '').trim();
 
 /**
+ * Sandboxes refuse absolute paths. Azure Repos reports changed files with a
+ * leading "/" ("/app/main.py"), so make a path relative to the repository root
+ * the way the agent's own read tool does before it reaches the sandbox.
+ */
+const repoRelative = (p: string): string => p.replace(/^\/+/, '');
+
+/**
  * Build the lookup for one review from the sandbox handle the pipeline already
  * carries. `undefined` (no sandbox at all, e.g. the trial flow) and a handle of
  * `type: 'null'` are the same thing here: unavailable.
@@ -185,13 +192,15 @@ export function buildRepoLookup(
 
         async read(path: string, start: number, end: number) {
             guard(`read ${path}`);
-            return tally('read', () => remote!.read(path, start, end));
+            return tally('read', () =>
+                remote!.read(repoRelative(path), start, end),
+            );
         },
 
         async exists(path: string) {
             guard(`check whether ${path} exists`);
             const listing = await tally('exists', () =>
-                remote!.listDir(parentDirOf(path), 1),
+                remote!.listDir(parentDirOf(repoRelative(path)), 1),
             );
             // A provider reports a broken command as an `Error: ` payload rather
             // than by throwing (the same convention `grep` uses). Parsed as a
@@ -203,7 +212,7 @@ export function buildRepoLookup(
                     listing.slice('Error:'.length).trim(),
                 );
             }
-            const wanted = normalize(path);
+            const wanted = normalize(repoRelative(path));
             return listing
                 .split('\n')
                 .map(normalize)
@@ -216,7 +225,11 @@ export function buildRepoLookup(
             }
             let content: string;
             try {
-                content = await remote!.read(knownChangedFile, 0, 0);
+                content = await remote!.read(
+                    repoRelative(knownChangedFile),
+                    0,
+                    0,
+                );
             } catch (err) {
                 disable('a read of a known changed file threw', {
                     file: knownChangedFile,

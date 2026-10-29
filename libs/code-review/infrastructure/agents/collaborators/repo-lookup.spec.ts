@@ -249,3 +249,45 @@ describe('probe — an available lookup that answers with silence is not availab
         expect(warn).not.toHaveBeenCalled();
     });
 });
+
+describe('a path that starts with "/" is read relative to the repository root (Azure Repos)', () => {
+    // Azure changed files keep the API's `item.path` ("/app/main.py"), and the
+    // sandboxes reject absolute paths outright.
+    const rejectingAbsolute = (): Partial<
+        SandboxInstance['remoteCommands']
+    > => ({
+        read: jest.fn(async (path: string) => {
+            if (path.startsWith('/')) {
+                throw new Error('Absolute paths are not allowed');
+            }
+            return 'export const x = 1;\n';
+        }),
+    });
+
+    it('keeps the lookup available when the probe file starts with a slash', async () => {
+        const lookup = buildRepoLookup(realHandle(rejectingAbsolute()));
+
+        await lookup.probe('/app/main.py');
+
+        expect(lookup.available).toBe(true);
+    });
+
+    it('read forwards the path without the leading slash', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/app/main.py', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('app/main.py', 1, 1);
+    });
+
+    it('exists lists the parent directory without the leading slash', async () => {
+        const listDir = jest
+            .fn()
+            .mockResolvedValue('app/main.py\napp/test_main.py\n');
+        const lookup = buildRepoLookup(realHandle({ listDir }));
+
+        await expect(lookup.exists('/app/test_main.py')).resolves.toBe(true);
+        expect(listDir).toHaveBeenCalledWith('app', 1);
+    });
+});
