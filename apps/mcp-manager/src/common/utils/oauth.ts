@@ -375,10 +375,11 @@ export async function checkAndRefreshOAuth(
             validateStatus: () => true,
         });
 
-        // RFC 6749 §5.2: the provider answers 400 (invalid_grant) or 401 when
-        // the refresh token is revoked or expired. Only a new authorization fixes
-        // that; any other failure can pass.
-        if (tokenResp.status === 400 || tokenResp.status === 401) {
+        // RFC 6749 §5.2: `invalid_grant` is the answer for a refresh token that
+        // is revoked or expired; only a new authorization fixes that. Other
+        // 400/401 codes (invalid_request, invalid_client) say nothing about
+        // the grant.
+        if (tokenErrorCode(tokenResp) === 'invalid_grant') {
             throw new OAuthGrantRejectedError(
                 `Failed to refresh tokens${tokenError(tokenResp)}`,
             );

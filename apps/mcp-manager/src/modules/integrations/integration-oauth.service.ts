@@ -214,6 +214,18 @@ export class IntegrationOAuthService {
             return oauthState;
         } catch (error) {
             if (error instanceof OAuthGrantRejectedError) {
+                // A rotating refresh token is spent by the first refresh: a
+                // concurrent request that got here first has already saved the
+                // new grant, and this refusal is only about the old token.
+                const stored = await this.getOAuthState(
+                    organizationId,
+                    integrationId,
+                );
+                const storedRefresh = (stored?.tokens as TokenData)
+                    ?.refreshToken;
+                if (storedRefresh && storedRefresh !== current.refreshToken) {
+                    return stored;
+                }
                 return this.markGrantLost(
                     organizationId,
                     integrationId,
@@ -249,13 +261,16 @@ export class IntegrationOAuthService {
                 reason,
             },
         );
+        // Drop the tokens too: other read paths (custom integrations'
+        // getValidAccessToken) read the stored state without its status.
+        const lost = { ...oauthState, tokens: undefined };
         await this.saveOAuthState(
             organizationId,
             integrationId,
             MCPIntegrationOAuthStatus.INACTIVE,
-            oauthState,
+            lost,
         );
-        return { ...oauthState, tokens: undefined };
+        return lost;
     }
 
     async refreshIntegrationOAuthIfNeeded(

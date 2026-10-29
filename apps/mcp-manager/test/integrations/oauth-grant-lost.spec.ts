@@ -98,6 +98,69 @@ describe('IntegrationOAuthService — a grant that can no longer be refreshed', 
         expect(axios.post).toHaveBeenCalledTimes(1);
     });
 
+    it('drops the stored tokens, so no other read path hands them out', async () => {
+        await storeExpired({ refreshToken: 'revoked-refresh' });
+        (axios.post as jest.Mock).mockResolvedValue({
+            status: 400,
+            data: { error: 'invalid_grant' },
+        });
+
+        await service.resolveManagedAuthHeaders(ORG, INT);
+
+        expect((await service.getOAuthState(ORG, INT))?.tokens).toBeUndefined();
+    });
+
+    it.each([
+        ['400 invalid_request', 400, 'invalid_request'],
+        ['401 invalid_client', 401, 'invalid_client'],
+    ])(
+        'keeps the grant on a %s, which does not say the grant is gone',
+        async (_label, status, error) => {
+            await storeExpired({ refreshToken: 'good-refresh' });
+            (axios.post as jest.Mock).mockResolvedValue({
+                status,
+                data: { error },
+            });
+
+            await service.resolveManagedAuthHeaders(ORG, INT);
+
+            expect(await service.getOAuthStatus(ORG, INT)).toBe(
+                MCPIntegrationOAuthStatus.ACTIVE,
+            );
+        },
+    );
+
+    it('keeps the grant another request rotated while this one was refused', async () => {
+        await storeExpired({ refreshToken: 'r1' });
+        (axios.post as jest.Mock).mockImplementation(async () => {
+            // A concurrent request spent r1 first and saved the rotated grant.
+            await service.saveOAuthState(
+                ORG,
+                INT,
+                MCPIntegrationOAuthStatus.ACTIVE,
+                {
+                    clientId: 'client-1',
+                    redirectUri: 'https://app.kodus.io/callback',
+                    asMetadata: { token_endpoint: 'https://idp/token' },
+                    tokens: {
+                        accessToken: 'fresh-access',
+                        refreshToken: 'r2',
+                        expiresIn: 3600,
+                        expiresAt: Date.now() + 3_600_000,
+                    },
+                } as any,
+            );
+            return { status: 400, data: { error: 'invalid_grant' } };
+        });
+
+        expect(await service.resolveManagedAuthHeaders(ORG, INT)).toEqual({
+            Authorization: 'Bearer fresh-access',
+        });
+        expect(await service.getOAuthStatus(ORG, INT)).toBe(
+            MCPIntegrationOAuthStatus.ACTIVE,
+        );
+    });
+
     it('marks the grant inactive when an expiring token has no refresh token', async () => {
         await storeExpired({ refreshToken: undefined });
 
