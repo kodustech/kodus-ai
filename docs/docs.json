@@ -55,6 +55,7 @@
                                         "group": "Advanced Configs",
                                         "pages": [
                                             "en/how_to_use/code_review/configs/general",
+                                            "en/how_to_use/code_review/configs/auto_approve",
                                             "en/how_to_use/code_review/configs/centralized_config",
                                             "en/how_to_use/code_review/configs/inheritance_overrides",
                                             "en/how_to_use/code_review/configs/directory_level",
@@ -395,6 +396,7 @@
                                         "group": "Configuraciones Avanzadas",
                                         "pages": [
                                             "es/how_to_use/code_review/configs/general",
+                                            "es/how_to_use/code_review/configs/auto_approve",
                                             "es/how_to_use/code_review/configs/centralized_config",
                                             "es/how_to_use/code_review/configs/inheritance_overrides",
                                             "es/how_to_use/code_review/configs/directory_level",
@@ -735,6 +737,7 @@
                                         "group": "Configurações Avançadas",
                                         "pages": [
                                             "pt-BR/how_to_use/code_review/configs/general",
+                                            "pt-BR/how_to_use/code_review/configs/auto_approve",
                                             "pt-BR/how_to_use/code_review/configs/centralized_config",
                                             "pt-BR/how_to_use/code_review/configs/inheritance_overrides",
                                             "pt-BR/how_to_use/code_review/configs/directory_level",
@@ -1075,6 +1078,7 @@
                                         "group": "詳細設定",
                                         "pages": [
                                             "ja/how_to_use/code_review/configs/general",
+                                            "ja/how_to_use/code_review/configs/auto_approve",
                                             "ja/how_to_use/code_review/configs/centralized_config",
                                             "ja/how_to_use/code_review/configs/inheritance_overrides",
                                             "ja/how_to_use/code_review/configs/directory_level",
@@ -1415,6 +1419,7 @@
                                         "group": "高级配置",
                                         "pages": [
                                             "zh/how_to_use/code_review/configs/general",
+                                            "zh/how_to_use/code_review/configs/auto_approve",
                                             "zh/how_to_use/code_review/configs/centralized_config",
                                             "zh/how_to_use/code_review/configs/inheritance_overrides",
                                             "zh/how_to_use/code_review/configs/directory_level",
