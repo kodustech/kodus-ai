@@ -1188,6 +1188,26 @@ describe('finderRunEnvironment — instruction citations', () => {
     });
 });
 
+describe('finderRunEnvironment — overhead', () => {
+    it("counts Claude's writing policy in the fixed overhead", () => {
+        const model = new MockLanguageModelV3({});
+        // A category prompt sentence the Claude writing policy rewrites.
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const env = (over: Record<string, unknown>) =>
+            finderRunEnvironment(
+                makeInput(model, { systemPrompt, ...over }),
+                secrets,
+            );
+        const other = env({ byokProvider: 'openai' });
+        const claude = env({ byokProvider: 'anthropic' });
+        expect(claude.finderSystemPrompt.length).toBeGreaterThan(
+            other.finderSystemPrompt.length,
+        );
+        expect(claude.overheadTokens).toBeGreaterThan(other.overheadTokens);
+    });
+});
+
 describe('runAgentLoopViaCore — finder labels', () => {
     const labelsOffered = async (over: Record<string, unknown>) => {
         let enumOffered: string[] | undefined;

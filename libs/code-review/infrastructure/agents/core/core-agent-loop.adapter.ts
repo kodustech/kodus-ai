@@ -157,8 +157,20 @@ export function finderRunEnvironment(
     // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
     // schema (~210 tokens) is part of the real overhead and must be counted too
     // — it matters on small windows where the safety margin is tight.
+    // Claude gets the WHAT/WHY/HOW writing policy (#1821), so its system
+    // prompt, and the overhead counted from it, carry the policy too.
+    const claudeSafeWording =
+        input.byokProvider === 'anthropic' ||
+        [
+            secrets.byokConfig?.model,
+            secrets.byokConfig?.fallback?.model,
+            (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
+        ].some((id) => typeof id === 'string' && /claude/i.test(id));
+    const finderSystemPrompt = claudeSafeWording
+        ? withClaudeWritingPolicy(input.systemPrompt)
+        : input.systemPrompt;
     const overheadTokens = contextWindowTokens
-        ? estimateOverheadTokens(input.systemPrompt, [
+        ? estimateOverheadTokens(finderSystemPrompt, [
               ...tools.list(),
               submitResultTool,
           ])
@@ -209,6 +221,8 @@ export function finderRunEnvironment(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeSafeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
         finderRunner,
@@ -264,6 +278,8 @@ export async function runAgentLoopViaCore(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeSafeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
         finderRunner,
@@ -284,20 +300,10 @@ export async function runAgentLoopViaCore(
         !!input.skipHeavyPasses;
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
-    // Claude gets the WHAT/WHY/HOW writing policy and the one-problem rule
-    // (#1821); every other model keeps the prompts as built. The bench passes a
-    // prebuilt model with no slot.
-    const claudeSafeWording =
-        input.byokProvider === 'anthropic' ||
-        [
-            secrets.byokConfig?.model,
-            fallbackModelId,
-            (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
-        ].some((id) => typeof id === 'string' && /claude/i.test(id));
+    // Claude also gets the one-problem rule in the user prompt (#1821); every
+    // other model keeps the prompts as built.
     const finderSpec = buildFinderAgentSpec({
-        systemPrompt: claudeSafeWording
-            ? withClaudeWritingPolicy(input.systemPrompt)
-            : input.systemPrompt,
+        systemPrompt: finderSystemPrompt,
         modelId: specModelId,
         fallbackModelId,
         usageRunName: input.usageRunName,
