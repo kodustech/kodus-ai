@@ -81,7 +81,9 @@ describe('resolveReviewAgentModel', () => {
     describe('per-run model override', () => {
         it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
             await run({ byokModelId: 'm-B', byokModel: 'gpt-4o' });
-            expect(overrideCtx()).toEqual({ override: { modelId: 'm-B' } });
+            expect(overrideCtx()).toEqual({
+                override: { modelId: 'm-B', byId: true },
+            });
         });
 
         it('falls back to the trimmed byokModel NAME when no id is set', async () => {

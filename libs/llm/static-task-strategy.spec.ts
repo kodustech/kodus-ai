@@ -252,6 +252,35 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
             expect(v.modelName).toBe('gpt-5-mini');
         });
     });
+
+    describe('id override that no longer resolves (model deleted from BYOK)', () => {
+        it('skips it and routes the task normally instead of sending the id as a model name', () => {
+            const v = strategy.resolve(
+                'customAgent',
+                {
+                    override: {
+                        modelId: '97ad0d7d-181c-4387-b908-fbaee2fd1989',
+                        byId: true,
+                    },
+                },
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-A');
+            expect(v.modelName).toBeUndefined();
+            expect(v.reason).toContain(
+                'override "97ad0d7d-181c-4387-b908-fbaee2fd1989": no model with this id',
+            );
+        });
+
+        it('still applies an unmatched legacy NAME onto the routed slot', () => {
+            const v = strategy.resolve(
+                'codeReview',
+                { override: { modelId: 'gpt-5-mini', byId: false } },
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelName).toBe('gpt-5-mini');
+        });
+    });
 });
 
 /**

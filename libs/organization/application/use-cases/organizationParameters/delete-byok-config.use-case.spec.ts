@@ -224,6 +224,30 @@ describe('DeleteByokConfigUseCase — referential-integrity guard (REQ-DELETE-01
         expect(deleteByokModel).not.toHaveBeenCalled();
     });
 
+    it('rejects a model a custom agent runs on, naming the agent', async () => {
+        const codeReviewConfig = {
+            configs: {
+                customAgents: [
+                    {
+                        id: 'new-agent-6',
+                        name: 'silent-failures',
+                        models: { run: 'm2' },
+                    },
+                ],
+            },
+            repositories: [],
+        };
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            codeReviewConfig,
+        });
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).rejects.toThrow(
+            /custom agent "silent-failures"/,
+        );
+        expect(deleteByokModel).not.toHaveBeenCalled();
+    });
+
     it('(c) delegates to deleteByokModel for an unreferenced model (guard clear)', async () => {
         // m2 is not referenced by routing (default→m1) and there are no overrides.
         const { useCase, deleteByokModel } = buildUseCase({

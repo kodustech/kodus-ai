@@ -118,6 +118,10 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const requirement = TASK_CAPABILITY_REQUIREMENTS[task];
 
         const skips: string[] = [];
+        const overrideRef = ctx.override?.modelId?.trim();
+        if (overrideRef && ctx.override?.byId && !byId.has(overrideRef)) {
+            skips.push(`override "${overrideRef}": no model with this id`);
+        }
         // Dedup exact (id + nameOverride) repeats so a model that is BOTH a higher
         // tier and a lower one (e.g. the folder override id == defaultModelId) is
         // gated once, not twice — no redundant capability lookup, no duplicated
@@ -238,9 +242,11 @@ export class StaticTaskStrategy implements RoutingStrategy {
             if (byIdMatch) {
                 // id override → route straight to that model.
                 candidates.push({ model: byIdMatch, tier: 'override' });
-            } else if (routedModel) {
+            } else if (routedModel && !ctx.override?.byId) {
                 // NAME override (W1): not a models[] id → apply the name onto the
                 // chosen slot's `.model`, mirroring the legacy byokModel behavior.
+                // An id ref is never a name: a deleted model's id sent as a model
+                // name fails every call.
                 candidates.push({
                     model: routedModel,
                     tier: 'override(name)',

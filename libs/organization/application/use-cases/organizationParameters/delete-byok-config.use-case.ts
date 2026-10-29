@@ -10,6 +10,7 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { isByokConfig } from '@libs/llm/byok-config';
 import { findModelReferences } from '@libs/llm/validate-byok-config-refs';
+import { collectCustomAgentModelOverrides } from './model-overrides.util';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 
@@ -186,8 +187,13 @@ export class DeleteByokConfigUseCase {
                 modelId,
                 model?.model,
             );
+            // A custom agent pins its model by id; deleting it left the agent
+            // calling the provider with that id as the model name.
+            const agentRefs = collectCustomAgentModelOverrides(codeReviewConfig)
+                .filter((agent) => agent.model === modelId)
+                .map((agent) => `custom agent "${agent.agentName}"`);
 
-            const usages = [...routingRefs, ...overrideRefs];
+            const usages = [...routingRefs, ...overrideRefs, ...agentRefs];
             if (usages.length > 0) {
                 throw new BadRequestException(
                     `Model "${modelId}" is in use and cannot be deleted. ` +

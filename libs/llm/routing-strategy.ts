@@ -21,9 +21,23 @@ import type { BYOKConfig, LlmTask } from './byok-config';
  *  - `override`: a folder/repo model override (top of the precedence chain). Its
  *    `modelId` may be a v2 `models[]` id OR a legacy model NAME — see the
  *    id-THEN-name contract in StaticTaskStrategy (REQ-COMPAT-01 read window).
+ *    `byId` says the ref came from an id field (`byokModelId`, a custom agent's
+ *    `models.run`): it is never a name, so an id that no longer resolves is
+ *    skipped instead of being sent to the provider as a model name.
  */
 export interface RequestContext {
-    override?: { modelId?: string };
+    override?: { modelId?: string; byId?: boolean };
+}
+
+/** The override context for a stored id (wins) and a legacy model NAME. */
+export function overrideContext(
+    byokModelId?: string,
+    byokModel?: string,
+): RequestContext {
+    const id = byokModelId?.trim();
+    if (id) return { override: { modelId: id, byId: true } };
+    const name = byokModel?.trim();
+    return name ? { override: { modelId: name } } : {};
 }
 
 /**
