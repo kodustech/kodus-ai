@@ -435,7 +435,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('token limit') ||
         lower.includes('too many tokens') ||
         // OpenAI: "Your input exceeds the context window of this model."
-        lower.includes('exceeds the context window')
+        lower.includes('exceeds the context window') ||
+        // A gateway that caps the body: "The total text input size exceeds 8 MB".
+        lower.includes('input size exceeds')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }

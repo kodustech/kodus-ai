@@ -334,6 +334,16 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Production 2026-10-29: a gateway caps the request body instead of
+        // the token count. Read as UNKNOWN, the PR summary never retried on a
+        // smaller budget and failed outright.
+        it('"total text input size exceeds 8 MB" → CONTEXT_OVERFLOW', () => {
+            const err = new Error('The total text input size exceeds 8 MB');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
         it('"Model does not support this protocol" → MODEL_NOT_FOUND', () => {
             const err = new Error('Model does not support this protocol.');
             expect(classifyLLMError(err).category).toBe(
