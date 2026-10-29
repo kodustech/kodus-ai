@@ -53,16 +53,16 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
     () => {
         let admin: DataSource;
         let ds: DataSource;
-        let canRun = true;
 
         beforeAll(async () => {
             admin = new DataSource({ type: 'postgres', ...PG });
-            try {
-                await admin.initialize();
-            } catch {
-                canRun = false;
-                return;
-            }
+            // No silent pass: without a database this suite proves nothing,
+            // so it fails unless it was skipped on purpose.
+            await admin.initialize().catch((error) => {
+                throw new Error(
+                    `Postgres unreachable at ${PG.host}:${PG.port} (${error.message}); set SKIP_INTEGRATION=true to skip this suite`,
+                );
+            });
             await admin.query(`DROP DATABASE IF EXISTS ${SCRATCH_DB}`);
             await admin.query(`CREATE DATABASE ${SCRATCH_DB}`);
             const bootstrap = new DataSource({
@@ -84,7 +84,7 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         afterAll(async () => {
-            if (!canRun) return;
+            if (!admin?.isInitialized) return;
             await ds?.destroy();
             await admin.query(`DROP DATABASE IF EXISTS ${SCRATCH_DB}`);
             await admin.destroy();
@@ -129,7 +129,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         };
 
         it('leaves the connection ACTIVE when the user reconnected after the read', async () => {
-            if (!canRun) return;
             await seed(MCPIntegrationOAuthStatus.ACTIVE);
 
             expect(await expireAfterStaleRead()).toBe(
@@ -138,7 +137,6 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
         });
 
         it('expires the connection while the grant is still lost', async () => {
-            if (!canRun) return;
             await seed(MCPIntegrationOAuthStatus.INACTIVE);
 
             expect(await expireAfterStaleRead()).toBe(
