@@ -51,6 +51,22 @@ describe("readFirstTouchFromDocument", () => {
         expect(readFirstTouchFromDocument()).toBeUndefined();
     });
 
+    it("returns undefined when reading cookies throws", () => {
+        const spy = jest
+            .spyOn(document, "cookie", "get")
+            .mockImplementation(() => {
+                throw new DOMException(
+                    "The operation is insecure.",
+                    "SecurityError",
+                );
+            });
+        try {
+            expect(readFirstTouchFromDocument()).toBeUndefined();
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
     it("finds it among other cookies", () => {
         document.cookie = "pll_language=pt; Path=/";
         document.cookie = `${FIRST_TOUCH_COOKIE}=${encodeURIComponent(

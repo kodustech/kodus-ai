@@ -40,8 +40,17 @@ export const parseFirstTouchCookie = (
 export const readFirstTouchFromDocument = (): FirstTouchPayload | undefined => {
     if (typeof document === "undefined") return undefined;
 
+    // Reading document.cookie throws where cookies are blocked (sandboxed
+    // frames, opaque origins); the signup must go ahead without attribution.
+    let cookies: string;
+    try {
+        cookies = document.cookie;
+    } catch {
+        return undefined;
+    }
+
     const prefix = `${FIRST_TOUCH_COOKIE}=`;
-    const entry = document.cookie
+    const entry = cookies
         .split(";")
         .map((part) => part.trim())
         .find((part) => part.startsWith(prefix));
