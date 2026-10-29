@@ -19,6 +19,12 @@ import { InstallationStatus } from "@services/setup/types";
 import { AxiosError } from "axios";
 import { getCookie, deleteCookie } from "cookies-next/client";
 import { CopyIcon } from "lucide-react";
+import {
+    GITHUB_CODE_PARAM,
+    GITHUB_STATE_PARAM,
+    githubAuthorizationReturnPath,
+    startGithubInstallationAuthorization,
+} from "src/core/integrations/github-installation-authorization";
 import { PlatformType } from "src/core/types";
 import { axiosAuthorized } from "src/core/utils/axios";
 
@@ -28,6 +34,12 @@ export default function GithubIntegrationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const installationId = searchParams.get("installation_id");
+    // GitHub's user authorization sends `code` and `state` back here; the
+    // page that started it gets them as github_code and github_state.
+    const returnedCode = searchParams.get("code");
+    const returnedState = searchParams.get("state");
+    const githubCode = searchParams.get(GITHUB_CODE_PARAM);
+    const githubState = searchParams.get(GITHUB_STATE_PARAM);
 
     const { data, isLoading, error } = useGetGithubIntegrationByInstallId(
         installationId ?? "",
@@ -54,6 +66,13 @@ export default function GithubIntegrationClient() {
     }
 
     useEffect(() => {
+        if (returnedCode && returnedState && !githubCode) {
+            router.replace(
+                githubAuthorizationReturnPath(returnedCode, returnedState),
+            );
+            return;
+        }
+
         if (!installationId) {
             setStep("failed");
             return;
@@ -61,7 +80,6 @@ export default function GithubIntegrationClient() {
         if (isLoading) return;
 
         if (data?.status === InstallationStatus.SUCCESS) {
-            setOrganizationName(data.organizationName);
             setStep("success");
             return;
         }
@@ -91,6 +109,18 @@ export default function GithubIntegrationClient() {
         creatingRef.current = true;
         setStep("creating");
 
+        if (!githubCode || !githubState) {
+            startGithubInstallationAuthorization(
+                installationId,
+                `/github-integration?installation_id=${encodeURIComponent(installationId)}`,
+            ).catch((err) => {
+                console.error("[GithubIntegration] authorization failed", err);
+                setStep("failed");
+                creatingRef.current = false;
+            });
+            return;
+        }
+
         (async () => {
             try {
                 const orgIdResp = await axiosAuthorized.fetcher<string>(
@@ -110,6 +140,8 @@ export default function GithubIntegrationClient() {
                 const response = await createCodeManagementIntegration({
                     integrationType: PlatformType.GITHUB,
                     installationId,
+                    githubCode,
+                    githubState,
                     organizationAndTeamData: {
                         organizationId,
                         teamId: team.uuid!,
@@ -162,7 +194,17 @@ export default function GithubIntegrationClient() {
                 creatingRef.current = false;
             }
         })();
-    }, [data, error, installationId, isLoading, router]);
+    }, [
+        data,
+        error,
+        installationId,
+        isLoading,
+        router,
+        returnedCode,
+        returnedState,
+        githubCode,
+        githubState,
+    ]);
 
     if (step === "checking" || step === "creating" || isLoading) {
         return (
@@ -178,11 +220,17 @@ export default function GithubIntegrationClient() {
                 <Card className="w-lg">
                     <CardHeader>
                         <CardTitle>
-                            GitHub integration with{" "}
-                            <span className="text-primary-light">
-                                {organizationName ?? data?.organizationName}
-                            </span>{" "}
-                            successfully completed!
+                            {organizationName ? (
+                                <>
+                                    GitHub integration with{" "}
+                                    <span className="text-primary-light">
+                                        {organizationName}
+                                    </span>{" "}
+                                    successfully completed!
+                                </>
+                            ) : (
+                                "GitHub integration successfully completed!"
+                            )}
                         </CardTitle>
                     </CardHeader>
 
