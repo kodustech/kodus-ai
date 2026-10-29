@@ -1,1 +1,0 @@
-ajustar-formula.py
