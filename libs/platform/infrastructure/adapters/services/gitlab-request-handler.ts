@@ -25,11 +25,18 @@ const logger = createLogger('gitlab-request-handler');
  * every call with 429 for 12 minutes straight after onboarding, and the
  * review it was there to test was skipped as rate-limited.
  *
- * Here a 429 is not retried. It puts the token in a cooldown for as long as
- * GitLab asks, and every call with that token fails locally until the
- * cooldown ends, so the callers that do retry (`with429Retry`, the RabbitMQ
- * republish) wait it out without spending more of the quota. The error keeps
- * the wait, so those callers sleep for exactly that long.
+ * Here a 429 is not retried. It starts a cooldown for as long as GitLab asks,
+ * and calls under it fail locally until it ends, so the callers that do retry
+ * (`with429Retry`, the RabbitMQ republish) wait it out without spending more
+ * of the quota. The error keeps the wait, so those callers sleep for exactly
+ * that long.
+ *
+ * The cooldown covers what the 429 covered. GitLab's per-user limit ("Rate
+ * limit exceeded") refuses every endpoint, so it cools the whole token. Its
+ * per-endpoint limits ("This endpoint has been requested too many times",
+ * e.g. 60 note creations a minute on gitlab.com) refuse only that call, so
+ * they cool only that method and path: publishing comments too fast must not
+ * stop the same org's other reviews from reading.
  *
  * 502 keeps gitbeaker's original behaviour.
  */
@@ -45,8 +52,11 @@ export const GITLAB_MAX_RETRY_AFTER_MS = 5 * 60_000;
 
 const RETRY_502_ATTEMPTS = 10;
 
-// Token fingerprint (+ host) -> epoch ms until which the token is cooling down.
+// Token fingerprint (+ host), or that plus method and path, -> epoch ms until
+// which it is cooling down.
 const cooldowns = new Map<string, number>();
+
+const ENDPOINT_LIMIT_BODY = /requested too many times/i;
 
 export class GitlabRateLimitedError extends GitbeakerRetryError {
     readonly status = 429;
@@ -98,6 +108,21 @@ export function parseGitlabRetryAfterMs(
 
 function clampRetryAfter(ms: number): number {
     return Math.min(Math.max(ms, 1_000), GITLAB_MAX_RETRY_AFTER_MS);
+}
+
+function remainingCooldownMs(...keys: string[]): number {
+    const now = Date.now();
+    let remaining = 0;
+    for (const key of keys) {
+        const until = cooldowns.get(key);
+        if (until === undefined) continue;
+        if (until <= now) {
+            cooldowns.delete(key);
+            continue;
+        }
+        remaining = Math.max(remaining, until - now);
+    }
+    return remaining;
 }
 
 function cooldownKey(origin: string, headers: unknown): string {
@@ -193,16 +218,13 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
     const mode = endpoint.includes('repository/archive')
         ? 'same-origin'
         : undefined;
-    const key = cooldownKey(url.origin, opts.headers);
+    const tokenKey = cooldownKey(url.origin, opts.headers);
+    const endpointKey = `${tokenKey}|${method} ${url.pathname}`;
 
     for (let i = 0; i < RETRY_502_ATTEMPTS; i += 1) {
-        const coolingUntil = cooldowns.get(key);
-        if (coolingUntil !== undefined) {
-            const remaining = coolingUntil - Date.now();
-            if (remaining > 0) {
-                throw new GitlabRateLimitedError(remaining, url.origin, true);
-            }
-            cooldowns.delete(key);
+        const remaining = remainingCooldownMs(tokenKey, endpointKey);
+        if (remaining > 0) {
+            throw new GitlabRateLimitedError(remaining, url.origin, true);
         }
 
         const request = new Request(url, { ...opts, method, mode });
@@ -222,13 +244,19 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
 
         if (response.status === 429) {
             const retryAfterMs = parseGitlabRetryAfterMs(response.headers);
-            cooldowns.set(key, Date.now() + retryAfterMs);
+            const body = await response.text().catch(() => '');
+            const endpointOnly = ENDPOINT_LIMIT_BODY.test(body);
+            cooldowns.set(
+                endpointOnly ? endpointKey : tokenKey,
+                Date.now() + retryAfterMs,
+            );
             logger.warn({
-                message: `GitLab 429 on ${method} ${url.pathname}; cooling the token down for ${retryAfterMs}ms`,
+                message: `GitLab 429 on ${method} ${url.pathname}; cooling ${endpointOnly ? 'this endpoint' : 'the token'} down for ${retryAfterMs}ms`,
                 context: 'gitlabRequestHandler',
                 metadata: {
                     origin: url.origin,
                     retryAfterMs,
+                    scope: endpointOnly ? 'endpoint' : 'token',
                     rateLimitLimit: response.headers.get('ratelimit-limit'),
                     rateLimitObserved:
                         response.headers.get('ratelimit-observed'),

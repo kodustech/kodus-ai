@@ -76,6 +76,35 @@ describe('GitlabService', () => {
         ).resolves.toBeNull();
     });
 
+    // A rate-limit error has no `cause`; reading `cause.description` threw a
+    // TypeError, so the comment publisher never saw the 429.
+    it('surfaces a rate-limited inline comment as a 429, not a TypeError', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const rateLimited = Object.assign(
+            new Error('GitLab answered HTTP 429; retry after 30s'),
+            { name: 'GitbeakerRetryError', status: 429, retryAfterMs: 30_000 },
+        );
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequests: {
+                allDiffVersions: jest.fn().mockRejectedValue(rateLimited),
+            },
+        });
+
+        const error = await service
+            .createReviewComment({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                lineComment: { path: 'a.ts', line: 1, body: 'x' },
+            })
+            .catch((e) => e);
+
+        expect(error).not.toBeInstanceOf(TypeError);
+        expect(error.status).toBe(429);
+        expect(error.retryAfterMs).toBe(30_000);
+        expect(error.errorType).toBe('failed');
+    });
+
     it('posts status as a plain note and PR-level findings as discussions', async () => {
         jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
         const createNote = jest.fn().mockResolvedValue({ id: 11 });

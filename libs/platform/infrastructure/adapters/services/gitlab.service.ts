@@ -2637,7 +2637,9 @@ export class GitlabService implements Omit<
                 updatedAt: discussion?.notes[0]?.updated_at,
             };
         } catch (error) {
-            const isLineMismatch = error.cause.description.includes(
+            // A rate-limit error carries no `cause`; reading it threw a
+            // TypeError that hid the 429 from the caller.
+            const isLineMismatch = !!error?.cause?.description?.includes(
                 'must be a valid line code',
             );
 

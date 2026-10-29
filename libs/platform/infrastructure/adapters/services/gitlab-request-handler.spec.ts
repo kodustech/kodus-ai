@@ -135,6 +135,53 @@ describe('gitlabRequestHandler', () => {
         expect(result.body).toEqual({ ok: true });
     });
 
+    // gitlab.com caps note creation at 60/min per user. Publishing comments
+    // too fast must not stop the same org's other reviews from reading.
+    it('cools only the endpoint on a per-endpoint limit', async () => {
+        fetchMock
+            .mockResolvedValueOnce(
+                jsonResponse(
+                    429,
+                    {
+                        message:
+                            'This endpoint has been requested too many times. Try again later.',
+                    },
+                    { 'retry-after': '30' },
+                ),
+            )
+            .mockResolvedValueOnce(jsonResponse(200, { id: 1 }));
+        const notes = 'projects/1/merge_requests/2/discussions';
+        const post = { ...options(), method: 'POST' };
+        await gitlabRequestHandler(notes, post).catch(() => undefined);
+
+        const read = await gitlabRequestHandler('user', options());
+        const again = await gitlabRequestHandler(notes, post).catch((e) => e);
+
+        expect(read.body).toEqual({ id: 1 });
+        expect(is429Error(again)).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('cools the whole token on the per-user limit', async () => {
+        fetchMock.mockResolvedValueOnce(
+            new Response(
+                'Rate limit exceeded; see https://docs.gitlab.com/user/gitlab_com/rate_limits/ for more details',
+                { status: 429, headers: { 'retry-after': '30' } },
+            ),
+        );
+        await gitlabRequestHandler('projects/1/merge_requests/2/discussions', {
+            ...options(),
+            method: 'POST',
+        }).catch(() => undefined);
+
+        const read = await gitlabRequestHandler('user', options()).catch(
+            (e) => e,
+        );
+
+        expect(is429Error(read)).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('lets with429Retry wait the cooldown out with two requests, not forty', async () => {
         jest.useFakeTimers({ now: 1_000_000, advanceTimers: true });
         fetchMock
