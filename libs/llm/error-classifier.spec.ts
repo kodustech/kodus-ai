@@ -126,6 +126,33 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Read off production (#2104): Z.AI's weekly/monthly cap (code 1310)
+        // says neither quota nor balance, so it landed on RATE_LIMIT. A
+        // one-shot call (maxRetries: 0) never fails over on RATE_LIMIT, and the
+        // configured fallback sat unused until the cap reset.
+        it('reads the Z.AI weekly/monthly cap as a spent quota and fails over', () => {
+            const err = errorWithStatus(
+                'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        });
+
+        // Its neighbour, Z.AI code 1308, is a window that reopens within hours.
+        // It stays a rate limit, the cheap direction to be wrong in.
+        it('keeps the Z.AI short-window usage limit on RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                'Usage limit reached for 5 hour. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
         it('treats plain 429 → RATE_LIMIT', () => {
             const err = errorWithStatus('too many requests', 429);
             expect(classifyLLMError(err).category).toBe(
