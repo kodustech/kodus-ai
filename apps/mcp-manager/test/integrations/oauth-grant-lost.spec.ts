@@ -150,12 +150,17 @@ describe('IntegrationOAuthService — a grant that can no longer be refreshed', 
                     },
                 } as any,
             );
+            // The refresh call sets `validateStatus: () => true`, so axios
+            // resolves a 400 here as it does in production.
             return { status: 400, data: { error: 'invalid_grant' } };
         });
 
         expect(await service.resolveManagedAuthHeaders(ORG, INT)).toEqual({
             Authorization: 'Bearer fresh-access',
         });
+        const [url, body] = (axios.post as jest.Mock).mock.calls[0];
+        expect(url).toBe('https://idp/token');
+        expect(new URLSearchParams(body).get('refresh_token')).toBe('r1');
         expect(await service.getOAuthStatus(ORG, INT)).toBe(
             MCPIntegrationOAuthStatus.ACTIVE,
         );

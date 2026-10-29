@@ -248,6 +248,25 @@ describe('DeleteByokConfigUseCase — referential-integrity guard (REQ-DELETE-01
         expect(deleteByokModel).not.toHaveBeenCalled();
     });
 
+    it('ignores customAgents outside a scope configs (not where agents are stored)', async () => {
+        const codeReviewConfig = {
+            customAgents: [
+                { id: 'stray', name: 'stray', models: { run: 'm2' } },
+            ],
+            configs: {},
+            repositories: [],
+        };
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            codeReviewConfig,
+        });
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).resolves.toBe(
+            true,
+        );
+        expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
+    });
+
     it('(c) delegates to deleteByokModel for an unreferenced model (guard clear)', async () => {
         // m2 is not referenced by routing (default→m1) and there are no overrides.
         const { useCase, deleteByokModel } = buildUseCase({
