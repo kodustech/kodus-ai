@@ -35,7 +35,7 @@ export function secretFileRefusal(filePath: string): string {
 /**
  * Drops the lines of grep output that come from a secret file. rg prints
  * `path:line:text` for a match and `path-line-text` for a context line;
- * with namesOnly, the bare path. A path can hold ":" or "-" itself, so every
+ * with namesOnly, the bare path; a linked repository's lines carry its tag. A path can hold ":" or "-" itself, so every
  * candidate prefix ending before a line number is tested.
  */
 export function withoutSecretFileLines(output: string): string {
@@ -52,7 +52,11 @@ export function withoutSecretFileLines(output: string): string {
         .join('\n');
 }
 
-function lineFromSecretFile(line: string): boolean {
+/** Linked-repository grep tags each line with `[owner/repo] `. */
+const REPOSITORY_TAG = /^\[[^\]\s]+\] /;
+
+function lineFromSecretFile(tagged: string): boolean {
+    const line = tagged.replace(REPOSITORY_TAG, '');
     if (isSecretFilePath(line.trim())) return true;
     const boundary = /[:-]\d+[:-]/g;
     let match: RegExpExecArray | null;

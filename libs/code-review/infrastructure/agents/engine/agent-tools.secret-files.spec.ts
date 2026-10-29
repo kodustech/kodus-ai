@@ -4,7 +4,9 @@ import * as path from 'node:path';
 
 import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 
+import { buildFinderToolRegistry } from '../adapters/finder-tools.adapter';
 import { buildAgentTools } from './agent-tools.factory';
+import { withoutSecretFileLines } from './secret-files';
 
 /**
  * A repository can commit credentials: an env file, a private key. What a
@@ -27,6 +29,14 @@ describe('agent tools — secret files of the repository', () => {
             `-----BEGIN PRIVATE KEY-----\n${VALUE}\n`,
         );
         fs.writeFileSync(path.join(dir, '.env.example'), 'API_TOKEN=\n');
+        // Long enough, with declarations, for the outline-first read.
+        fs.writeFileSync(
+            path.join(dir, '.env.local'),
+            Array.from(
+                { length: 200 },
+                (_, i) => `export const KEY_${i} = '${VALUE}';`,
+            ).join('\n'),
+        );
         fs.writeFileSync(
             path.join(dir, 'src', 'config.ts'),
             `export const name = '${VALUE}';\n`,
@@ -77,6 +87,48 @@ describe('agent tools — secret files of the repository', () => {
         });
 
         expect(out).not.toContain(VALUE);
+    });
+
+    it.each(['directory', 'dir'])(
+        'does not grep a secret file named as %s',
+        async (alias) => {
+            const out = await buildAgentTools(rc).grep.execute({
+                pattern: 'API_TOKEN',
+                [alias]: '.env',
+            });
+
+            expect(out).not.toContain(VALUE);
+        },
+    );
+
+    it('does not outline a secret file on an outline-first read', async () => {
+        const { registry } = buildFinderToolRegistry({
+            remoteCommands: rc,
+            outlineFirst: true,
+        });
+
+        const res = await registry
+            .get('readFile')!
+            .execute({ path: '.env.local' }, {} as any);
+
+        expect(res.output).not.toContain(VALUE);
+        expect(res.output).not.toContain('KEY_1');
+        expect(res.output).toContain('secret');
+    });
+
+    it("drops a linked repository's secret files from its tagged grep lines", () => {
+        const out = withoutSecretFileLines(
+            [
+                `[org/api] src/config.ts:1:export const name = '${VALUE}';`,
+                `[org/api] id_rsa:2:${VALUE}`,
+                `[org/api] .env-3-API_TOKEN=${VALUE}`,
+                '[org/api] certs/server.pem',
+            ].join('\n'),
+        );
+
+        expect(out).toBe(
+            `[org/api] src/config.ts:1:export const name = '${VALUE}';`,
+        );
     });
 
     it('drops secret files from the sandbox rg output, context lines included', async () => {

@@ -1753,7 +1753,11 @@ function guardSecretFiles(tools: Record<string, any>): void {
         if (!tool) continue;
         const execute = tool.execute;
         tool.execute = async (args: any) => {
-            const searchPath = String(args?.path || '');
+            // Every alias grep reads its path from: a search scoped to one
+            // file prints its lines without the file name.
+            const searchPath = String(
+                args?.path || args?.directory || args?.dir || '',
+            );
             if (isSecretFilePath(searchPath)) {
                 return secretFileRefusal(searchPath);
             }
