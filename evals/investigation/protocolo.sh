@@ -36,12 +36,8 @@ if [ -d "pools/$NOME" ]; then echo "pools/$NOME ja existe — escolha outro vN" 
 
 export RECALL_SET=light
 export RECALL_MODEL="$MODELO"
-export RECALL_MICRO_AGENTS=1+sim
-export RECALL_FINDING_REASON=1
 export RECALL_SKIP_SYNTHESIS=1
-export RECALL_SKIP_BASE_PASS=1
 export RECALL_REAL_REPO=1
-export RECALL_REDUCER=v2
 export RECALL_GATE=0
 export RECALL_DUMP="$AQUI/pools/$NOME"
 # 8 PRs em paralelo: com 4 a VM do runo ficava ociosa (load 0,2) e a latencia

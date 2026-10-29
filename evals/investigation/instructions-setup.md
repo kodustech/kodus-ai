@@ -254,11 +254,8 @@ Três armadilhas já pagas com rodadas inteiras:
 ### Ligar na rodada
 
 ```bash
-RECALL_CALL_GRAPH=1 RECALL_MICRO_GRAPH=1 ...
+RECALL_CALL_GRAPH=1 ...
 ```
-
-As duas andam juntas: a primeira **constrói** o blob, a segunda **manda** no
-prompt. Ligar só a segunda não faz nada, em silêncio.
 
 ---
 

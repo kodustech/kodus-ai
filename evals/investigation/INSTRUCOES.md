@@ -162,139 +162,25 @@ são todas `=1` para ligar, salvo onde indicado.
 
 ### Arquiteturas de revisão
 
-Cada bloco abaixo é uma configuração distinta. Elas **se somam** ao generalista
-a menos que você desligue o generalista explicitamente.
-
 #### Generalista sozinho (a linha de base)
 
 Não ligue nada. Uma passada ampla sobre o diff inteiro.
 
 ```bash
 RECALL_REAL_REPO=1 RECALL_CALL_GRAPH=1 RECALL_MAX_STEPS=24 \
-RECALL_REDUCER=1 RECALL_SKIP_VERIFY=1 RECALL_REASONING_EFFORT=low
+RECALL_REASONING_EFFORT=low
 ```
 
 > O generalista **sempre roda com o call graph** por decisão do projeto —
 > produção já roda com ele, então medir sem é medir outra coisa.
 
-#### Plan + Shard
-
-```bash
-RECALL_SELECTOR_SHARD=1
-```
-
-Plano do LLM → `grep` no repositório → uma passada por grupo de call sites
-afetados. É a **única passada que lê código que o diff não contém**. Exige
-`RECALL_REAL_REPO=1` (fixture gravada não responde busca por código ausente do
-diff).
-
-Knobs: `RECALL_SHARD_CAP=<n>` (sites por PR, default 6),
-`RECALL_SHARD_PER_WORKER=<n>` (sites por worker),
-`RECALL_SHARD_DEDICATED=1` (worker ganha prompt próprio em vez de herdar o do
-generalista), `RECALL_SHARD_ALT=1`.
-
-#### Graph Shard
-
-```bash
-RECALL_GRAPH_SHARD=1 RECALL_CALL_GRAPH=1
-```
-
-Mesma passada de shard, mas os sites vêm do **blast radius da AST** em vez de
-plano do LLM + grep. Custa uma chamada de LLM a menos por PR e alcança
-dependentes que o grep perde estruturalmente (`USES_TYPE`, `INHERITS`).
-
-**Exige `RECALL_CALL_GRAPH=1`** — sem grafo não há sites, e a passada
-silenciosamente não faz nada. `RECALL_GRAPH_DEPTH=<n>` controla a profundidade
-(default 1).
-
-Ligar `RECALL_GRAPH_SHARD` sozinho faz substituição (`graphSitesOnly`); ligar os
-dois juntos mede o híbrido (grafo onde tem site, grep no resto).
-
-#### Microagentes
-
-```bash
-RECALL_MICRO_AGENTS=1 RECALL_SKIP_BASE_PASS=1 RECALL_SKIP_SYNTHESIS=1
-```
-
-**14 passadas estreitas**, uma por classe de defeito, definidas em
-`libs/code-review/infrastructure/agents/core/micro-agents.ts`. Cada agente
-carrega 1 a 7 itens de detecção e **nada mais** — sem Workflow, sem
-CoverageContract, sem as definições das outras treze classes. O prompt de
-instrução tem ~1k tokens contra os ~21k do system prompt do generalista.
-
-Os dois `SKIP` são o que torna isso um teste de "só os microagentes": sem eles o
-generalista roda junto e você não sabe quem achou o quê.
-
-`RECALL_MICRO_PLANNER=1` roteia antes — só as classes que o diff poderia conter
-ganham passada. **Medido e pior**: recall caiu de 32,6% para 21,1%.
-
-#### Scout / Investigator
-
-```bash
-RECALL_SCOUT_INVESTIGATOR=1
-```
-
-Um scout barato de uma tacada sinaliza pontos suspeitos, depois uma passada
-completa por sinal investiga com orçamento de tool próprio.
-
-Variações: `RECALL_SCOUT_CAP=<n>` (default 5; **`0` = sem teto**, então teste
-presença e não veracidade), `RECALL_SCOUT_THINKING=1` (scout com reasoning
-medium — independente de `RECALL_REASONING_EFFORT`, que controla o
-investigador), `RECALL_SCOUT_BY_CATEGORY=1` (três scouts paralelos, um por
-categoria), `RECALL_SCOUT_RESAMPLE=1` (3 rodadas), `RECALL_SCOUT_SECOND_ROUND=1`
-(exatamente 2 rodadas), `RECALL_SCOUT_LINE_HINT=1`,
-`RECALL_SCOUT_VERDICT=1` (scout roda primeiro e vira checklist obrigatório do
-generalista), `RECALL_SCOUT_DEDICATED_PROMPT=1`,
-`RECALL_SCOUT_CALIBRATED_PROMPT=1`, `RECALL_PARALLEL_SCOUT=1`.
-
-`RECALL_HYPOTHESIS_DRIVEN=1` faz o scout nomear uma hipótese falsificável em vez
-de um sinal vago. `RECALL_INVESTIGATOR_GROUP_BY_FILE=1` junta sinais do mesmo
-arquivo numa passada só.
-
-#### Painéis de papéis
-
-| variável | o que faz |
-|---|---|
-| `RECALL_EXPERT_PANEL=1` | N passadas por papel (especialista da linguagem, segurança, performance, QA, DBA condicional) + uma passada de arbitragem |
-| `RECALL_ROLE_ENSEMBLE=1` | versão enxuta: linguagem + segurança + performance, mesclados **sem** arbitragem |
-| `RECALL_RECOGNITION_PANEL=1` | 4 papéis escolhidos por padrão de falha de reconhecimento, não por tópico (Contract Auditor, Data-Flow Tracer, Cross-Method Consistency Checker, Failure-Path Specialist) |
-| `RECALL_EXPERT_PANEL_DEDICATED_PROMPT=1` | os três acima ganham base mínima só-diff |
-
-#### Passadas por arquivo / por hunk
-
-| variável | o que faz |
-|---|---|
-| `RECALL_CRITICAL_FILE_PASS=1` | uma passada de arquivo inteiro por arquivo de tier crítico |
-| `RECALL_ATOMIC_FILES=1` | uma passada por arquivo alterado |
-| `RECALL_ATOMIC_HUNKS=1` | uma passada por hunk de todo arquivo — a versão exaustiva |
-| `RECALL_CRITICAL_FILE_DEDICATED_PROMPT=1` | base dedicada para essas passadas |
-| `RECALL_CRITICAL_MAX_STEPS=<n>` | teto de passos só para elas |
-
-> **Cuidado de regime.** Todas essas adicionam passadas. Não compare um run com
-> elas contra um sem como se só a qualidade tivesse mudado — o custo mudou
-> junto. Rotule o eixo.
-
-#### Outras
-
-| variável | o que faz |
-|---|---|
-| `RECALL_FREEFORM=1` | uma passada independente com prompt mínimo estilo dev sênior |
-| `RECALL_ADVERSARIAL=1` | troca a tarefa de revisar pela tarefa de quebrar |
-| `RECALL_SECOND_LOOK=1` | quando um investigador limpa o sinal após usar tool, uma passada de follow-up pergunta sobre um defeito **diferente** no mesmo arquivo |
-| `RECALL_SECOND_LOOK_ALWAYS=1` | dispara o second look em toda passada que usou tool. Exige `RECALL_SECOND_LOOK=1` |
-| `RECALL_SECOND_LOOK_FORCE_REPORT=1` | tira a saída "submeter vazio" do second look |
-| `RECALL_CHALLENGE_DISMISSALS=1` | uma passada argumenta o contrário do próprio raciocínio anterior |
-
 ### Estágios finais
 
 | variável | efeito |
 |---|---|
-| `RECALL_REDUCER=1` | **redutor**: uma passada sobre o conjunto inteiro de candidatos — mescla, descarta por mérito e ordena por importância. Substitui verify (por finding, cego ao resto) e dedup (conjunto todo, mas só pergunta "mesmo bug?") |
-| `RECALL_SKIP_VERIFY=1` | tira o verify. Ele manteve 98,2% dos candidatos em 5 modelos, a uma chamada de LLM cada |
 | `RECALL_SKIP_DEDUP=1` | tira dedup e redutor juntos |
 | `RECALL_DEDUP_ROOT_CAUSE=1` | dedup por causa raiz |
 | `RECALL_SKIP_SYNTHESIS=1` | tira a passada de synthesis-rescue |
-| `RECALL_SKIP_BASE_PASS=1` | **pula o generalista inteiro**, sem chamada de LLM. Findings finais vêm só das passadas configuradas |
 
 ### `RECALL_CATEGORIES` — leia antes de comparar com produção
 
@@ -311,44 +197,7 @@ produto.** Para aproximar: `RECALL_CATEGORIES=bug,security,performance`.
 
 ---
 
-## 5. Receitas prontas
-
-As duas configurações medidas em 19/09/2026, já com o diff completo e o call
-graph refeito. Copie e troque só o `--cases` e o `--output`.
-
-### Plan + Shard
-
-```bash
-S=/tmp/bench && rm -rf $S/ps && \
-RECALL_REAL_REPO=1 RECALL_CALL_GRAPH=1 RECALL_SELECTOR_SHARD=1 \
-RECALL_MAX_STEPS=24 RECALL_REDUCER=1 RECALL_SKIP_VERIFY=1 \
-RECALL_REASONING_EFFORT=low RECALL_CONCURRENCY=2 RECALL_DUMP=$S/ps \
-node evals/investigation/run-recall.js --model gpt-5.6-sol@sub \
-  --set light --output evals/investigation/results/ps-light.json
-```
-
-### 14 microagentes
-
-```bash
-S=/tmp/bench && rm -rf $S/m14 && \
-RECALL_REAL_REPO=1 RECALL_CALL_GRAPH=1 \
-RECALL_MICRO_AGENTS=1 RECALL_SKIP_BASE_PASS=1 RECALL_SKIP_SYNTHESIS=1 \
-RECALL_MAX_STEPS=12 RECALL_REDUCER=1 RECALL_SKIP_VERIFY=1 \
-RECALL_REASONING_EFFORT=low RECALL_CONCURRENCY=1 RECALL_DUMP=$S/m14 \
-node evals/investigation/run-recall.js --model gpt-5.6-sol@sub \
-  --set light --output evals/investigation/results/m14-light.json
-```
-
-> `RECALL_CONCURRENCY=1` nos microagentes é proposital: eles já disparam 14
-> chamadas em paralelo por PR num `Promise.all`. Com concorrência 2 são 28
-> simultâneas, e o provedor começa a devolver 429.
-
-**Nunca rode as duas configurações ao mesmo tempo.** Somadas passam de 20
-chamadas simultâneas. Encadeie num script com `nohup`.
-
----
-
-## 6. O corpus — o que você precisa saber antes de confiar num número
+## 5. O corpus — o que você precisa saber antes de confiar num número
 
 ### O diff era truncado até 19/09/2026
 
@@ -401,7 +250,7 @@ O `RECALL_REAL_REPO=1` prepara o worktree no commit certo automaticamente.
 
 ---
 
-## 7. Piso de ruído — não persiga diferença pequena
+## 6. Piso de ruído — não persiga diferença pequena
 
 **±0,026 de F1 e ±1pp de recall**, medido em quatro runs que por acidente
 tinham config idêntica.
@@ -413,7 +262,7 @@ quebra, não para decidir arquitetura.
 
 ---
 
-## 8. Armadilhas que já custaram runs inteiros
+## 7. Armadilhas que já custaram runs inteiros
 
 **O adaptador monta os params campo a campo.** `core-agent-loop.adapter.ts`
 constrói o objeto do finder listando cada campo. Qualquer parâmetro adicionado
@@ -444,7 +293,7 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 
 ---
 
-## 9. Onde as coisas moram
+## 8. Onde as coisas moram
 
 | caminho | o quê |
 |---|---|
@@ -465,7 +314,7 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 
 ---
 
-## 10. Estado em 19/09/2026
+## 9. Estado em 19/09/2026
 
 **Validado:** `maxSteps=24` é o único ganho confirmado nos 30 PRs (+4,2pp de
 recall, e mais barato). A regeração do call graph melhorou o plan+shard nas

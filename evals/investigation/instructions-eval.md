@@ -134,12 +134,8 @@ sobrescrever pasta existente.
 
 ```
 RECALL_SET=light              os 30 PRs
-RECALL_MICRO_AGENTS=1+sim     13 agentes + simulação
-RECALL_FINDING_REASON=1       todo achado traz o percurso (o contrato exige)
 RECALL_SKIP_SYNTHESIS=1       sem synthesis-rescue
-RECALL_SKIP_BASE_PASS=1       sem a passada generalista
 RECALL_REAL_REPO=1            worktree de verdade
-RECALL_REDUCER=v2             reducer de produção dentro da rodada
 RECALL_GATE=0                 sem gate de piso
 RECALL_CONCURRENCY=4          4 PRs em paralelo
 ```
@@ -153,8 +149,7 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 | variável | quando |
 |---|---|
 | `RECALL_CONCURRENCY` | mantenha 4 se for comparar **tempo** entre rodadas |
-| `RECALL_SKIP_AGENTS=<id>` | desligar um agente para medir o que ele paga |
-| `RECALL_CALL_GRAPH=1 RECALL_MICRO_GRAPH=1` | só para re-testar grafo (ver setup) |
+| `RECALL_CALL_GRAPH=1` | só para re-testar grafo (ver setup) |
 
 ### Duração e custo
 
