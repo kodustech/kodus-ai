@@ -47,18 +47,12 @@ const setName = (args.find((a) => a.startsWith('--set=')) || '').split('=')[1];
 /** Only the cases of a named set (LIGHT_CASES etc). Without it the script
  *  touches all 53 datasets, and the ones with no `changedFilesFull` would be
  *  rewritten with the same graph they already had — noise in the diff. */
-const setIds = setName
-    ? new Set(
-          [
-              ...require('fs')
-                  .readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8')
-                  .match(
-                      new RegExp(`${setName.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`),
-                  )[1]
-                  .matchAll(/'([^']+)'/g),
-          ].map((m) => m[1]),
-      )
-    : null;
+const { CASE_SETS } = require('./recall-tests-1821');
+if (setName && !CASE_SETS[setName]) {
+    console.error(`unknown --set=${setName}; known: ${Object.keys(CASE_SETS).join(', ')}`);
+    process.exit(2);
+}
+const setIds = setName ? new Set(CASE_SETS[setName]) : null;
 const dryRun = args.includes('--dry-run');
 
 const j = (v) => (typeof v === 'string' ? JSON.parse(v) : v);
