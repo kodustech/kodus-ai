@@ -679,7 +679,8 @@ export class AzureReposRequestHelper {
                 const { data } = await instance.get(
                     `${url}&$top=${DIFF_PAGE_SIZE}&$skip=${changes.length}`,
                 );
-                const pageChanges: AzureRepoDiffChange[] = data?.changes ?? [];
+                if (!Array.isArray(data?.changes)) break;
+                const pageChanges: AzureRepoDiffChange[] = data.changes;
                 changes.push(...pageChanges);
 
                 if (data?.allChangesIncluded === true) {

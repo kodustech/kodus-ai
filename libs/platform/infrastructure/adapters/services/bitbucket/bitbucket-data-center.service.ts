@@ -3502,10 +3502,12 @@ export class BitbucketDataCenterService implements Omit<
             const { data } = await axiosClient.get(url, {
                 params: { ...params, limit: FILES_PAGE_SIZE, start },
             });
-            if (!data) break;
-            values.push(...(data.values ?? []));
-            if (data.isLastPage !== false) return { values, complete: true };
-            if (data.nextPageStart === undefined) break;
+            // A page without its list or its last-page flag is not a read.
+            if (!Array.isArray(data?.values)) break;
+            values.push(...data.values);
+            if (data.isLastPage === true) return { values, complete: true };
+            if (data.isLastPage !== false || data.nextPageStart === undefined)
+                break;
             start = data.nextPageStart;
         }
         return { values, complete: false };

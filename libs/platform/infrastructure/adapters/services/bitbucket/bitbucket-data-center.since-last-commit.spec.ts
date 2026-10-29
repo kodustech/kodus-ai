@@ -137,6 +137,18 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit', () => {
         );
     });
 
+    it.each([
+        ['without values', { isLastPage: true }],
+        ['without isLastPage', { values: [] }],
+    ])(
+        'returns null when a compare page comes back %s',
+        async (_label, page) => {
+            const { service } = makeService(makeGet({ 0: page }));
+
+            await expect(read(service)).resolves.toBeNull();
+        },
+    );
+
     it('rethrows a 429', async () => {
         const get = jest.fn().mockRejectedValue({ response: { status: 429 } });
         const { service } = makeService(get);

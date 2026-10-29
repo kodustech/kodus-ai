@@ -289,6 +289,16 @@ describe('AzureReposRequestHelper.getDiff — pages until allChangesIncluded', (
         expect(result.changes).toHaveLength(1);
     });
 
+    it('reports the diff as incomplete when a page has no changes list', async () => {
+        axiosInstance.get.mockResolvedValueOnce({
+            data: { allChangesIncluded: true },
+        });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+    });
+
     it('stops at the page cap and reports the diff as incomplete', async () => {
         axiosInstance.get.mockResolvedValue({
             data: { changes: [blob('/a.ts')] },
