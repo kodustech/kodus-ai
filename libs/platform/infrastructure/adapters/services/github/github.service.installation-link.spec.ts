@@ -105,7 +105,8 @@ describe('GitHub installation linking', () => {
         expect(appAuth).toHaveBeenCalledWith({
             type: 'oauth-user',
             code: 'gh-code',
-            redirectUrl: 'https://app.example.test/github-integration',
+            redirectUrl:
+                'https://app.example.test/api/auth/callback/github/installation',
         });
         expect(svc.createUserOctokit).toHaveBeenCalledWith('ghu_user_token');
         expect(paginate).toHaveBeenCalledWith('GET /user/installations', {
@@ -198,7 +199,7 @@ describe('GitHub installation linking', () => {
             expect(parsed.searchParams.get('client_id')).toBe('Iv1.client');
             // Never the App's first callback URL, which is the sign-in one.
             expect(parsed.searchParams.get('redirect_uri')).toBe(
-                'https://app.example.test/github-integration',
+                'https://app.example.test/api/auth/callback/github/installation',
             );
             expect(
                 openInstallationState(parsed.searchParams.get('state')),
@@ -207,6 +208,26 @@ describe('GitHub installation linking', () => {
                 userId: USER,
                 organizationId: ORG,
             });
+        });
+
+        it('falls back to NEXTAUTH_URL, which self-hosted installs set', () => {
+            const svc: any = Object.create(GithubService.prototype);
+            svc.assertGithubOAuthEnv = jest.fn();
+            svc.configService = {
+                get: (key: string) =>
+                    ({
+                        GLOBAL_GITHUB_CLIENT_ID: 'Iv1.client',
+                        NEXTAUTH_URL: 'https://kodus-web.example.test',
+                    })[key],
+            };
+            const { url } = svc.getInstallationAuthorizationUrl({
+                installationId: INSTALLATION,
+                userId: USER,
+                organizationId: ORG,
+            });
+            expect(new URL(url).searchParams.get('redirect_uri')).toBe(
+                'https://kodus-web.example.test/api/auth/callback/github/installation',
+            );
         });
 
         it('refuses an installation id that is not a number', () => {

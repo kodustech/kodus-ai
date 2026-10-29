@@ -35,12 +35,7 @@ KodyをGitHub Appで実行する場合は、アプリを作成する必要があ
   WEB_DOMAIN/api/auth/callback/github
   ```
   このURLは認可フローを完了するために使用されます。
-
-- **2つ目のCallback URL**（**Add Callback URL**をクリック）：
-  ```
-  WEB_DOMAIN/github-integration
-  ```
-  接続するインストールにユーザーがアクセスできることをGitHubが確認した後、Kodusはユーザーをここに戻します。設定しないとアプリの接続に失敗します。
+  このURLでは**Allow wildcard matching**を有効のままにしてください。アプリを接続するとき、GitHubはユーザーがインストールにアクセスできることを確認し、このURLのサブディレクトリである`WEB_DOMAIN/api/auth/callback/github/installation`に戻します。wildcard matchingを無効にする場合は、そのURLを2つ目のCallback URLとして追加してください。
 
 - **Setup URL**:
   ```

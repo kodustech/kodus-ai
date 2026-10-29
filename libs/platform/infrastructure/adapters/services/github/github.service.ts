@@ -587,12 +587,15 @@ export class GithubService
     }
 
     private installationRedirectUri(): string {
-        const frontendUrl = this.configService
-            .get<string>('API_FRONTEND_URL')
-            ?.trim();
+        // Self-hosted installs set NEXTAUTH_URL, the web app's public URL,
+        // in the .env every service reads; cloud sets API_FRONTEND_URL.
+        const frontendUrl = (
+            this.configService.get<string>('API_FRONTEND_URL') ||
+            this.configService.get<string>('NEXTAUTH_URL')
+        )?.trim();
         if (!frontendUrl) {
             throw new BadRequestException(
-                'API_FRONTEND_URL is not configured: it is needed to send the user back from GitHub.',
+                'Neither API_FRONTEND_URL nor NEXTAUTH_URL is configured: one is needed to send the user back from GitHub.',
             );
         }
         return installationAuthorizationRedirectUri(frontendUrl);

@@ -91,17 +91,23 @@ export function openInstallationState(
     return { installationId, userId, organizationId };
 }
 
-/** Where GitHub sends the user back: the web app's /github-integration page. */
+/**
+ * Where GitHub sends the user back. It is under the App's sign-in callback
+ * URL (`/api/auth/callback/github`), so no other callback URL has to be
+ * registered: GitHub accepts a subdirectory of a callback URL while wildcard
+ * matching is on, the default for an App with a single callback URL. The web
+ * route there passes code and state on to /github-integration.
+ */
 export function installationAuthorizationRedirectUri(
     frontendUrl: string,
 ): string {
-    return `${frontendUrl.replace(/\/+$/, '')}/github-integration`;
+    return `${frontendUrl.replace(/\/+$/, '')}/api/auth/callback/github/installation`;
 }
 
 /**
- * GitHub's user authorization page for the App. `redirectUri` must be one of
- * the App's callback URLs: the first one is usually the sign-in callback, so
- * it is always given.
+ * GitHub's user authorization page for the App. `redirectUri` is always
+ * given: without it GitHub would use the App's first callback URL, the
+ * sign-in one.
  */
 export function githubUserAuthorizationUrl(
     clientId: string,

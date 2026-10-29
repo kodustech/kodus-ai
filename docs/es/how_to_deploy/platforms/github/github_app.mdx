@@ -35,12 +35,7 @@ Este paso es fundamental para garantizar que la instalación y la redirección f
   WEB_DOMAIN/api/auth/callback/github
   ```
   Esta URL se utiliza para completar el flujo de autorización.
-
-- **Segunda Callback URL** (haz clic en **Add Callback URL**):
-  ```
-  WEB_DOMAIN/github-integration
-  ```
-  Kodus envía al usuario aquí después de que GitHub confirma que tiene acceso a la instalación que se está conectando. Sin ella, la conexión de la app falla.
+  Mantén **Allow wildcard matching** marcado en ella: cuando alguien conecta la app, GitHub confirma que tiene acceso a la instalación y lo devuelve a `WEB_DOMAIN/api/auth/callback/github/installation`, un subdirectorio de esta URL. Si desactivas el wildcard matching, agrega esa URL como segunda Callback URL.
 
 - **Setup URL**:
   ```
