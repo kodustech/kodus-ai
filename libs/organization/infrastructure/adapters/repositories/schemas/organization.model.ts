@@ -5,6 +5,7 @@ import {
     RELEASE_TRACKS,
     type ReleaseTrack,
 } from '@libs/feature-gate/domain/release-track';
+import type { FirstTouch } from '@libs/organization/domain/organization/first-touch';
 import type { SSOConfigModel } from '@libs/ee/sso/repositories/ssoConfig.model';
 import type { UserModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/user.model';
 import type { AuthIntegrationModel } from '@libs/integrations/infrastructure/adapters/repositories/schemas/authIntegration.model';
@@ -53,6 +54,15 @@ export class OrganizationModel extends CoreModel {
         default: DEFAULT_RELEASE_TRACK,
     })
     releaseTrack: ReleaseTrack;
+
+    /**
+     * First-touch marketing attribution of the user who created the
+     * organization (UTMs, gclid, referrer, landing page). Written once, when
+     * the organization is created; NULL for organizations created before it
+     * was tracked or without the cookie.
+     */
+    @Column({ name: 'first_touch', type: 'jsonb', nullable: true })
+    firstTouch?: FirstTouch | null;
 
     @OneToMany('TeamModel', 'organization')
     teams: TeamModel[];

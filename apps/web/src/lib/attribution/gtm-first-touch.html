@@ -1,0 +1,58 @@
+<script>
+/*
+ * Kodus first-touch attribution.
+ *
+ * Paste this whole file into a Custom HTML tag, triggered on
+ * "Initialization - All Pages", in both GTM containers: GTM-KN2J57G (kodus.io)
+ * and GTM-T2TMHK7K (app.kodus.io). Publish only after the API that accepts
+ * `firstTouch` is in production.
+ *
+ * On the first visit to any *.kodus.io page it stores where the visitor came
+ * from in the cookie `kodus_first_touch` on .kodus.io. It never overwrites an
+ * existing cookie. The app reads it at signup and the API stores it on the new
+ * organization. ES5 on purpose: GTM rejects newer syntax in Custom HTML.
+ */
+(function () {
+  var COOKIE = 'kodus_first_touch';
+  var MAX_AGE = 60 * 60 * 24 * 365;
+  var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
+  var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+
+  try {
+    var host = location.hostname;
+    if (host !== 'kodus.io' && !/\.kodus\.io$/.test(host)) return;
+    if (new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
+
+    var touch = {};
+    var kept = [];
+    var query = new URLSearchParams(location.search);
+    for (var i = 0; i < PARAMS.length; i++) {
+      var value = (query.get(PARAMS[i]) || '').replace(/^\s+|\s+$/g, '').slice(0, 100);
+      if (!value || EMAIL.test(value)) continue;
+      touch[PARAMS[i]] = value;
+      kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
+    }
+
+    // Referrer and landing page without query strings or fragments, which is
+    // where personal data in a URL usually lives.
+    var referrer = document.referrer.split(/[?#]/)[0];
+    if (referrer) touch.referrer = referrer.slice(0, 300);
+    touch.landing_page = (location.origin + location.pathname + (kept.length ? '?' + kept.join('&') : '')).slice(0, 300);
+    touch.captured_at = new Date().toISOString();
+
+    var cookie = encodeURIComponent(JSON.stringify(touch));
+    // Browsers drop cookies over 4KB without a word; non-ASCII UTMs can get there.
+    if (cookie.length > 3500) {
+      for (var key in touch) {
+        if (touch.hasOwnProperty(key) && key !== 'captured_at') touch[key] = touch[key].slice(0, 40);
+      }
+      cookie = encodeURIComponent(JSON.stringify(touch));
+    }
+
+    document.cookie = COOKIE + '=' + cookie + '; Domain=.kodus.io; Path=/; Max-Age=' + MAX_AGE +
+      '; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
+  } catch (e) {
+    // Attribution is best effort: never break the page.
+  }
+})();
+</script>

@@ -178,4 +178,97 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
             expect(membershipStatusFromCreate(deps)).toBe(true);
         });
     });
+
+    describe('first touch', () => {
+        // Attribution is written only in the insert that creates the
+        // organization. Joining an existing org (invite, SSO) must never touch
+        // it, so the first organization creator's source wins.
+        const firstTouch = {
+            utm_source: 'google',
+            utm_medium: 'cpc',
+            utm_campaign: 'test',
+            gclid: 'TEST',
+            landing_page:
+                'https://kodus.io/?utm_source=google&utm_medium=cpc&utm_campaign=test&gclid=TEST&email=jane@acme.com',
+            captured_at: new Date().toISOString(),
+            email: 'jane@acme.com',
+        };
+
+        it('stores the cleaned attribution on the organization it creates', async () => {
+            const deps = buildDeps();
+            deps.organizationService.findOne.mockResolvedValue(null);
+
+            await buildUseCase(deps).execute({
+                email: 'owner@acme.com',
+                name: 'Owner',
+                password: 'x',
+                firstTouch,
+            } as any);
+
+            const created =
+                deps.organizationService.createOrganizationWithTenant.mock
+                    .calls[0][0];
+            expect(created.firstTouch).toEqual({
+                utm_source: 'google',
+                utm_medium: 'cpc',
+                utm_campaign: 'test',
+                gclid: 'TEST',
+                landing_page:
+                    'https://kodus.io/?utm_source=google&utm_medium=cpc&utm_campaign=test&gclid=TEST',
+                captured_at: firstTouch.captured_at,
+            });
+        });
+
+        it('creates the organization with NULL attribution when there is none', async () => {
+            const deps = buildDeps();
+            deps.organizationService.findOne.mockResolvedValue(null);
+
+            await buildUseCase(deps).execute({
+                email: 'owner@acme.com',
+                name: 'Owner',
+                password: 'x',
+            } as any);
+
+            const created =
+                deps.organizationService.createOrganizationWithTenant.mock
+                    .calls[0][0];
+            expect(created.firstTouch).toBeNull();
+        });
+
+        it('still signs up when the attribution is malformed', async () => {
+            const deps = buildDeps();
+            deps.organizationService.findOne.mockResolvedValue(null);
+
+            await buildUseCase(deps).execute({
+                email: 'owner@acme.com',
+                name: 'Owner',
+                password: 'x',
+                firstTouch: { utm_source: ['x'], referrer: 'javascript:1' },
+            } as any);
+
+            const created =
+                deps.organizationService.createOrganizationWithTenant.mock
+                    .calls[0][0];
+            expect(created.firstTouch).toBeNull();
+            expect(deps.usersService.register).toHaveBeenCalled();
+        });
+
+        it('never writes attribution when joining an existing organization', async () => {
+            const deps = buildDeps();
+
+            await buildUseCase(deps).execute({
+                email: 'invitee@acme.com',
+                name: 'Invitee',
+                password: 'x',
+                organizationId: 'org-1',
+                firstTouch,
+            } as any);
+
+            expect(
+                deps.organizationService.createOrganizationWithTenant,
+            ).not.toHaveBeenCalled();
+            const registered = deps.usersService.register.mock.calls[0][0];
+            expect(registered.organization).not.toHaveProperty('firstTouch');
+        });
+    });
 });

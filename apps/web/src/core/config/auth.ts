@@ -5,6 +5,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GithubProvider from "next-auth/providers/github";
 import GitlabProvider from "next-auth/providers/gitlab";
 import {
+    FIRST_TOUCH_COOKIE,
+    parseFirstTouchCookie,
+} from "src/lib/attribution/first-touch";
+import {
     loginEmailPassword,
     loginOAuth,
     refreshAccessToken,
@@ -27,6 +31,20 @@ const getDataFromPayload = (accessToken: string) => {
         exp: payload.exp,
         jti: payload.jti,
     } satisfies Partial<JWT>;
+};
+
+// The OAuth callback is a top-level redirect back from the provider, so the
+// SameSite=Lax first-touch cookie on .kodus.io comes with it. next/headers is
+// loaded lazily: this module also ends up in client bundles (via
+// lib/services/fetch.ts), where a static import of it fails the build.
+const readFirstTouch = async () => {
+    try {
+        const { cookies } = await import("next/headers");
+        const store = await cookies();
+        return parseFirstTouchCookie(store.get(FIRST_TOUCH_COOKIE)?.value);
+    } catch {
+        return undefined;
+    }
 };
 
 const credentialsProvider = CredentialsProvider({
@@ -179,6 +197,7 @@ const authOptions: NextAuthConfig = {
                             user.email,
                             account.access_token,
                             account.provider as AuthProviders,
+                            await readFirstTouch(),
                         );
 
                         if (response && response?.data) {

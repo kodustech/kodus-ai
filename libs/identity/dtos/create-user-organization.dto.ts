@@ -1,5 +1,6 @@
 import {
     IsEmail,
+    IsObject,
     IsOptional,
     IsString,
     IsStrongPassword,
@@ -38,4 +39,14 @@ export class SignUpDTO {
     @IsString()
     @IsOptional()
     public organizationId?: string;
+
+    @ApiPropertyOptional({
+        type: 'object',
+        additionalProperties: true,
+        description:
+            'First-touch attribution from the kodus_first_touch cookie. Stored only when this signup creates the organization. Unknown keys are dropped and values cleaned server-side; a malformed value is discarded, never rejected.',
+    })
+    @IsOptional()
+    @IsObject()
+    public firstTouch?: Record<string, unknown>;
 }

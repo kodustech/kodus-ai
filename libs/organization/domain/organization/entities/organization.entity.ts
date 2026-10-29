@@ -6,6 +6,7 @@ import {
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { ITeam } from '@libs/organization/domain/team/interfaces/team.interface';
 
+import { FirstTouch } from '../first-touch';
 import { IOrganization } from '../interfaces/organization.interface';
 
 export class OrganizationEntity implements Entity<IOrganization> {
@@ -16,6 +17,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
     private _codeHostMemberCount?: number;
     private _codeHostMemberCountUpdatedAt?: Date;
     private _releaseTrack: ReleaseTrack;
+    private _firstTouch?: FirstTouch | null;
     private _users?: Partial<IUser>[];
     private _teams?: Partial<ITeam>[];
 
@@ -29,6 +31,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
             organization.codeHostMemberCountUpdatedAt;
         this._releaseTrack =
             organization.releaseTrack ?? DEFAULT_RELEASE_TRACK;
+        this._firstTouch = organization.firstTouch;
         this._users = organization.users;
         this._teams = organization.teams;
     }
@@ -71,6 +74,10 @@ export class OrganizationEntity implements Entity<IOrganization> {
         return this._releaseTrack;
     }
 
+    public get firstTouch(): FirstTouch | null | undefined {
+        return this._firstTouch;
+    }
+
     public get user() {
         return this._users;
     }
@@ -88,6 +95,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
             codeHostMemberCount: this._codeHostMemberCount,
             codeHostMemberCountUpdatedAt: this._codeHostMemberCountUpdatedAt,
             releaseTrack: this._releaseTrack,
+            firstTouch: this._firstTouch,
             users: this._users,
             teams: this._teams,
         };
@@ -102,6 +110,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
             codeHostMemberCount: this._codeHostMemberCount,
             codeHostMemberCountUpdatedAt: this._codeHostMemberCountUpdatedAt,
             releaseTrack: this._releaseTrack,
+            firstTouch: this._firstTouch,
             users: this._users,
             teams: this._teams,
         };
