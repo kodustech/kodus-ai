@@ -79,6 +79,17 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit', () => {
         expect(files.map((f: { filename: string }) => f.filename)).toEqual([
             'zz/own.ts',
         ]);
+        // From the last reviewed commit to the PR head.
+        expect(get).toHaveBeenCalledWith(
+            '/projects/PRJ/repos/api/compare/changes',
+            {
+                params: expect.objectContaining({
+                    from: 'reviewed-sha',
+                    to: 'head-sha',
+                    start: 0,
+                }),
+            },
+        );
     });
 
     it('reads every page of the PR changes', async () => {

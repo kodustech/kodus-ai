@@ -61,6 +61,14 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
 
         await expect(metadata(service, lastCommit)).resolves.toEqual([own]);
         expect(
+            codeManagementService.getChangedFilesSinceLastCommit,
+        ).toHaveBeenCalledWith({
+            organizationAndTeamData: orgData,
+            repository,
+            prNumber: 42,
+            lastCommit,
+        });
+        expect(
             codeManagementService.getPullRequestFilesAtCommit,
         ).not.toHaveBeenCalled();
     });
@@ -90,9 +98,13 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
 
         expect(
             codeManagementService.getPullRequestFilesAtCommit,
-        ).toHaveBeenCalledWith(
-            expect.objectContaining({ headSha: 'reviewed-sha' }),
-        );
+        ).toHaveBeenCalledWith({
+            organizationAndTeamData: orgData,
+            repository,
+            prNumber: 42,
+            baseBranch: 'main',
+            headSha: 'reviewed-sha',
+        });
         expect(files).toEqual([
             expect.objectContaining({
                 filename: 'src/own.ts',
