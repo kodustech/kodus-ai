@@ -4,9 +4,10 @@ import { axiosAuthorized } from "src/core/utils/axios";
 /**
  * Linking a GitHub App installation needs GitHub's word that the user can see
  * it: the API issues GitHub's authorization page with a state bound to the
- * user, GitHub sends the user back to `/github-integration` with a code, and
- * the page that started the link gets the code and state as `github_code`
- * and `github_state`.
+ * user, GitHub sends the user back with a code (through
+ * /api/auth/callback/github/installation to `/github-integration`), and the
+ * page that started the link gets the code and state as `github_code` and
+ * `github_state`.
  */
 
 const STORAGE_KEY = "kodus.github-installation-authorization";
