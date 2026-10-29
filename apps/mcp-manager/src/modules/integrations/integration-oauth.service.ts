@@ -177,7 +177,11 @@ export class IntegrationOAuthService {
             current.expiresIn !== undefined &&
             (current.expiresAt ?? 0) < Date.now();
         if (expiredForGood) {
-            return this.markGrantLost(organizationId, integrationId, oauthState);
+            return this.markGrantLost(
+                organizationId,
+                integrationId,
+                oauthState,
+            );
         }
 
         try {
@@ -237,11 +241,14 @@ export class IntegrationOAuthService {
         oauthState: IntegrationOAuthState,
         reason = 'access token expired and there is no refresh token',
     ): Promise<IntegrationOAuthState> {
-        this.logger.warn('OAuth grant lost; the integration must be connected again', {
-            organizationId,
-            integrationId,
-            reason,
-        });
+        this.logger.warn(
+            'OAuth grant lost; the integration must be connected again',
+            {
+                organizationId,
+                integrationId,
+                reason,
+            },
+        );
         await this.saveOAuthState(
             organizationId,
             integrationId,

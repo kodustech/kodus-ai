@@ -30,7 +30,9 @@ describe('GithubService — uninstalled or suspended installation', () => {
     const makeService = (authError: Error) => {
         const store = new Map<string, unknown>();
         const cacheService = {
-            getFromCache: jest.fn(async (key: string) => store.get(key) ?? null),
+            getFromCache: jest.fn(
+                async (key: string) => store.get(key) ?? null,
+            ),
             addToCache: jest.fn(async (key: string, value: unknown) => {
                 store.set(key, value);
             }),
