@@ -38,7 +38,7 @@ const inDataset = new Set(current.map((x) => x.issueId));
 const splitOfPr = new Map(current.map((x) => [x.caseId, x.split]));
 const tps = Object.values(read(`${V3}/golden.json`).prs).flat().filter((r) => r.class_reviewed === 'TP' && !inDataset.has(r.issueId));
 const tpById = new Map(tps.map((t) => [t.issueId, t]));
-const repos = read(`${WORK}/repos.json`);
+const repos = require('../shared/bench-repos').loadBenchRepos();
 const repoOf = (c) => path.basename(repos[c].repo);
 
 const patches = new Map();

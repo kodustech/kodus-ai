@@ -47,7 +47,7 @@ const files = args.filter((a) => !a.startsWith('--'));
 const PAR = Number((args.find((a) => a.startsWith('--par=')) || '--par=6').split('=')[1]);
 const DIR = path.join(__dirname, 'dataset');
 const CACHE = path.join(__dirname, 'results', 'judge-cache.json');
-const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
+const REPOS = require('../shared/bench-repos').loadBenchRepos();
 
 const items = new Map(JSON.parse(fs.readFileSync(path.join(DIR, 'items.json'), 'utf8')).items.map((x) => [x.issueId, x]));
 const refs = new Map();

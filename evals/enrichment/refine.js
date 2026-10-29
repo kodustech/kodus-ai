@@ -39,7 +39,7 @@ const PAR = Number((process.argv.find((a) => a.startsWith('--par=')) || '--par=6
 const OUT_DIR = path.join(__dirname, 'dataset', 'references-self');
 const TOOLS = process.argv.includes('--tools');
 const OUT = path.join(OUT_DIR, `${MODEL.replace(/[^\w.-]+/g, '_')}${TOOLS ? '-tools' : ''}.json`);
-const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
+const REPOS = require('../shared/bench-repos').loadBenchRepos();
 const READ_TOOLS = new Set(['grep', 'readFile', 'listDir', 'findFile']);
 const DONE = 'submitReference';
 const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.json'), 'utf8')).items;

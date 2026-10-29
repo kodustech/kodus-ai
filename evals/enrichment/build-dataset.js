@@ -36,7 +36,7 @@ const read = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 
 const tps = Object.values(read(`${V3}/golden.json`).prs).flat().filter((r) => r.class_reviewed === 'TP');
 const tpById = new Map(tps.map((t) => [t.issueId, t]));
-const repos = read(`${V3}/trabalho/repos.json`);
+const repos = require('../shared/bench-repos').loadBenchRepos();
 
 // Every lean finding the Opus judge matched to a TP, with its label from the pool.
 const pool = new Map();

@@ -19,7 +19,7 @@ const { execFileSync, spawn } = require('child_process');
 const DIR = path.join(__dirname, 'dataset');
 const ITEMS = (process.argv.find((a) => a.startsWith('--items=')) || '--items=items.json').slice(8);
 const OUT = path.join(DIR, ITEMS === 'items.json' ? 'references' : `references-${path.basename(ITEMS, '.json')}`);
-const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
+const REPOS = require('../shared/bench-repos').loadBenchRepos();
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
 const PAR = Number(arg('par', 4));
 const ONLY = arg('cases', '') ? new Set(arg('cases', '').split(',')) : null;

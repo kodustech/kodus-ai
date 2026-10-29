@@ -40,7 +40,7 @@ const LEVELS = ['low', 'medium', 'high', 'critical'];
 // --levels=high: only the items of those gold levels (calls still grouped per PR).
 const ONLY = arg('levels', '');
 const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.json'), 'utf8')).items.filter((x) => !ONLY || ONLY.split(',').includes(x.severity));
-const REPOS = JSON.parse(fs.readFileSync(path.join(__dirname, '../dedup/gold-v3/trabalho/repos.json'), 'utf8'));
+const REPOS = require('../shared/bench-repos').loadBenchRepos();
 const right = (gold, got) => got === gold;
 
 // The head file around the cited lines; "+" marks lines the PR changed, ">" the cited ones.
