@@ -19,6 +19,7 @@ type CodeMgmtStub = {
     getCommitsForPullRequestForCodeReview: jest.Mock;
     getChangedFilesSinceLastCommit: jest.Mock;
     getFilesByPullRequestId: jest.Mock;
+    getPullRequestFilesAtCommit: jest.Mock;
     getRepositoryContentBatch: jest.Mock;
     getRepositoryContentFile: jest.Mock;
 };
@@ -31,6 +32,7 @@ function makeService(): {
         getCommitsForPullRequestForCodeReview: jest.fn(),
         getChangedFilesSinceLastCommit: jest.fn(),
         getFilesByPullRequestId: jest.fn(),
+        getPullRequestFilesAtCommit: jest.fn(),
         getRepositoryContentBatch: jest.fn(),
         getRepositoryContentFile: jest.fn(),
     };
@@ -281,11 +283,15 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the fetch resolves null (lastCommit path)', async () => {
+    it('returns [] when the fetch resolves null and the PR has no files (lastCommit path)', async () => {
         const { service, codeManagementService } = makeService();
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
             null,
         );
+        codeManagementService.getPullRequestFilesAtCommit.mockResolvedValue(
+            null,
+        );
+        codeManagementService.getFilesByPullRequestId.mockResolvedValue([]);
 
         const result = await (service as any).getChangedFilesMetadata(
             orgData,

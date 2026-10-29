@@ -70,16 +70,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             let changedFiles: FileChange[];
 
             if (lastCommit) {
-                // Retrieve files changed since the last commit
-                changedFiles =
-                    await this.codeManagementService.getChangedFilesSinceLastCommit(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest?.number,
-                            lastCommit,
-                        },
-                    );
+                changedFiles = await this.getChangedFilesSinceLastCommit(
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest,
+                    lastCommit,
+                );
             } else {
                 // Retrieve all files changed in the pull request. Pass
                 // `headSha` so the GitHub adapter can memoize by (PR, SHA)
@@ -303,15 +299,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             let changedFiles: FileChange[];
 
             if (lastCommit) {
-                changedFiles =
-                    await this.codeManagementService.getChangedFilesSinceLastCommit(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest?.number,
-                            lastCommit,
-                        },
-                    );
+                changedFiles = await this.getChangedFilesSinceLastCommit(
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest,
+                    lastCommit,
+                );
             } else {
                 changedFiles =
                     await this.codeManagementService.getFilesByPullRequestId({
@@ -340,6 +333,71 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             });
             throw error;
         }
+    }
+
+    /**
+     * `null` from the provider means the diff since the last review could not
+     * be read in full (#2268), not that nothing changed: what is new is then
+     * read from the PR diff at the last reviewed commit, else the whole PR.
+     */
+    private async getChangedFilesSinceLastCommit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: any; project?: { id: any } },
+        pullRequest: any,
+        lastCommit: string | Commit,
+    ): Promise<FileChange[]> {
+        const changedFiles =
+            await this.codeManagementService.getChangedFilesSinceLastCommit({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+                lastCommit,
+            });
+        if (changedFiles) return changedFiles;
+
+        const lastCommitSha =
+            typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
+        const interdiff = lastCommitSha
+            ? await this.getRebaseInterdiff(
+                  organizationAndTeamData,
+                  repository,
+                  pullRequest,
+                  lastCommitSha,
+              )
+            : null;
+
+        const files =
+            interdiff?.files ??
+            (await this.codeManagementService.getFilesByPullRequestId({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+                headSha: pullRequest?.head?.sha,
+            }));
+        // Not `[]`: that would skip the review as a PR with nothing new.
+        if (!files) {
+            throw new Error(
+                `Could not read the changes of PR#${pullRequest?.number}: neither the diff since ${lastCommitSha} nor the whole PR was readable`,
+            );
+        }
+
+        this.logger.warn({
+            message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${interdiff ? 'its changes since then' : 'the whole PR'}`,
+            context: PullRequestHandlerService.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                teamId: organizationAndTeamData?.teamId,
+                repositoryId: repository?.id,
+                prNumber: pullRequest?.number,
+                lastCommitSha,
+                headSha: pullRequest?.head?.sha,
+                fallback: interdiff ? 'interdiff' : 'full',
+                files: files.length,
+                reason: 'incremental_diff_unavailable',
+            },
+        });
+
+        return files;
     }
 
     async getRebaseInterdiff(

@@ -708,3 +708,129 @@ describe('AzureReposService.getFilesByPullRequestId — bounded fan-out', () => 
         });
     });
 });
+
+describe('AzureReposService.getChangedFilesSinceLastCommit — complete vs unreadable diff (#2268)', () => {
+    let service: AzureReposService;
+    let azureReposRequestHelper: {
+        getPullRequestDetails: jest.Mock;
+        getDiff: jest.Mock;
+        getIterations: jest.Mock;
+        getChanges: jest.Mock;
+    };
+
+    const params = {
+        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+        repository: { name: 'repo', id: 'repo-1', project: { id: 'proj-1' } },
+        prNumber: 42,
+        lastCommit: { sha: 'reviewed-sha' },
+    };
+
+    const blob = (path: string) => ({
+        changeType: 'edit',
+        item: { path, gitObjectType: 'blob' },
+    });
+
+    beforeEach(() => {
+        azureReposRequestHelper = {
+            getPullRequestDetails: jest.fn().mockResolvedValue({
+                lastMergeSourceCommit: { commitId: 'head-sha' },
+            }),
+            getDiff: jest.fn(),
+            getIterations: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+            getChanges: jest
+                .fn()
+                .mockResolvedValue([{ item: { path: '/src/own.ts' } }]),
+        };
+
+        service = new AzureReposService(
+            {} as any,
+            {} as any,
+            {} as any,
+            azureReposRequestHelper as any,
+            {} as any,
+            undefined,
+        );
+
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+            orgName: 'fake-org',
+            token: 'fake-token',
+        });
+        jest.spyOn(
+            service as any,
+            '_generateFileDiffForAzure',
+        ).mockImplementation(async ({ filePath }: any) => ({
+            filename: filePath,
+            status: 'modified',
+            patch: '@@ -1 +1 @@\n-a\n+b',
+        }));
+    });
+
+    it('keeps the PR files of a complete diff, wherever they sort', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [
+                blob('/merged/a.ts'),
+                blob('/merged/b.ts'),
+                blob('/src/own.ts'),
+            ],
+            allChangesIncluded: true,
+        });
+
+        const files = await service.getChangedFilesSinceLastCommit(
+            params as any,
+        );
+
+        expect(files?.map((f) => f.filename)).toEqual(['/src/own.ts']);
+    });
+
+    it('returns [] when the complete diff holds no PR file', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts')],
+            allChangesIncluded: true,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns [] when the diff has no file entries at all', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [{ item: { path: '/src', gitObjectType: 'tree' } }],
+            allChangesIncluded: true,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns null when the diff could not be read in full', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts')],
+            allChangesIncluded: false,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('returns null when the diff read fails', async () => {
+        azureReposRequestHelper.getDiff.mockRejectedValue(new Error('boom'));
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('rethrows a 429', async () => {
+        azureReposRequestHelper.getDiff.mockRejectedValue({
+            status: 429,
+            message: 'Too Many Requests',
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).rejects.toMatchObject({ status: 429 });
+    });
+});
