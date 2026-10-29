@@ -279,6 +279,7 @@ export async function runAgentLoopViaCore(
         finderRunner,
         readGuide,
         astGrepLog,
+        verifyParams,
     } = finderRunEnvironment(input, secrets);
 
     const coverageLedger = new DiffCoverageLedger({
@@ -366,23 +367,15 @@ export async function runAgentLoopViaCore(
           }
         : {};
 
+    // The same verifyParams the verify eval reads (evals/funnel/verify/run.js),
+    // so the eval measures what production runs.
     const r = await runFinderWithVerify(
         {
-            runner: finderRunner,
+            ...verifyParams,
             ...ownVerify,
             finderSpec,
-            modelId: specModelId,
-            fallbackModelId,
-            tools,
-            providerOptions,
             skipHeavyPasses,
             skipSynthesisRescue,
-            previousDecisions: input.previousDecisions,
-            repoInstructions: input.repoInstructions,
-            checksInstructionCitations: input.conventionGuides === undefined,
-            telemetryMetadata: input.telemetryMetadata,
-            agentName: input.agentName,
-            usageRunName: input.usageRunName,
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
             ...(readGuide && {
