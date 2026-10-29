@@ -10,6 +10,8 @@ import { FIRST_TOUCH_COOKIE, parseFirstTouchCookie } from "./first-touch";
  * marketing site to the app the way it does in a browser.
  */
 const TAG = readFileSync(join(__dirname, "gtm-first-touch.html"), "utf8");
+// The file is a single <script> element, as pasted into GTM.
+const SCRIPT = TAG.slice(TAG.indexOf(">") + 1, TAG.lastIndexOf("</script>"));
 
 const visit = (jar: CookieJar, url: string, referrer = "") => {
     const dom = new JSDOM(
@@ -21,11 +23,7 @@ const visit = (jar: CookieJar, url: string, referrer = "") => {
             runScripts: "outside-only",
         },
     );
-    const script = TAG.replace(/^\s*<script>/, "").replace(
-        /<\/script>\s*$/,
-        "",
-    );
-    dom.window.eval(script);
+    dom.window.eval(SCRIPT);
     return dom.window.document.cookie;
 };
 
@@ -118,6 +116,18 @@ describe("GTM first-touch tag", () => {
             landing_page: "https://kodus.io/?utm_source=newsletter",
             captured_at: expect.any(String),
         });
+    });
+
+    it("drops an email that starts before the 100-character cut", () => {
+        const jar = new CookieJar();
+        visit(
+            jar,
+            `https://kodus.io/?utm_source=newsletter&utm_content=${"x".repeat(95)}%20jane%40acme.com`,
+        );
+
+        expect(
+            firstTouchOn(jar, "https://kodus.io/")?.utm_content,
+        ).toBeUndefined();
     });
 
     it("does nothing outside kodus.io (self-hosted installs load the app container too)", () => {

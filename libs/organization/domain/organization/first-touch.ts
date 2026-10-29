@@ -39,10 +39,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_CLOCK_SKEW_MS = DAY_MS;
 // The cookie lives one year; older than this is not a real visit either.
 const MAX_AGE_MS = 2 * 365 * DAY_MS;
+// The body is client-controlled and the endpoint is public: bound every value
+// before scanning it. Text keeps room past the cut for an email that starts
+// before it (254 = longest valid address); the tag never writes longer URLs.
+const TEXT_SCAN_MAX = FIRST_TOUCH_TEXT_MAX + 254;
+const URL_INPUT_MAX = 2048;
 
 // eslint-disable-next-line no-control-regex -- intentional: strip control characters from client input
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
-const EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+const EMAIL_LOCAL_CHAR = /[a-z0-9._%+-]/i;
+const EMAIL_DOMAIN = /[a-z0-9.-]+/iy;
+const EMAIL_TLD = /\.[a-z]{2,}/i;
 const GCLID = /^[a-z0-9_-]+$/i;
 
 /**
@@ -106,12 +113,38 @@ function sanitizeText(value: unknown): string | null {
         return null;
     }
 
-    const text = value.replace(CONTROL_CHARS, '').trim();
-    if (!text || EMAIL.test(text)) {
+    const text = value
+        .slice(0, TEXT_SCAN_MAX)
+        .replace(CONTROL_CHARS, '')
+        .trim();
+    if (!text || containsEmail(text)) {
         return null;
     }
 
-    return text;
+    return text.slice(0, FIRST_TOUCH_TEXT_MAX);
+}
+
+/**
+ * Whether the text has something shaped like local@domain.tld. Linear on
+ * purpose: the equivalent single regex backtracks quadratically on long
+ * inputs such as a run of '%'.
+ */
+function containsEmail(text: string): boolean {
+    for (
+        let at = text.indexOf('@');
+        at !== -1;
+        at = text.indexOf('@', at + 1)
+    ) {
+        if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
+            continue;
+        }
+        EMAIL_DOMAIN.lastIndex = at + 1;
+        const domain = EMAIL_DOMAIN.exec(text)?.[0];
+        if (domain && EMAIL_TLD.test(domain)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -123,7 +156,7 @@ function sanitizeUrl(
     value: unknown,
     keepCampaignParams: boolean,
 ): string | null {
-    if (typeof value !== 'string') {
+    if (typeof value !== 'string' || value.length > URL_INPUT_MAX) {
         return null;
     }
 
@@ -144,7 +177,7 @@ function sanitizeUrl(
     } catch {
         path = url.pathname;
     }
-    if (EMAIL.test(path)) {
+    if (containsEmail(path)) {
         return null;
     }
 

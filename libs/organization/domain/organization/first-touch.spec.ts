@@ -98,6 +98,39 @@ describe('sanitizeFirstTouch', () => {
         ).toEqual({ utm_source: 'newsletter' });
     });
 
+    it('drops an email that starts before the truncation point', () => {
+        expect(
+            sanitizeFirstTouch(
+                {
+                    utm_content: `${'x'.repeat(FIRST_TOUCH_TEXT_MAX - 5)} jane.doe@acme.com`,
+                },
+                now,
+            ),
+        ).toBeNull();
+    });
+
+    it('stays fast on long hostile input (the public signup endpoint takes 25mb bodies)', () => {
+        const hostile = '%'.repeat(1_000_000);
+        const atSigns = 'a@'.repeat(500_000);
+        const started = Date.now();
+
+        expect(
+            sanitizeFirstTouch(
+                {
+                    utm_source: hostile,
+                    utm_term: atSigns,
+                    referrer: `https://example.com/${hostile}`,
+                    landing_page: `https://kodus.io/?utm_source=${atSigns}`,
+                },
+                now,
+            ),
+        ).toEqual({
+            utm_source: '%'.repeat(FIRST_TOUCH_TEXT_MAX),
+            utm_term: 'a@'.repeat(FIRST_TOUCH_TEXT_MAX / 2),
+        });
+        expect(Date.now() - started).toBeLessThan(200);
+    });
+
     it('drops a gclid with characters Google never uses', () => {
         expect(sanitizeFirstTouch({ gclid: 'abc<script>' }, now)).toBeNull();
         expect(sanitizeFirstTouch({ gclid: 'Cj0K-Q_jw1' }, now)).toEqual({

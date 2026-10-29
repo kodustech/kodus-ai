@@ -27,8 +27,11 @@
     var kept = [];
     var query = new URLSearchParams(location.search);
     for (var i = 0; i < PARAMS.length; i++) {
-      var value = (query.get(PARAMS[i]) || '').replace(/^\s+|\s+$/g, '').slice(0, 100);
-      if (!value || EMAIL.test(value)) continue;
+      // Bounded before the email check, with room for an address that starts
+      // before the 100-character cut.
+      var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(/^\s+|\s+$/g, '');
+      if (!full || EMAIL.test(full)) continue;
+      var value = full.slice(0, 100);
       touch[PARAMS[i]] = value;
       kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
     }
