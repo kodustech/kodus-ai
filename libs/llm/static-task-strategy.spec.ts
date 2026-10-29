@@ -17,6 +17,7 @@ import '@libs/llm/providers'; // side-effect: self-register every provider modul
 import { REGISTRY } from './providers';
 import { StaticTaskStrategy } from './static-task-strategy';
 import type { RoutingVerdict, RequestContext } from './routing-strategy';
+import { overrideContext } from './routing-strategy';
 import type {
     BYOKConfig,
     BYOKCredential,
@@ -270,6 +271,27 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
             expect(v.reason).toContain(
                 'override "97ad0d7d-181c-4387-b908-fbaee2fd1989": no model with this id',
             );
+        });
+
+        it("falls back to the repository override when a custom agent's pinned model is gone", () => {
+            const v = strategy.resolve(
+                'customAgent',
+                overrideContext('m-B', undefined, 'deleted-pin'),
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-B');
+            expect(v.reason).toContain(
+                'override "deleted-pin": no model with this id',
+            );
+        });
+
+        it("keeps a custom agent's pinned model over the repository override", () => {
+            const v = strategy.resolve(
+                'customAgent',
+                overrideContext('m-B', undefined, 'm-ANT'),
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-ANT');
         });
 
         it('still applies an unmatched legacy NAME onto the routed slot', () => {

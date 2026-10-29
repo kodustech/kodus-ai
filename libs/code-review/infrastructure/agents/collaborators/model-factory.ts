@@ -67,6 +67,9 @@ export async function resolveReviewAgentModel(
     // `kodyRulesReview` so an org can route it to its own model (it inherits
     // `codeReview` when unset — TASK_ROUTING_FALLBACK).
     task: LlmTask = LLM_TASK.codeReview,
+    // A custom agent's own model id: wins over the repository override while
+    // it resolves, and falls back to it when that model was deleted.
+    pinnedModelId?: string,
 ): Promise<ResolvedAgentModel> {
     // Route the `task` to its slot through the single task→slot entry point owned
     // by the permission service. byokModelId (id) wins over the legacy byokModel
@@ -76,7 +79,13 @@ export async function resolveReviewAgentModel(
     const slot = await permissionService.resolveTaskSlot(
         input.organizationAndTeamData,
         task,
-        { ctx: overrideContext(input.byokModelId, input.byokModel) },
+        {
+            ctx: overrideContext(
+                input.byokModelId,
+                input.byokModel,
+                pinnedModelId,
+            ),
+        },
     );
 
     // The MAIN bundle from the routed slot (undefined on a BLOCKED/managed verdict

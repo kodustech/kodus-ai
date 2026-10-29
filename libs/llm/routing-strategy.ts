@@ -23,21 +23,39 @@ import type { BYOKConfig, LlmTask } from './byok-config';
  *    id-THEN-name contract in StaticTaskStrategy (REQ-COMPAT-01 read window).
  *    `byId` says the ref came from an id field (`byokModelId`, a custom agent's
  *    `models.run`): it is never a name, so an id that no longer resolves is
- *    skipped instead of being sent to the provider as a model name.
+ *    skipped instead of being sent to the provider as a model name, and `then`
+ *    (the next override down, e.g. the repository's under a custom agent's
+ *    pin) is tried in its place.
  */
-export interface RequestContext {
-    override?: { modelId?: string; byId?: boolean };
+export interface ModelOverride {
+    modelId?: string;
+    byId?: boolean;
+    then?: ModelOverride;
 }
 
-/** The override context for a stored id (wins) and a legacy model NAME. */
+export interface RequestContext {
+    override?: ModelOverride;
+}
+
+/**
+ * The override context for a stored id (wins) and a legacy model NAME, under
+ * an optional custom agent pin that wins over both while it still resolves.
+ */
 export function overrideContext(
     byokModelId?: string,
     byokModel?: string,
+    pinnedModelId?: string,
 ): RequestContext {
     const id = byokModelId?.trim();
-    if (id) return { override: { modelId: id, byId: true } };
     const name = byokModel?.trim();
-    return name ? { override: { modelId: name } } : {};
+    const base: ModelOverride | undefined = id
+        ? { modelId: id, byId: true }
+        : name
+          ? { modelId: name }
+          : undefined;
+    const pin = pinnedModelId?.trim();
+    const override = pin ? { modelId: pin, byId: true, then: base } : base;
+    return override ? { override } : {};
 }
 
 /**

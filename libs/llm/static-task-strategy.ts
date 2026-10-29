@@ -30,6 +30,7 @@ import type {
     LlmTask,
 } from './byok-config';
 import type {
+    ModelOverride,
     ModelRuntimeStats,
     RequestContext,
     RoutingStrategy,
@@ -117,11 +118,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const fallback = this.buildFallbackCandidate(routing, byId);
         const requirement = TASK_CAPABILITY_REQUIREMENTS[task];
 
-        const skips: string[] = [];
-        const overrideRef = ctx.override?.modelId?.trim();
-        if (overrideRef && ctx.override?.byId && !byId.has(overrideRef)) {
-            skips.push(`override "${overrideRef}": no model with this id`);
-        }
+        const skips = [...this.effectiveOverride(ctx, byId).skips];
         // Dedup exact (id + nameOverride) repeats so a model that is BOTH a higher
         // tier and a lower one (e.g. the folder override id == defaultModelId) is
         // gated once, not twice — no redundant capability lookup, no duplicated
@@ -208,6 +205,27 @@ export class StaticTaskStrategy implements RoutingStrategy {
         return undefined;
     }
 
+    /**
+     * The first override in the chain that can apply: an id that resolves, or a
+     * legacy NAME. An id that no longer resolves (its model was deleted) is
+     * skipped with a reason and the next one down (`then`) is tried.
+     */
+    private effectiveOverride(
+        ctx: RequestContext,
+        byId: Map<string, BYOKModelConfig>,
+    ): { override?: ModelOverride; skips: string[] } {
+        const skips: string[] = [];
+        let override = ctx.override;
+        while (override) {
+            const ref = override.modelId?.trim();
+            if (!ref) return { skips };
+            if (!override.byId || byId.has(ref)) return { override, skips };
+            skips.push(`override "${ref}": no model with this id`);
+            override = override.then;
+        }
+        return { skips };
+    }
+
     /** override (id-THEN-name) > taskOverride > default. */
     private buildPrimaryCandidates(
         task: LlmTask,
@@ -236,13 +254,14 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const routedId = taskOverrideId ?? routing.defaultModelId;
         const routedModel = routedId ? byId.get(routedId) : undefined;
 
-        const overrideRef = ctx.override?.modelId?.trim();
+        const { override } = this.effectiveOverride(ctx, byId);
+        const overrideRef = override?.modelId?.trim();
         if (overrideRef) {
             const byIdMatch = byId.get(overrideRef);
             if (byIdMatch) {
                 // id override → route straight to that model.
                 candidates.push({ model: byIdMatch, tier: 'override' });
-            } else if (routedModel && !ctx.override?.byId) {
+            } else if (routedModel && !override.byId) {
                 // NAME override (W1): not a models[] id → apply the name onto the
                 // chosen slot's `.model`, mirroring the legacy byokModel behavior.
                 // An id ref is never a name: a deleted model's id sent as a model

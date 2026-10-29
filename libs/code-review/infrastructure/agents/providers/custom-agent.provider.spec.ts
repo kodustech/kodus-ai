@@ -248,7 +248,10 @@ describe('CustomAgentProvider', () => {
         const runCall = resolveModelMock.mock.calls.find(
             ([, , task]) => task === LLM_TASK.customAgent,
         );
-        expect(runCall[0].byokModelId).toBe('byok-model-run');
+        // The pin goes alongside the repository override, which stays as the
+        // fallback for a pin whose model was deleted.
+        expect(runCall[3]).toBe('byok-model-run');
+        expect(runCall[0].byokModelId).toBe('repo-override');
     });
 });
 
