@@ -26,17 +26,15 @@ import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    FIX_STATUSES,
+    type FixStatus,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { extractLastJsonObjectWith } from '@libs/llm/structured-output-repair';
 
 export const ENRICH_DONE_TOOL = 'submitEnrichment' as const;
 
-export const FIX_STATUSES = [
-    'local',
-    'needs-wider-change',
-    'insufficient-context',
-    'no-code-fix',
-] as const;
-export type FixStatus = (typeof FIX_STATUSES)[number];
+export { FIX_STATUSES, type FixStatus };
 
 export type ContentEnrichment = {
     oneSentenceSummary: string;

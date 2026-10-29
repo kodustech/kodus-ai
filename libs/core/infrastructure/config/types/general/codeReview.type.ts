@@ -8,7 +8,6 @@ import type {
     ContextPack,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import type { FixStatus } from '@libs/code-review/infrastructure/agents/engine/enrich-content';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
@@ -147,6 +146,15 @@ export type AIAnalysisResult = {
 export type AIAnalysisResultPrLevel = {
     codeSuggestions: ISuggestionByPR[];
 };
+
+/** The enrichment's answer on a suggestion's fix (enrich-content.ts). */
+export const FIX_STATUSES = [
+    'local',
+    'needs-wider-change',
+    'insufficient-context',
+    'no-code-fix',
+] as const;
+export type FixStatus = (typeof FIX_STATUSES)[number];
 
 export type CodeSuggestion = {
     id?: string;
