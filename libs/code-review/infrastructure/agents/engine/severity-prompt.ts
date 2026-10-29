@@ -177,7 +177,9 @@ export function buildCriteriaSeverityPrompt(
     const suggestionsText = suggestions
         .map(
             (s, i) =>
-                `[${i}] File: ${s.relevantFile}\nIssue: ${s.suggestionContent}\nSummary: ${s.oneSentenceSummary || 'N/A'}`,
+                // Severity runs before the enrichment writes the title, so a
+                // finder suggestion has none yet: no Summary line for it.
+                `[${i}] File: ${s.relevantFile}\nIssue: ${s.suggestionContent}${s.oneSentenceSummary ? `\nSummary: ${s.oneSentenceSummary}` : ''}`,
         )
         .join('\n\n');
 

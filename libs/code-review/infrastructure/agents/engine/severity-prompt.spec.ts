@@ -31,6 +31,14 @@ describe('buildSeverityPrompt', () => {
         expect(prompt).not.toContain('**High:** A supported operational path');
     });
 
+    it('sends a Summary line only for a suggestion that has a title', () => {
+        const custom = { ...DEFAULT_SEVERITY_FLAGS, high: 'Anything touching billing' };
+        expect(buildSeverityPrompt([suggestion], custom)).not.toContain('Summary:');
+        expect(
+            buildSeverityPrompt([{ ...suggestion, oneSentenceSummary: 'Profile-less users crash' }], custom),
+        ).toContain('Summary: Profile-less users crash');
+    });
+
     it('builds from a suggestion with no fields', () => {
         expect(buildSeverityPrompt([{}] as any)).toContain('[0] File: \nIssue: ');
     });
