@@ -625,6 +625,7 @@ export async function recoverFindingsFromProse(
     organizationId: string | undefined,
     usageRunName?: string,
     previousDecisions?: readonly PrDecisionRecord[],
+    changedFiles?: readonly string[],
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -664,6 +665,9 @@ export async function recoverFindingsFromProse(
                 'invent findings; only extract what is explicitly ' +
                 `described. oneSentenceSummary: ${TITLE_PROMPT_SPEC}.` +
                 `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (changedFiles?.length
+                    ? `\n\nCHANGED FILES (relevantFile must be exactly one of these paths):\n${changedFiles.join('\n')}`
+                    : '') +
                 (previousDecisions?.length
                     ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
                     : ''),
@@ -672,7 +676,15 @@ export async function recoverFindingsFromProse(
                 : 'code-review-recovery',
             organizationId,
         });
-        return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
+        const recovered =
+            (result.suggestions as unknown as FinderSuggestion[]) ?? [];
+        if (!changedFiles?.length) return recovered;
+        // Prose that names no path leaves the recoverer writing "unknown".
+        // Such a finding would be verified and then dropped at path mapping.
+        const changed = new Set(changedFiles.map(normalizePath));
+        return recovered.filter((f) =>
+            changed.has(normalizePath(f.relevantFile)),
+        );
     } catch {
         // Best-effort: recovery must never break the review.
         return [];
