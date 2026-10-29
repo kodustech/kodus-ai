@@ -7,6 +7,7 @@ import {
     GITLAB_DEFAULT_RETRY_AFTER_MS,
     GITLAB_MAX_RETRY_AFTER_MS,
     gitlabRequestHandler,
+    gitlabRouteOf,
     parseGitlabRetryAfterMs,
     resetGitlabCooldowns,
 } from './gitlab-request-handler';
@@ -162,6 +163,56 @@ describe('gitlabRequestHandler', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    // The note-creation quota is per user across MRs: the cooldown from one
+    // MR has to cover the next one.
+    it('shares an endpoint cooldown across merge requests', async () => {
+        fetchMock.mockResolvedValueOnce(
+            jsonResponse(
+                429,
+                { message: 'This endpoint has been requested too many times.' },
+                { 'retry-after': '30' },
+            ),
+        );
+        const post = { ...options(), method: 'POST' };
+        await gitlabRequestHandler(
+            'projects/1/merge_requests/2/discussions',
+            post,
+        ).catch(() => undefined);
+
+        const other = await gitlabRequestHandler(
+            'projects/group%2Frepo/merge_requests/9/discussions',
+            post,
+        ).catch((e) => e);
+
+        expect(is429Error(other)).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the longer wait when two 429s race', async () => {
+        jest.useFakeTimers({ now: 1_000_000 });
+        fetchMock
+            .mockResolvedValueOnce(
+                jsonResponse(429, {}, { 'retry-after': '60' }),
+            )
+            .mockResolvedValueOnce(
+                jsonResponse(429, {}, { 'retry-after': '5' }),
+            );
+        await Promise.all([
+            gitlabRequestHandler('user', options()).catch(() => undefined),
+            gitlabRequestHandler('projects/1', options()).catch(
+                () => undefined,
+            ),
+        ]);
+
+        jest.setSystemTime(1_000_000 + 10_000);
+        const error = await gitlabRequestHandler('user', options()).catch(
+            (e) => e,
+        );
+
+        expect(error.retryAfterMs).toBe(50_000);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
     it('cools the whole token on the per-user limit', async () => {
         fetchMock.mockResolvedValueOnce(
             new Response(
@@ -197,6 +248,25 @@ describe('gitlabRequestHandler', () => {
 
         expect(result.body).toEqual({ ok: true });
         expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    // Five minutes is past with429Retry's 30s delay cap: it gives up instead
+    // of reaching GitLab again while the cooldown lasts.
+    it('never reaches GitLab again inside a long cooldown', async () => {
+        jest.useFakeTimers({ now: 1_000_000, advanceTimers: 1000 });
+        fetchMock.mockResolvedValue(
+            jsonResponse(429, {}, { 'retry-after': '300' }),
+        );
+
+        const run = with429Retry(
+            () => gitlabRequestHandler('user', options()),
+            { label: 'spec' },
+        ).catch((e) => e);
+        await jest.advanceTimersByTimeAsync(120_000);
+        const error = await run;
+
+        expect(is429Error(error)).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('keeps retrying a 502 like gitbeaker did', async () => {
@@ -278,5 +348,21 @@ describe('parseGitlabRetryAfterMs', () => {
                 now,
             ),
         ).toBe(GITLAB_MAX_RETRY_AFTER_MS);
+    });
+});
+
+describe('gitlabRouteOf', () => {
+    it('collapses ids and encoded project paths into the route', () => {
+        expect(
+            gitlabRouteOf(
+                '/api/v4/projects/82279235/merge_requests/1287/notes',
+            ),
+        ).toBe('/api/v4/projects/:id/merge_requests/:id/notes');
+        expect(
+            gitlabRouteOf(
+                '/api/v4/projects/group%2Fsub%2Frepo/merge_requests/3/discussions',
+            ),
+        ).toBe('/api/v4/projects/:id/merge_requests/:id/discussions');
+        expect(gitlabRouteOf('/api/v4/user')).toBe('/api/v4/user');
     });
 });

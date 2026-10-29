@@ -811,6 +811,9 @@ export class GenerateKodyRulesUseCase {
                             organizationAndTeamData,
                             repository,
                             prNumber,
+                            // Without it GitLab answers a 429 with [], and the
+                            // walk never learns it should stop.
+                            failOnError: true,
                         }),
                     { label: `genRules:getAllComments PR#${prNumber}` },
                 ),

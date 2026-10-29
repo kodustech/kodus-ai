@@ -271,6 +271,28 @@ describe('fetchPullRequestComments (the walk itself)', () => {
         }
     });
 
+    // GitLab turns a failed general-comments fetch into [] unless asked to
+    // throw, which hid the 429 from the walk.
+    it('asks for general comments to fail loudly', async () => {
+        const useCase: any = Object.create(GenerateKodyRulesUseCase.prototype);
+        useCase.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        useCase.codeManagementService = {
+            getAllCommentsInPullRequest: jest.fn(async () => []),
+            getPullRequestReviewComment: jest.fn(async () => []),
+            getFilesByPullRequestId: jest.fn(async () => []),
+        };
+
+        await useCase.fetchSinglePullRequestComments(
+            {},
+            { pull_number: 1 },
+            {},
+        );
+
+        expect(
+            useCase.codeManagementService.getAllCommentsInPullRequest,
+        ).toHaveBeenCalledWith(expect.objectContaining({ failOnError: true }));
+    });
+
     it('does not flag a pull request whose fetch failed for another reason', async () => {
         const useCase: any = Object.create(GenerateKodyRulesUseCase.prototype);
         useCase.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };

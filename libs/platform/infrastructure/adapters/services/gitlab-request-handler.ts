@@ -110,6 +110,32 @@ function clampRetryAfter(ms: number): number {
     return Math.min(Math.max(ms, 1_000), GITLAB_MAX_RETRY_AFTER_MS);
 }
 
+/**
+ * The route, not the resource: GitLab's per-endpoint quotas (note creation,
+ * single-project reads) are per user across every project and MR, so
+ * `projects/1/merge_requests/2/discussions` and `.../3/discussions` share one.
+ * Numeric ids and the URL-encoded `group%2Fproject` form both collapse.
+ */
+export function gitlabRouteOf(pathname: string): string {
+    return pathname
+        .split('/')
+        .map((segment) =>
+            /^\d+$/.test(segment) || segment.includes('%2F') ? ':id' : segment,
+        )
+        .join('/');
+}
+
+function startCooldown(key: string, retryAfterMs: number): void {
+    const now = Date.now();
+    // Drop what has expired so routes that are never requested again do not
+    // pile up in a long-running worker.
+    for (const [existing, until] of cooldowns) {
+        if (until <= now) cooldowns.delete(existing);
+    }
+    // Two 429s racing for the same key: keep the longer wait GitLab asked for.
+    cooldowns.set(key, Math.max(cooldowns.get(key) ?? 0, now + retryAfterMs));
+}
+
 function remainingCooldownMs(...keys: string[]): number {
     const now = Date.now();
     let remaining = 0;
@@ -219,16 +245,17 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
         ? 'same-origin'
         : undefined;
     const tokenKey = cooldownKey(url.origin, opts.headers);
-    const endpointKey = `${tokenKey}|${method} ${url.pathname}`;
+    const endpointKey = `${tokenKey}|${method} ${gitlabRouteOf(url.pathname)}`;
 
     for (let i = 0; i < RETRY_502_ATTEMPTS; i += 1) {
+        const request = new Request(url, { ...opts, method, mode });
+        await rateLimit();
+        // Checked after the limiter: a call queued there can wake up after
+        // another one already got the 429.
         const remaining = remainingCooldownMs(tokenKey, endpointKey);
         if (remaining > 0) {
             throw new GitlabRateLimitedError(remaining, url.origin, true);
         }
-
-        const request = new Request(url, { ...opts, method, mode });
-        await rateLimit();
         const response = await (
             agent
                 ? fetch(request, { dispatcher: agent } as RequestInit)
@@ -246,10 +273,7 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
             const retryAfterMs = parseGitlabRetryAfterMs(response.headers);
             const body = await response.text().catch(() => '');
             const endpointOnly = ENDPOINT_LIMIT_BODY.test(body);
-            cooldowns.set(
-                endpointOnly ? endpointKey : tokenKey,
-                Date.now() + retryAfterMs,
-            );
+            startCooldown(endpointOnly ? endpointKey : tokenKey, retryAfterMs);
             logger.warn({
                 message: `GitLab 429 on ${method} ${url.pathname}; cooling ${endpointOnly ? 'this endpoint' : 'the token'} down for ${retryAfterMs}ms`,
                 context: 'gitlabRequestHandler',
@@ -272,6 +296,8 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
         if (response.status !== 502) {
             await throwFailedRequestError(request, response);
         }
+        // Release the connection before asking again.
+        await response.body?.cancel().catch(() => undefined);
         await delay(2 ** i * 0.25);
     }
 
