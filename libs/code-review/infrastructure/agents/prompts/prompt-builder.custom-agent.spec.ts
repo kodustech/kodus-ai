@@ -217,6 +217,40 @@ describe('custom agent — lane focus', () => {
     });
 });
 
+describe('custom agent — no sandbox', () => {
+    // A review with no sandbox runs every agent without the repository. The
+    // agent keeps its own lane there instead of the generalist's checklist.
+    const noSandbox = input({ remoteCommands: undefined });
+
+    it('keeps its lane and its instructions in the system prompt', () => {
+        const system = buildSystemPrompt(noSandbox, e2e);
+
+        expect(system).toContain('<CodeReviewAgent mode="self-contained">');
+        expect(system).toContain('Report only findings within your focus');
+        expect(system).toContain(
+            'Every new booking screen needs an end-to-end test',
+        );
+        expect(system).toContain('cannot read the repository');
+        expect(system).not.toContain('Your first action must be a tool call');
+        expect(system).not.toContain(
+            'Is there a null/undefined dereference on a path the diff introduces?',
+        );
+    });
+
+    it('scopes the task and the reporting rules of its user prompt', () => {
+        const user = buildUserPrompt(noSandbox, e2e);
+
+        expect(user).toContain('<ReviewTask mode="self-contained">');
+        expect(user).toContain('the issues your focus covers');
+        expect(user).toContain('Report only findings within your focus.');
+        expect(user).not.toContain(
+            'DO report: null/undefined dereferences with no guard',
+        );
+        expect(user).toContain('<Diffs>');
+        expect(user).toContain('Assign a confidence score (1-10)');
+    });
+});
+
 describe('custom agent — conflicting sources', () => {
     const CONFLICT = 'When two sources give conflicting rules for this code';
 

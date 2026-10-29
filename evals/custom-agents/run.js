@@ -7,7 +7,10 @@
 // and which files the review handed it, against the feature's properties
 // (README.md).
 //
-//   node evals/custom-agents/run.js [--model=<id>] [--gate] [--output=<result.json>] [--cases=<id,...>] [--concurrency=N]
+//   node evals/custom-agents/run.js [--model=<id>] [--gate] [--output=<result.json>] [--cases=<id,...>] [--concurrency=N] [--sandbox=none]
+//
+// --sandbox=none reviews with no sandbox, as production does when none could
+// be created: every agent sees only the diff.
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
@@ -122,6 +125,7 @@ async function review(c, route) {
         team: teamOf(vars, teamConfig(c)),
         route,
         permissionService: evalPermissionService(route.storedConfig),
+        ...(args.sandbox === 'none' && { sandbox: 'none' }),
     });
     if (out.skipped)
         throw new Error(`production skipped the review: ${out.skipped}`);
