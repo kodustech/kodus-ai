@@ -273,7 +273,7 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
     });
 
     describe('Python companions follow pytest naming', () => {
-        it('looks for test_<name>.py beside the file, in tests/, and under the root tests/', async () => {
+        it('looks for test_<name>.py and <name>_test.py beside the file, in tests/, and under the root tests/', async () => {
             const exists = jest.fn(
                 async (path: string) => path === 'tests/app/test_main.py',
             );
@@ -291,8 +291,11 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
                     '- app/test_main.py: does not exist',
                     '- app/main_test.py: does not exist',
                     '- app/tests/test_main.py: does not exist',
+                    '- app/tests/main_test.py: does not exist',
                     '- tests/test_main.py: does not exist',
+                    '- tests/main_test.py: does not exist',
                     '- tests/app/test_main.py: exists',
+                    '- tests/app/main_test.py: does not exist',
                 ].join('\n'),
             );
         });
@@ -309,6 +312,7 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
                     '- test_main.py: does not exist',
                     '- main_test.py: does not exist',
                     '- tests/test_main.py: does not exist',
+                    '- tests/main_test.py: does not exist',
                 ].join('\n'),
             );
         });

@@ -381,14 +381,19 @@ function siblingCandidates(filename: string): string[] {
     if (ext === '.py') {
         const root = filename.startsWith('/') ? '/' : '';
         const relativeDir = dir.slice(root.length);
+        const testDirs = [
+            dir,
+            `${dir}tests/`,
+            `${root}tests/`,
+            `${root}tests/${relativeDir}`,
+        ];
         return [
-            ...new Set([
-                `${dir}test_${base}.py`,
-                `${dir}${base}_test.py`,
-                `${dir}tests/test_${base}.py`,
-                `${root}tests/test_${base}.py`,
-                `${root}tests/${relativeDir}test_${base}.py`,
-            ]),
+            ...new Set(
+                testDirs.flatMap((testDir) => [
+                    `${testDir}test_${base}.py`,
+                    `${testDir}${base}_test.py`,
+                ]),
+            ),
         ];
     }
 
