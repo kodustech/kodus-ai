@@ -16,6 +16,8 @@ import {
     buildDropReviewUserPrivilegesScript,
     confirmsPrivilegesDropped,
     DROP_PRIVILEGES_TIMEOUT_MS,
+    ROOT_ONLY_DIR,
+    SS_LOCAL_CONFIG_FILE,
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
@@ -1169,13 +1171,21 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
-        // Start ss-local daemon listening on SOCKS5 port 1080
+        // Start ss-local daemon listening on SOCKS5 port 1080. The password
+        // goes in a root-only config file: a process's arguments are readable
+        // by every user of the sandbox, the review user included. `-f` is how
+        // shadowsocks-libev daemonizes; it has no `-d start`.
+        const config = `${ROOT_ONLY_DIR}/${SS_LOCAL_CONFIG_FILE}`;
         await sandbox.commands.run(
-            `ss-local -s ${host} -p ${port} -l 1080 -k "$SS_PASSWORD" -m ${method} -d start`,
+            [
+                `umask 077 && mkdir -p ${ROOT_ONLY_DIR}`,
+                `printf '%s' "$SS_CONFIG" > ${config}`,
+                `ss-local -c ${config} -s ${shSingleQuote(host)} -p ${shSingleQuote(port)} -l 1080 -m ${shSingleQuote(method)} -f /run/ss-local.pid`,
+            ].join(' && '),
             {
                 timeoutMs: TIMEOUTS.PROXY_DAEMON_MS,
                 user: 'root',
-                envs: { SS_PASSWORD: password },
+                envs: { SS_CONFIG: JSON.stringify({ password }) },
             },
         );
 
