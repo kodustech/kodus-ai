@@ -19,7 +19,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const lib = (p) => require(path.join(__dirname, '../../libs', p));
-const { enrichOneShot, enrichWithTools } = lib('code-review/infrastructure/agents/engine/enrich-content.ts');
+const { enrichOneShot } = lib('code-review/infrastructure/agents/engine/enrich-content.ts');
+const { enrichWithTools } = require('./with-tools');
 const { buildFinderToolRegistry } = lib('code-review/infrastructure/agents/adapters/finder-tools.adapter.ts');
 const { InMemoryToolRegistry } = lib('agent-harness/infrastructure/tools/in-memory-tool-registry.ts');
 const { AiSdkAgentRunner } = lib('agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
