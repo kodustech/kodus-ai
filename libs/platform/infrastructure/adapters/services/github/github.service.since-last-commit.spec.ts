@@ -62,7 +62,7 @@ describe('GithubService.getChangedFilesSinceLastCommit', () => {
         });
         const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
         (service as any).logger = logger;
-        return { service, logger };
+        return { service, logger, compareCommitsWithBasehead };
     };
 
     const read = (service: GithubService) =>
@@ -74,12 +74,19 @@ describe('GithubService.getChangedFilesSinceLastCommit', () => {
         });
 
     it('keeps the compare files that belong to the PR', async () => {
-        const { service } = makeService([
+        const { service, compareCommitsWithBasehead } = makeService([
             file('merged/a.ts'),
             file('zz/own.ts'),
         ]);
 
         const files = await read(service);
+
+        // From the last reviewed commit to the PR head, not the base branch.
+        expect(compareCommitsWithBasehead).toHaveBeenCalledWith({
+            owner: 'acme',
+            repo: 'repo',
+            basehead: 'reviewed-sha...head-sha',
+        });
 
         expect(files.map((f: { filename: string }) => f.filename)).toEqual([
             'zz/own.ts',
