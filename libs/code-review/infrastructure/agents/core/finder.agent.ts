@@ -15,7 +15,6 @@ import type {
 } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
-import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
 import type {
     RunState,
     TokenUsage,
@@ -71,6 +70,13 @@ import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
+    FULL_FINDING,
+    FULL_RECOVERY,
+    LEAN_FINDING,
+    LEAN_RECOVERY,
+    submitResultSchema,
+} from '@libs/code-review/infrastructure/agents/core/finder-output-schema';
+import {
     FINDER_LABELS,
     type FinderLabel,
 } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
@@ -102,89 +108,10 @@ export interface FinderSuggestion {
     source?: { file: string; section?: string; quote: string };
 }
 
-/** The finder's output: exactly the fields the prompt asks for, all required.
- *  Snippet, fix, severity and confidence are not part of it at all; a later
- *  enrichment stage adds them. */
-const SUBMIT_RESULT_SCHEMA: JSONSchema = {
-    type: 'object',
-    // additionalProperties:false on every object is required by provider strict
-    // tool use / structured output modes.
-    additionalProperties: false,
-    properties: {
-        reasoning: { type: 'string' },
-        suggestions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                    label: {
-                        type: 'string',
-                        enum: [...FINDER_LABELS],
-                    },
-                    relevantFile: { type: 'string' },
-                    relevantLinesStart: { type: 'number' },
-                    relevantLinesEnd: { type: 'number' },
-                    suggestionContent: { type: 'string' },
-                },
-                required: [
-                    'label',
-                    'relevantFile',
-                    'relevantLinesStart',
-                    'relevantLinesEnd',
-                    'suggestionContent',
-                ],
-            },
-        },
-    },
-    required: ['reasoning', 'suggestions'],
-};
+const SUBMIT_RESULT_SCHEMA = submitResultSchema(LEAN_FINDING);
 
-/** Custom agents' output: the full finding, as main had it. Their findings
- *  skip the enrichment and the severity classifier, so the agent writes the
- *  snippet, the fix, the title and the severity itself. */
-const FULL_SUBMIT_RESULT_SCHEMA: JSONSchema = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-        reasoning: { type: 'string' },
-        suggestions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                    relevantFile: { type: 'string' },
-                    language: { type: 'string' },
-                    label: { type: 'string', enum: [...FINDER_LABELS] },
-                    suggestionContent: { type: 'string' },
-                    existingCode: { type: 'string' },
-                    improvedCode: { type: 'string' },
-                    oneSentenceSummary: {
-                        type: 'string',
-                        description: TITLE_PROMPT_SPEC,
-                    },
-                    relevantLinesStart: { type: 'number' },
-                    relevantLinesEnd: { type: 'number' },
-                    severity: {
-                        type: 'string',
-                        enum: ['critical', 'high', 'medium', 'low'],
-                    },
-                    confidence: { type: 'number' },
-                    ruleUuid: { type: 'string' },
-                },
-                required: [
-                    'relevantFile',
-                    'suggestionContent',
-                    'existingCode',
-                    'improvedCode',
-                    'oneSentenceSummary',
-                ],
-            },
-        },
-    },
-    required: ['reasoning', 'suggestions'],
-};
+/** Custom agents' output: the full finding, as main had it. */
+const FULL_SUBMIT_RESULT_SCHEMA = submitResultSchema(FULL_FINDING);
 
 /** The done tool. No-op execute: it is a finalize SIGNAL the CompletionGatePolicy
  *  detects by name; its input (the findings) is captured in the RunState.
@@ -592,45 +519,12 @@ function looksLikeFindings(text: string): boolean {
     return signals.filter((r) => r.test(l)).length >= 2;
 }
 
-const RECOVERY_SCHEMA = z.object({
-    suggestions: z.array(
-        z.object({
-            relevantFile: z.string(),
-            suggestionContent: z.string(),
-            // Same lean fields as submitResult. Nullable: prose that describes a
-            // defect may not name its label or lines, and requiring them made
-            // the WHOLE recovery fail with "response did not match schema"
-            // (measured on GPT-6.1, 30/09).
-            label: z.string().nullable(),
-            relevantLinesStart: z.number().nullable(),
-            relevantLinesEnd: z.number().nullable(),
-        }),
-    ),
-});
+const RECOVERY_SCHEMA = LEAN_RECOVERY;
 
 /** A custom agent's recovery: the full finding, as its submitResult asks.
  *  Its findings skip the enrichment and the severity classifier, so what the
  *  recovery leaves out would post missing. */
-const FULL_RECOVERY_SCHEMA = z.object({
-    suggestions: z.array(
-        z.object({
-            relevantFile: z.string(),
-            suggestionContent: z.string(),
-            existingCode: z.string(),
-            improvedCode: z.string(),
-            language: z.string().nullable(),
-            label: z.string().nullable(),
-            oneSentenceSummary: z
-                .string()
-                .nullable()
-                .describe(TITLE_PROMPT_SPEC),
-            relevantLinesStart: z.number().nullable(),
-            relevantLinesEnd: z.number().nullable(),
-            severity: z.string().nullable(),
-            confidence: z.number().nullable(),
-        }),
-    ),
-});
+const FULL_RECOVERY_SCHEMA = FULL_RECOVERY;
 
 const withRevisionId = (schema: typeof RECOVERY_SCHEMA | typeof FULL_RECOVERY_SCHEMA) =>
     z.object({

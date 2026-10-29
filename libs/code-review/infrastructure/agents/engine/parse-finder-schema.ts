@@ -11,13 +11,9 @@
  * whose PR-level findings have no file and no lines. A suggestion missing a
  * required field is discarded and reported.
  */
-export const LEAN_FINDER_FIELDS = [
-    'label',
-    'relevantFile',
-    'relevantLinesStart',
-    'relevantLinesEnd',
-    'suggestionContent',
-] as const;
+import { LEAN_FINDER_FIELDS } from '@libs/code-review/infrastructure/agents/core/finder-output-schema';
+
+export { LEAN_FINDER_FIELDS };
 
 export type LeanFinderField = (typeof LEAN_FINDER_FIELDS)[number];
 
