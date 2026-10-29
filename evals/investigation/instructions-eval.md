@@ -43,63 +43,52 @@ Esta é a parte que mais gera confusão. Leia a coluna da direita.
 
 | # | fase | roda em **produção**? |
 |---|---|---|
-| 1 | **13 microagentes** em paralelo (fase 0) | **sim** |
-| 2 | **mental simulation** (fase 1), vendo o que a fase 0 levantou | **sim** |
-| 3 | **filtro de contrato** — descarta achado sem `reason` ou com severidade fora da escala | **sim** (determinístico, dentro do reducer) |
-| 4 | **atribuidor** — agrupa duplicatas e dá nota 0-100 por grupo | **sim** (1 chamada por PR) |
-| 5 | **veracidade** — 0-100 de "a alegação é verdadeira sobre este código" | **sim** (1 chamada por PR) |
-| 6 | **fórmula logística + cota + limiar** | **sim** (determinístico) |
+| 1 | **generalista** — uma passada ampla sobre o diff inteiro | **sim** |
+| 2 | **synthesis-rescue** — uma passada a mais procurando o que a base perdeu | **sim** em produção; **desligada** no protocolo (`RECALL_SKIP_SYNTHESIS=1`) |
+| 3 | **verify** — o verificador julga cada candidato (mais o evidence gate) | **sim** |
+| 4 | **dedup** — no mesmo modelo da review | **sim** |
 | — | — | — |
-| 7 | **judge** — casa achado com golden | **não.** Só medição |
-| 8 | **verify** — agente por grupo, com grep/readFile no repo | **não.** Só experimento |
-| 9 | **relatório** | **não.** Só medição |
+| 5 | **judge** — casa achado com golden | **não.** Só medição |
+| 6 | **atribuidor** — agrupa duplicatas e dá nota 0-100 por grupo | **não.** Offline |
+| 7 | **veracidade** — 0-100 de "a alegação é verdadeira sobre este código" | **não.** Offline |
+| 8 | **fórmula logística + cota + limiar** | **não.** Offline, no `relatorio.py` |
+| 9 | **relatório** e **trace debugger** | **não.** Só medição |
 
 ### O que isso significa na prática
 
-**O reducer de produção é: contrato → atribuidor → veracidade → fórmula.** Duas
-chamadas de LLM por PR, mais aritmética. É o que está em
-`libs/code-review/infrastructure/agents/engine/finding-reducer.ts`.
+**O reducer não existe mais.** `finding-reducer.ts` saiu de `libs/`; produção
+faz generalista → synthesis-rescue → verify → (ancoragem, repetidos) → dedup →
+severidade/enriquecimento e posta o que sobra (`AgentReviewStage`).
+Atribuidor, veracidade e fórmula seguem no protocolo só como medição offline do
+que um corte faria.
 
-**O verify nunca esteve em produção.** Nada em `libs/` ou `apps/` instancia o
-`LlmVerifier` no caminho de review. Ele existe nos scripts de eval, roda
-**depois** da geração, sobre os grupos que o atribuidor montou. Colocá-lo em
-produção seria trabalho novo, com custo de 1 execução de agente **por grupo**
-somado ao tempo da review — e pelo que já foi medido não paga: +0,016 de F1 no
-GPT (dentro do ruído) e **0,000 no DeepSeek**, com 124 de 125 grupos pontuados.
+**Os microagentes, a simulação mental, o scout, o painel, o shard e o
+dev-level também saíram** do `libs/` e do harness. Números deles abaixo são
+histórico.
 
 **O judge não é parte do produto.** Ele é o instrumento de medida. Julga
-**todos os candidatos**, não os representantes dos grupos — representante não
-responde nada por agente e mudaria a definição de "o grupo cobre o golden", que
-hoje significa *o dono do golden está no grupo*.
-
-**O agente cross-file (`changed-files-disagree`) roda na fase 0 com os outros,
-mas o que ele produz NÃO entra no `<AlreadyRaised>` da simulação.** É
-deliberado: mantém a simulação inalterada, e assim remover os candidatos dele
-offline reproduz exatamente a rodada de 12 agentes.
+**todos os candidatos** (o que o verify manteve, antes do dedup), não os
+representantes dos grupos — representante mudaria a definição de "o grupo cobre
+o golden", que hoje significa *o dono do golden está no grupo*. Os descartados
+pelo verify são julgados à parte (`matriz-descartados-<rodada>.json`).
 
 ### Ordem de dependência
 
 ```
-geração (fases 1-2)
+geração (generalista → verify → dedup)
         │
-        ├──────────────┬──────────────┐
-        ▼              ▼              │
-   filtro de        judge             │   judge e atribuidor não dependem
-    contrato     (todos os           │   um do outro: rodam em paralelo
-        │         candidatos)         │
-        ▼                             │
-   atribuidor ◄───────────────────────┘
+        ├──────────────┐
+        ▼              ▼
+   atribuidor        judge          rodam em paralelo
+        │              │
+        ▼              │
+   veracidade          │
+        │              │
+        ▼              │
+   fórmula ◄───────────┘  (relatorio.py)
         │
-        ├──────────────┬──────────────┐
-        ▼              ▼              │
-   veracidade       verify            │   dependem do agrupamento,
-        │              │              │   não um do outro
-        └──────┬───────┘              │
-               ▼                      │
-           fórmula ◄──────────────────┘
-               │
-               ▼
-           relatório
+        ▼
+   relatório
 ```
 
 ---
@@ -124,11 +113,15 @@ sobrescrever pasta existente.
 
 ### O que o protocolo faz, em ordem
 
-1. **geração** — 13 microagentes + simulação, nos 30 PRs
-2. **portão** — 30 dumps e zero INFRA, ou aborta
-3. **judge ∥ atribuidor** — em paralelo
-4. **veracidade ∥ verify** — em paralelo
-5. **relatório**
+1. **geração** — generalista → verify → dedup, nos 30 PRs (sem synthesis-rescue)
+2. **portão** — 30 dumps e zero INFRA, ou aborta; depois `saude.py`, vermelho aborta
+3. **judge ∥ judge dos descartados ∥ atribuidor** — em paralelo
+4. **veracidade** — sobre os grupos do atribuidor
+5. **relatório** e **trace debugger** — offline
+
+> A fase 1 chama `run-recall.js` (harness de produção). `RECALL_SKIP_SYNTHESIS`
+> e `RECALL_REAL_REPO` só são lidos pelo `run-recall-1821.js`, que é quem grava
+> `trace.preFilterCandidates`, a entrada do judge.
 
 ### Configuração congelada (não há o que passar)
 
@@ -136,8 +129,8 @@ sobrescrever pasta existente.
 RECALL_SET=light              os 30 PRs
 RECALL_SKIP_SYNTHESIS=1       sem synthesis-rescue
 RECALL_REAL_REPO=1            worktree de verdade
-RECALL_GATE=0                 sem gate de piso
-RECALL_CONCURRENCY=4          4 PRs em paralelo
+RECALL_GATE=0                 sem gate
+RECALL_CONCURRENCY=8          8 PRs em paralelo (sobrescrevível)
 ```
 
 Para modelos `gpt-*` o protocolo já força `RECALL_REASONING_EFFORT=low`.
@@ -148,7 +141,7 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 
 | variável | quando |
 |---|---|
-| `RECALL_CONCURRENCY` | mantenha 4 se for comparar **tempo** entre rodadas |
+| `RECALL_CONCURRENCY` | mantenha o mesmo valor se for comparar **tempo** entre rodadas |
 | `RECALL_CALL_GRAPH=1` | só para re-testar grafo (ver setup) |
 
 ### Duração e custo
@@ -157,7 +150,7 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 |---|---|
 | geração | ~55 min (varia muito com o provedor) |
 | judge ∥ atribuidor | ~10 min |
-| veracidade ∥ verify | ~25 min |
+| veracidade | medido com o verify offline, que saiu (~25 min juntos) |
 | **total** | **~1h30** |
 | custo DeepSeek/Fireworks | ~US$ 8 na rodada inteira |
 | modelos `@sub` | consome cota do plano, não dinheiro |
@@ -171,8 +164,7 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 | `ABORTADO: N/30 dumps` | cota, rate limit ou agente com zero passos | resolver a causa e **rodar tudo de novo**. Não remende PRs avulsos: misturar regimes no mesmo pool é o erro do `gpt-30` |
 | `The usage limit has been reached` | cota do plano de assinatura | esperar a janela virar, ou trocar de modelo. Login novo não resolve |
 | recall muito abaixo do esperado, sem erro | ver §6 | antes de culpar o código, comparar o trabalho por passo |
-| `score ausente` em muitos grupos do verify | extração do modo score | já corrigido com `scoreFromText`; se voltar, é regressão |
-| `ABORTADO: saude vermelha` | o `saude.py` achou falha de harness num PR: repo não montado, arquivo faltando no prompt, agente com 0 passos, reducer que falhou, pool com configurações misturadas | abrir `results/saude-<rodada>.log`, corrigir o harness e rodar de novo. Amarelo não bloqueia, mas vale abrir o PR antes de confiar no número dele |
+| `ABORTADO: saude vermelha` | o `saude.py` achou falha de harness num PR: repo não montado, arquivo faltando no prompt, agente com 0 passos, pool com configurações misturadas | abrir `results/saude-<rodada>.log`, corrigir o harness e rodar de novo. Amarelo não bloqueia, mas vale abrir o PR antes de confiar no número dele |
 | `NAO COMPARAVEL` no `comparar-config.py` | as duas rodadas diferem em algo além do braço declarado | não compare. Rode os dois braços com a mesma configuração |
 
 ### O que cada rodada grava desde 26/09
@@ -182,9 +174,9 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 - `searchDocs` (Exa) ligado nos agentes, como na produção. `RECALL_DOCS=0` desliga, para o braço de comparação.
 - 8 PRs em paralelo por padrão (`RECALL_CONCURRENCY`).
 
-**Nunca pontue pelo campo `findings` do dump quando a rodada não passou pelo
-reducer.** É o caminho que produziu um "baseline" de 0,356 com 208 falsos
-positivos, e ele não corresponde a nenhuma configuração real.
+**Nunca pontue pelo campo `findings` de um dump antigo que não passou pelo
+reducer (hoje removido).** Foi o caminho que produziu um "baseline" de 0,356
+com 208 falsos positivos, que não corresponde a nenhuma configuração real.
 
 ---
 
@@ -203,7 +195,7 @@ O que cada uma responde:
 |---|---|
 | `tempo` | quanto durou cada fase (menor, mediana, média, maior) |
 | `tokens` | input fresco, cache read e output por PR |
-| `prereducer` | recall/precision/F1/F2 antes de qualquer corte, **com e sem o agente cross-file** |
+| `prereducer` | recall/precision/F1/F2 antes de qualquer corte (o nome é histórico; a linha "sem o agente cross-file" só tem efeito em pool de microagentes) |
 | `agentes` | TP e FP por agente, totais e únicos |
 | `formula` | as três variantes nos cortes 3-7 |
 
@@ -222,9 +214,13 @@ O que cada uma responde:
 
 | | sinal além do atribuidor |
 |---|---|
-| **A** | veracidade *(é a de produção)* |
-| **B** | veracidade + verify |
-| **C** | verify sozinho |
+| **A** | veracidade |
+| **D** | nenhum (só atribuidor) |
+| **B** | veracidade + verify offline |
+| **C** | verify offline sozinho |
+
+B e C leem `results/verify-<rodada>.json`, que o protocolo não gera mais (o
+`verify-apos-atribuidor.js` saiu): sem ele o `relatorio.py` para com `falta`.
 
 O atribuidor é fixo em todas: a nota dele é termo da fórmula.
 
@@ -251,9 +247,9 @@ do código e compare o md5. Idênticos = o código de geração está inocente.
 assinatura de mudança do provedor.** Menos achados com menos passos pode ser
 timeout ou orçamento — verifique `finishReason` e `warnings`.
 
-**4. A queda é uniforme entre os 13 agentes?** Se todos caem na mesma proporção,
-a causa é comum a todos — e a única coisa comum é o modelo. Se um agente cai
-sozinho, é mudança no prompt dele.
+**4. A queda é uniforme entre as passadas?** Se todas caem na mesma proporção,
+a causa é comum — e a única coisa comum é o modelo. Se uma cai sozinha, é
+mudança no prompt dela.
 
 **5. Ferramenta quebrada?** Confira no log: erros de ferramenta, falha de
 worktree, `replayCalls` desproporcional. Zero em tudo significa que o repo real
@@ -267,18 +263,21 @@ gente pediu**, não o que foi servido. Para saber o que rodou de verdade, olhe o
 
 ## 7. O que já foi decidido (não re-teste sem motivo)
 
+Medições da arquitetura de microagentes + reducer, que já não existe; ficam como
+histórico.
+
 | questão | veredito | evidência |
 |---|---|---|
 | grafo AST no prompt dos agentes | **piora** | −0,049 F1 DeepSeek, −0,019 GPT |
 | fundir 12 agentes em 8 | **piora** | −5,5pp de recall, −6 goldens |
 | verify no lugar/ao lado da veracidade | **não paga** | +0,016 GPT (ruído), 0,000 DeepSeek |
 | 8 passos no verify vs 5 | 8 responde quase sempre; 5 não responde em 56 casos | — |
-| 3 microagentes fracos | **removidos** | nenhum achado sobreviveu ao reducer |
+| microagentes, simulação e reducer | **removidos** de `libs/` e do harness | — |
 | agente cross-file | **soma** | +4,6pp de recall, precisão intacta, mesmo pool |
 
 E o diagnóstico de fundo, que deve guiar o que se testa a seguir:
 
-**O gargalo é a geração, não o corte.** Dos 111 goldens core, ~60 são
+**O gargalo é a geração, não o corte** (medido com os microagentes). Dos 111 goldens core, ~60 são
 alcançados por algum agente e praticamente todos esses sobrevivem ao reducer.
 Os ~50 restantes nunca viram candidato. Afinar cota, limiar ou fórmula
 redistribui os 60; não traz nenhum dos 50.

@@ -4,11 +4,19 @@
 #   ./protocolo.sh <modelo> <nome-da-rodada>
 #
 # Fases, na ordem em que dependem umas das outras:
-#   1. geracao      13 microagentes + simulacao (a simulacao NAO ve o cross-file)
+#   1. geracao      generalista (passada base) -> verify -> dedup, nos 30 PRs;
+#                   synthesis-rescue desligada (RECALL_SKIP_SYNTHESIS=1)
 #   2. judge  ||  atribuidor        — independentes, rodam juntos
 #   3. veracidade                   — precisa do agrupamento, e so
 #   4. relatorio    offline, sem LLM
 #   5. debugger     pagina HTML do trace, tambem offline
+#
+# Atribuidor e veracidade sao offline: o reducer saiu de libs/, nada disso
+# corta o que producao posta.
+#
+# ATENCAO: a fase 1 chama run-recall.js (harness de producao). RECALL_SKIP_SYNTHESIS
+# e RECALL_REAL_REPO so sao lidos pelo run-recall-1821.js / agent-provider-1821.js,
+# que e quem grava trace.preFilterCandidates (entrada do judge).
 #
 # O judge julga TODOS os candidatos, nao os representantes: sem isso nao existe
 # TP/FP por agente, nem pre-reducer, e a cobertura de um grupo passaria a
@@ -51,7 +59,7 @@ case "$MODELO" in gpt-*) export RECALL_REASONING_EFFORT=low ;; esac
 echo "modelo $MODELO | rodada $NOME | concorrencia $RECALL_CONCURRENCY"
 mkdir -p "$RECALL_DUMP"
 
-echo; echo "==== 1/4 geracao ===="
+echo; echo "==== 1/5 geracao (generalista -> verify -> dedup) ===="
 # `|| true`: o run-recall sai com codigo 1 quando algum PR fica abaixo do limiar
 # de qualidade — um veredito sobre a REVISAO, nao sobre a execucao. Com
 # `set -e pipefail` isso matava o protocolo inteiro depois de 2h de geracao, com
@@ -73,15 +81,15 @@ if [ "$DUMPS" != "30" ] || [ "$INFRA" != "0" ]; then
 fi
 
 # PORTAO DE SAUDE: 30 dumps nao quer dizer 30 PRs medidos direito. Repo nao
-# montado, diff truncado, agente com zero passos ou reducer que falhou e postou
-# tudo ja foram lidos como "a arquitetura piorou". Vermelho aqui para a rodada.
+# montado, diff truncado, agente com zero passos ou o reducer (ja removido) que
+# falhou e postou tudo ja foram lidos como "a arquitetura piorou". Vermelho aqui para a rodada.
 echo; echo "==== saude, PR por PR ===="
 if ! python3 saude.py "$RECALL_DUMP" "results/run-$NOME.log" | tee "results/saude-$NOME.log"; then
     echo "ABORTADO: saude vermelha. Corrija o harness antes de pagar judge por cima disso."
     exit 1
 fi
 
-echo; echo "==== 2/4 judge (todos os candidatos + descartados pelo verificador)  ||  atribuidor ===="
+echo; echo "==== 2/5 judge (candidatos pos-verify/pre-dedup + descartados pelo verificador)  ||  atribuidor ===="
 node matriz-prefilter.js --dump="$NOME" --par=10 --out="results/matriz-$NOME.json" \
     > "results/matriz-$NOME.log" 2>&1 &
 PID_J=$!
@@ -96,7 +104,7 @@ PID_A=$!
 wait $PID_J; wait $PID_D; wait $PID_A
 echo "judge e atribuidor prontos"
 
-echo; echo "==== 3/4 veracidade ===="
+echo; echo "==== 3/5 veracidade (offline) ===="
 node score2-veracidade.js --dump="$NOME" --grupos="results/seletor-$NOME.json" \
     --parpr=5 --out="results/score2-$NOME.json" > "results/score2-$NOME.log" 2>&1 &
 PID_V=$!
@@ -107,5 +115,5 @@ python3 relatorio.py --run="$NOME"
 
 echo; echo "==== 5/5 trace debugger ===="
 # So le artefato ja gravado: nenhuma chamada de LLM, instantaneo. Pode ser
-# regerado a qualquer momento depois (ex.: depois de acrescentar o verify).
+# regerado a qualquer momento depois (ex.: depois de acrescentar um passo novo ao dump).
 node build-trace-debugger.js --run="$NOME"

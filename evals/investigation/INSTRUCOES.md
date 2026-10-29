@@ -17,8 +17,16 @@ versão final do produto** — é documentação de bancada.
 ## 1. O comando
 
 ```bash
-node evals/investigation/run-recall.js --model <modelo> --cases <ids> --output <arquivo.json>
+node evals/investigation/run-recall-1821.js --model <modelo> --cases <ids> --output <arquivo.json>
 ```
+
+O harness de pesquisa é o `*-1821.js` (`run-recall-1821.js`,
+`agent-provider-1821.js`, `recall-tests-1821.js`). Os nomes sem sufixo são o
+harness de produção da main, que não lê as `RECALL_*` de arquitetura abaixo.
+
+O que ele roda por PR: o generalista (passada base) → synthesis-rescue → verify
+(com o evidence gate) → descarte do parse schema → dedup no mesmo modelo.
+`trace.preFilterCandidates` é o snapshot depois do verify e antes do dedup.
 
 Roda sempre a partir da **raiz do repositório** (`/Users/juniorsartori/Projects/Kody/kodus-ai`),
 nunca de dentro de `evals/investigation` — os caminhos de `tsconfig-paths` são
@@ -91,7 +99,7 @@ pareciam normais.
 
 ## 3. Langfuse
 
-Registrado em `agent-provider.js:13-47`, **depois** do `dotenv` e nunca antes.
+Registrado no topo do `agent-provider-1821.js`, **depois** do `dotenv` e nunca antes.
 
 ```
 LANGFUSE_TRACING=true
@@ -103,7 +111,7 @@ LANGFUSE_ENVIRONMENT=benchmark
 
 As chaves vêm do `.env` e depois do `.env.local` com `override: true` — o
 `.env.local` ganha. O ambiente é forçado para `benchmark` quando não vier
-definido (`agent-provider.js:23`), justamente para os traces de bancada não se
+definido, justamente para os traces de bancada não se
 misturarem com os de produção no mesmo projeto.
 
 No começo do run o harness imprime uma linha dizendo se o tracing subiu:
@@ -118,7 +126,7 @@ coisas: `LANGFUSE_TRACING=true` **e** as duas chaves.
 ### Como os traces se chamam
 
 Cada PR vira traces chamados `bench:<caseId>`, mais irmãos com sufixo
-(`bench:<caseId>-plan`, `-recovery`). **Um run não produz um trace por PR**:
+(ex.: `bench:<caseId>-recovery`). **Um run não produz um trace por PR**:
 toda chamada de modelo que começa sem span pai vira trace raiz próprio, então um
 PR aparece como vários. O debugger lista todos.
 
@@ -178,9 +186,10 @@ RECALL_REASONING_EFFORT=low
 
 | variável | efeito |
 |---|---|
-| `RECALL_SKIP_DEDUP=1` | tira dedup e redutor juntos |
+| `RECALL_SKIP_DEDUP=1` | tira o dedup |
 | `RECALL_DEDUP_ROOT_CAUSE=1` | dedup por causa raiz |
 | `RECALL_SKIP_SYNTHESIS=1` | tira a passada de synthesis-rescue |
+| `RECALL_GATE=1` | além do gate de piso, liga o gate da prova depois do dedup (experimento) |
 
 ### `RECALL_CATEGORIES` — leia antes de comparar com produção
 
@@ -267,14 +276,15 @@ quebra, não para decidir arquitetura.
 **O adaptador monta os params campo a campo.** `core-agent-loop.adapter.ts`
 constrói o objeto do finder listando cada campo. Qualquer parâmetro adicionado
 ao finder e **não listado ali é descartado em silêncio**. Quatro runs de 30 PRs
-se reportaram como experimentos de graph-shard e teto elevado enquanto rodavam o
-default de plan+grep — ~55M de tokens medindo a mesma coisa. Se um experimento
+se reportaram como experimentos de graph-shard e teto elevado (modos já
+removidos) enquanto rodavam o default de plan+grep — ~55M de tokens medindo a mesma coisa. Se um experimento
 novo devolver número idêntico ao baseline, **suspeite disso primeiro**. Declarar
 o campo em `AgentLoopInput` faz o `tsc` pegar.
 
-**Confira a passada no dump antes de confiar no run.** `shardPlan: null` quando
-deveria ter plano significa que o shard não rodou. O debugger mostra as passadas
-executadas por nome.
+**Confira as passadas no dump antes de confiar no run.** `trace.recallPasses`
+lista as passadas que rodaram (a base e, sem `RECALL_SKIP_SYNTHESIS=1`, a
+synthesis-rescue). O debugger
+mostra as passadas executadas por nome.
 
 **Prompt de experimento abandonado fica no código.** Um teste com prompt
 alternativo que saiu pior deixou o prompt lá, e os dois runs seguintes partiram
@@ -297,9 +307,10 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 
 | caminho | o quê |
 |---|---|
-| `evals/investigation/run-recall.js` | entrada do run |
-| `evals/investigation/agent-provider.js` | onde as env vars viram configuração do loop |
-| `evals/investigation/recall-tests.js` | definição dos conjuntos (`LIGHT_CASES` etc) |
+| `evals/investigation/run-recall-1821.js` | entrada do run de pesquisa |
+| `evals/investigation/agent-provider-1821.js` | onde as env vars viram configuração do loop, e o dedup |
+| `evals/investigation/recall-tests-1821.js` | definição dos conjuntos (`LIGHT_CASES` etc) |
+| `evals/investigation/protocolo.sh` | a rodada padrão (ver `instructions-eval.md`) |
 | `evals/investigation/datasets/*.json` | os PRs: diff, goldens, call graph, toolReplay |
 | `evals/investigation/materialize-full-diff.js` | grava o diff completo |
 | `evals/investigation/build-call-graphs.js` | grava o call graph do corpus |
@@ -307,14 +318,16 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 | `evals/investigation/build-trace-debugger.js` | monta a página de trace (ver `instructions-trace-debugger.md`) |
 | `evals/investigation/langfuse-traces.js` | resolve os traces via API |
 | `evals/investigation/eval-observability.js` | a porta `LlmObservability` do eval |
-| `libs/code-review/infrastructure/agents/core/micro-agents.ts` | os 14 microagentes |
-| `libs/code-review/infrastructure/agents/core/selector-shard.ts` | plan/graph shard |
+| `libs/code-review/infrastructure/agents/core/finder.agent.ts` | passada base, synthesis-rescue e verify |
 | `libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts` | adaptador — **o dos params campo a campo** |
 | `libs/common/utils/codeReview/v2Defaults.ts` | os 34 itens de detecção |
 
 ---
 
-## 9. Estado em 19/09/2026
+## 9. Estado em 19/09/2026 (histórico)
+
+Microagentes, plan/graph shard e scout citados aqui **não existem mais** — foram
+removidos do `libs/` e do harness. O que segue é registro do que foi medido.
 
 **Validado:** `maxSteps=24` é o único ganho confirmado nos 30 PRs (+4,2pp de
 recall, e mais barato). A regeração do call graph melhorou o plan+shard nas
@@ -330,6 +343,6 @@ pareada.
 
 **Pendências conhecidas:**
 
-- Os 5 itens estendidos vivem como constantes no `micro-agents.ts` e **não** no `v2Defaults.ts`. Portar dá acesso a eles também ao generalista, ao shard e ao scout — e muda o campeão, então é um experimento, não uma arrumação.
+- Os 5 itens estendidos viviam como constantes no `micro-agents.ts` (removido) e nunca chegaram ao `v2Defaults.ts`.
 - `formatDiffs(input.changedFiles)` nunca recebe `fileTiers` nas três chamadas (`prompt-builder.ts:354`, `:507`, `:633`). A redução de `optional` para cabeçalhos de hunk é código morto **também em produção**. O tier ainda serve como portão de conclusão e rótulo de cobertura, só não corta prompt.
 - O eval chama `runAgentLoopViaCore` direto, pulando o `BaseCodeReviewAgentProvider`. O tiering ele replica de propósito; o filtro low-signal e o **batching** não. Um PR que em produção viraria 33 batches roda aqui numa passada só.

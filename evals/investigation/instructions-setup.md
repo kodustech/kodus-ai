@@ -199,7 +199,7 @@ conta do mesmo jeito, com 0 achados e os goldens dele no denominador.
 O grafo **não faz parte do fluxo padrão**. Ele só é construído quando a rodada
 liga `RECALL_CALL_GRAPH=1`.
 
-> **Resultado já medido:** mandar o grafo no prompt dos microagentes **piora** —
+> **Resultado já medido:** mandar o grafo no prompt dos microagentes (arquitetura já removida) **piorou** —
 > −0,049 de F1 no DeepSeek e −0,019 no GPT. Só ligue se o objetivo for
 > especificamente re-testar isso.
 
