@@ -174,6 +174,34 @@ describe('knowledge tools', () => {
         expect(reader.reads).toContain(`${SKILL_DIR}/references/codes.md`);
     });
 
+    it('readSkillFile does not serve a secret file the skill folder holds', async () => {
+        const withSecret = {
+            ...files,
+            [`${SKILL_DIR}/.env`]: 'LEDGER_TOKEN=FAKE_VALUE_7f3a',
+        };
+        const reader = new InMemoryBaseBranchReader(withSecret);
+        reader.listFiles = async (dir) =>
+            Object.keys(withSecret).filter((f) => f.startsWith(`${dir}/`));
+        const knowledge = await new KnowledgeResolver(reader).resolve({
+            target: 'main-review',
+            items: [
+                { path: SKILL_DIR, kind: 'skill', linkedTo: ['main-review'] },
+            ],
+        });
+        const readSkillFile = buildKnowledgeTools(knowledge, reader).find(
+            (t) => t.name === 'readSkillFile',
+        )!;
+
+        const result = await readSkillFile.execute(
+            { skill: 'ledger-errors', path: '.env' },
+            ctx,
+        );
+
+        expect(result.isError).toBe(true);
+        expect(result.output).not.toContain('FAKE_VALUE_7f3a');
+        expect(reader.reads).not.toContain(`${SKILL_DIR}/.env`);
+    });
+
     it('reports only the skills opened and files read that returned content', async () => {
         const reader = new InMemoryBaseBranchReader(files);
         reader.listFiles = async (dir) =>

@@ -6,6 +6,11 @@ import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 import {
+    isSecretFilePath,
+    secretFileRefusal,
+    withoutSecretFileLines,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
+import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
     isProjectLevelTypeScriptLine,
@@ -1712,10 +1717,48 @@ fi
         );
     }
 
+    guardSecretFiles(tools);
+
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
         context: 'agent-tools.factory',
     });
 
     return tools;
+}
+
+/**
+ * No tool returns the content of a secret file the repository committed
+ * (secret-files.ts): it would reach the model provider and the trace. The
+ * readers refuse the path, and search output drops the file's lines, on
+ * every route a tool takes (linked repositories, sandbox rg, the provider's
+ * grep).
+ */
+function guardSecretFiles(tools: Record<string, any>): void {
+    for (const name of ['readFile', 'readReference']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            const filePath = String(
+                args?.path || args?.filePath || args?.file || '',
+            );
+            return isSecretFilePath(filePath)
+                ? secretFileRefusal(filePath)
+                : execute(args);
+        };
+    }
+    for (const name of ['grep', 'getCallers']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            const searchPath = String(args?.path || '');
+            if (isSecretFilePath(searchPath)) {
+                return secretFileRefusal(searchPath);
+            }
+            const out = await execute(args);
+            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+        };
+    }
 }
