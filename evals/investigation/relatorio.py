@@ -8,21 +8,15 @@ dele no denominador. Toda tabela de 29 PRs que saiu daqui antes veio de iterar
 as chaves de um artefato em vez de iterar o conjunto — o artefato perdia o PR
 vazio, o denominador encolhia e o recall subia de graca.
 
-  python3 relatorio.py --run=<nome> [--secao=tempo|tokens|prereducer|agentes|formula]
+  python3 relatorio.py --run=<nome> [--secao=tempo|tokens|prereducer|agentes]
 """
-import json, math, os, sys, statistics as st
+import json, os, sys, statistics as st
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 R = os.path.join(AQUI, 'results')
 POOLS = os.environ.get('POOL_ROOT', os.path.join(AQUI, 'pools'))
 CORE = {'bug','security','concurrency','data','api','perf','test_gap','doc_defect'}
-SEVN = {'low':.25,'medium':.5,'high':.75,'critical':1.0}
 CROSS = 'micro-changed-files-disagree'
-LIM = float(os.environ.get('REL_LIMIAR', '0.22'))
-# REL_COTAS=3,5,7,9,12: o ponto de operacao de F2 fica em cotas mais altas que o
-# de F1 (F2 pesa recall 4x), e a tabela padrao parava em 7.
-COTAS = tuple(int(x) for x in os.environ.get('REL_COTAS', '3,4,5,6,7').split(','))
-BASE_FEATS = ['nota','ver','prod','conf','tam','sev','nag','vies']
 
 def arg(n, d=None):
     for a in sys.argv[1:]:
@@ -61,30 +55,17 @@ def resumo(vals, div=1.0, suf=''):
 # ---------------------------------------------------------------- tempo
 def secao_tempo():
     print('\n== TEMPO ==  (30 PRs; PR ausente aparece como faltando)')
-    rev, f0, f1 = [], [], []
+    rev, fin = [], []
     faltando = []
     for cid in OS30:
         j = dump(cid)
         if not j: faltando.append(cid); continue
         t = j.get('trace') or {}
         if t.get('reviewWallMs'): rev.append(t['reviewWallMs'])
-        ps = t.get('recallPasses') or []
-        com_inicio = [p for p in ps if p.get('startMs') is not None and p.get('ms')]
-        sim = [p for p in com_inicio if 'simulate' in p['label']]
-        mic = [p for p in com_inicio if 'simulate' not in p['label']]
-        if mic: f0.append(max(p['startMs']+p['ms'] for p in mic) - min(p['startMs'] for p in mic))
-        if sim: f1.append(max(p['startMs']+p['ms'] for p in sim) - min(p['startMs'] for p in sim))
+        ps = [p for p in (t.get('recallPasses') or []) if p.get('startMs') is not None and p.get('ms')]
+        if ps: fin.append(max(p['startMs']+p['ms'] for p in ps) - min(p['startMs'] for p in ps))
     linhas = [('revisao inteira (parede)', rev),
-              ('fase 0 · 13 microagentes', f0),
-              ('fase 1 · simulacao', f1)]
-    for nome, art in [('atribuidor','seletor'), ('veracidade','score2'), ('verify 8 passos','verify')]:
-        j = carregar(art, obrig=False)
-        if not j: continue
-        if art == 'score2':
-            ms = [v for k,v in (j.get('ms') or {}).items() if k in OS30]
-        else:
-            ms = [v['ms'] for k,v in j['saida'].items() if k in OS30 and v.get('ms')]
-        linhas.append((nome, ms))
+              ('passadas do finder', fin)]
     print(f'{"fase":<28}{"n":>4}  distribuicao (minutos)')
     for nome, vals in linhas:
         print(f'{nome:<28}{len(vals):>4}  {resumo(vals, 60000, " min")}')
@@ -151,7 +132,7 @@ def linha(rot, m):
 
 def secao_prereducer():
     dados = carregar_matriz()
-    print('\n== PRE-REDUCER ==  (perfil core; cada candidato conta como comentario postado)')
+    print('\n== PRE-DEDUP ==  (pos-verify; perfil core; cada candidato conta como comentario postado)')
     print(f'{"":<38}{"PRs":>4}{"goldens":>9}{"cand":>7}{"tp":>5}{"fp":>5}{"recall":>8}{"precis":>9}{"F1":>8}{"F2":>8}')
     linha('com o agente cross-file', metricas(dados))
     linha('SEM o agente cross-file', metricas(dados, excluir={CROSS}))
@@ -186,7 +167,7 @@ def secao_agentes():
                 if not (viz - {a}): unic_fp[a] = unic_fp.get(a,0)+1
     print('\n== POR AGENTE ==  (conta CANDIDATOS, nao goldens: um candidato pode')
     print('   vencer mais de um golden, entao a soma de TP aqui e menor que o tp da')
-    print('   secao pre-reducer, que conta goldens cobertos.)')
+    print('   secao pre-dedup, que conta goldens cobertos.)')
     print(f'{"agente":<34}{"TP":>5}{"FP":>5}{"prec":>7}{"TP unico":>10}{"FP unico":>10}')
     ags = sorted(set(tot_tp)|set(tot_fp), key=lambda a: -tot_tp.get(a,0))
     for a in ags:
@@ -199,130 +180,8 @@ def secao_agentes():
     print('  TP unico = golden que SO este agente alcanca (confianca > 0)')
     print('  FP unico = candidato sem golden e sem nenhum outro agente no mesmo arquivo')
 
-# ---------------------------------------------------------------- formula
-def fit(am, feats, it=300, lr=.5, reg=.01):
-    w = {k:0.0 for k in feats}
-    for _ in range(it):
-        gr = {k:0.0 for k in feats}
-        for f,y in am:
-            z = sum(w[k]*f.get(k,0.) for k in feats)
-            e = 1/(1+math.exp(-max(-30,min(30,z)))) - y
-            for k in feats: gr[k] += e*f.get(k,0.)
-        n = len(am) or 1
-        for k in feats: w[k] -= lr*(gr[k]/n + reg*w[k])
-    return w
-
-def prob(w,f):
-    z = sum(w[k]*f.get(k,0.) for k in w)
-    return 1/(1+math.exp(-max(-30,min(30,z))))
-
-def montar_grupos(fonte):
-    """fonte: 'ver' | 'verify' | 'ambos'."""
-    dados = carregar_matriz()
-    SEL = carregar('seletor')['saida']
-    VER = (carregar('score2', obrig=(fonte in ('ver','ambos'))) or {}).get('saida', {})
-    VFY = (carregar('verify', obrig=(fonte in ('verify','ambos'))) or {}).get('saida', {})
-    out = {}
-    for cid in OS30:
-        d = dados[cid]
-        cands = d['cands']
-        exige = any(c.get('reason') for c in cands)  # regra do finding-reducer.ts: reason so se algum tiver
-        keep = [i for i,c in enumerate(cands)
-                if str(c.get('severity','')).lower() in SEVN and (not exige or c.get('reason') or c.get('devolvidoDoVerificador'))]  # mesma regra do seletor-vA.js
-        core = [i for i,g in enumerate(d['gs']) if g.get('category') in CORE]
-        dono = {}
-        for gi in core:
-            linha_c = d['conf'][gi] if gi < len(d['conf']) else []
-            b,q = 0,-1
-            for pos,ci in enumerate(keep):
-                x = linha_c[ci] if ci < len(linha_c) else 0
-                if x > b: b,q = x,pos
-            if q >= 0: dono[gi] = q
-        gr = []
-        vfy_pr = {g.get('representante'): g.get('score') for g in (VFY.get(cid,{}).get('grupos') or [])}
-        for g in (SEL.get(cid,{}).get('grupos') or []):
-            idx = [i for i in (g.get('indices') or []) if i < len(keep)]
-            if not idx: continue
-            mem = [cands[keep[i]] for i in idx]
-            ags = {m.get('producedBy') for m in mem}
-            rep = g.get('representante', idx[0])
-            orig = keep[rep] if rep < len(keep) else rep
-            nota = (g.get('nota') or 0)/100
-            v_ver = VER.get(cid,{}).get(str(orig))
-            v_ver = (v_ver if v_ver is not None else 50)/100
-            v_sc = vfy_pr.get(rep)
-            v_sc = (v_sc if v_sc is not None else 50)/100
-            base = v_sc if fonte == 'verify' else v_ver
-            f = {'nota':nota,'ver':base,'prod':nota*base,
-                 'conf':max((m.get('confidence') or 0) for m in mem)/100,
-                 'tam':min(len(idx),4)/4,
-                 'sev':max(SEVN.get(str(m.get('severity','')).lower(),.5) for m in mem),
-                 'nag':min(len(ags),3)/3,'vies':1.0}
-            if fonte == 'ambos':
-                f['vscore'] = v_sc; f['prodsc'] = nota*v_sc
-            cobre = [gi for gi,pos in dono.items() if pos in idx]
-            gr.append({'f':f,'cobre':cobre,'core':cobre})
-        out[cid] = {'g':gr,'core':len(core)}
-    return out
-
-def avaliar(dados, feats, pesos=None):
-    prs = OS30
-    probs = {}
-    if pesos:
-        for c in prs: probs[c] = [prob(pesos,g['f']) for g in dados[c]['g']]
-    else:
-        for fora in prs:
-            am = [(g['f'], 1.0 if g['core'] else 0.0)
-                  for c in prs if c != fora for g in dados[c]['g']]
-            w = fit(am, feats)
-            probs[fora] = [prob(w,g['f']) for g in dados[fora]['g']]
-    linhas = []
-    for K in COTAS:
-        tp=fp=tot=n=0
-        for c in prs:
-            tot += dados[c]['core']; cob = set()
-            ordem = sorted(range(len(dados[c]['g'])), key=lambda i: -probs[c][i])[:K]
-            for i in ordem:
-                if probs[c][i] < LIM: continue
-                n += 1; g = dados[c]['g'][i]
-                if g['core']: cob.update(g['core'])
-                elif not g['cobre']: fp += 1
-            tp += len(cob)
-        r = tp/max(1,tot); p = tp/max(1,tp+fp)
-        linhas.append((K,tp,fp,r,p,2*r*p/max(1e-9,r+p),5*r*p/max(1e-9,4*p+r),n/len(prs)))
-    return linhas
-
-def tabela(nome, linhas):
-    print(f'\n{nome}')
-    print(f'{"corte":>6}{"tp":>5}{"fp":>5}{"recall":>9}{"precis":>9}{"F1":>8}{"F2":>8}{"cmt/PR":>8}')
-    for K,tp,fp,r,p,f1,f2,cpr in linhas:
-        print(f'{K:>6}{tp:>5}{fp:>5}{r:>8.1%}{p:>9.1%}{f1:>8.3f}{f2:>8.3f}{cpr:>8.1f}')
-
-# Copia de REDUCER_WEIGHTS (libs/code-review/infrastructure/agents/engine/finding-reducer.ts).
-PESOS_PROD = {'nota':0.8021,'ver':-0.9322,'prod':1.064,'conf':-0.0787,'tam':1.0001,'sev':-0.797,'nag':0.7929,'vies':-1.2458}
-
-def secao_formula():
-    print(f'\n== FORMULA ==  (limiar {LIM}; pesos SEMPRE reajustados leave-one-out por PR —')
-    print('   o PR avaliado nunca entra no fit. E o mesmo regime de todas as simulacoes')
-    print('   anteriores; os pesos publicados nao entram aqui para nao haver dois numeros.)')
-    a = montar_grupos('ver')
-    if os.environ.get('REL_PESOS') == 'prod':
-        # Pesos de PRODUCAO (finding-reducer.ts, ajustados em 22/09 sobre outro
-        # pool): nenhum ajuste nesta rodada, nada escolhido depois de ver o
-        # resultado. E a leitura sem overfit.
-        tabela('P) pesos de producao (sem reajuste)', avaliar(a, BASE_FEATS, pesos=PESOS_PROD))
-        return
-    tabela('A) atribuidor + veracidade', avaliar(a, BASE_FEATS))
-    # D: a veracidade e uma chamada a mais por PR (~0,1-1 min). Os mesmos grupos
-    # de A, sem as duas features que dependem dela: mede se ela paga a espera.
-    tabela('D) so atribuidor (sem veracidade)', avaliar(a, [k for k in BASE_FEATS if k not in ('ver','prod')]))
-    b = montar_grupos('ambos')
-    tabela('B) atribuidor + veracidade + verify', avaliar(b, BASE_FEATS+['vscore','prodsc']))
-    c = montar_grupos('verify')
-    tabela('C) atribuidor + verify (sem veracidade)', avaliar(c, BASE_FEATS))
-
 SECOES = {'tempo':secao_tempo,'tokens':secao_tokens,'prereducer':secao_prereducer,
-          'agentes':secao_agentes,'formula':secao_formula}
+          'agentes':secao_agentes}
 def configuracao():
     """A configuracao que produziu a rodada. Um pool com dumps de configuracoes
     diferentes nao descreve configuracao nenhuma (foi assim que o gpt-30, 24 PRs

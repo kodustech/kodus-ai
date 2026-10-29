@@ -267,7 +267,7 @@ RECALL_CALL_GRAPH=1 ...
 | `$BENCH_REPOS_ROOT/.worktrees/` | worktrees por PR | sim, se sobrou de run interrompido |
 | `$BENCH_REPOS_ROOT/.callgraph/` | cache de grafo | sim (e às vezes deve) |
 | `evals/investigation/pools/<rodada>/` | dumps crus por PR | **não** — é a matéria-prima de toda análise |
-| `evals/investigation/results/` | matrizes, seletores, scores, relatórios | não |
+| `evals/investigation/results/` | matrizes, logs e relatórios das rodadas | não |
 
 Worktrees órfãos de uma rodada morta:
 

@@ -6,21 +6,16 @@
 # Fases, na ordem em que dependem umas das outras:
 #   1. geracao      generalista (passada base) -> verify -> dedup, nos 30 PRs;
 #                   synthesis-rescue desligada (RECALL_SKIP_SYNTHESIS=1)
-#   2. judge  ||  atribuidor        — independentes, rodam juntos
-#   3. veracidade                   — precisa do agrupamento, e so
-#   4. relatorio    offline, sem LLM
-#   5. debugger     pagina HTML do trace, tambem offline
+#   2. judge        candidatos pos-verify/pre-dedup || descartados pelo verificador
+#   3. relatorio    offline, sem LLM
+#   4. debugger     pagina HTML do trace, tambem offline
 #
-# Atribuidor e veracidade sao offline: o reducer saiu de libs/, nada disso
-# corta o que producao posta.
+# A fase 1 chama run-recall-1821.js (harness de pesquisa): e ele que le
+# RECALL_SKIP_SYNTHESIS / RECALL_REAL_REPO e grava trace.preFilterCandidates
+# (entrada do judge). run-recall.js e o harness de producao.
 #
-# ATENCAO: a fase 1 chama run-recall.js (harness de producao). RECALL_SKIP_SYNTHESIS
-# e RECALL_REAL_REPO so sao lidos pelo run-recall-1821.js / agent-provider-1821.js,
-# que e quem grava trace.preFilterCandidates (entrada do judge).
-#
-# O judge julga TODOS os candidatos, nao os representantes: sem isso nao existe
-# TP/FP por agente, nem pre-reducer, e a cobertura de um grupo passaria a
-# significar "o representante casa", que e outra regra e outro numero.
+# O judge julga TODOS os candidatos, nao so os que sobram do dedup: sem isso
+# nao existe TP/FP por agente nem a medida pre-dedup.
 set -euo pipefail
 MODELO="${1:?uso: ./protocolo.sh <modelo> [nome]}"
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,15 +54,15 @@ case "$MODELO" in gpt-*) export RECALL_REASONING_EFFORT=low ;; esac
 echo "modelo $MODELO | rodada $NOME | concorrencia $RECALL_CONCURRENCY"
 mkdir -p "$RECALL_DUMP"
 
-echo; echo "==== 1/5 geracao (generalista -> verify -> dedup) ===="
-# `|| true`: o run-recall sai com codigo 1 quando algum PR fica abaixo do limiar
+echo; echo "==== 1/4 geracao (generalista -> verify -> dedup) ===="
+# `|| true`: o run-recall-1821 sai com codigo 1 quando algum PR fica abaixo do limiar
 # de qualidade — um veredito sobre a REVISAO, nao sobre a execucao. Com
 # `set -e pipefail` isso matava o protocolo inteiro depois de 2h de geracao, com
 # os 30 dumps ja gravados. Quem decide se a rodada presta e o portao abaixo.
-node run-recall.js --model "$MODELO" --output "results/run-$NOME.json" 2>&1 | tee "results/run-$NOME.log" || true
+node run-recall-1821.js --model "$MODELO" --output "results/run-$NOME.json" 2>&1 | tee "results/run-$NOME.log" || true
 
 # PORTAO: 30 dumps ou nada. Uma rodada com PR faltando nao e uma rodada menor,
-# e um conjunto diferente — e as fases seguintes custam judge e atribuidor por
+# e um conjunto diferente — e as fases seguintes custam judge por
 # cima de dado que nao vai poder ser comparado com nada. Cota estourada, rate
 # limit e agente com zero passos aparecem todos aqui, como dump ausente.
 DUMPS=$(ls "$RECALL_DUMP"/*.raw.txt 2>/dev/null | wc -l | tr -d ' ')
@@ -76,20 +71,20 @@ if [ "$DUMPS" != "30" ] || [ "$INFRA" != "0" ]; then
     echo
     echo "ABORTADO: $DUMPS/30 dumps, $INFRA casos de infraestrutura."
     grep -E '^INFRA ' "results/run-$NOME.log" | head -5
-    echo "Nada de judge/atribuidor — o conjunto esta incompleto e nao seria comparavel."
+    echo "Nada de judge — o conjunto esta incompleto e nao seria comparavel."
     exit 1
 fi
 
 # PORTAO DE SAUDE: 30 dumps nao quer dizer 30 PRs medidos direito. Repo nao
-# montado, diff truncado, agente com zero passos ou o reducer (ja removido) que
-# falhou e postou tudo ja foram lidos como "a arquitetura piorou". Vermelho aqui para a rodada.
+# montado, diff truncado ou agente com zero passos ja foram lidos como
+# "a arquitetura piorou". Vermelho aqui para a rodada.
 echo; echo "==== saude, PR por PR ===="
 if ! python3 saude.py "$RECALL_DUMP" "results/run-$NOME.log" | tee "results/saude-$NOME.log"; then
     echo "ABORTADO: saude vermelha. Corrija o harness antes de pagar judge por cima disso."
     exit 1
 fi
 
-echo; echo "==== 2/5 judge (candidatos pos-verify/pre-dedup + descartados pelo verificador)  ||  atribuidor ===="
+echo; echo "==== 2/4 judge (candidatos pos-verify/pre-dedup + descartados pelo verificador) ===="
 node matriz-prefilter.js --dump="$NOME" --par=10 --out="results/matriz-$NOME.json" \
     > "results/matriz-$NOME.log" 2>&1 &
 PID_J=$!
@@ -98,22 +93,13 @@ PID_J=$!
 node matriz-prefilter.js --dump="$NOME" --fonte=descartados --par=10 \
     --out="results/matriz-descartados-$NOME.json" > "results/matriz-descartados-$NOME.log" 2>&1 &
 PID_D=$!
-node seletor-vA.js --dump="$NOME" --parpr=5 --out="results/seletor-$NOME.json" \
-    > "results/seletor-$NOME.log" 2>&1 &
-PID_A=$!
-wait $PID_J; wait $PID_D; wait $PID_A
-echo "judge e atribuidor prontos"
+wait $PID_J; wait $PID_D
+echo "judge pronto"
 
-echo; echo "==== 3/5 veracidade (offline) ===="
-node score2-veracidade.js --dump="$NOME" --grupos="results/seletor-$NOME.json" \
-    --parpr=5 --out="results/score2-$NOME.json" > "results/score2-$NOME.log" 2>&1 &
-PID_V=$!
-wait $PID_V
-
-echo; echo "==== 4/5 relatorio ===="
+echo; echo "==== 3/4 relatorio ===="
 python3 relatorio.py --run="$NOME"
 
-echo; echo "==== 5/5 trace debugger ===="
+echo; echo "==== 4/4 trace debugger ===="
 # So le artefato ja gravado: nenhuma chamada de LLM, instantaneo. Pode ser
 # regerado a qualquer momento depois (ex.: depois de acrescentar um passo novo ao dump).
 node build-trace-debugger.js --run="$NOME"

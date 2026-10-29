@@ -2,8 +2,8 @@
 """Saude de uma rodada, PR por PR, ANTES de olhar qualquer metrica.
 
 Varias vezes a investigacao concluiu algo sobre a arquitetura quando o problema
-era o harness: repo nao montado, diff truncado, agente que nao rodou, reducer
-que falhou e postou tudo. Este script procura exatamente isso.
+era o harness: repo nao montado, diff truncado, agente que nao rodou. Este
+script procura exatamente isso.
 
   python3 saude.py <pasta-do-pool> [log-da-rodada]
 
@@ -34,7 +34,6 @@ def main():
     for cid, d in carregados:
         t = d['trace']; p = t.get('pipeline') or {}; ps = t.get('recallPasses') or []
         u = t.get('usage') or {}
-        red = ((t.get('dedup') or {}).get('reducer')) or {}
         ver = t.get('verification') or {}
         cands = t.get('preFilterCandidates') or []
         tot_in += u.get('inputTokens', 0); tot_cache += u.get('cacheReadTokens', 0)
@@ -50,8 +49,6 @@ def main():
         if len(sem_tool) >= 3: a.append(f'{len(sem_tool)} agentes sem nenhuma ferramenta')
         lentos = [x['label'].replace('micro-', '') for x in ps if x.get('ms', 0) > AGENTE_LENTO_MS]
         if lentos: a.append('agente > 10 min: ' + ', '.join(lentos))
-        if red.get('status') not in (None, 'success', 'skipped'):
-            v.append(f"reducer {red.get('status')} (postou sem filtrar)")
         if u.get('reasoningTokens', 0) == 0 and (d.get('config') or {}).get('reasoningEffort'):
             a.append('esforco de raciocinio pedido, zero tokens de raciocinio')
         modos = Counter(x.get('parseMode') for x in ver.get('decisions') or [])

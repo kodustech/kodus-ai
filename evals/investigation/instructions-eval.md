@@ -49,18 +49,15 @@ Esta é a parte que mais gera confusão. Leia a coluna da direita.
 | 4 | **dedup** — no mesmo modelo da review | **sim** |
 | — | — | — |
 | 5 | **judge** — casa achado com golden | **não.** Só medição |
-| 6 | **atribuidor** — agrupa duplicatas e dá nota 0-100 por grupo | **não.** Offline |
-| 7 | **veracidade** — 0-100 de "a alegação é verdadeira sobre este código" | **não.** Offline |
-| 8 | **fórmula logística + cota + limiar** | **não.** Offline, no `relatorio.py` |
-| 9 | **relatório** e **trace debugger** | **não.** Só medição |
+| 6 | **relatório** e **trace debugger** | **não.** Só medição |
 
 ### O que isso significa na prática
 
 **O reducer não existe mais.** `finding-reducer.ts` saiu de `libs/`; produção
 faz generalista → synthesis-rescue → verify → (ancoragem, repetidos) → dedup →
 severidade/enriquecimento e posta o que sobra (`AgentReviewStage`).
-Atribuidor, veracidade e fórmula seguem no protocolo só como medição offline do
-que um corte faria.
+Atribuidor, veracidade e fórmula (que só alimentavam o reducer) saíram do
+protocolo.
 
 **Os microagentes, a simulação mental, o scout, o painel, o shard e o
 dev-level também saíram** do `libs/` e do harness. Números deles abaixo são
@@ -77,18 +74,18 @@ pelo verify são julgados à parte (`matriz-descartados-<rodada>.json`).
 ```
 geração (generalista → verify → dedup)
         │
-        ├──────────────┐
-        ▼              ▼
-   atribuidor        judge          rodam em paralelo
-        │              │
-        ▼              │
-   veracidade          │
-        │              │
-        ▼              │
-   fórmula ◄───────────┘  (relatorio.py)
+        ▼
+portão (30 dumps) → saude.py
+        │
+        ├──────────────────┐
+        ▼                  ▼
+      judge      judge dos descartados    rodam em paralelo
+        │                  │
+        ▼                  │
+   relatório ◄─────────────┘  (relatorio.py)
         │
         ▼
-   relatório
+   trace debugger
 ```
 
 ---
@@ -115,13 +112,13 @@ sobrescrever pasta existente.
 
 1. **geração** — generalista → verify → dedup, nos 30 PRs (sem synthesis-rescue)
 2. **portão** — 30 dumps e zero INFRA, ou aborta; depois `saude.py`, vermelho aborta
-3. **judge ∥ judge dos descartados ∥ atribuidor** — em paralelo
-4. **veracidade** — sobre os grupos do atribuidor
-5. **relatório** e **trace debugger** — offline
+3. **judge ∥ judge dos descartados** — em paralelo
+4. **relatório** e **trace debugger** — offline
 
-> A fase 1 chama `run-recall.js` (harness de produção). `RECALL_SKIP_SYNTHESIS`
-> e `RECALL_REAL_REPO` só são lidos pelo `run-recall-1821.js`, que é quem grava
-> `trace.preFilterCandidates`, a entrada do judge.
+> A fase 1 chama `run-recall-1821.js` (harness de pesquisa): é ele que lê
+> `RECALL_SKIP_SYNTHESIS` e `RECALL_REAL_REPO` e grava
+> `trace.preFilterCandidates`, a entrada do judge. `run-recall.js` é o harness
+> de produção.
 
 ### Configuração congelada (não há o que passar)
 
@@ -149,9 +146,8 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 | | |
 |---|---|
 | geração | ~55 min (varia muito com o provedor) |
-| judge ∥ atribuidor | ~10 min |
-| veracidade | medido com o verify offline, que saiu (~25 min juntos) |
-| **total** | **~1h30** |
+| judge ∥ judge dos descartados | ~10 min |
+| **total** | **~1h05** |
 | custo DeepSeek/Fireworks | ~US$ 8 na rodada inteira |
 | modelos `@sub` | consome cota do plano, não dinheiro |
 
@@ -187,7 +183,7 @@ python3 relatorio.py --run=<nome>
 python3 relatorio.py --run=<nome> --secao=prereducer   # uma seção só
 ```
 
-Seções: `tempo`, `tokens`, `prereducer`, `agentes`, `formula`.
+Seções: `tempo`, `tokens`, `prereducer`, `agentes`.
 
 O que cada uma responde:
 
@@ -195,9 +191,8 @@ O que cada uma responde:
 |---|---|
 | `tempo` | quanto durou cada fase (menor, mediana, média, maior) |
 | `tokens` | input fresco, cache read e output por PR |
-| `prereducer` | recall/precision/F1/F2 antes de qualquer corte (o nome é histórico; a linha "sem o agente cross-file" só tem efeito em pool de microagentes) |
+| `prereducer` | recall/precision/F1/F2 pós-verify, pré-dedup (cabeçalho `PRE-DEDUP`; a chave tem nome histórico; a linha "sem o agente cross-file" só tem efeito em pool de microagentes) |
 | `agentes` | TP e FP por agente, totais e únicos |
-| `formula` | as três variantes nos cortes 3-7 |
 
 ### Convenções que o relatório respeita
 
@@ -205,24 +200,6 @@ O que cada uma responde:
   que não vence nenhum golden é FP. É a mesma regra do leaderboard.
 - **Perfil core:** 111 dos 120 goldens (categorias `bug`, `security`,
   `concurrency`, `data`, `api`, `perf`, `test_gap`, `doc_defect`).
-- **Pesos sempre reajustados leave-one-out por PR** — o PR avaliado nunca entra
-  no fit. Os pesos publicados ficam de fora de propósito, para não existirem
-  dois números para a mesma pergunta.
-- **Limiar 0,22**, cortes (cota por PR) 3 a 7.
-
-### As três variantes da fórmula
-
-| | sinal além do atribuidor |
-|---|---|
-| **A** | veracidade |
-| **D** | nenhum (só atribuidor) |
-| **B** | veracidade + verify offline |
-| **C** | verify offline sozinho |
-
-B e C leem `results/verify-<rodada>.json`, que o protocolo não gera mais (o
-`verify-apos-atribuidor.js` saiu): sem ele o `relatorio.py` para com `falta`.
-
-O atribuidor é fixo em todas: a nota dele é termo da fórmula.
 
 ---
 
