@@ -5,6 +5,9 @@
 import { V2_DEFAULT_SEVERITY_FLAGS_TEXT } from '@libs/common/utils/codeReview/v2Defaults';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { samePromptText } from '@libs/common/utils/writing-guidelines';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('SeverityPrompt');
 
 export const DEFAULT_SEVERITY_FLAGS = {
     critical:
@@ -85,34 +88,38 @@ let shippedFlags: SeverityFlags[] | undefined;
  * Every criteria text Kody has shipped as a default: the classifier's fallback,
  * the settings page's (default-kodus-config.yml until 2026-03) and the current
  * default-kodus-config.yml, which the team's config carries when it kept them.
+ * A failed read of the current file is logged and not cached, so the next
+ * review reads it again.
  */
-function shippedSeverityFlags(): SeverityFlags[] {
-    if (shippedFlags === undefined) {
-        shippedFlags = [
-            DEFAULT_SEVERITY_FLAGS,
-            V2_DEFAULT_SEVERITY_FLAGS_TEXT,
-            currentDefaultFlags(),
-        ].filter(Boolean);
-    }
-    return shippedFlags;
-}
-
-function currentDefaultFlags(): SeverityFlags | undefined {
+function shippedSeverityFlags(organizationId?: string): SeverityFlags[] {
+    if (shippedFlags !== undefined) return shippedFlags;
+    const fixed = [DEFAULT_SEVERITY_FLAGS, V2_DEFAULT_SEVERITY_FLAGS_TEXT];
     try {
-        return getDefaultKodusConfigFile()?.v2PromptOverrides?.severity?.flags;
-    } catch {
-        return undefined;
+        const current =
+            getDefaultKodusConfigFile()?.v2PromptOverrides?.severity?.flags;
+        shippedFlags = [...fixed, current].filter(Boolean);
+        return shippedFlags;
+    } catch (error) {
+        logger.warn({
+            message: `[SEVERITY] could not read the shipped severity defaults: ${(error as Error)?.message ?? String(error)}`,
+            context: 'SeverityPrompt',
+            metadata: { organizationId },
+        });
+        return fixed.filter(Boolean);
     }
 }
 
 /** Whether the team wrote its own criteria for any level, instead of keeping a shipped default. */
-export function hasCustomSeverityFlags(flags?: SeverityFlags): boolean {
+export function hasCustomSeverityFlags(
+    flags?: SeverityFlags,
+    organizationId?: string,
+): boolean {
     return LEVELS.some((level) => {
         const value = flags?.[level];
         return (
             typeof value === 'string' &&
             value.trim().length > 0 &&
-            !shippedSeverityFlags().some((shipped) =>
+            !shippedSeverityFlags(organizationId).some((shipped) =>
                 samePromptText(value, shipped[level]),
             )
         );
@@ -131,8 +138,9 @@ const RESPONSE_FORMAT = `Respond with ONLY a JSON object:
 export function buildSeverityPrompt(
     suggestions: SuggestionForClassification[],
     flags?: SeverityFlags,
+    organizationId?: string,
 ): string {
-    if (hasCustomSeverityFlags(flags)) {
+    if (hasCustomSeverityFlags(flags, organizationId)) {
         return buildCriteriaSeverityPrompt(suggestions, flags);
     }
 
