@@ -296,8 +296,9 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
         if (response.status !== 502) {
             await throwFailedRequestError(request, response);
         }
-        // Release the connection before asking again.
-        await response.body?.cancel().catch(() => undefined);
+        // Release the connection before asking again, without waiting on it:
+        // a cancel that never settles must not hold the retry.
+        void response.body?.cancel().catch(() => undefined);
         await delay(2 ** i * 0.25);
     }
 
