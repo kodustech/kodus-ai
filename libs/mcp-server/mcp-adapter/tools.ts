@@ -80,6 +80,8 @@ export function mcpToolToEngineTool(mcpTool: MCPToolRawWithServer): EngineTool {
         outputZodSchema: outputZodSchema,
         outputSchema: enhancedOutputJsonSchema,
         annotations: mcpTool.annotations,
+        _meta: mcpTool._meta,
+        serverName: mcpTool.serverName,
         title: mcpTool.title,
         execute: async (_args: unknown, _ctx: unknown) => {
             throw new Error(

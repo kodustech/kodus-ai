@@ -1,5 +1,9 @@
 import { MCPServerConfig } from '../mcp-adapter';
-import { KODUS_MCP_TOKEN_AUDIENCE } from '../utils/mcp-auth.constants';
+import {
+    KODUS_ISSUES_INTEGRATION_ID,
+    KODUS_MCP_INTEGRATION_ID,
+    KODUS_MCP_TOKEN_AUDIENCE,
+} from '../utils/mcp-auth.constants';
 import { createLogger } from '@libs/core/log/logger';
 import { TransportType } from '../mcp-adapter';
 import { Injectable } from '@nestjs/common';
@@ -132,8 +136,7 @@ interface MCPIntegrationOAuth2 extends MCPIntegrationBase {
     tokenExpiry?: number;
 }
 
-export const KODUS_MCP_INTEGRATION_ID = 'kd_mcp_oTUrzqsaxTg';
-export const KODUS_ISSUES_INTEGRATION_ID = 'kodus-issues-default';
+export { KODUS_ISSUES_INTEGRATION_ID, KODUS_MCP_INTEGRATION_ID };
 
 @Injectable()
 export class MCPManagerService {
