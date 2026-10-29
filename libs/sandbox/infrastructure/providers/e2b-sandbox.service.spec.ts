@@ -330,9 +330,12 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const out = await rc.read('src/a.ts', 0, 0);
             expect(out).toBe('file body');
-            expect(run).toHaveBeenCalledWith(readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0), {
-                timeoutMs: 10_000,
-            });
+            expect(run).toHaveBeenCalledWith(
+                readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0),
+                {
+                    timeoutMs: 10_000,
+                },
+            );
         });
 
         it('uses sed with the exact line range for a normal window', async () => {
@@ -557,9 +560,12 @@ describe('E2BSandboxService.buildRemoteCommands', () => {
         // Prove the delegate actually drives THIS sandbox and resolves paths
         // against REPO_DIR, not the sandbox CWD.
         await rc.read('src/a.ts', 0, 0);
-        expect(run).toHaveBeenCalledWith(readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0), {
-            timeoutMs: 10_000,
-        });
+        expect(run).toHaveBeenCalledWith(
+            readWithinRootCommand(`${REPO_DIR}/src/a.ts`, REPO_DIR, 0, 0),
+            {
+                timeoutMs: 10_000,
+            },
+        );
     });
 });
 
@@ -1063,6 +1069,47 @@ describe('E2B review user lockdown', () => {
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',
             expect.objectContaining({ secure: true }),
+        );
+    });
+
+    it('keeps the proxy password out of every command line', async () => {
+        const sbx = fakeSandbox(`${PRIVILEGES_DROPPED_MARKER}\n`);
+        (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
+        const config = {
+            get: (key: string) =>
+                ({
+                    API_E2B_KEY: 'key',
+                    API_E2B_TEMPLATE_ID: 'tpl',
+                    API_NODE_ENV: 'test',
+                    E2B_PROXY_HOST: '192.0.2.1',
+                    E2B_PROXY_PASSWORD: 'FAKE_PROXY_PASSWORD',
+                })[key],
+        };
+        await new E2BSandboxService(config as any).createSandboxWithRepo({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'tok',
+            branch: 'feature',
+            prNumber: 1,
+            platform: PlatformType.GITHUB,
+        });
+        const calls = sbx.commands.run.mock.calls;
+        for (const [cmd] of calls) {
+            expect(cmd).not.toContain('FAKE_PROXY_PASSWORD');
+            expect(cmd).not.toMatch(/ -k /);
+        }
+        const proxy = calls.find(([cmd]) => cmd.includes('ss-local'));
+        expect(proxy[0]).toContain('ss-local -c /etc/kodus/ss-local.json ');
+        expect(proxy[0]).toContain('umask 077');
+        expect(proxy[0]).toContain(' -f /run/ss-local.pid');
+        expect(proxy[1]).toEqual(
+            expect.objectContaining({
+                user: 'root',
+                envs: {
+                    SS_CONFIG: JSON.stringify({
+                        password: 'FAKE_PROXY_PASSWORD',
+                    }),
+                },
+            }),
         );
     });
 
