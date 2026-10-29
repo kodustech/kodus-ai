@@ -419,16 +419,24 @@ async function retrieveSiblingFile(
     // path from: there is no sibling to report on, and nothing is hidden.
     if (candidates.length === 0) return [];
 
+    // Each check is a sandbox round trip, so they run together. One that could
+    // not be answered still fails the whole need: a partial list would read as
+    // "the rest do not exist".
+    const settled = await Promise.allSettled(
+        candidates.map((candidate) => lookup.exists(candidate)),
+    );
+    const failed = settled.find(
+        (s): s is PromiseRejectedResult => s.status === 'rejected',
+    );
+    if (failed) throw failed.reason;
+
     const changed = new Set(changedFilenames);
-    const lines: string[] = [];
-    for (const candidate of candidates) {
-        const exists = await lookup.exists(candidate);
-        lines.push(
-            `- ${candidate}: ${exists ? 'exists' : 'does not exist'}${
-                changed.has(candidate) ? ', changed by this PR' : ''
-            }`,
-        );
-    }
+    const lines = candidates.map((candidate, i) => {
+        const exists = (settled[i] as PromiseFulfilledResult<boolean>).value;
+        return `- ${candidate}: ${exists ? 'exists' : 'does not exist'}${
+            changed.has(candidate) ? ', changed by this PR' : ''
+        }`;
+    });
 
     return [
         {

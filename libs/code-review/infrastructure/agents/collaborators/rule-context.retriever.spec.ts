@@ -272,6 +272,48 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
         );
     });
 
+    it('checks every companion at once rather than one sandbox round trip after another', async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        const exists = jest.fn(async () => {
+            await gate;
+            return false;
+        });
+
+        const pending = retrieveForShard({
+            file: file({ filename: 'app/main.py' }),
+            rules: [rule('sibling-file')],
+            lookup: lookup({ exists }),
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(exists).toHaveBeenCalledTimes(8);
+        release();
+        const result = await pending;
+        expect(result.slices[0].content.split('\n')[0]).toBe(
+            '- app/test_main.py: does not exist',
+        );
+    });
+
+    it('reports the rule unmet when any one companion check fails', async () => {
+        const rules = [rule('sibling-file')];
+        const exists = jest.fn(async (path: string) => {
+            if (path.endsWith('main_test.py')) {
+                throw new RepoLookupUnavailableError('exists', 'listing failed');
+            }
+            return false;
+        });
+
+        const result = await retrieveForShard({
+            file: file({ filename: 'app/main.py' }),
+            rules,
+            lookup: lookup({ exists }),
+        });
+
+        expect(result.slices).toEqual([]);
+        expect(result.unmet).toEqual(rules);
+    });
+
     describe('Python companions follow pytest naming', () => {
         it('looks for test_<name>.py and <name>_test.py beside the file, in tests/, and under the root tests/', async () => {
             const exists = jest.fn(
