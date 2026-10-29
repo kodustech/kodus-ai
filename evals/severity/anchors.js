@@ -14,7 +14,7 @@ const read = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 const flat = (f) => { const x = read(f); return Array.isArray(x) ? x : Object.values(x.prs).flat(); };
 const rand = (s) => parseInt(crypto.createHash('sha256').update(`severity-anchors|${s}`).digest('hex').slice(0, 12), 16);
 const inSet = new Set(read(path.join(__dirname, 'dataset/items.json')).items.map((x) => x.issueId));
-const real = [...flat(`${V3}/golden.json`), ...flat(`${V3}/fps-conhecidos.json`)].filter((x) => x.class === 'TP' && !inSet.has(x.issueId));
+const real = [...flat(`${V3}/golden.json`), ...flat(`${V3}/known-fps.json`)].filter((x) => x.class === 'TP' && !inSet.has(x.issueId));
 const anchors = [];
 for (const level of ['low', 'medium', 'high']) {
     const pool = real.filter((x) => x.severity === level && (x.commentOpus || x.comment)).sort((a, b) => rand(a.issueId) - rand(b.issueId));

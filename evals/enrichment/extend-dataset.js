@@ -76,7 +76,7 @@ for (const f of walk(WORK).filter((f) => /classif-in(-[ab])?\.json$/.test(f))) {
 }
 const groups = new Map();
 for (const [c, v] of Object.entries(read(`${WORK}/inventario.json`))) for (const g of v.grupos) for (const m of g.membros) groups.set(`${g.model}|${c}|${m}`, g);
-for (const [key, issueId] of Object.entries(read(`${V3}/sugestoes.json`).sugestoes)) {
+for (const [key, issueId] of Object.entries(read(`${V3}/suggestions.json`).sugestoes)) {
     const g = groups.get(key);
     if (g) add(issueId, 2, `inventory:${key}`, null, g.file, g.lines, g.texto);
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Writes dataset/head-files.json: each cited file of the enrichment dataset
 // (evals/enrichment/dataset/items.json) at its PR head, read from the local
-// checkouts the dataset was built from (evals/dedup/gold-v3/trabalho/repos.json).
+// checkouts the dataset was built from (evals/dedup/gold-v3/repos.json).
 // The eval gives production the whole file, as the review does; CI has no
 // checkouts, so the files ship with the eval.
 //

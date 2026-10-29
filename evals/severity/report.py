@@ -79,7 +79,7 @@ def tabela(pasta, rotulo='texto', uma=False, so=None):
 
 
 # Aba Definições: a definição de cada nível, escrita por Astra e Opus a partir do gold v3.
-REV = json.load(open(f'{AQUI}/../dedup/gold-v3/trabalho/revisao-severidade.json'))['itens']
+REV = json.load(open(f'{AQUI}/../dedup/gold-v3/severity-review.json'))['itens']
 DEF_EN = open(f'{AQUI}/definitions.md').read()
 NO_DATASET = sum(1 for x in json.load(open(f'{AQUI}/dataset/items.json'))['items'] if x.get('severityBefore'))
 import collections as _c

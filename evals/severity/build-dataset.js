@@ -38,7 +38,7 @@ const flat = (f) => {
 // relabel (severidadeAnterior) changes an item's gold, not which items are in.
 const drawLevel = (x) => x.severidadeAnterior || x.severity;
 const real = new Map(
-    [...flat(`${V3}/golden.json`), ...flat(`${V3}/fps-conhecidos.json`)]
+    [...flat(`${V3}/golden.json`), ...flat(`${V3}/known-fps.json`)]
         .filter((x) => x.class === 'TP' && PER_LEVEL[drawLevel(x)])
         .map((x) => [x.issueId, x]),
 );
@@ -71,7 +71,7 @@ for (const f of walk(WORK).filter((f) => /classif-in(-[ab])?\.json$/.test(f))) {
 const inv = read(`${WORK}/inventario.json`);
 const groups = new Map();
 for (const [c, v] of Object.entries(inv)) for (const g of v.grupos) for (const m of g.membros) groups.set(`${g.model}|${c}|${m}`, g);
-for (const [key, issueId] of Object.entries(read(`${V3}/sugestoes.json`).sugestoes)) {
+for (const [key, issueId] of Object.entries(read(`${V3}/suggestions.json`).sugestoes)) {
     const g = groups.get(key);
     if (g && !lean.has(issueId)) add(issueId, `inventory:${key}`, g.file, g.lines, g.texto);
 }
