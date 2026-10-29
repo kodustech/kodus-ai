@@ -21,6 +21,9 @@ import {
     type FixStatus,
 } from './enrich-content';
 import { enrichDeterministic } from './enrich-deterministic';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('EnrichSuggestions');
 
 /** Lines of the head file shown on each side of the cited range. */
 export const ENRICH_WINDOW_LINES = 60;
@@ -149,7 +152,16 @@ export async function enrichSuggestions(
                     organizationId: opts.organizationId,
                     attrs: opts.usageAttrs,
                 });
-            } catch {
+            } catch (error) {
+                logger.warn({
+                    message: `[ENRICH] enrichment call failed for ${s.relevantFile}:${s.relevantLinesStart ?? '?'}: ${(error as Error)?.message ?? String(error)}`,
+                    context: 'EnrichSuggestions',
+                    metadata: {
+                        organizationId: opts.organizationId,
+                        teamId: opts.usageAttrs?.teamId,
+                        prNumber: opts.usageAttrs?.prNumber,
+                    },
+                });
                 result = null;
             }
             if (result) {
