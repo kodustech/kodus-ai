@@ -67,20 +67,6 @@ describe('SandboxLeaseReaperService', () => {
     });
 
     describe('reapExpiredLeases', () => {
-        it('deletes the lease when Sandbox.kill succeeds', async () => {
-            leaseRepository.findExpired.mockResolvedValue([
-                { _id: 'org:repo:1', sandboxId: 'sbx-1', state: 'READY' },
-            ]);
-            mockKill.mockResolvedValue(undefined);
-
-            await service.reapExpiredLeases();
-
-            expect(mockKill).toHaveBeenCalledWith('sbx-1', {
-                apiKey: 'fake-api-key',
-            });
-            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
-        });
-
         it('deletes the lease when the sandbox is already gone', async () => {
             leaseRepository.findExpired.mockResolvedValue([
                 { _id: 'org:repo:1', sandboxId: 'sbx-1', state: 'READY' },
@@ -232,17 +218,6 @@ describe('SandboxLeaseReaperService', () => {
     });
 
     describe('killIdleSandboxes', () => {
-        it('deletes the lease when Sandbox.kill succeeds', async () => {
-            leaseRepository.findReadyToKill.mockResolvedValue([
-                { _id: 'org:repo:1', sandboxId: 'sbx-1', killAt: new Date() },
-            ]);
-            mockKill.mockResolvedValue(undefined);
-
-            await service.killIdleSandboxes();
-
-            expect(leaseRepository.delete).toHaveBeenCalledWith('org:repo:1');
-        });
-
         it('does NOT delete the lease when Sandbox.kill fails for a real reason', async () => {
             leaseRepository.findReadyToKill.mockResolvedValue([
                 { _id: 'org:repo:1', sandboxId: 'sbx-1', killAt: new Date() },

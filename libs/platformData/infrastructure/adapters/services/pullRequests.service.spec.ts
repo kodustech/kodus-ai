@@ -272,6 +272,55 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
         );
     }
 
+    // The review saves the PR as it was when the review started. A close or
+    // merge processed while it ran must survive that save.
+    it('keeps the stored status, merged and closedAt when the review saves an existing PR', async () => {
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue({
+            uuid: 'closed-meanwhile',
+            status: 'closed',
+        });
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue(null);
+
+        await (service as any).aggregateAndSaveDataStructure(
+            { number: 2, state: 'open', user: { username: 'someone' } },
+            stubRepository,
+            [],
+            [],
+            [],
+            PlatformType.AZURE_REPOS,
+            stubOrg,
+            [],
+            undefined,
+            { keepStoredState: true },
+        );
+
+        const written = (service as any).update.mock.calls[0][1];
+        expect(written).not.toHaveProperty('status');
+        expect(written).not.toHaveProperty('merged');
+        expect(written).not.toHaveProperty('closedAt');
+        expect(written).toHaveProperty('updatedAt');
+    });
+
+    it('still writes the state a webhook carries, so a reopen or close lands', async () => {
+        pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue({
+            uuid: 'reopened',
+            status: 'closed',
+        });
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue(null);
+
+        await callSave(stubRepository);
+
+        const written = (service as any).update.mock.calls[0][1];
+        expect(written).toHaveProperty('status');
+        expect(written).toHaveProperty('closedAt');
+    });
+
     it('looks the existing PR up by repository.id and stops there when it matches', async () => {
         const byId = { uuid: 'by-id' };
         pullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(

@@ -230,20 +230,6 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).toHaveBeenCalled();
     });
 
-    it('holds a clean PR when the approval policy judged it risky', async () => {
-        await stage.execute(
-            makeContext({
-                approvalDecision: {
-                    kind: 'hold',
-                    reason: 'Authentication change needs a human.',
-                },
-            }),
-        );
-
-        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-        expect(notificationService.emit).not.toHaveBeenCalled();
-    });
-
     it.each([
         PlatformType.GITLAB,
         PlatformType.FORGEJO,

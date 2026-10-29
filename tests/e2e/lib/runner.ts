@@ -740,6 +740,20 @@ export function isGithubRateLimit(message: string): boolean {
     return GITHUB_RATE_LIMIT_PATTERN.test(message ?? '');
 }
 
+// The pattern also matches GitLab's and Bitbucket's 429 bodies, so the skip
+// has to name the cell's own provider: "GitHub rate limit" on a gitlab cell
+// sent the 2026-10-28 release triage after the wrong account.
+const RATE_LIMIT_OWNERS: Record<string, string> = {
+    github: 'GitHub',
+    gitlab: 'GitLab',
+    bitbucket: 'Bitbucket',
+    'azure-devops': 'Azure DevOps',
+    forgejo: 'Forgejo',
+};
+export function rateLimitOwner(provider: string): string {
+    return RATE_LIMIT_OWNERS[provider] ?? provider;
+}
+
 // ABSENCE failures (an expected event never materialized — review never
 // started, comment never arrived) get a settle delay before the retry.
 // Rationale: the per-deploy matrix starts ~5s after the GitOps infra PR,
@@ -985,7 +999,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             if (githubRateLimited) {
                 log.err(
-                    `SKIP  ${cellLabel}: GitHub rate limit already tripped this cell — short-circuiting (quota resets hourly, NOT a product pass)`,
+                    `SKIP  ${cellLabel}: ${rateLimitOwner(cell.provider)} rate limit already tripped this cell — short-circuiting (NOT a product pass)`,
                 );
                 results.push(
                     makeSkip(
@@ -993,7 +1007,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                         cell,
                         0,
                         'infra',
-                        'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
+                        `${cell.provider}-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)`,
                     ),
                 );
                 continue;
@@ -1206,7 +1220,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                         // hanging on the rate-limited product until timeout.
                         githubRateLimited = true;
                         log.err(
-                            `SKIP  ${cellLabel}: GitHub rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
+                            `SKIP  ${cellLabel}: ${rateLimitOwner(cell.provider)} rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
                         );
                         results.push(
                             makeSkip(
@@ -1214,7 +1228,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                                 cell,
                                 duration,
                                 'infra',
-                                `github-rate-limit: ${e.message.slice(0, 200)}`,
+                                `${cell.provider}-rate-limit: ${e.message.slice(0, 200)}`,
                             ),
                         );
                         break;

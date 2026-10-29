@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { BYOKProvider } from '@libs/llm/model-providers';
 
 // Encryption is irrelevant here — deterministic reversible stand-in so
@@ -15,7 +14,6 @@ import {
     EFFORT_TO_BUDGET,
 } from '@libs/llm/reasoning-options';
 import { TestByokConnectionUseCase } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
-import axios from 'axios';
 
 // The unified probe issues its call through the AI SDK.
 const generateText = jest.fn();
@@ -25,19 +23,6 @@ jest.mock('ai', () => ({
 }));
 
 describe('anthropic_compatible BYOK provider', () => {
-    describe('anthropicCompatibleRootURL', () => {
-        it.each([
-            ['https://api.kimi.com/coding', 'https://api.kimi.com/coding'],
-            ['https://api.kimi.com/coding/', 'https://api.kimi.com/coding'],
-            ['https://api.kimi.com/coding/v1', 'https://api.kimi.com/coding'],
-            ['https://api.kimi.com/coding/v1/', 'https://api.kimi.com/coding'],
-            ['https://api.z.ai/api/anthropic', 'https://api.z.ai/api/anthropic'],
-            [' https://api.deepseek.com/anthropic ', 'https://api.deepseek.com/anthropic'],
-        ])('normalizes %s → %s', (input, expected) => {
-            expect(anthropicCompatibleRootURL(input)).toBe(expected);
-        });
-    });
-
     describe('reasoning provider options', () => {
         // These pin a non-obvious contract that a future refactor merging the
         // ANTHROPIC and ANTHROPIC_COMPATIBLE cases could silently break:

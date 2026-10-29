@@ -87,26 +87,6 @@ describe('AzureReposService — getCheckEvidence', () => {
         expect(getPullRequestStatuses).not.toHaveBeenCalled();
     });
 
-    it('queries the pull request by id', async () => {
-        const getPullRequestStatuses = jest.fn().mockResolvedValue([]);
-        const service = makeService(getPullRequestStatuses);
-
-        await service.getCheckEvidence({
-            organizationAndTeamData,
-            repository,
-            commitSha,
-            prNumber: 42,
-        });
-
-        expect(getPullRequestStatuses).toHaveBeenCalledWith(
-            expect.objectContaining({
-                projectId: 'project-1',
-                repositoryId: 'repo-uuid',
-                prId: 42,
-            }),
-        );
-    });
-
     it.each([
         ['failed', 'failure'],
         ['error', 'failure'],

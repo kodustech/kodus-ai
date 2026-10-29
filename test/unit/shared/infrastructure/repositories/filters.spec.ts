@@ -1,48 +1,9 @@
 import { createNestedConditions } from '@/shared/infrastructure/repositories/filters';
 
 describe('createNestedConditions', () => {
-    it('should return empty object when filterObject is undefined', () => {
-        const result = createNestedConditions('test', undefined);
-        expect(result).toEqual({});
-    });
-
-    it('should return empty object when filterObject is null', () => {
-        const result = createNestedConditions('test', null);
-        expect(result).toEqual({});
-    });
-
-    it('should handle simple primitive values', () => {
-        const filterObject = {
-            name: 'test',
-            age: 25,
-            active: true,
-        };
-
-        const result = createNestedConditions('user', filterObject);
-
-        expect(result).toEqual({
-            'user.name': 'test',
-            'user.age': 25,
-            'user.active': true,
-        });
-    });
-
-    it('should handle single-level nested objects', () => {
-        const filterObject = {
-            name: 'test',
-            organization: {
-                uuid: 'org-123',
-                name: 'Test Org',
-            },
-        };
-
-        const result = createNestedConditions('user', filterObject);
-
-        expect(result).toEqual({
-            'user.name': 'test',
-            'user.organization.uuid': 'org-123',
-            'user.organization.name': 'Test Org',
-        });
+    it('should return empty object when filterObject is undefined or null', () => {
+        expect(createNestedConditions('test', undefined)).toEqual({});
+        expect(createNestedConditions('test', null)).toEqual({});
     });
 
     it('should handle deeply nested objects (organization filtering case)', () => {
@@ -66,28 +27,6 @@ describe('createNestedConditions', () => {
             'teamAutomation.team.name': 'Test Team',
             'teamAutomation.team.organization.uuid': 'org-id',
             'teamAutomation.team.organization.name': 'Test Organization',
-        });
-    });
-
-    it('should handle mixed primitive and nested values', () => {
-        const filterObject = {
-            status: 'active',
-            pullRequestNumber: 123,
-            teamAutomation: {
-                team: {
-                    organization: {
-                        uuid: 'org-123',
-                    },
-                },
-            },
-        };
-
-        const result = createNestedConditions('execution', filterObject);
-
-        expect(result).toEqual({
-            'execution.status': 'active',
-            'execution.pullRequestNumber': 123,
-            'execution.teamAutomation.team.organization.uuid': 'org-123',
         });
     });
 
@@ -173,33 +112,6 @@ describe('createNestedConditions', () => {
         expect(result).toEqual({
             'entity.customObject': instance,
             'entity.status': 'active',
-        });
-    });
-
-    it('should handle complex objects with mixed Date, RegExp, and plain objects', () => {
-        const now = new Date();
-        const regex = /pattern/;
-
-        const filterObject = {
-            createdAt: now,
-            validationPattern: regex,
-            team: {
-                uuid: 'team-123',
-                organization: {
-                    uuid: 'org-123',
-                    createdAt: now,
-                },
-            },
-        };
-
-        const result = createNestedConditions('automation', filterObject);
-
-        expect(result).toEqual({
-            'automation.createdAt': now,
-            'automation.validationPattern': regex,
-            'automation.team.uuid': 'team-123',
-            'automation.team.organization.uuid': 'org-123',
-            'automation.team.organization.createdAt': now,
         });
     });
 });

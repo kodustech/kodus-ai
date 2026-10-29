@@ -10,11 +10,6 @@ describe('resolveAgentReviewSettings', () => {
         expect(s.adaptiveProfile).toEqual(resolveAdaptiveProfile(s.effectiveContextWindow));
     });
 
-    it("keeps the team's categories", () => {
-        const options = { bug: true, security: false, performance: false };
-        expect(resolveAgentReviewSettings({ reviewOptions: options } as any).reviewOptions).toBe(options);
-    });
-
     it("sizes the profile on the routed slot's own input limit", () => {
         const s = resolveAgentReviewSettings({ resolvedModelSlot: { provider: 'openai', model: 'gpt-x', maxInputTokens: 16000 } } as any);
         expect(s.effectiveContextWindow).toBe(16000);

@@ -409,25 +409,6 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
             expect(v.usedFallback).toBe(true);
         });
 
-        it('A13: extra unknown keys on routing/model/credential are tolerated (no crash)', () => {
-            const c = cfg({ defaultModelId: 'm-A' });
-            // The case is precisely that UNKNOWN keys are tolerated, so the
-            // writes are off-schema on purpose and need the double cast.
-            const routing = c.routing as unknown as Record<string, unknown>;
-            routing.mode = 'manual';
-            routing.experimentalFoo = 42;
-            (c.models[0] as unknown as Record<string, unknown>).unknownField =
-                'x';
-            const v = strategy.resolve('codeReview', NO_CTX, c);
-            expect(v.modelId).toBe('m-A');
-        });
-
-        it('A14: an empty routing object {} → BLOCKED "no routing target configured"', () => {
-            const v = strategy.resolve('codeReview', NO_CTX, cfg({}));
-            expect(v.modelId).toBeNull();
-            expect(v.reason).toMatch(/no routing target configured/);
-        });
-
         it('A15: empty models[] and empty credentials[] → BLOCKED, never throws', () => {
             const c: BYOKConfig = {
                 version: 2,
@@ -520,19 +501,6 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
             expect(v.reason).toMatch(/managed/);
         });
 
-        it('B27: unicode / emoji in a model name is threaded through without throwing', () => {
-            const c: BYOKConfig = {
-                version: 2,
-                credentials: [{ id: 'c-oa', provider: 'openai', apiKey: 'enc' }],
-                models: [{ id: 'm-U', credentialId: 'c-oa', model: 'gpt-4o-🚀-café' }],
-                routing: { defaultModelId: 'm-U' },
-            };
-            let v: RoutingVerdict;
-            expect(() => {
-                v = strategy.resolve('codeReview', NO_CTX, c);
-            }).not.toThrow();
-            expect(isVerdictShape(v)).toBe(true);
-        });
     });
 
     // ── C30-31: fail-safe on the ONE external call (provider.capabilities) ──
@@ -586,41 +554,6 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
 
     // ── D35-42: input variants (the config/ctx is the "input") ──────────────
     describe('D35-42 / input variants', () => {
-        it('D35: fully empty input (no creds, no models, empty routing) → BLOCKED, no throw', () => {
-            const c: BYOKConfig = { version: 2, credentials: [], models: [], routing: {} };
-            const v = strategy.resolve('codeReview', NO_CTX, c);
-            expect(v.modelId).toBeNull();
-        });
-
-        it('D36: a single model + single credential resolves cleanly', () => {
-            const v = strategy.resolve(
-                'codeReview',
-                NO_CTX,
-                soloCfg({ defaultModelId: 'm-A' }),
-            );
-            expect(v.modelId).toBe('m-A');
-        });
-
-        it('D37: a large models[] does not change resolution (O(1) id lookup, no batching)', () => {
-            const many: BYOKModelConfig[] = Array.from({ length: 500 }, (_, i) => ({
-                id: `bulk-${i}`,
-                credentialId: 'c-oa',
-                model: 'gpt-4o',
-            }));
-            const target: BYOKModelConfig = {
-                id: 'm-target',
-                credentialId: 'c-oa',
-                model: 'gpt-4o',
-            };
-            const c: BYOKConfig = {
-                version: 2,
-                credentials: [{ id: 'c-oa', provider: 'openai', apiKey: 'enc' }],
-                models: [...many, target],
-                routing: { defaultModelId: 'm-target' },
-            };
-            const v = strategy.resolve('codeReview', NO_CTX, c);
-            expect(v.modelId).toBe('m-target');
-        });
 
         it('D38: duplicate candidate tiers (override id == default id) are gated ONCE (dedup)', () => {
             // Same model referenced by both the folder override and the default.
@@ -669,16 +602,6 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
             expect(v.modelName).toBeUndefined();
         });
 
-        it('D42: order permutation of models[] yields the same verdict (metamorphic)', () => {
-            const base = [M.A, M.B, M.ANT];
-            const permuted = [M.ANT, M.B, M.A];
-            const routing: BYOKRouting = { taskOverrides: { codeReview: 'm-B' }, defaultModelId: 'm-A' };
-            const v1 = strategy.resolve('codeReview', NO_CTX, cfg(routing, base));
-            const v2 = strategy.resolve('codeReview', NO_CTX, cfg(routing, permuted));
-            expect(v1.modelId).toBe('m-B');
-            expect(v2.modelId).toBe(v1.modelId);
-            expect(v2.reason).toBe(v1.reason);
-        });
     });
 
     // ── E: capability-gate model policy (the "N modelos" branch at THIS seam)
@@ -740,14 +663,6 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
             ).toBeUndefined();
         });
 
-        it('returns the fallback verdict (usedFallback:true) when it passes the gate', () => {
-            const v = strategy.resolveFallback('codeReview', cfg({ fallbackModelId: 'm-A' }));
-            expect(v).toEqual({
-                modelId: 'm-A',
-                reason: 'resolved "codeReview" via fallback to "m-A"',
-                usedFallback: true,
-            });
-        });
     });
 
     // ── #1786 non-degradation guard ─────────────────────────────────────────

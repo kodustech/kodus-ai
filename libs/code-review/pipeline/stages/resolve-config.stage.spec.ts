@@ -79,12 +79,12 @@ describe('ResolveConfigStage — input contract', () => {
         stage = module.get(ResolveConfigStage);
     });
 
-    it('threads org + repo + PR into getChangedFilesMetadata, with the last analyzed commit as base', async () => {
+    it('threads org + repo + PR into getChangedFilesMetadata with the last analyzed commit as base, and builds the config from those files', async () => {
         const context = buildContext({
             lastExecution: { lastAnalyzedCommit: 'sha-prev' },
         } as any);
 
-        await stage.execute(context);
+        const result = await stage.execute(context);
 
         expect(prManager.getChangedFilesMetadata).toHaveBeenCalledWith(
             ORG,
@@ -92,6 +92,10 @@ describe('ResolveConfigStage — input contract', () => {
             PR,
             'sha-prev',
         );
+        // The config the LLM review runs on is built from the resolved inputs.
+        expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(ORG, REPO, FILES);
+        expect(result.codeReviewConfig).toEqual({ id: 'cfg' });
+        expect(result.preliminaryFiles).toBe(FILES);
     });
 
     it('forceFullRerun drops the base commit (re-reads the whole PR)', async () => {
@@ -125,15 +129,6 @@ describe('ResolveConfigStage — input contract', () => {
             rebased,
         );
         expect(result.preliminaryFiles).toBe(rebased);
-    });
-
-    it('derives the review config from (org, repo, preliminaryFiles) and stamps it on the context', async () => {
-        const result = await stage.execute(buildContext());
-
-        // The config the LLM review runs on is built from the resolved inputs.
-        expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(ORG, REPO, FILES);
-        expect(result.codeReviewConfig).toEqual({ id: 'cfg' });
-        expect(result.preliminaryFiles).toBe(FILES);
     });
 
     it('SKIPS (never builds a config) when the PR has no files', async () => {

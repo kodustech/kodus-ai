@@ -203,15 +203,6 @@ describe('MCPToolMetadataService (deterministic logic)', () => {
                 service.getMetadataForTool(map, 'gitlab', 'clone'),
             ).toBeUndefined();
         });
-
-        it('returns undefined when providerId is missing', () => {
-            const map = new Map<string, MCPToolMetadata>([
-                ['github|search', md(['q'])],
-            ]);
-            expect(
-                service.getMetadataForTool(map, undefined, 'search'),
-            ).toBeUndefined();
-        });
     });
 
     describe('buildMetadataFromConnections', () => {

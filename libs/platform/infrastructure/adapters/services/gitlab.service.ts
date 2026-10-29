@@ -122,6 +122,7 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
 
 /**
@@ -382,6 +383,7 @@ export class GitlabService implements Omit<
             }),
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     }
 
@@ -2635,7 +2637,9 @@ export class GitlabService implements Omit<
                 updatedAt: discussion?.notes[0]?.updated_at,
             };
         } catch (error) {
-            const isLineMismatch = error.cause.description.includes(
+            // A rate-limit error carries no `cause`; reading it threw a
+            // TypeError that hid the 429 from the caller.
+            const isLineMismatch = !!error?.cause?.description?.includes(
                 'must be a valid line code',
             );
 

@@ -272,11 +272,19 @@ describe('McpTaskTracker', () => {
                 };
             },
         });
-        const lookup = await new LinearTracker(s).read(ref('SAA-96'), {
-            organizationAndTeamData: {} as any,
-        });
-        expect(calls).toBe(2);
-        expect(lookup.status).toBe('found');
+        // The second read waits RETRY_DELAY_MS (1s); fake timers skip it.
+        jest.useFakeTimers();
+        try {
+            const pending = new LinearTracker(s).read(ref('SAA-96'), {
+                organizationAndTeamData: {} as any,
+            });
+            await jest.runAllTimersAsync();
+            const lookup = await pending;
+            expect(calls).toBe(2);
+            expect(lookup.status).toBe('found');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('reads a tool the org turned off as setup, not an outage, without retrying', async () => {

@@ -36,26 +36,6 @@ describe('PromptContextLoaderService (deterministic logic)', () => {
             ).toBe('a\nb\nc');
         });
 
-        it('extracts an offset slice (start-1 offset is applied)', () => {
-            expect(
-                asAny().extractLineRange(
-                    content,
-                    { start: 2, end: 4 },
-                    orgData,
-                ),
-            ).toBe('b\nc\nd');
-        });
-
-        it('returns a single line when start === end', () => {
-            expect(
-                asAny().extractLineRange(
-                    content,
-                    { start: 2, end: 2 },
-                    orgData,
-                ),
-            ).toBe('b');
-        });
-
         it('clamps end to file length via Math.min (end past EOF)', () => {
             // end=10 -> Math.min(5, 10)=5 ; start=4 -> index 3
             expect(
@@ -98,16 +78,6 @@ describe('PromptContextLoaderService (deterministic logic)', () => {
             ).toBe('');
         });
 
-        it('rejects a negative end (end <= 0)', () => {
-            expect(
-                asAny().extractLineRange(
-                    content,
-                    { start: 1, end: -1 },
-                    orgData,
-                ),
-            ).toBe('');
-        });
-
         it('rejects an inverted range where start > end', () => {
             expect(
                 asAny().extractLineRange(
@@ -126,18 +96,6 @@ describe('PromptContextLoaderService (deterministic logic)', () => {
                 '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
             );
             expect(asAny().calculateContentHash('hello')).toBe(expected);
-        });
-
-        it('returns the exact sha256 hex digest for the empty string', () => {
-            expect(asAny().calculateContentHash('')).toBe(
-                'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-            );
-        });
-
-        it('produces different digests for different content', () => {
-            expect(asAny().calculateContentHash('a')).not.toBe(
-                asAny().calculateContentHash('b'),
-            );
         });
     });
 

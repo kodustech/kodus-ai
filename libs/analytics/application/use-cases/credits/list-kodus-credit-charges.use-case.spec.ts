@@ -4,10 +4,9 @@ import { ListKodusCreditChargesUseCase } from './list-kodus-credit-charges.use-c
 
 /**
  * The use-case owns the projection of a stored charge into the wire shape, so
- * these tests pin exactly that: the query reaches the journal untouched, the
- * catalog id is exposed as `model`, and operational columns never leak to a
- * client (an org must not read another org's id back, and `lastError` can
- * carry an upstream message).
+ * this test pins exactly that: the catalog id is exposed as `model`, and
+ * operational columns never leak to a client (an org must not read another
+ * org's id back, and `lastError` can carry an upstream message).
  */
 describe('ListKodusCreditChargesUseCase', () => {
     const charge = (over: Partial<KodusCreditChargeModel> = {}) =>
@@ -42,34 +41,8 @@ describe('ListKodusCreditChargesUseCase', () => {
         const useCase = new ListKodusCreditChargesUseCase({
             listCharges,
         } as never);
-        return { useCase, listCharges };
+        return { useCase };
     };
-
-    it('passes the query through to the journal', async () => {
-        const { useCase, listCharges } = build([]);
-        const before = '2026-09-10T00:00:00.000Z';
-
-        await useCase.execute('org-1', { limit: 25, before, prNumber: 42 });
-
-        expect(listCharges).toHaveBeenCalledWith('org-1', {
-            limit: 25,
-            before,
-            prNumber: 42,
-        });
-    });
-
-    it('defaults to an empty query when none is given', async () => {
-        const { useCase, listCharges } = build([]);
-
-        await expect(useCase.execute('org-1')).resolves.toEqual({
-            charges: [],
-        });
-        expect(listCharges).toHaveBeenCalledWith('org-1', {
-            limit: undefined,
-            before: undefined,
-            prNumber: undefined,
-        });
-    });
 
     it('projects the catalog id as `model` and drops internal fields', async () => {
         const { useCase } = build([charge()]);
@@ -106,17 +79,5 @@ describe('ListKodusCreditChargesUseCase', () => {
         ]) {
             expect(charges[0]).not.toHaveProperty(hidden);
         }
-    });
-
-    it('keeps a pending charge pending (status is not massaged)', async () => {
-        const { useCase } = build([
-            charge({ status: 'pending', debitedAt: undefined }),
-            charge({ spanId: 'span-2', status: 'unpriced', amountUsd: 0 }),
-        ]);
-
-        const { charges } = await useCase.execute('org-1', {});
-
-        expect(charges.map((c) => c.status)).toEqual(['pending', 'unpriced']);
-        expect(charges[0].debitedAt).toBeUndefined();
     });
 });

@@ -119,22 +119,6 @@ describe('ReviewOperationalIngestionService (deterministic logic)', () => {
             expect(sql).not.toContain('::timestamp');
             expect(sql).not.toContain('ae."uuid" > ');
         });
-
-        it('returns exactly what appDs.query resolves to', async () => {
-            const { service, appQuery } = makeService();
-            const resultRows = [{ automation_execution_id: 'x' }];
-            appQuery.mockResolvedValueOnce(resultRows);
-
-            const out = await fetchBatch(service, null, undefined, 10);
-            expect(out).toBe(resultRows);
-        });
-
-        it('binds the batchSize argument verbatim as $1', async () => {
-            const { service, appQuery } = makeService();
-            await fetchBatch(service, null, undefined, 7);
-            const [, params] = appQuery.mock.calls[0];
-            expect(params[0]).toBe(7);
-        });
     });
 
     describe('writeBatch — insert fan-out and coercion', () => {

@@ -426,6 +426,20 @@ describe('the resolver asks the finder only after every direct read missed', () 
     }
     const context = { organizationAndTeamData: {} as any };
 
+    /** A failed read waits RETRY_DELAY_MS (1s) before the second; skip it. */
+    async function resolveSkippingRetryWait(
+        ...args: Parameters<typeof resolveTasks>
+    ) {
+        jest.useFakeTimers();
+        try {
+            const pending = resolveTasks(...args);
+            await jest.runAllTimersAsync();
+            return await pending;
+        } finally {
+            jest.useRealTimers();
+        }
+    }
+
     it('recovers a task the direct read can no longer parse, and says so', async () => {
         const finder = jest.fn(async () => ({
             task: { id: 'SAA-96', title: 'Sticky notes', description: 'x' },
@@ -460,7 +474,7 @@ describe('the resolver asks the finder only after every direct read missed', () 
             }),
         ).useFinder(async () => ({ notFound: true, tools: ['list_issues'] }));
 
-        const resolution = await resolveTasks(
+        const resolution = await resolveSkippingRetryWait(
             [ref('SAA-999')],
             [linear],
             context,
@@ -591,7 +605,7 @@ describe('the resolver asks the finder only after every direct read missed', () 
             }),
         ).useFinder(finder);
 
-        const resolution = await resolveTasks(
+        const resolution = await resolveSkippingRetryWait(
             [ref('SAA-96')],
             [linear],
             context,
