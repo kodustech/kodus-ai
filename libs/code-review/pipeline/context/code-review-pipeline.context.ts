@@ -21,7 +21,6 @@ import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-c
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
-import type { ReducerTrace } from '@libs/code-review/infrastructure/agents/engine/finding-reducer';
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
@@ -415,8 +414,6 @@ export interface DedupTraceSummary {
     followupError?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
-    /** Presente quando o reducer rodou no lugar do dedup. */
-    reducer?: ReducerTrace;
 }
 
 export interface FileContextAgentResult {

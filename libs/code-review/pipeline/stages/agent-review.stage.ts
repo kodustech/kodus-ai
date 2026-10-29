@@ -179,14 +179,6 @@ import {
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
 import {
-    isReducerEnabled,
-    REDUCER_QUOTA,
-    REDUCER_THRESHOLD,
-    reduceFindings,
-    type ReducerCandidate,
-    type ReducerTrace,
-} from '@libs/code-review/infrastructure/agents/engine/finding-reducer';
-import {
     normalizeEnvelope,
     LLM_ENVELOPE_TAG,
 } from '@libs/llm/structured-output-repair';
@@ -2400,24 +2392,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             ),
         };
         try {
-            // O reducer substitui o dedup: agrupar duplicata e escolher o
-            // que vale postar sao a mesma decisao vista de dois angulos, e
-            // o dedup so fazia a primeira metade. Kody Rules NAO passam por
-            // aqui — sao contrato com o cliente, nao candidato a corte.
-            const dedupResult = isReducerEnabled()
-                ? await this.reduceSuggestions(
-                      nonKodyRulesForDedup,
-                      context.changedFiles ?? [],
-                      prNumber,
-                      context.codeReviewConfig?.resolvedModelSlot,
-                      telemetryMeta,
-                  )
-                : await this.deduplicateSuggestions(
-                      nonKodyRulesForDedup,
-                      prNumber,
-                      context.codeReviewConfig?.resolvedModelSlot,
-                      telemetryMeta,
-                  );
+            const dedupResult = await this.deduplicateSuggestions(
+                nonKodyRulesForDedup,
+                prNumber,
+                context.codeReviewConfig?.resolvedModelSlot,
+                telemetryMeta,
+            );
             dedupedNonRules = dedupResult.suggestions;
             dedupTrace = {
                 ...dedupResult.trace,
@@ -3049,107 +3029,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
         return kept;
-    }
-
-    /**
-     * REDUCER — agrupa, pontua e corta os achados nao-Kody-Rule de um PR.
-     *
-     * Duas chamadas de LLM por PR (atribuidor + veracidade), no lugar da uma do
-     * dedup, e o corte deterministico depois. O prompt precisa do diff inteiro:
-     * as duas perguntas sao sobre o CODIGO, nao sobre o texto do achado — quem
-     * julga so pelo texto premia prosa confiante, que foi exatamente o que
-     * medimos falhar em todos os filtros por candidato.
-     *
-     * Falha aberta em todos os niveis: sem modelo, sem diff ou com o LLM
-     * quebrando, devolve o conjunto de entrada inteiro. Uma revisao com ruido e
-     * pior que uma revisao limpa; uma revisao vazia e pior que as duas.
-     */
-    private async reduceSuggestions(
-        suggestions: Partial<CodeSuggestion>[],
-        changedFiles: CodeReviewPipelineContext['changedFiles'],
-        prNumber: number,
-        resolvedSlot?: NormalizedModel,
-        telemetryMeta?: LangfuseTelemetryMetadata,
-    ): Promise<{
-        suggestions: Partial<CodeSuggestion>[];
-        trace: DedupTraceSummary;
-    }> {
-        const asDedupTrace = (t: ReducerTrace): DedupTraceSummary => ({
-            status: t.status,
-            totalClassifiedCount: t.inputCount,
-            kodyRulesSkippedCount: 0,
-            nonKodyInputCount: t.inputCount,
-            nonKodyOutputCount: t.keptCount,
-            finalOutputCount: t.keptCount,
-            uniqueCount: t.keptCount,
-            groupsCount: t.groupsCount,
-            removedCount: t.inputCount - t.keptCount,
-            errorMessage: t.errorMessage,
-            reducer: t,
-        });
-
-        if (!resolvedSlot && !hasManagedModelKey()) {
-            this.logger.warn({
-                message: `[REDUCER] PR#${prNumber}: no model available, keeping all suggestions`,
-                context: this.stageName,
-            });
-            return {
-                suggestions,
-                trace: asDedupTrace({
-                    status: 'skipped',
-                    inputCount: suggestions.length,
-                    contractDroppedCount: 0,
-                    groupsCount: 0,
-                    keptCount: suggestions.length,
-                    quota: REDUCER_QUOTA,
-                    threshold: REDUCER_THRESHOLD,
-                    groups: [],
-                }),
-            };
-        }
-
-        const diff = (changedFiles ?? [])
-            .map(
-                (f) =>
-                    `--- ${f.filename}\n${f.patchWithLinesStr || f.patch || ''}`,
-            )
-            .join('\n\n');
-
-        const result = await reduceFindings<
-            Partial<CodeSuggestion> & ReducerCandidate
-        >({
-            candidates: suggestions as Array<
-                Partial<CodeSuggestion> & ReducerCandidate
-            >,
-            diff,
-            log: (message) =>
-                this.logger.log({
-                    message: `${message} (PR#${prNumber})`,
-                    context: this.stageName,
-                }),
-            call: ({ schema, prompt, runName, spanName }) =>
-                LLM.run({
-                    byokConfig: resolvedSlot,
-                    schema: jsonSchema(schema as any),
-                    user: prompt,
-                    runName,
-                    spanName,
-                    organizationId: telemetryMeta?.organizationId,
-                    telemetryMetadata: telemetryMeta,
-                    attrs: {
-                        type: resolvedSlot ? 'byok' : 'system',
-                        prNumber,
-                        ...(telemetryMeta?.teamId
-                            ? { teamId: telemetryMeta.teamId }
-                            : {}),
-                    },
-                }) as Promise<any>,
-        });
-
-        return {
-            suggestions: result.suggestions,
-            trace: asDedupTrace(result.trace),
-        };
     }
 
     /**

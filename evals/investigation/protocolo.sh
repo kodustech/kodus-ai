@@ -6,7 +6,7 @@
 # Fases, na ordem em que dependem umas das outras:
 #   1. geracao      13 microagentes + simulacao (a simulacao NAO ve o cross-file)
 #   2. judge  ||  atribuidor        — independentes, rodam juntos
-#   3. veracidade  ||  verify       — os dois precisam do agrupamento, e so
+#   3. veracidade                   — precisa do agrupamento, e so
 #   4. relatorio    offline, sem LLM
 #   5. debugger     pagina HTML do trace, tambem offline
 #
@@ -100,15 +100,11 @@ PID_A=$!
 wait $PID_J; wait $PID_D; wait $PID_A
 echo "judge e atribuidor prontos"
 
-echo; echo "==== 3/4 veracidade  ||  verify 8 passos ===="
+echo; echo "==== 3/4 veracidade ===="
 node score2-veracidade.js --dump="$NOME" --grupos="results/seletor-$NOME.json" \
     --parpr=5 --out="results/score2-$NOME.json" > "results/score2-$NOME.log" 2>&1 &
 PID_V=$!
-RECALL_VERIFY_SCORE=1 RECALL_VERIFY_PASSOS=8 \
-node verify-apos-atribuidor.js --dump="$NOME" --grupos="results/seletor-$NOME.json" \
-    --parpr=4 --out="results/verify-$NOME.json" > "results/verify-$NOME.log" 2>&1 &
-PID_F=$!
-wait $PID_V; wait $PID_F
+wait $PID_V
 
 echo; echo "==== 4/5 relatorio ===="
 python3 relatorio.py --run="$NOME"

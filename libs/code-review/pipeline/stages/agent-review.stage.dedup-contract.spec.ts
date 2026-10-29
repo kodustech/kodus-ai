@@ -10,7 +10,6 @@ jest.mock('@libs/common/utils/crypto', () => ({
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { setReducerEnabledForTests } from '@libs/code-review/infrastructure/agents/engine/finding-reducer';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 
@@ -622,16 +621,7 @@ describe('AgentReviewStage.executeStage — dedup assembly + fail-safe (#1786)',
     });
 
     let runSpy: jest.SpyInstance;
-    // Este bloco guarda o contrato do DEDUP (#1786), que hoje so roda com o
-    // reducer desligado. Sem forcar a flag o mock responde no DEDUP_SCHEMA para
-    // um estagio que pediu o schema do atribuidor, e a rede de seguranca passa
-    // a testar nada. O caminho do reducer tem cobertura propria em
-    // agent-review.stage.reducer.spec.ts.
-    beforeEach(() => {
-        setReducerEnabledForTests(false);
-    });
     afterEach(() => {
-        setReducerEnabledForTests(undefined);
         runSpy?.mockRestore();
         jest.clearAllMocks();
     });

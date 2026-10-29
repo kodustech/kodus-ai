@@ -17,7 +17,7 @@ require('tsconfig-paths/register');
  * own call plus judging.
  *
  * Usage:
- *   node evals/investigation/offline-filter-ab.js --dump=<dir> [--filters=none,dedup,reducer,reducer-strict] [--model=gpt-5.6-sol@sub]
+ *   node evals/investigation/offline-filter-ab.js --dump=<dir> [--filters=none,dedup] [--model=gpt-5.6-sol@sub]
  */
 const fs = require('fs');
 const path = require('path');
@@ -34,7 +34,7 @@ const arg = (name, dflt) => {
 };
 
 const DUMP = arg('dump');
-const FILTERS = arg('filters', 'none,dedup,reducer,reducer-strict').split(',');
+const FILTERS = arg('filters', 'none,dedup').split(',');
 const MODEL = arg('model', 'gpt-5.6-sol@sub');
 const CONCURRENCY = Number(arg('concurrency', '4'));
 
@@ -99,15 +99,6 @@ async function applyFilter(name, candidates) {
         });
         const keep = new Set(r.unique ?? r.kept ?? []);
         return candidates.filter((_, i) => keep.has(i));
-    }
-
-    if (name === 'reducer' || name === 'reducer-strict') {
-        const { runReducer } = require('../dedup/reducer-runner.js');
-        const r = await runReducer(candidates, {
-            model: MODEL_OBJ,
-            strict: name === 'reducer-strict',
-        });
-        return r.kept.map((i) => candidates[i]).filter(Boolean);
     }
 
     throw new Error(`unknown filter ${name}`);
