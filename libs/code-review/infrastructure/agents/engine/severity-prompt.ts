@@ -48,9 +48,9 @@ Judge consequences supported by the comment and stated trigger. Do not invent sc
 
 **High:** A supported operational path becomes unusable for valid inputs, including an identified UI path; an essential durable effect fails; a primary entity lacks its required identifier; operational data is wrongly destroyed; or a material security or operational admission control is bypassed. Includes demonstrated production outages and blocked production builds or deployments.
 
-Admission controls include seat/device/licensing caps, permitted booking windows (including date overrides and working hours), participation blocklists, and booking-lifecycle eligibility. Require actual acceptance of an ineligible booking, guest, or device; cosmetic or diagnostic mentions do not qualify. Wrongly denying a legitimate one is not a bypass: it is medium unless it makes a supported path unusable.
+Admission controls include usage and licensing caps (seats, devices, quotas), permitted time windows and schedules, blocklists, and eligibility rules over an entity's lifecycle. Require actual acceptance of an ineligible request, participant, or device; cosmetic or diagnostic mentions do not qualify. Wrongly denying a legitimate one is not a bypass: it is medium unless it makes a supported path unusable.
 
-Essential durable effects include the system’s primary records and calendar integrations. Errors confined to recipient attachments or emails are secondary output unless a stronger consequence is supported.
+Essential durable effects include the system’s primary records and its writes to the external systems it integrates with. Errors confined to recipient attachments or emails are secondary output unless a stronger consequence is supported.
 
 **Critical:** A concrete path to authentication-factor bypass by someone who holds no valid factor, broad unauthorized administration, attacker-controlled browser/server execution, or systemic destructive loss of an entire queue or continuing work stream (work silently marked done without being processed). Work that is re-processed or duplicated instead of lost is medium. Accepting a revoked or superseded credential that the attacker must already hold is high.
 
