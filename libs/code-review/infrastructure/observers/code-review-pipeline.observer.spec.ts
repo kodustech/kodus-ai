@@ -242,6 +242,81 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
+    // A review that could not run because the org's own key has no credits is
+    // not a failed review, same as one skipped for lack of a license (#2191):
+    // a red check would block merges for something only the org can fix.
+    it('finalizes as SKIPPED when every critical error is an exhausted API quota (#2191)', async () => {
+        context.statusInfo = { status: AutomationStatus.ERROR } as any;
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:generalist',
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity: 'critical',
+                metadata: { category: 'QUOTA_EXCEEDED' },
+            } as any,
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:bug',
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity: 'critical',
+                metadata: { category: 'QUOTA_EXCEEDED' },
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.SKIPPED,
+            CheckStageNames._pipelineEndSkipped,
+            expect.stringContaining('out of credits'),
+        );
+    });
+
+    it('still finalizes as FAILURE when an exhausted quota co-occurs with another critical error (#2191)', async () => {
+        context.statusInfo = { status: AutomationStatus.ERROR } as any;
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:generalist',
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity: 'critical',
+                metadata: { category: 'QUOTA_EXCEEDED' },
+            } as any,
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:bug',
+                error: new Error('Path not found: /chat/completions'),
+                severity: 'critical',
+                metadata: { category: 'UNKNOWN' },
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.FAILURE,
+            CheckStageNames._pipelineEndFailure,
+            expect.any(String),
+        );
+    });
+
     it('should finalize pipeline check on pipeline finish (skipped)', async () => {
         context.statusInfo = {
             status: AutomationStatus.SKIPPED,

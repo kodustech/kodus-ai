@@ -22,6 +22,7 @@ import {
     PipelineObserverContext,
 } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-observer.interface';
 import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
+import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -173,6 +174,29 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         const hasPartialError =
             context.statusInfo.status === AutomationStatus.PARTIAL_ERROR ||
             errors.some((e) => e.severity === 'partial');
+
+        // A review that could not run because the org's own API key is out of
+        // credits did not fail: only the org can fix it, and a red check would
+        // block merges meanwhile. Concluded like a review skipped for lack of
+        // a license (#2191). Any other critical error keeps the failure.
+        const criticalErrors = errors.filter(
+            (e) => (e.severity ?? 'critical') === 'critical',
+        );
+        if (
+            criticalErrors.length > 0 &&
+            criticalErrors.every(
+                (e) => e.metadata?.category === LlmErrorCategory.QUOTA_EXCEEDED,
+            )
+        ) {
+            await this.pipelineChecksService.finalizeCheck(
+                observerContext,
+                context,
+                CheckConclusion.SKIPPED,
+                CheckStageNames._pipelineEndSkipped,
+                this.buildPipelineFailureReason(context),
+            );
+            return;
+        }
 
         if (hasCriticalError) {
             const failureReason = this.buildPipelineFailureReason(context);
