@@ -35,6 +35,12 @@ export async function repairInvalidToolInput(opts: {
     /** Runs the re-ask inside the caller's usage span, so its tokens are
      *  charged to the org like the loop's own. */
     inSpan?: <T>(exec: () => Promise<T>) => Promise<T>;
+    /** The review's ids, on every log line of the repair. */
+    logContext?: {
+        organizationId?: string;
+        teamId?: string;
+        prNumber?: number;
+    };
 }): Promise<Record<string, unknown> | null> {
     const { model, abortSignal, toolCall, inputSchema, error } = opts;
     const inSpan = opts.inSpan ?? (<T>(exec: () => Promise<T>) => exec());
@@ -46,6 +52,7 @@ export async function repairInvalidToolInput(opts: {
         message: `[tool-repair] invoked for "${toolCall.toolName}" — model sent invalid tool input`,
         context: 'repairInvalidToolInput',
         metadata: {
+            ...opts.logContext,
             toolName: toolCall.toolName,
             validationError:
                 (error as Error)?.message?.slice(0, 300) ?? String(error),
@@ -84,7 +91,7 @@ export async function repairInvalidToolInput(opts: {
         logger.log({
             message: `[tool-repair] repaired "${toolCall.toolName}" via model re-ask`,
             context: 'repairInvalidToolInput',
-            metadata: { toolName: toolCall.toolName },
+            metadata: { ...opts.logContext, toolName: toolCall.toolName },
         });
         return { ...toolCall, input: JSON.stringify(readOutput(result)) };
     } catch (err) {
@@ -98,7 +105,13 @@ export async function repairInvalidToolInput(opts: {
             logger.log({
                 message: `[tool-repair] repaired "${toolCall.toolName}" via deterministic salvage`,
                 context: 'repairInvalidToolInput',
-                metadata: { toolName: toolCall.toolName },
+                metadata: {
+                    ...opts.logContext,
+                    toolName: toolCall.toolName,
+                    // The re-ask failed; the salvage read its text.
+                    repairError:
+                        (err as Error)?.message?.slice(0, 300) ?? String(err),
+                },
             });
             return { ...toolCall, input: JSON.stringify(recovered) };
         }
@@ -106,6 +119,7 @@ export async function repairInvalidToolInput(opts: {
             message: `[tool-repair] DISCARDED tool call "${toolCall.toolName}" — repair and salvage both failed, step is dropped`,
             context: 'repairInvalidToolInput',
             metadata: {
+                ...opts.logContext,
                 toolName: toolCall.toolName,
                 repairError:
                     (err as Error)?.message?.slice(0, 300) ?? String(err),

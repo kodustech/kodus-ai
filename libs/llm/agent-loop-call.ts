@@ -254,6 +254,11 @@ export async function runAgentLoopCall(
                     error: opts.error,
                     inSpan: (repair) =>
                         usageSpan(`${runName}-tool-repair`, repair, false),
+                    logContext: {
+                        organizationId,
+                        teamId: attrs?.teamId as string | undefined,
+                        prNumber: attrs?.prNumber as number | undefined,
+                    },
                 })) as any,
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
