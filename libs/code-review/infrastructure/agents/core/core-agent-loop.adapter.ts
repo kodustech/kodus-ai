@@ -21,6 +21,7 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import { isClaudeModel } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
 import { withClaudeOneProblem, withClaudeWritingPolicy } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import type { LanguageModel } from 'ai';
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
@@ -165,7 +166,7 @@ export function finderRunEnvironment(
             secrets.byokConfig?.model,
             secrets.byokConfig?.fallback?.model,
             (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
-        ].some((id) => typeof id === 'string' && /claude/i.test(id));
+        ].some((id) => typeof id === 'string' && isClaudeModel(id));
     const finderSystemPrompt = claudeSafeWording
         ? withClaudeWritingPolicy(input.systemPrompt)
         : input.systemPrompt;

@@ -1,5 +1,6 @@
 import {
     DEFAULT_FINDER_PROFILE,
+    isClaudeModel,
     finderProfileFor,
     finderRunSettings,
 } from './finder-model-profile';
@@ -86,5 +87,16 @@ describe('finderRunSettings', () => {
             'claude-sonnet-5-5',
         );
         expect(twice).toEqual(once);
+    });
+});
+
+describe('isClaudeModel', () => {
+    it('reads every Claude id with the bounded patterns, Haiku and provider prefixes included', () => {
+        for (const id of ['claude-opus-5-5', 'claude-haiku-4-5', 'us.anthropic.claude-sonnet-5-5', 'anthropic/claude-sonnet-5.5']) {
+            expect(isClaudeModel(id)).toBe(true);
+        }
+        for (const id of ['gpt-6-sol', 'deepseek-v4-flash', 'myclaudeproxy', undefined]) {
+            expect(isClaudeModel(id)).toBe(false);
+        }
     });
 });

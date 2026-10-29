@@ -73,6 +73,16 @@ export const DEFAULT_FINDER_PROFILE: FinderModelProfile = {
     synthesisRescue: true,
 };
 
+// Every Claude model, Haiku included: the WHAT/WHY/HOW writing policy and the
+// one-problem rule apply to all of them, whatever their finder profile.
+const CLAUDE = new RegExp(`${START}claude-`, 'i');
+
+/** Whether `modelName` is a Claude model, read with the same bounded
+ *  patterns as the families above. */
+export function isClaudeModel(modelName?: string): boolean {
+    return CLAUDE.test((modelName ?? '').trim());
+}
+
 export function finderProfileFor(modelName?: string): FinderModelProfile {
     const id = (modelName ?? '').trim();
     const hit = id ? FAMILIES.find((f) => f.match.test(id)) : undefined;
