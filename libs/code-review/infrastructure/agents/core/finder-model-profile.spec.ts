@@ -60,6 +60,16 @@ describe('finderRunSettings', () => {
         });
     });
 
+    it("gives a fixed-budget family the orchestrator's budget above 100 changed files", () => {
+        const files = (n: number) => Array.from({ length: n }, () => ({}));
+        expect(finderRunSettings({ maxSteps: 66, changedFiles: files(100) }, 'gpt-6-sol').maxSteps).toBe(12);
+        expect(finderRunSettings({ maxSteps: 66, changedFiles: files(101) }, 'gpt-6-sol').maxSteps).toBe(66);
+        expect(finderRunSettings({ maxSteps: 66, changedFiles: files(101) }, 'claude-opus-5-5')).toMatchObject({
+            maxSteps: 66,
+            skipSynthesisRescue: true,
+        });
+    });
+
     it("keeps the orchestrator's budget for an adaptive family", () => {
         expect(
             finderRunSettings({ reviewMode: 'normal', maxSteps: 34 }, 'deepseek-v4-flash'),
