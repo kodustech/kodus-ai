@@ -35,7 +35,9 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
                 .mockResolvedValue(overrides.atCommit ?? null),
             getFilesByPullRequestId: jest
                 .fn()
-                .mockResolvedValue(overrides.prFiles ?? []),
+                .mockResolvedValue(
+                    'prFiles' in overrides ? overrides.prFiles : [],
+                ),
             getRepositoryContentFile: jest
                 .fn()
                 .mockResolvedValue({ data: { content: 'x' } }),
@@ -140,6 +142,16 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
                 }),
             }),
         );
+    });
+
+    it('throws when the whole PR cannot be read either, instead of reading as nothing new', async () => {
+        const { service } = makeService({
+            sinceLastCommit: null,
+            atCommit: null,
+            prFiles: null,
+        });
+
+        await expect(metadata(service, lastCommit)).rejects.toThrow('PR#42');
     });
 
     it('falls back the same way for getChangedFiles', async () => {

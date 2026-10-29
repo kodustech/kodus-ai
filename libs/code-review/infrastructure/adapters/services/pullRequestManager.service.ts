@@ -373,8 +373,13 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 repository,
                 prNumber: pullRequest?.number,
                 headSha: pullRequest?.head?.sha,
-            })) ??
-            [];
+            }));
+        // Not `[]`: that would skip the review as a PR with nothing new.
+        if (!files) {
+            throw new Error(
+                `Could not read the changes of PR#${pullRequest?.number}: neither the diff since ${lastCommitSha} nor the whole PR was readable`,
+            );
+        }
 
         this.logger.warn({
             message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${interdiff ? 'its changes since then' : 'the whole PR'}`,

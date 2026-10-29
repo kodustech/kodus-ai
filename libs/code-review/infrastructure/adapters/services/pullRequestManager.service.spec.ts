@@ -283,7 +283,7 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the fetch resolves null and no fallback finds files (lastCommit path)', async () => {
+    it('returns [] when the fetch resolves null and the PR has no files (lastCommit path)', async () => {
         const { service, codeManagementService } = makeService();
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
             null,
@@ -291,7 +291,7 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         codeManagementService.getPullRequestFilesAtCommit.mockResolvedValue(
             null,
         );
-        codeManagementService.getFilesByPullRequestId.mockResolvedValue(null);
+        codeManagementService.getFilesByPullRequestId.mockResolvedValue([]);
 
         const result = await (service as any).getChangedFilesMetadata(
             orgData,
