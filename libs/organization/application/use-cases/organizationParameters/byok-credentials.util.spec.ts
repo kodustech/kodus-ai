@@ -112,6 +112,77 @@ describe('resolveByokSlot', () => {
         });
     });
 
+    describe('by credential id (two gateways of one provider)', () => {
+        const twoGateways = {
+            version: 2,
+            credentials: [
+                {
+                    id: 'cred-a',
+                    provider: 'openai_compatible',
+                    apiKey: 'ENC_A',
+                    settings: { baseURL: 'https://gateway-a.example.com/v1' },
+                },
+                {
+                    id: 'cred-b',
+                    provider: 'openai_compatible',
+                    apiKey: 'ENC_B',
+                    settings: { baseURL: 'https://gateway-b.example.com/v1' },
+                },
+                {
+                    id: 'cred-managed',
+                    provider: 'openai_compatible',
+                    managed: true,
+                },
+            ],
+            models: [],
+        };
+
+        it('resolves the credential named by id, not the first of its provider', async () => {
+            const slot = await resolveByokSlot(
+                buildService(twoGateways),
+                'openai_compatible',
+                org,
+                'cred-b',
+            );
+
+            expect(slot?.apiKey).toBe('dec:ENC_B');
+            expect(slot?.baseURL).toBe('https://gateway-b.example.com/v1');
+        });
+
+        it('returns null for an unknown id instead of falling back to the provider', async () => {
+            const slot = await resolveByokSlot(
+                buildService(twoGateways),
+                'openai_compatible',
+                org,
+                'cred-gone',
+            );
+
+            expect(slot).toBeNull();
+        });
+
+        it('returns null when the id belongs to another provider', async () => {
+            const slot = await resolveByokSlot(
+                buildService(twoGateways),
+                'anthropic_compatible',
+                org,
+                'cred-a',
+            );
+
+            expect(slot).toBeNull();
+        });
+
+        it('returns null when the id names a managed credential', async () => {
+            const slot = await resolveByokSlot(
+                buildService(twoGateways),
+                'openai_compatible',
+                org,
+                'cred-managed',
+            );
+
+            expect(slot).toBeNull();
+        });
+    });
+
     describe('legacy {main,fallback} slot lookup dropped (04b-06 — v2-only)', () => {
         it('returns null for a legacy main-slot blob (no longer read)', async () => {
             const service = buildService({
