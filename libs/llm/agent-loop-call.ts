@@ -213,10 +213,11 @@ export async function runAgentLoopCall(
         name: string,
         exec: () => Promise<T>,
         traced: boolean,
+        span: string = name,
     ): Promise<T> =>
         observability
             ? observability.runAiSdkLLMInSpan<any>({
-                  spanName: name,
+                  spanName: span,
                   runName: name,
                   model: inv.modelName,
                   byokModelId: identity.byokModelId,
@@ -271,25 +272,10 @@ export async function runAgentLoopCall(
         } as any);
 
     // ── ONE observability span — records the run's aggregate usage. Absent port
-    // (a bare unit test) runs directly, still gets the model/loop, just no span. ──
+    // (a bare unit test) runs directly, still gets the model/loop, just no span.
+    // Traced under the same condition that turns the SDK telemetry on above. ──
     const run = () =>
-        observability
-        ? observability.runAiSdkLLMInSpan<any>({
-              spanName: spanName ?? runName,
-              runName,
-              model: inv.modelName,
-              byokModelId: identity.byokModelId,
-              credentialId: identity.credentialId,
-              // Routing task + fallback flag the slot carried down from
-              // resolveTaskSlot (route = the LlmTask, not the tier).
-              route: slot?.route,
-              usedFallback: slot?.usedFallback,
-              // Same condition that turns the SDK telemetry on above.
-              traced: !!telemetryMetadata,
-              attrs: spanAttrs,
-              exec,
-          })
-        : exec();
+        usageSpan(runName, exec, !!telemetryMetadata, spanName ?? runName);
 
     // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
     // OpenAI-compatible proxies accept the connection, ignore the abort and
