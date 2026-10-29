@@ -594,13 +594,38 @@ export class McpService {
                 integrationId,
             )) === MCPIntegrationOAuthStatus.INACTIVE
         ) {
-            await this.connectionRepository.update(
-                { organizationId, integrationId },
-                { status: MCPConnectionStatus.EXPIRED },
+            await this.expireConnectionOfLostGrant(
+                organizationId,
+                integrationId,
             );
         }
 
         return { headers };
+    }
+
+    /**
+     * Expire the connection only while its grant is still INACTIVE, in the same
+     * statement: a reconnect that saved an ACTIVE grant in between must not be
+     * overwritten with EXPIRED.
+     */
+    private async expireConnectionOfLostGrant(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<void> {
+        await this.connectionRepository
+            .createQueryBuilder()
+            .update()
+            .set({ status: MCPConnectionStatus.EXPIRED })
+            .where('"organizationId" = :organizationId', { organizationId })
+            .andWhere('"integrationId" = :integrationId', { integrationId })
+            .andWhere(
+                `EXISTS (SELECT 1 FROM "mcp-manager"."mcp_integration_oauth" o
+                    WHERE o."organizationId" = :organizationId
+                      AND o."integrationId" = :integrationId
+                      AND o."status" = :inactive)`,
+                { inactive: MCPIntegrationOAuthStatus.INACTIVE },
+            )
+            .execute();
     }
 
     /**
