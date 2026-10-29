@@ -185,7 +185,9 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         if (
             criticalErrors.length > 0 &&
             criticalErrors.every(
-                (e) => e.metadata?.category === LlmErrorCategory.QUOTA_EXCEEDED,
+                (e) =>
+                    e.metadata?.errorCategory ===
+                    LlmErrorCategory.QUOTA_EXCEEDED,
             )
         ) {
             await this.pipelineChecksService.finalizeCheck(

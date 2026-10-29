@@ -255,7 +255,10 @@ describe('CodeReviewPipelineObserver', () => {
                     'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
                 ),
                 severity: 'critical',
-                metadata: { category: 'QUOTA_EXCEEDED' },
+                metadata: {
+                    category: 'generalist',
+                    errorCategory: 'QUOTA_EXCEEDED',
+                },
             } as any,
             {
                 stage: 'AgentReviewStage',
@@ -264,7 +267,10 @@ describe('CodeReviewPipelineObserver', () => {
                     'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
                 ),
                 severity: 'critical',
-                metadata: { category: 'QUOTA_EXCEEDED' },
+                metadata: {
+                    category: 'generalist',
+                    errorCategory: 'QUOTA_EXCEEDED',
+                },
             } as any,
         ];
 
@@ -292,14 +298,17 @@ describe('CodeReviewPipelineObserver', () => {
                     'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
                 ),
                 severity: 'critical',
-                metadata: { category: 'QUOTA_EXCEEDED' },
+                metadata: {
+                    category: 'generalist',
+                    errorCategory: 'QUOTA_EXCEEDED',
+                },
             } as any,
             {
                 stage: 'AgentReviewStage',
                 substage: 'agent:bug',
                 error: new Error('Path not found: /chat/completions'),
                 severity: 'critical',
-                metadata: { category: 'UNKNOWN' },
+                metadata: { category: 'bug', errorCategory: 'UNKNOWN' },
             } as any,
         ];
 
