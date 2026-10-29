@@ -23,7 +23,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { z } = require('zod');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
-const { createModel } = require('../investigation/agent-provider-1821');
+const { createSlot } = require('../investigation/agent-provider-1821');
 const lib = (p) => require(path.join(__dirname, '../../libs', p));
 const { buildFinderToolRegistry } = lib('code-review/infrastructure/agents/adapters/finder-tools.adapter.ts');
 const { InMemoryToolRegistry } = lib('agent-harness/infrastructure/tools/in-memory-tool-registry.ts');
@@ -75,7 +75,7 @@ function worktree(caseId) {
     return worktrees.get(caseId);
 }
 
-async function withTools(it, model) {
+async function withTools(it, slot) {
     const { registry } = buildFinderToolRegistry({ remoteCommands: comandosSandboxLocal(worktree(it.caseId)) });
     const tools = new InMemoryToolRegistry([
         ...registry.list().filter((t) => READ_TOOLS.has(t.name)),
@@ -87,7 +87,7 @@ async function withTools(it, model) {
     };
     const { ctx, cleanup } = createAgentRunContext({ runId: `refine:${it.issueId}` });
     try {
-        const state = await new AiSdkAgentRunner(undefined, { prebuiltModel: model }).run(spec, { prompt: prompt(it) }, ctx);
+        const state = await new AiSdkAgentRunner(slot).run(spec, { prompt: prompt(it) }, ctx);
         const steps = state.steps.length;
         for (let k = state.artifacts.length - 1; k >= 0; k--) {
             const a = state.artifacts[k];
@@ -112,14 +112,14 @@ const prompt = (it) => [
     fs.mkdirSync(OUT_DIR, { recursive: true });
     const prev = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')).items : [];
     const done = new Map(prev.map((r) => [r.issueId, r]));
-    const model = await createModel({ provider: 'tier0' });
+    const slot = createSlot({ provider: 'tier0' });
     const todo = items.filter((it) => !done.has(it.issueId));
     const save = () => fs.writeFileSync(OUT, JSON.stringify({ model: MODEL, tools: TOOLS, items: [...done.values()] }, null, 1));
     let fail = 0;
     async function one(it) {
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
-                const r = TOOLS ? await withTools(it, model) : REF.parse(await LLM.run({ system: SYSTEM, user: prompt(it), schema: REF, prebuiltModel: model, runName: 'eval-enrich-refine' }));
+                const r = TOOLS ? await withTools(it, slot) : REF.parse(await LLM.run({ system: SYSTEM, user: prompt(it), schema: REF, byokConfig: slot, runName: 'eval-enrich-refine' }));
                 done.set(it.issueId, { issueId: it.issueId, ...r });
                 return;
             } catch (e) {

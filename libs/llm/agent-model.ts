@@ -35,13 +35,6 @@ export interface ResolveAgentModelOptions {
         provider: string;
         errorMessage: string;
     }) => void;
-    /** An ALREADY-BUILT model to run instead of resolving one from the slot.
-     *  The one caller is the eval harness, which builds bespoke models that no
-     *  slot can express (the Codex-subscription transport). Without this seam the
-     *  eval's model was silently dropped and the run fell back to the env default
-     *  — the benchmark then labelled results with a model that never ran.
-     *  Still goes through wrapByokModel so the limiter/reporter behave the same. */
-    prebuiltModel?: LanguageModel;
 }
 
 export function resolveAgentModel(
@@ -50,8 +43,7 @@ export function resolveAgentModel(
 ): LanguageModel {
     // Build the model from the ONE resolved slot; the limiter keys off that slot.
     return wrapByokModel(
-        opts.prebuiltModel ??
-            buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
+        buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
         {
             byokConfig: slot,
             organizationId: opts.organizationId,

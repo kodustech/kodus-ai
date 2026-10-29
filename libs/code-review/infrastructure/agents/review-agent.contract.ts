@@ -548,17 +548,6 @@ export interface AgentLoopSecrets {
      */
     remoteCommands: RemoteCommands | undefined;
     byokConfig?: NormalizedModel;
-    /** An already-built model to run instead of resolving one from `byokConfig`.
-     *  Eval-only seam for transports no BYOK slot can express (the Codex
-     *  subscription). Production leaves it unset; when set it also reaches the
-     *  verifier, since finder and verify share one runner. */
-    prebuiltModel?: unknown;
-    /** Eval-only: the model for the one-shot prose recovery, set only when the
-     *  managed default cannot reach the eval's model (the Codex subscription). */
-    prebuiltRecoveryModel?: unknown;
-    /** Eval-only: an AgentRunner that replaces the AI SDK runner for every
-     *  pass and verify (the Claude Agent SDK, whose loop runs in Claude Code). */
-    prebuiltRunner?: unknown;
     /** Slot the verify pass runs on when it differs from `byokConfig` (a
      *  custom agent's check model, #2172). Unset: verify uses `byokConfig`. */
     verifyByokConfig?: NormalizedModel;

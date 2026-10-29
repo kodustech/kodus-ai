@@ -156,14 +156,10 @@ function resolveRoute(config) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyPlatformEnv, TIER0 } = require('./tier0-models');
         const spec = TIER0[modelId];
-        if (spec && spec.provider === 'codex_subscription') {
-            throw new NotAProductionRoute(
-                `${modelId} runs on a ChatGPT subscription, which production has no route for ` +
-                    '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
-            );
-        }
+        // Not a tier-0 id (a typo, a removed route): nothing production would
+        // run under that name, so not measured rather than another model.
+        if (!spec) throw new NotAProductionRoute(`unknown tier-0 model '${modelId}' (evals/shared/tier0-models.js)`);
         applyPlatformEnv();
-        if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
         // `kodus-managed`: an org with no model config, which gets Kodus's default
         // model on Kodus's key (libs/llm/managed-slot.ts). No stored config, no effort.
         if (spec.managed) {

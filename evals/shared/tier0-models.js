@@ -8,7 +8,7 @@
 // TWO lists live here and they are NOT the same thing:
 //
 //   TIER0     every id an eval can pin with `--model=`. A routing table, not a
-//             recommendation — the `@nvidia` / `@novita` / `@sub` routes and
+//             recommendation — the `@nvidia` / `@novita` routes and
 //             the Akash one are experiment paths nobody ships.
 //   tier0()   the models the push-to-main suite gates on, marked `tier0: true`
 //             below. THIS is the list the CI matrix reads.
@@ -112,31 +112,14 @@ const TIER0 = {
     // Rota Akash — catalogo confirmado por inferencia real (finish_reason: stop).
     'qwen3.8-27b': { provider: 'openai_compatible', doModel: 'Qwen/Qwen3.8-27B', keyEnvs: ['AKASH_ML'], baseURL: 'https://api.akashml.com/v1' },
 
-    // Rota de ASSINATURA (Codex OAuth): credencial vem de ~/.codex/auth.json,
-    // nao de env. Cobra na cota semanal do plano ChatGPT, nao por token — sai
-    // no leaderboard com accessPath=subscription e SEM coluna de custo.
-    'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
-    'gpt-6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-sol', keyEnvs: [] },
-    'gpt-6.1-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-6.1-sol', keyEnvs: [] },
-    'gpt-6-astra@sub': { provider: 'codex_subscription', codexModel: 'gpt-6-astra', keyEnvs: [] },
-    // Claude pela ASSINATURA via Claude Agent SDK (#1821): o loop roda no Claude
-    // Code, com as tools do bench por MCP. Credencial em ~/.claude-oauth
-    // (`claude setup-token`), nao em env.
-    'claude-sonnet-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-sonnet-5-5', keyEnvs: [] },
-    'claude-opus-5.5@sdk': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', keyEnvs: [] },
-    // O Agent SDK (preset do Claude Code, loop do SDK) autenticado pela chave de API, nao pela assinatura.
-    'claude-opus-5.5@sdk-api': { provider: 'claude_agent_sdk', sdkModel: 'claude-opus-5-5', sdkAuth: 'api', keyEnvs: ['API_ANTHROPIC_API_KEY'] },
-    'claude-sonnet-5.5@sdk-api': { provider: 'claude_agent_sdk', sdkModel: 'claude-sonnet-5-5', sdkAuth: 'api', keyEnvs: ['API_ANTHROPIC_API_KEY'] },
-    // Mesmo gpt-6-sol pela API da OpenAI (#1821: separar o modelo da rota da assinatura).
+    // gpt-6-sol pela API da OpenAI.
     'gpt-6-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6.1-sol@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6.1-sol', keyEnvs: ['MATRIX_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
     'gpt-6-luna@api': { provider: 'openai', byokNative: true, doModel: 'gpt-6-luna', keyEnvs: ['MATRIX_OPENAI_API_KEY'] },
     'claude-sonnet-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-sonnet-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
     'claude-opus-5.5@api': { provider: 'anthropic', byokNative: true, doModel: 'claude-opus-5-5', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY'] },
-    'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
     // The nightly's judge (JUDGE_MODEL), on the OpenAI key the nightly sets for it.
     'gpt-5.6-luna': { provider: 'openai', byokNative: true, keyEnvs: ['JUDGE_API_KEY', 'API_OPEN_AI_API_KEY', 'BYOK_OPENAI_API_KEY'] },
-    'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
     // GPT-6 and Sonnet 5.5 through the same OpenRouter account as the tier-0
     // Kimi, each pinned to its first-party upstream with fallbacks off. The
     // pin is what a customer's OpenRouter BYOK slot sends
@@ -172,12 +155,7 @@ const TIER0 = {
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
 // --model to force one.
-// Subscription and Agent SDK ids are research routes: production has no such
-// route (evals/README.md rule 5), so they stay out of the default matrices.
-const EXCLUDED_BY_DEFAULT = new Set([
-    'claude-opus-4-7',
-    ...Object.keys(TIER0).filter((id) => ['codex_subscription', 'claude_agent_sdk'].includes(TIER0[id].provider)),
-]);
+const EXCLUDED_BY_DEFAULT = new Set(['claude-opus-4-7']);
 
 // Routes that only answer inside the wiring smoke (its local server is up only
 // while it runs): never offered as a runnable model.
@@ -206,10 +184,6 @@ function defaultMatrix() {
 function applyModelEnv(modelId, env = process.env) {
     const spec = TIER0[modelId];
     if (!spec) throw new Error(`unknown tier-0 model '${modelId}' (known: ${Object.keys(TIER0).join(', ')})`);
-    // A subscription takes no env var: its credential is ~/.codex/auth.json
-    // (libs/llm/codex-subscription-model.ts).
-    if (spec.provider === 'codex_subscription') return spec;
-    if (spec.provider === 'claude_agent_sdk') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
 

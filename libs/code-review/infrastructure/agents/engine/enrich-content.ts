@@ -119,7 +119,6 @@ export async function enrichOneShot(
     input: EnrichmentInput,
     opts: {
         byokConfig?: NormalizedModel;
-        prebuiltModel?: unknown;
         telemetryMetadata?: LangfuseTelemetryMetadata;
         runName?: string;
         /** Puts the call's tokens on the org's Token Usage and credits.
@@ -135,12 +134,11 @@ export async function enrichOneShot(
         user,
         schema: RESULT_ZOD,
         byokConfig: opts.byokConfig,
-        prebuiltModel: opts.prebuiltModel as any,
         telemetryMetadata: opts.telemetryMetadata,
         runName: opts.runName ?? 'code-review-enrich',
         timeoutMs: ENRICH_TIMEOUT_MS,
         organizationId: opts.organizationId,
         attrs: opts.attrs,
-    } as any);
+    });
     return parseEnrichment(out);
 }

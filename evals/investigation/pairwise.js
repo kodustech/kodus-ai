@@ -24,7 +24,7 @@ const arg = (n, d) => { const h = process.argv.slice(2).find((a) => a.startsWith
 const DUMP = arg('dump', 'sol-teto2');
 const PARPR = Number(arg('parpr', '5'));
 const OUT = arg('out', path.join(__dirname, 'results', 'pairwise-sol-teto2.json'));
-const MODEL = process.env.RECALL_MODEL || 'gpt-5.6-sol@sub';
+const MODEL = process.env.RECALL_MODEL || 'gpt-6-sol@api';
 const J = (v) => (typeof v === 'string' ? JSON.parse(v) : v || []);
 registerTracing('pairwise');
 
@@ -100,7 +100,7 @@ well-written non-issue.
 Answer every duelo exactly once. Call duelos exactly once.`;
 
 (async () => {
-    const model = comEsforco(buildModel(MODEL), String(MODEL).replace(/@sub$/, ''));
+    const model = comEsforco(buildModel(MODEL), String(MODEL).replace(/@[a-z0-9_-]+$/i, ''));
     console.log(`[modelo] ${descreveModelo(MODEL)}`);
     const FR = JSON.parse(fs.readFileSync(path.join(__dirname, 'results', 'fronteira.json'), 'utf8'));
     const diffs = {};

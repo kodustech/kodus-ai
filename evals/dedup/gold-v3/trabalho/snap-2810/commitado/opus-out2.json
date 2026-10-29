@@ -1,0 +1,238 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Create storage-error path records with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records with recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy write context derives from the request ctx, cancelled when the request ends."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unbounded goroutine per write / no backpressure on legacy mirroring; no golden issue covers resource bounding."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update gets raw objInfo instead of a wrapper with the storage-committed object, so legacy diverges."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Create storage-error path uses recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "DeleteCollection legacy goroutine uses recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete builds the context with d.Log instead of the enriched per-call log."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "request.referer interpolated unescaped into a JS string in the embed layout (XSS); no golden issue covers the layout referer injection."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub raises on description-only RSS items and aborts the poll loop."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+   "newGroup": null,
+   "reason": "setnx and expire are separate calls; a crash between them leaves a key with no TTL blocking retrieval forever."
+  },
+  {
+   "id": "S4",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "newGroup": null,
+   "reason": "open(url).read with no timeout or size limit can hang the job or exhaust memory."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "i.content.scrub crashes on description-only RSS items."
+  },
+  {
+   "id": "S6",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+   "newGroup": null,
+   "reason": "import_remote open(url).read with no timeout or body size bound."
+  }
+ ],
+ "sms-workflow-reminder-retry-count-tracking-cal-com": [
+  {
+   "id": "S1",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount > 1 OR arm lacks the SMS method filter, deleting non-SMS reminders."
+  },
+  {
+   "id": "S2",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#e2b-01",
+   "newGroup": null,
+   "reason": "scheduleSMS returns undefined when SMS is locked, retryCount is incremented and reminders get deleted after two runs."
+  },
+  {
+   "id": "S3",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Unguarded update inside catch can throw and abort the loop/cron run."
+  },
+  {
+   "id": "S4",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "newGroup": null,
+   "reason": "retryCount OR arm not scoped to SMS method."
+  },
+  {
+   "id": "S5",
+   "match": "sms-workflow-reminder-retry-count-tracking-cal-com#04",
+   "newGroup": null,
+   "reason": "Awaited update inside catch can itself throw; same unguarded catch-update problem."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId grant-shortcut comparison is inverted at line 483 so assertions do not verify the grant; comment keeps the (3,5) offset but fixes the same check."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor null-checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "S3",
+   "match": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "getShortcut() added as abstract method with no default, breaking existing grant factories."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#06",
+   "newGroup": null,
+   "reason": "Lazy registration does not re-validate shortcut uniqueness and overwrites the reverse map."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Negative --flusher-processes passes the or-guard and crashes construction with KeyError."
+  },
+  {
+   "id": "S2",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "get_memory_info called per flusher buffer, repeating cluster-wide INFO calls."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+   "newGroup": null,
+   "reason": "Non-positive flusher_processes unvalidated; centers on the negative value crashing construction (also mentions 0 falling back, #06)."
+  },
+  {
+   "id": "S4",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "get_memory_info per buffer triggers N redundant Redis INFO calls per submit."
+  }
+ ],
+ "fix-proper-handling-of-group-memberships-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "totalPages = floor(user_count/limit)+1 over-counts on exact multiples, Next goes to an empty page."
+  },
+  {
+   "id": "S2",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "newGroup": null,
+   "reason": "Public members endpoint takes limit from params with no upper bound."
+  },
+  {
+   "id": "S3",
+   "match": "fix-proper-handling-of-group-memberships-discourse-cursor#10",
+   "newGroup": null,
+   "reason": "remove_member uses group.users.delete bypassing GroupUser callbacks, skipping primary_group_id cleanup (also user_count decrement, musep-01)."
+  }
+ ],
+ "notification-rule-processing-engine-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "notification-rule-processing-engine-grafana-codex#07",
+   "newGroup": null,
+   "reason": "GrafanaRuleListItem rendered without key prop in FilterView."
+  },
+  {
+   "id": "S2",
+   "match": "notification-rule-processing-engine-grafana-codex#11",
+   "newGroup": null,
+   "reason": "Silence drawer gated on ruler alerting rule, list-view passes only promRule so Silence does nothing."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated once at class definition."
+  },
+  {
+   "id": "S2",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated once at import time."
+  }
+ ],
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "align-items mixin forwards 'baseline' to legacy prefixes that cannot express it, breaking badge baseline alignment; distinct from the missing -moz-box-align (#02) and the nonexistent -ms-align-items (#03)."
+  }
+ ],
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Login caches not invalidated when an organization is enabled/disabled; #08 is about the IDP update path comparing org-aware enabled state, a different trigger and code path."
+  }
+ ]
+}

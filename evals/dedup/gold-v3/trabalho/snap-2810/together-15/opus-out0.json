@@ -1,0 +1,250 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create/Update failure recorded with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create/Update failure recorded with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create/Update failure recorded with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Create/Update failure recorded with recordLegacyDuration instead of recordStorageDuration."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection duration recorded with recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection duration recorded with recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of the enriched log into the context."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of the enriched log into the context."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update receives original objInfo instead of wrapper with the storage-persisted object."
+  },
+  {
+   "id": "S12",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update receives original objInfo instead of wrapper with the storage-persisted object."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy goroutines derive context from the request ctx, which is cancelled when the request ends."
+  },
+  {
+   "id": "S13",
+   "match": "dual-storage-architecture-grafana-codex#05",
+   "newGroup": null,
+   "reason": "Async legacy goroutines derive context from the request ctx, which is cancelled when the request ends."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric passes name instead of options.Kind in the kind label."
+  },
+  {
+   "id": "S14",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success metric passes name instead of options.Kind in the kind label."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims the refresh_token assignment is stripped/dropped and proposes adding refresh_token to the schema; the code assigns onto the parsed object, so the claim is false and the fix does not remove the hardcoded 'refresh_token' (#07)."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "Salesforce checks response.statusText !== 'OK' instead of response.ok."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#17",
+   "newGroup": null,
+   "reason": "Salesforce getClient ignores the refreshed token data and builds the connection from the stale credentialKey; fix is to consume accessTokenParsed.data."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with non-constant-time !==."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "newGroup": null,
+   "reason": "symmetricDecrypt/JSON.parse throw unhandled, giving 500 instead of 4xx."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#03",
+   "newGroup": null,
+   "reason": "Non-atomic findFirst-then-create allows duplicate credentials under concurrent deliveries."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "In sync mode refreshOAuthTokens returns raw fetch Response but callers expect provider shapes (.data etc.)."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "before_validation calls host.sub! without a nil guard."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "Migration reads execute(...)[0]['id'] without checking for an empty result."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates legacy host values into the INSERT SQL without quoting/binding."
+  },
+  {
+   "id": "S6",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Migration interpolates legacy host values into the INSERT SQL without quoting/binding."
+  },
+  {
+   "id": "S5",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id:).first with no nil check, giving 500 instead of 404."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Admin::EmbeddingController#update persists nothing; no golden issue covers this controller."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims rowsAffected==0 for an unchanged-row update misreports an existing device as over the limit; no golden issue covers this."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Wire provider/injection change for AnonStore (unresolved int64 dependency, mocks bypassed); not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "Extra CountDevices query on every write is a perf cost; #09 is about synchronous tagging, a different change."
+  },
+  {
+   "id": "S4",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+   "newGroup": null,
+   "reason": "updateDevice prepends query to captured args inside the retried callback, corrupting args on retry."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#01",
+   "newGroup": null,
+   "reason": "Removal-cleanup listener gated only on the V1 fine-grained feature flag, skipped under V2."
+  },
+  {
+   "id": "S2",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04",
+   "newGroup": null,
+   "reason": "getResourceTypeResource may return null in hasPermission, causing NPE in findByResource."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Per-client policy evaluation cost in getClientsWithPermission (performance); #03 is about returning the type resource name instead of client ids."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "Token exchange request is outside error handling, so network failures produce 500s."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#05",
+   "newGroup": null,
+   "reason": "get_user_info lookup in the new OAuth step is unguarded, so failures produce 500s instead of the error page."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata['sender']['login'] indexed without checking sender exists, raising KeyError."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of the cache after acquiring the write lock, so concurrent callers reload the manifest."
+  },
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of the cache after acquiring the write lock, so concurrent callers reload the manifest."
+  }
+ ]
+}

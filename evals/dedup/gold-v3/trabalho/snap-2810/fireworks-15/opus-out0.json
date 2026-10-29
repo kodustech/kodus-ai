@@ -1,0 +1,186 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Unguarded mainHostDestinationCalendar.integration throws when destinationCalendar is null/empty in the Meet fallback."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback find compares externalId to the falsy externalCalendarId, so the destination calendar lookup never matches (update/delete)."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same never-matching externalCalendarId lookup in deleteEvent; the issue covers updateEvent and deleteEvent."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push on null destinationCalendar drops collective hosts' destination calendars."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Outer per-reference loop reruns the whole deletion logic, producing duplicate delete calls; same per-reference re-execution as the issue."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "findUnique per missing credential inside the destination/reference loops instead of one batched query."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Same unguarded mainHostDestinationCalendar.integration TypeError in the Meet fallback."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback find against falsy externalCalendarId never matches in updateEvent."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Fallback find against falsy externalCalendarId never matches in deleteEvent."
+  },
+  {
+   "id": "S10",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push on null destinationCalendar drops team destination calendars."
+  },
+  {
+   "id": "S11",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "newGroup": null,
+   "reason": "Per-reference loop reruns recurring/no-credential deletion over all credentials, duplicating delete calls."
+  },
+  {
+   "id": "S12",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+   "newGroup": null,
+   "reason": "Per-destination findUnique inside the loop (also in updateAllCalendarEvents); batch it."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "lower(host) compared against non-downcased uri.host, so mixed-case referers fail."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04",
+   "newGroup": null,
+   "reason": "Migration inserts legacy hosts without stripping scheme/path, so they no longer match the bare-host lookup."
+  },
+  {
+   "id": "S3",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "update/destroy use where(id).first without nil check, raising NoMethodError for unknown ids."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "EmbeddingController#update never persists anything; no golden issue covers this."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Claims expandable_first_post? lost its host-presence guard in the code; issue #09 is about the spec name/setup, not the model logic."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "store.js hydration only deletes obj[k] when hydrated; unrelated to any golden issue."
+  },
+  {
+   "id": "S7",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#07",
+   "newGroup": null,
+   "reason": "execute(...)[0]['id'] crashes the migration when embed_category query returns no rows."
+  }
+ ],
+ "implement-access-token-context-encoding-framework-keycloak": [
+  {
+   "id": "S1",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "isAccessTokenId grant-shortcut comparison is inverted, so assertions never verify grant type."
+  },
+  {
+   "id": "S2",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor checks grantType twice instead of rawTokenId."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Possible NPE in getShouldUseLightweightToken when the session context has no client; not in the golden set."
+  },
+  {
+   "id": "S4",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Inverted grant-shortcut equality in isAccessTokenId."
+  },
+  {
+   "id": "S5",
+   "match": "implement-access-token-context-encoding-framework-keycloak#02",
+   "newGroup": null,
+   "reason": "Wrong substring offset (3,5 instead of 4,6) in isAccessTokenId; the issue names both the offset and the inversion."
+  },
+  {
+   "id": "S6",
+   "match": "implement-access-token-context-encoding-framework-keycloak#01",
+   "newGroup": null,
+   "reason": "Constructor null-checks grantType twice instead of rawTokenId."
+  }
+ ],
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": [
+  {
+   "id": "S1",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+   "newGroup": null,
+   "reason": "join() breaks out of the loop at the deadline, skipping termination of remaining processes."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Empty assigned_shards yields zero processes and silent no-flush; #07 is about negative --flusher-processes causing KeyError, different code path/cause."
+  },
+  {
+   "id": "S3",
+   "match": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+   "newGroup": null,
+   "reason": "get_memory_info called per flusher buffer, repeating identical cluster-wide INFO calls."
+  }
+ ],
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "newGroup": null,
+   "reason": "queued default timezone.now() evaluated at class definition; use default_factory."
+  }
+ ]
+}

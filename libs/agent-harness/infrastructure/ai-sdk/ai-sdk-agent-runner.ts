@@ -57,10 +57,6 @@ export class AiSdkAgentRunner implements AgentRunner {
             }) => void;
             queueTimeoutMs?: number;
             provider?: string;
-            /** Run this already-built model instead of resolving from the slot.
-             *  Eval-only: bespoke transports (Codex subscription) that no slot
-             *  can express. Production always leaves this unset. */
-            prebuiltModel?: unknown;
         } = {},
     ) {}
 
@@ -252,7 +248,6 @@ export class AiSdkAgentRunner implements AgentRunner {
                 reporter: this.modelOpts.reporter,
                 queueTimeoutMs: this.modelOpts.queueTimeoutMs,
                 provider: this.modelOpts.provider,
-                prebuiltModel: this.modelOpts.prebuiltModel as any,
                 // Observability naming: runName drives the Langfuse observation +
                 // cost row; agentName/phase are the cost attrs; spanName the span.
                 runName: spec.runName ?? spec.agentName ?? spec.id,

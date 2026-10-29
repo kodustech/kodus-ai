@@ -9,7 +9,6 @@
  * concern. It runs ALONGSIDE the legacy agent (behind a flag, next step); the
  * legacy path is untouched.
  */
-import type { LanguageModel } from 'ai';
 import type {
     AgentRunner,
     AgentSpec,
@@ -707,7 +706,6 @@ export async function recoverFindingsFromProse(
     organizationId: string | undefined,
     usageRunName?: string,
     previousDecisions?: readonly PrDecisionRecord[],
-    prebuiltModel?: LanguageModel,
     teamId?: string,
     /** A custom agent: recover the full finding (FULL_RECOVERY_SCHEMA). */
     fullOutput?: boolean,
@@ -772,9 +770,6 @@ export async function recoverFindingsFromProse(
                 ? `${usageRunName}-recovery`
                 : 'code-review-recovery',
             organizationId,
-            // Eval-only: the review's own already-built model. Unset in
-            // production, where byokConfig is the slot.
-            prebuiltModel,
         });
         return (result.suggestions ?? []) as unknown as FinderSuggestion[];
     } catch (err) {

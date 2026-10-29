@@ -227,18 +227,11 @@ function runMetaOf(args) {
     return {
         harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
         model: {
-            // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
-            id:
-                (TIER0[args.model] &&
-                    (TIER0[args.model].codexModel ||
-                        TIER0[args.model].doModel)) ||
-                args.model,
+            // id publico = modelo real; sufixo (@nvidia) e so roteamento
+            id: (TIER0[args.model] && TIER0[args.model].doModel) || args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
-            accessPath:
-                TIER0[args.model]?.provider === 'codex_subscription'
-                    ? 'subscription'
-                    : 'api',
+            accessPath: 'api',
         },
         executionMode: 'replay',
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar

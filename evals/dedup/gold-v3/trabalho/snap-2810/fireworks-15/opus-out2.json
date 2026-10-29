@@ -1,0 +1,180 @@
+{
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& between isTeamAdmin and isTeamOwner rejects team admins; same bug."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Blacklist lowercased but guest compared raw; case bypass."
+  },
+  {
+   "id": "S3",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails gets raw guests instead of uniqueGuests; existing attendees get scheduled email."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "No server-side dedup of guests array, duplicate attendee rows."
+  },
+  {
+   "id": "S5",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Organizer subject uses attendees[0].name which may be empty/missing; no golden issue covers the email template subject."
+  },
+  {
+   "id": "S6",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "Same && admin/owner authorization bug."
+  },
+  {
+   "id": "S7",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+   "newGroup": null,
+   "reason": "No uniqueness on guests input, duplicates inserted."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same attendees[0].name subject problem in organizer-add-guests-email as S5."
+  },
+  {
+   "id": "S9",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest emails not lowercased before blacklist check."
+  },
+  {
+   "id": "S10",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+   "newGroup": null,
+   "reason": "Guest emails not lowercased before blacklist check."
+  }
+ ],
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync branch returns raw Response while callers expect provider-specific parsed shapes."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Hardcoded \"refresh_token\" string written when refresh token missing."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#02",
+   "newGroup": null,
+   "reason": "zod parse and decrypt/JSON.parse unguarded -> 500 instead of 4xx."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Non-constant-time !== comparison of webhook secret."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync branch returns raw Response; callers read undefined fields."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#16",
+   "newGroup": null,
+   "reason": "Salesforce uses statusText !== \"OK\" instead of response.ok; fixing this fixes the issue (extra dead-code note is additive)."
+  },
+  {
+   "id": "S7",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Dead !parsedToken.success guard in zoom VideoApiAdapter; #11 is the Office365 dead check, different place."
+  },
+  {
+   "id": "S8",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Salesforce bypasses refreshOAuthTokens so sync endpoint never used; no golden issue covers it."
+  },
+  {
+   "id": "S9",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same zoom dead success guard as S7."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+   "newGroup": null,
+   "reason": "Oversized SVGs go through ImageMagick downsize loop; excluding SVG fixes the issue."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Hardcoded 10MB client limit diverges from per-type server setting."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Hardcoded limit drops per-type max_<type>_size_kb (attachments)."
+  },
+  {
+   "id": "S4",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides old signature; ResizeEmoji ArgumentError."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "newGroup": null,
+   "reason": "tagDeviceUI caches device before CreateOrUpdateDevice; limit bypassed for TTL."
+  },
+  {
+   "id": "S2",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "TagDevice now synchronous in Authenticate, adding DB round-trips."
+  },
+  {
+   "id": "S3",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Non-atomic count-then-insert lets concurrent requests exceed limit."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "V2 setPermissionsEnabled throws when listener runs with both flags on, breaking client deletion; #01 is about orphaned permissions when V1 is off, a different failure and fix."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Performance of per-resource policy evaluation in getClientsWithPermission; #03 is about returning only the type-level resource name, a correctness bug."
+  }
+ ]
+}

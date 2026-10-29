@@ -1,0 +1,238 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": [
+  {
+   "id": "S1",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Unguarded mainHostDestinationCalendar.integration throws when destinationCalendar is null/empty."
+  },
+  {
+   "id": "S2",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead fallback: find compares externalId to the falsy externalCalendarId in updateEvent."
+  },
+  {
+   "id": "S3",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Same dead destination-calendar fallback in deleteEvent."
+  },
+  {
+   "id": "S4",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push on null destinationCalendar drops collective hosts' calendars."
+  },
+  {
+   "id": "S5",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "newGroup": null,
+   "reason": "Unguarded mainHostDestinationCalendar.integration crash on null/empty destinationCalendar."
+  },
+  {
+   "id": "S6",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead find fallback in updateEvent never matches."
+  },
+  {
+   "id": "S7",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "newGroup": null,
+   "reason": "Dead find fallback in deleteEvent never matches."
+  },
+  {
+   "id": "S8",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push no-op on null destinationCalendar drops team calendars."
+  },
+  {
+   "id": "S9",
+   "match": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "newGroup": null,
+   "reason": "Optional push no-op on null destinationCalendar drops team calendars."
+  }
+ ],
+ "replays-self-serve-bulk-delete-system-sentry": [
+  {
+   "id": "S1",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness-based age/timestamp mutual exclusion lets zero values bypass the check."
+  },
+  {
+   "id": "S2",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "zip of error_ids with get_multi values misaligns error details."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Preprod assemble analytics recorded before the feature-flag check; no golden issue covers it."
+  },
+  {
+   "id": "S4",
+   "match": "replays-self-serve-bulk-delete-system-sentry#01",
+   "newGroup": null,
+   "reason": "Truthiness-based mutual exclusion bypassed by zero values."
+  },
+  {
+   "id": "S5",
+   "match": "replays-self-serve-bulk-delete-system-sentry#06",
+   "newGroup": null,
+   "reason": "get_multi drops missing ids so zip misaligns error ids and payloads."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same preprod analytics-before-feature-gate problem."
+  }
+ ],
+ "feature-automatically-downsize-large-images-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition overrides the width/height version, breaking ResizeEmoji's call; same fix (remove duplicate) though the stated consequence differs."
+  },
+  {
+   "id": "S2",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "Client-side size check hardcodes 10MB instead of max_<type>_size_kb."
+  },
+  {
+   "id": "S3",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+   "newGroup": null,
+   "reason": "413 handler error message shows hard-coded 10MB limit that may not match server limit."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Hardcoded 10MB download cap for URL uploads increases memory/temp work; no golden issue covers the download cap."
+  },
+  {
+   "id": "S5",
+   "match": "feature-automatically-downsize-large-images-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Duplicate downsize definition makes ResizeEmoji call raise ArgumentError."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independently computed common prefix/suffix overlap and substring throws."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Email-file detection via absolute path contains('email') misfires; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Overlapping prefix/suffix causes StringIndexOutOfBoundsException."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata['sender']['login'] indexed without checking sender exists -> KeyError."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Missing positive-path test asserting the user/sender match; #10 is about the wrong state in test_installation_not_found, a different defect."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Token exchange omits redirect_uri; no golden issue covers it."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same missing positive-path coverage of the sender-match check."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of cache after acquiring write lock, redundant manifest reloads."
+  },
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Incomplete double-checked locking in GetWebAssets."
+  }
+ ],
+ "unified-storage-performance-optimizations-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "BuildIndex locks only the final assignment so concurrent builds of the same key run and overwrite."
+  },
+  {
+   "id": "S2",
+   "match": "unified-storage-performance-optimizations-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Concurrent builds for the same key overwrite the cache entry."
+  }
+ ],
+ "fixing-re-authentication-with-passkeys-keycloak": [
+  {
+   "id": "S1",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Base login-password.ftl lacks passkeys conditional UI while PasswordForm enables it."
+  },
+  {
+   "id": "S2",
+   "match": "fixing-re-authentication-with-passkeys-keycloak#03",
+   "newGroup": null,
+   "reason": "Base theme login-password.ftl lacks passkeys conditional UI."
+  }
+ ],
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+   "newGroup": null,
+   "reason": "getAuthorizationConditions never returns falsy so getBaseConditions fallback branches are unreachable."
+  }
+ ],
+ "anonymous-add-configurable-device-limit-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "anonymous-add-configurable-device-limit-grafana-codex#09",
+   "newGroup": null,
+   "reason": "TagDevice now synchronous in Authenticate, adding inline DB round-trips instead of fire-and-forget."
+  }
+ ]
+}

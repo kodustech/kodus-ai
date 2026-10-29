@@ -28,7 +28,6 @@ describe('recoverFindingsFromProse', () => {
             'org-1',
             'code-review-generalist',
             undefined,
-            undefined,
             'team-1',
         );
 
@@ -70,7 +69,6 @@ describe('recoverFindingsFromProse', () => {
                     decidedAt: '2026-10-01T10:00:00Z',
                 },
             ],
-            undefined,
             'team-1',
             true,
         );

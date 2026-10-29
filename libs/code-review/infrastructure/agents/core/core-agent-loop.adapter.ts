@@ -23,10 +23,8 @@
  */
 import { isClaudeModel } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
 import { withClaudeOneProblem, withClaudeWritingPolicy } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
-import type { LanguageModel } from 'ai';
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
-import type { AgentRunner } from '@libs/agent-harness/domain/contracts/agent.contract';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
@@ -84,7 +82,7 @@ export function finderRunEnvironment(
     // wraps the model (limiter with the finder's own queueTimeoutMs + reporter),
     // derives tuning, applies the prompt-cache, and records the cost span. The
     // finder's config-derived reasoning is passed as a spec override below.
-    const runner = (secrets.prebuiltRunner as AgentRunner | undefined) ?? new AiSdkAgentRunner(secrets.byokConfig, {
+    const runner = new AiSdkAgentRunner(secrets.byokConfig, {
         organizationId: input.telemetryMetadata?.organizationId,
         provider:
             typeof input.byokProvider === 'string'
@@ -92,7 +90,6 @@ export function finderRunEnvironment(
                 : undefined,
         queueTimeoutMs: secrets.byokQueueTimeoutMs,
         reporter: secrets.byokErrorReporter,
-        prebuiltModel: secrets.prebuiltModel,
     });
 
     const { registry: baseTools, cache: toolCache } = buildFinderToolRegistry({
@@ -162,11 +159,7 @@ export function finderRunEnvironment(
     // prompt, and the overhead counted from it, carry the policy too.
     const claudeSafeWording =
         input.byokProvider === 'anthropic' ||
-        [
-            secrets.byokConfig?.model,
-            secrets.byokConfig?.fallback?.model,
-            (secrets.prebuiltModel as { modelId?: string } | undefined)?.modelId,
-        ].some((id) => typeof id === 'string' && isClaudeModel(id));
+        [secrets.byokConfig?.model, secrets.byokConfig?.fallback?.model].some((id) => typeof id === 'string' && isClaudeModel(id));
     const finderSystemPrompt = claudeSafeWording
         ? withClaudeWritingPolicy(input.systemPrompt)
         : input.systemPrompt;
@@ -414,7 +407,6 @@ export async function runAgentLoopViaCore(
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
                     input.previousDecisions,
-                    secrets.prebuiltRecoveryModel as LanguageModel | undefined,
                     input.telemetryMetadata?.teamId,
                     input.conventionGuides !== undefined,
                 ),

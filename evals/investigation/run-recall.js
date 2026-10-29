@@ -195,17 +195,12 @@ function runMetaOf(args) {
         // The team config saved over each case's (--team-config), by its hash.
         teamConfig: args.team ? args.team.hash : null,
         model: {
-            // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
-            id:
-                (TIER0[args.model] &&
-                    (TIER0[args.model].codexModel ||
-                        TIER0[args.model].doModel)) ||
-                args.model,
+            // id publico = modelo real; sufixo (@nvidia) e so roteamento
+            id: (TIER0[args.model] && TIER0[args.model].doModel) || args.model,
             provider:
                 (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
             // How the finder reached it (model-route.js resolveRoute): a BYOK
             // config, or none for `kodus-managed`.
-            // A subscription model never runs (main exits 2 before it).
             accessPath: TIER0[args.model] && TIER0[args.model].managed ? 'managed' : 'byok',
         },
         // Production's tools over the repository at the PR's head.
@@ -276,16 +271,6 @@ async function main() {
             console.error(`finder-recall on ${args.model}: not measured: ${error instanceof Error ? error.message : String(error)}`);
             process.exit(2);
         }
-    }
-
-    // A subscription model has no production route: the finder would run
-    // another model under its name (agent-provider.js resolveRoute).
-    if (TIER0[args.model]?.provider === 'codex_subscription') {
-        console.error(
-            `not measured: ${args.model} runs on a ChatGPT subscription, which production has no route for ` +
-                '(libs/llm/codex-subscription-model.ts is used only by evals). Run its API model instead.',
-        );
-        process.exit(2);
     }
 
     // --no-judge: run the finder and SAVE its findings, score nothing. The finder

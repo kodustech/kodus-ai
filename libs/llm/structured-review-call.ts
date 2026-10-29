@@ -136,11 +136,6 @@ export interface BaseReviewCallParams {
      *  a bare `[]` for "no violations" at scale (#1786 / prod audit 2026-09) —
      *  turning a shard error (and a false "rules not applied") into a clean pass. */
     recoverEnvelopeShape?: boolean;
-    /** Run this already-built model instead of resolving one from the slot.
-     *  Eval-only seam, the one-shot twin of the agent loop's: without it a
-     *  one-shot call made inside an eval review (the prose recovery) fell back
-     *  to the managed default, which cannot reach a bespoke eval model. */
-    prebuiltModel?: LanguageModel;
 }
 
 export interface StructuredReviewCallParams<
@@ -357,7 +352,6 @@ async function runReviewCall<T>(
         maxOutputTokens: maxOutputTokensOverride,
         providerOptions: providerOptionsOverride,
         suppressReasoning: callerSuppressReasoning,
-        prebuiltModel,
     } = params;
 
     const mainSlot = byokConfig;
@@ -408,7 +402,6 @@ async function runReviewCall<T>(
             suppressReasoning,
             defaultModelOverride,
             organizationId,
-            prebuiltModel,
             reasoningEffortDefault: 'none',
             openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
             openrouterAllowFallbacks: (mainSlot as any)

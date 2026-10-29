@@ -25,7 +25,8 @@ const { buildFinderToolRegistry } = lib('code-review/infrastructure/agents/adapt
 const { InMemoryToolRegistry } = lib('agent-harness/infrastructure/tools/in-memory-tool-registry.ts');
 const { AiSdkAgentRunner } = lib('agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
 const { createAgentRunContext } = lib('llm/agent-run-context.ts');
-const { createModel } = require('../investigation/agent-provider-1821');
+const { createSlot } = require('../investigation/agent-provider-1821');
+const { medir, instalaNoLLM } = require('../shared/usage-meter');
 const { comandosSandboxLocal } = require('../shared/local-sandbox');
 
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=').slice(1).join('=') || d;
@@ -45,30 +46,10 @@ const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.jso
     (x) => SPLIT === 'all' || x.split === SPLIT,
 ).slice(0, Number(arg('limit', 1e9)));
 
-// Token usage of every model call, summed per item.
-function withUsage(model, sink) {
-    const add = (u) => {
-        if (!u) return;
-        const n = (v) => (typeof v === 'number' ? v : v?.total ?? 0);
-        sink.input += n(u.inputTokens);
-        sink.output += n(u.outputTokens);
-        sink.cacheRead += u.cachedInputTokens ?? u.inputTokens?.cacheRead ?? 0;
-        sink.calls++;
-    };
-    return new Proxy(model, {
-        get(target, prop, receiver) {
-            if (prop === 'doGenerate') return async (o) => { const r = await target.doGenerate(o); add(r.usage); return r; };
-            if (prop === 'doStream') {
-                return async (o) => {
-                    const r = await target.doStream(o);
-                    const t = new TransformStream({ transform(part, ctl) { if (part.type === 'finish') add(part.usage); ctl.enqueue(part); } });
-                    return { ...r, stream: r.stream.pipeThrough(t) };
-                };
-            }
-            return Reflect.get(target, prop, receiver);
-        },
-    });
-}
+// The model, reached the way an org reaches it (evals/shared/model-route.js);
+// every call's tokens summed per item through LLM.run's observability port.
+const SLOT = createSlot({ provider: 'tier0', model: MODEL });
+instalaNoLLM();
 
 const worktrees = new Map();
 function worktree(caseId) {
@@ -93,32 +74,32 @@ async function one(it) {
         fileWindow: it.context.window,
         filePatch: it.context.filePatch,
     };
-    const usage = { input: 0, output: 0, cacheRead: 0, calls: 0 };
-    const model = withUsage(await createModel({ provider: 'tier0' }, it.caseId), usage);
     const t0 = Date.now();
     const row = { issueId: it.issueId, split: it.split };
-    try {
-        if (VARIANT === 'oneshot') {
-            row.result = await enrichOneShot(input, { prebuiltModel: model });
-        } else {
-            const { registry } = buildFinderToolRegistry({ remoteCommands: comandosSandboxLocal(worktree(it.caseId)) });
-            const tools = new InMemoryToolRegistry(registry.list().filter((t) => READ_TOOLS.has(t.name)));
-            const runner = new AiSdkAgentRunner(undefined, { prebuiltModel: model });
-            const { ctx, cleanup: done } = createAgentRunContext({ runId: `enrich:${it.issueId}` });
-            try {
-                const { result, state } = await enrichWithTools(input, { runner, tools, ctx });
-                row.result = result;
-                row.steps = state.steps.length;
-                row.toolCalls = state.steps.flatMap((s) => (s.message.toolCalls || []).map((c) => c.name || c.toolName)).filter((n) => n !== 'submitEnrichment');
-            } finally {
-                done();
+    const { uso } = await medir(async () => {
+        try {
+            if (VARIANT === 'oneshot') {
+                row.result = await enrichOneShot(input, { byokConfig: SLOT, organizationId: undefined });
+            } else {
+                const { registry } = buildFinderToolRegistry({ remoteCommands: comandosSandboxLocal(worktree(it.caseId)) });
+                const tools = new InMemoryToolRegistry(registry.list().filter((t) => READ_TOOLS.has(t.name)));
+                const runner = new AiSdkAgentRunner(SLOT);
+                const { ctx, cleanup: done } = createAgentRunContext({ runId: `enrich:${it.issueId}` });
+                try {
+                    const { result, state } = await enrichWithTools(input, { runner, tools, ctx });
+                    row.result = result;
+                    row.steps = state.steps.length;
+                    row.toolCalls = state.steps.flatMap((s) => (s.message.toolCalls || []).map((c) => c.name || c.toolName)).filter((n) => n !== 'submitEnrichment');
+                } finally {
+                    done();
+                }
             }
+        } catch (e) {
+            row.error = String(e?.message || e).slice(0, 300);
         }
-    } catch (e) {
-        row.error = String(e?.message || e).slice(0, 300);
-    }
+    });
     row.ms = Date.now() - t0;
-    row.usage = usage;
+    row.usage = { input: uso.input, output: uso.output, cacheRead: uso.cacheRead, calls: uso.chamadas };
     return row;
 }
 

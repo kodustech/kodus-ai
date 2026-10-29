@@ -80,7 +80,7 @@ if (process.env.RECALL_RAW_HTTP_DIR) {
 function janelaDoModelo() {
     const apelido = process.env.RECALL_MODEL || '';
     const { TIER0 } = require('../shared/tier0-models');
-    const real = TIER0[apelido]?.doModel || apelido.replace(/@sub$/, '');
+    const real = TIER0[apelido]?.doModel || apelido;
     return resolveContextWindow({ modelName: real });
 }
 
@@ -340,14 +340,6 @@ function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
  * O valor escolhido vai para o artefato via runMetaOf(), senao o numero fica
  * sem regime declarado.
  */
-/** Runner do Claude Agent SDK quando RECALL_MODEL e um `@sdk`; undefined no resto. */
-function claudeSdkRunner(cwd) {
-    const spec = require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || ''];
-    if (!spec || spec.provider !== 'claude_agent_sdk') return undefined;
-    const { ClaudeSdkRunner } = require('./claude-sdk-runner');
-    return new ClaudeSdkRunner(spec.sdkModel, { effort: process.env.RECALL_REASONING_EFFORT || undefined, cwd });
-}
-
 function withReasoningEffort(model, modelId) {
     const effort = process.env.RECALL_REASONING_EFFORT;
     if (!effort) return model;
@@ -458,14 +450,9 @@ function withPromptCacheKey(model, key) {
 }
 
 /**
- * Wrap a model so the run can PROVE which one served it.
- *
- * The eval used to build a model and hand it over in `input.model`, which the
- * loop adapter never read — the run silently fell back to the env default while
- * the artifact still carried the requested model's name. Every number was
- * labelled with a model that may not have run. This counter makes that failure
- * loud: zero calls means the model never served the review, and the case fails
- * instead of publishing a mislabelled score.
+ * Count the calls made on the eval's own model (the gate and other scripts
+ * that use createModel). The review loop does not run on it: it runs on the
+ * slot from createSlot.
  */
 function withCallCounter(model, label) {
     const stats = { label, modelId: model?.modelId ?? label, calls: 0 };
@@ -489,21 +476,7 @@ async function createModel(config, caseId) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
 
-        // Assinatura: nao passa por buildModelFromSlot (que espera chave de API).
-        // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
-        // resolve o streaming-only + store:false.
         const spec = TIER0[modelId];
-        if (spec && spec.provider === 'claude_agent_sdk') {
-            return require('./claude-sdk-runner').modeloFachada(spec.sdkModel, { effort: process.env.RECALL_REASONING_EFFORT || undefined });
-        }
-
-        if (spec && spec.provider === 'codex_subscription') {
-            const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
-            return withCallCounter(
-                buildCodexSubscriptionModel(spec.codexModel || modelId),
-                spec.codexModel || modelId,
-            );
-        }
 
         // API nativa da OpenAI como no BYOK da nuvem: o modulo 'openai' do
         // registro (createOpenAI -> Responses API). O caminho de env (managed)
@@ -594,6 +567,40 @@ async function createModel(config, caseId) {
     }
 
     throw new Error(`Unsupported provider: ${provider}`);
+}
+
+/**
+ * The slot the review loop runs on, reached the way an org reaches its model:
+ * a stored BYOK config routed for the codeReview task
+ * (evals/shared/model-route.js). The loop adapter resolves its model only from
+ * `secrets.byokConfig`, so this is what decides which model reviews. A
+ * tier-0 id with no stored config (`kodus-managed`) yields undefined, the
+ * managed default.
+ */
+function createSlot(config) {
+    const { resolveRoute, storedByokConfig } = require('../shared/model-route');
+    const { routeCodeReviewModel } = require(
+        path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'),
+    );
+    let storedConfig;
+    if (config.provider === 'tier0') {
+        storedConfig = resolveRoute({ provider: 'tier0', model: process.env.RECALL_MODEL || config.model }).storedConfig;
+    } else {
+        const provider = process.env.RECALL_PROVIDER || config.provider || 'google';
+        const model = process.env.RECALL_MODEL || config.model;
+        const apiKeyEnv = process.env.RECALL_APIKEY_ENV || config.apiKeyEnv || defaultApiKeyEnv(provider);
+        const apiKey = config.apiKey || process.env[apiKeyEnv];
+        if (!model) throw new Error('Missing provider config.model');
+        if (!apiKey) throw new Error(`Missing API key for ${provider} in ${apiKeyEnv}`);
+        storedConfig = storedByokConfig({
+            provider,
+            model,
+            apiKey,
+            baseURL: process.env.RECALL_BASEURL || config.baseURL,
+            reasoningEffort: process.env.RECALL_REASONING_EFFORT || null,
+        });
+    }
+    return storedConfig ? routeCodeReviewModel(storedConfig, {}).resolvedModelSlot : undefined;
 }
 
 function fixtureMatches(match, actual) {
@@ -1098,6 +1105,7 @@ class InvestigationAgentProvider {
             );
 
             stage = 'create-model';
+            const slot = createSlot(this.config);
             const model = await createModel(this.config, caseData.caseId);
 
             stage = 'build-replay-commands';
@@ -1215,26 +1223,10 @@ class InvestigationAgentProvider {
                 },
                 {
                     remoteCommands,
-                    byokConfig: undefined,
+                    byokConfig: slot,
                     byokErrorReporter: undefined,
                     documentationSearchService: docsSearchService(),
                     documentationSearchOptions: { prNumber: input.prNumber },
-                    // `input.model` is NOT read by the loop adapter. This is the
-                    // seam that is — without it the run silently uses the env
-                    // default under the requested model's label.
-                    prebuiltModel: model,
-                    // A recuperacao de prosa e uma chamada avulsa. Modelos com chave
-                    // (DeepSeek etc.) ja chegam nela pelo padrao do ambiente
-                    // (applyModelEnv), que sabe o formato de JSON do provedor; so a
-                    // assinatura do Codex nao tem esse caminho. Passar o modelo pronto
-                    // para todos fez o DeepSeek falhar "did not match schema" (26/09).
-                    prebuiltRunner: claudeSdkRunner(repoHandle ? repoHandle.dir : undefined),
-                    prebuiltRecoveryModel:
-                        (require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'codex_subscription' ||
-                            require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.provider === 'claude_agent_sdk' ||
-                            require('../shared/tier0-models').TIER0[process.env.RECALL_MODEL || '']?.byokNative)
-                            ? model
-                            : undefined,
                 },
             );
 
@@ -1581,14 +1573,9 @@ Call provar exactly once.`;
                 }
             }
 
-            stage = 'verify-model-served';
+            // The review ran on `slot` (secrets.byokConfig); the call count is
+            // the eval's own calls on `model` (the gate), not the review's.
             const evalStats = model && model.__evalStats;
-            if (evalStats && evalStats.calls === 0) {
-                throw new Error(
-                    `model ${evalStats.label} never served a call — the run used ` +
-                        'some other model. Refusing to publish a mislabelled result.',
-                );
-            }
 
             stage = 'serialize-result';
             const output = serializeResult(
@@ -1596,7 +1583,7 @@ Call provar exactly once.`;
                 agentResult,
                 remoteCommands,
                 input,
-                evalStats && { modelId: evalStats.modelId, calls: evalStats.calls },
+                { modelId: slot?.model ?? 'managed', evalCalls: evalStats ? evalStats.calls : null },
                 dedupTrace,
                 preFilterCandidates,
                 { ...pipeline, gate: gateTrace },
@@ -1669,5 +1656,6 @@ module.exports = InvestigationAgentProvider;
 // build the SAME model a recall run used — production runs dedup on "the bare
 // resolved model slot" (the review's own model), not a fixed secondary one.
 module.exports.createModel = createModel;
+module.exports.createSlot = createSlot;
 // Exported so a prompt-shape check can run without spending a model call.
 module.exports.buildCurrentPrompts = buildCurrentPrompts;

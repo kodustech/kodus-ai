@@ -1,0 +1,2424 @@
+{
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     480,
+     484
+    ],
+    "texto": "The grant-shortcut check in `isAccessTokenId` is both inverted and read at the wrong offset, so it never validates the grant and the assertion becomes a plain UUID check. `items[0].substring(3,5)` reads the token-type second char plus the grant first char (the grant shortcut occupies indices 4\u20135, i.e. `substring(4,6)`), and the branch returns `false` when the value *equals* the expected shortcut instead of when it differs. Because the offset is wrong `equals` is never true, silently disabling the grant verification for every caller (expectCodeToToken/expectRefresh/expectAuthReqIdToToken/expectDeviceCodeToToken) \u2014 a regression that could let grant encoding break undetected. Use `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+   },
+   {
+    "id": "S2",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "The constructor validates `grantType` twice and never validates `rawTokenId`: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` should target `rawTokenId`. As written a null `rawTokenId` is silently accepted and would later be concatenated into the token ID string producing `\"...:<null>\"`; change the argument to `rawTokenId`."
+   },
+   {
+    "id": "S3",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "lines": [
+     70,
+     79
+    ],
+    "texto": "`getShortcut()` is a newly added abstract method on `OAuth2GrantTypeFactory`, and `postInit` feeds its return value directly into `ConcurrentHashMap.put`. A grant factory that returns `null` (or a third-party factory not updated for the new interface contract) makes `grantsByShortcuts.put(grantShortcut, grantName)` throw a NullPointerException during `postInit`, failing server startup. Guard the value with a null check (or a default shortcut) before inserting, and fail with a descriptive message rather than an NPE."
+   },
+   {
+    "id": "S4",
+    "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "lines": [
+     74,
+     81
+    ],
+    "texto": "The decoder hardcodes a 6-character context (two 2-char components per field), but `OAuth2GrantTypeFactory.getShortcut()` docs state the shortcut is \"usually like 3-letters\". Any grant whose shortcut is not exactly 2 chars makes `encodeTokenId` emit a 7+ char prefix that this method rejects with `IllegalArgumentException(\"... Expected length of 6\")`, breaking the encode/decode round-trip. Either constrain the interface to exactly 2 chars, or parse by fixed offsets/length per field instead of asserting a total length of 6."
+   },
+   {
+    "id": "S5",
+    "file": "AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "AssertEvents.isAccessTokenId uses wrong offset: reads substring(3,5) instead of substring(4,6). Also logic is inverted: returns false when grant shortcut matches, so matcher never validates the grant."
+   },
+   {
+    "id": "S6",
+    "file": "AccessTokenContext.java",
+    "lines": [
+     73,
+     73
+    ],
+    "texto": "AccessTokenContext constructor fourth requireNonNull re-uses grantType with message 'Null rawTokenId not allowed' instead of validating rawTokenId, allowing null rawTokenId to produce 'onrtcc:null' in encoded token id."
+   },
+   {
+    "id": "S7",
+    "file": "AccessTokenContext.java",
+    "lines": [
+     74,
+     74
+    ],
+    "texto": "getTokenContextFromTokenId hardcodes 6-character context length, but getShortcut() is free-form; a shortcut longer than 2 characters yields a context of length != 6, causing decoding to throw."
+   },
+   {
+    "id": "S8",
+    "file": "OAuth2GrantTypeFactory.java",
+    "lines": [
+     74,
+     76
+    ],
+    "texto": "Factory postInit feeds getShortcut() into ConcurrentHashMap keys; SPI method has no default, so third-party OAuth2GrantTypeFactory implementations may return null, causing NPE on put(null) at startup; duplicate shortcuts only weakly detected."
+   },
+   {
+    "id": "S9",
+    "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "lines": [
+     483,
+     483
+    ],
+    "texto": "AssertEvents.isAccessTokenId uses wrong offset: reads substring(3,5) instead of substring(4,6). Also logic is inverted: returns false when grant shortcut matches, so matcher never validates the grant."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#01",
+    "descricao": "The AccessTokenContext constructor checks grantType twice instead of rawTokenId, so a null rawTokenId passes validation and is encoded as ':null'.",
+    "textoGolden": "In AccessTokenContext constructor, the fourth Objects.requireNonNull validates grantType twice instead of validating rawTokenId, allowing null rawTokenId values to pass validation.",
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "WHAT: the constructor validates `grantType` a second time instead of `rawTokenId` (`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")`). WHY: a null `rawTokenId` is silently accepted, so `encodeTokenId` produces a token id ending in `:null` and any later consumer of the raw id gets an invalid value instead of an early failure. HOW: change the argument to `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       69,
+       78
+      ],
+      "texto": "Line 73 calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\") \u2014 it validates grantType a second time (line 72 already does) with a message naming a different field. rawTokenId is never validated, so a null rawTokenId is accepted at construction and the advertised check/message is wrong. It should be Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+      "lines": [
+       73,
+       73
+      ],
+      "texto": "The null-check message names the wrong parameter: `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` validates `grantType` but reports `rawTokenId`, and it duplicates the check on line 72 while `rawTokenId` is never validated at all. The message that reaches the reader contradicts the code it guards; it should be `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#02",
+    "descricao": "isAccessTokenId reads the grant shortcut at the wrong offset (3,5 instead of 4,6) and inverts the comparison, so the event assertions never verify the token's grant type.",
+    "textoGolden": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4\u20135 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       483,
+       483
+      ],
+      "texto": "WHAT: `isAccessTokenId` reads the grant shortcut from the wrong offset and inverts the comparison \u2014 `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`. WHY: for the encoded id `ssttgg:raw` the grant shortcut occupies 0-based indices 4-5, so `substring(3,5)` inspects the token-type/grant boundary and can never equal the expected shortcut; combined with the inverted `return false`, the equality branch is unreachable and the matcher validates only the UUID part. As a result the new assertions in `expectCodeToToken`/`expectRefresh`/`expectDeviceCodeToToken`/`expectAuthReqIdToToken` do not actually assert the grant type and would pass even if the grant shortcut were wrong. HOW: use `items[0].substring(4, 6)` and negate the condition (`if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`)."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       476,
+       492
+      ],
+      "texto": "The matcher logic is inverted: line 483 returns false when the extracted grant shortcut EQUALS expectedGrantShortcut, so a token that actually carries the expected grant fails the matcher, while a token with any other grant shortcut falls through and passes. The condition should be negated: `if (!items[0].substring(3,5).equals(expectedGrantShortcut)) return false;`. Also note the encode site writes the grant shortcut at chars 4-6 (substring(4,6)); substring(3,5) reads one character early into the token-type field, so the offset is off by one relative to TokenManager.encodeTokenId."
+     },
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+      "lines": [
+       482,
+       483
+      ],
+      "texto": "The comment 'Grant type shortcut starts at character 4th char' disagrees with the encoding that this PR defines (sessionType chars 1-2, tokenType 3-4, grantType 5-6, e.g. 'trltcc'), and the code reads substring(3,5) \u2014 the 4th-5th chars, i.e. the token-type second char plus the grant first char, never the grant shortcut. The comment (and the index) should point at the 5th char / substring(4,6)."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#03",
+    "descricao": "getShortcut() Javadoc says shortcuts are usually 3 letters, but the encoding requires exactly 2-character shortcuts.",
+    "textoGolden": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+    "comentarios": [
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The Javadoc says getShortcut() returns 'usually like 3-letters shortcut', but every implementation introduced in this PR returns a 2-character shortcut ('ac','cc','pg','pc','rt','ro','te','ci','dg') and the encoder relies on exactly 2 chars (encoded context length 6 = 2+2+2). The doc states a length the code does not produce; it should say 2-character shortcut."
+     },
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Grant shortcuts are registered without enforcing the two-character length required by the decoder. A custom grant returning a three-character shortcut, which the new OAuth2GrantTypeFactory documentation explicitly suggests, produces a seven-character prefix that getTokenContextFromTokenId rejects, breaking encode/decode round trips for that grant. Validate shortcut length during registration and dynamic refresh, and document the required two-character format."
+     },
+     {
+      "file": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+      "lines": [
+       30,
+       31
+      ],
+      "texto": "The new contract describes getShortcut() as usually returning a three-letter shortcut, but DefaultTokenContextEncoderProvider requires exactly two characters for the grant field (six total prefix characters, decoded with substring(4, 6)). An extension author following this documentation can produce token IDs that the default decoder rejects. Document the required two-character length rather than advertising three letters."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#04",
+    "descricao": "testIncorrectGrantType catches any RuntimeException, so it passes on a NullPointerException from the unset sessionFactory rather than verifying the unknown-grant IllegalArgumentException.",
+    "textoGolden": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+    "comentarios": [
+     {
+      "file": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+      "lines": [
+       77,
+       83
+      ],
+      "texto": "Catching RuntimeException allows this negative test to pass for an unrelated fixture failure. The fixture constructs the factory without postInit, leaving sessionFactory null; resolving the unregistered `ac` shortcut calls sessionFactory.getProviderFactoriesStream and throws NullPointerException before the decoder's intended unknown-grant IllegalArgumentException. Catch/assert IllegalArgumentException specifically and provide a factory fixture whose lookup returns no matching grant, so removing the decoder's validation would fail the test."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#05",
+    "descricao": "Client-credentials (and UMA permission) token issuance never sets the GRANT_TYPE attribute, so their access token ids are encoded with the unknown grant 'na' instead of their shortcut.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+      "lines": [
+       57,
+       60
+      ],
+      "texto": "The new grant metadata falls back to 'na' for client-credentials and UMA tokens because their issuance paths never set Constants.GRANT_TYPE on their fresh ClientSessionContext. ClientCredentialsGrantType calls responseBuilder.generateAccessToken directly, and PermissionGrantType delegates to AuthorizationTokenService, so neither executes the new assignment in createTokenResponse; tokens from these known grants therefore carry unknown grant context. Set the grant attribute in both issuance paths before generating the access token."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#06",
+    "descricao": "Lazy registration of newly deployed grants does not check shortcut uniqueness, so a grant reusing an existing shortcut silently overwrites the reverse mapping and older tokens decode to the wrong grant.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+      "lines": [
+       112,
+       114
+      ],
+      "texto": "Enforce shortcut uniqueness during lazy registration rather than overwriting grantsByShortcuts. If a newly deployed grant B uses existing grant A's shortcut, this path replaces shortcut\u2192A with shortcut\u2192B while retaining both forward entries. Previously issued A tokens then decode as B. Concurrent registrations of two new grants with the same shortcut likewise both succeed, with the last inverse-map write winning. Use collision-aware atomic registration and reject the conflicting grant before publishing its forward mapping."
+     }
+    ]
+   },
+   {
+    "issueId": "implement-access-token-context-encoding-framework-keycloak#opa-01",
+    "descricao": "getShortcut() is added as an abstract method to OAuth2GrantTypeFactory without a default, breaking existing custom grant type factories (compile error or AbstractMethodError when DefaultTokenContextEncoderProviderFactory.postInit calls it).",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "`mainHostDestinationCalendar` is `undefined` whenever `evt.destinationCalendar` is empty, so `mainHostDestinationCalendar.integration` throws a TypeError. `handleNewBooking` now sets `destinationCalendar: ... : null` (line 1067) and other paths pass `[]`, so any Meet-location event with no destination calendar crashes `EventManager.create` and aborts the booking; use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The fallback branch only executes when `externalCalendarId` is falsy, yet it searches for `cal.externalId === externalCalendarId`, so it can never match and always yields `undefined`. This silently drops the previous fallback to `event.destinationCalendar?.externalId`, so updates go to an undefined calendarId; fall back to the credential-matched destination calendar (or the first entry) instead. The identical tautology exists in `deleteEvent` at line 317, where it prevents deletion on the intended calendar."
+   },
+   {
+    "id": "S3",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1077,
+     1079
+    ],
+    "texto": "`evt.destinationCalendar?.push(...teamDestinationCalendars)` is a silent no-op when `destinationCalendar` is `null`, which is exactly the case set a few lines above when neither the event type nor the organizer has a destination calendar. Collective members' destination calendars are then dropped, so the extra hosts are not invited on their calendars \u2014 the scenario this PR is meant to fix."
+   },
+   {
+    "id": "S4",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     122,
+     124
+    ],
+    "texto": "The organizer attendee email is taken from `destinationCalendar[0]` while the event is inserted into the calendar matched by `credentialId` (`selectedCalendar`). For a multi-host collective these can be different hosts, so the Google event is written to one host's calendar but shows another host's calendar email as the organizer; use the credential-matched destination calendar for the organizer email as well."
+   },
+   {
+    "id": "S5",
+    "file": "EventManager",
+    "lines": [
+     119,
+     119
+    ],
+    "texto": "In EventManager.create, line 119 destructures `evt.destinationCalendar ?? []` into `mainHostDestinationCalendar` and then immediately dereferences `.integration`. When `destinationCalendar` is null, undefined, or an empty array, the destructured value is undefined and `.integration` throws a TypeError. This is reachable when a Google Meet location event is booked with no destination calendar."
+   },
+   {
+    "id": "S6",
+    "file": "GoogleCalendarService",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "In GoogleCalendarService.updateEvent, lines 254-256, the fallback branch is guarded by `externalCalendarId` being falsy, yet the predicate compares `cal.externalId === externalCalendarId` (always falsy there), so the fallback can only ever yield undefined. The same defect exists in deleteEvent lines 315-317."
+   },
+   {
+    "id": "S7",
+    "file": "handleNewBooking",
+    "lines": [
+     1078,
+     1078
+    ],
+    "texto": "At handleNewBooking line 1078, `evt.destinationCalendar?.push(...teamDestinationCalendars)` short-circuits when `destinationCalendar` is null (the null branch at line 1067), silently dropping collective co-host calendars."
+   },
+   {
+    "id": "S8",
+    "file": "GoogleCalendarService",
+    "lines": [
+     null,
+     null
+    ],
+    "texto": "In GoogleCalendarService.createEvent, the organizer email is taken from `destinationCalendar[0]` while the event is inserted into the credential-matching calendar, causing a mismatch between the organizer and the calendar used."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "descricao": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "descricao": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "descricao": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+    "descricao": "In updateAllCalendarEvents the catch block builds an error `message` that is no longer logged or used after the PR removed console.error, leaving dead code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+    "descricao": "When updateAllCalendarEvents fails before the calendar references are loaded, its catch now returns an empty array instead of a failed result, so a failed reschedule or location update looks successful to callers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+    "descricao": "The hidden-notes placeholder written into calendar events is a hard-coded English string not routed through i18n.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01",
+    "descricao": "When rescheduling merges into a new booking, only the first old `_calendar` reference is deleted via `.find()`, leaving stale events on other hosts' calendars for collective bookings; iterate all old calendar references.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+    "descricao": "handleCancelBooking queries prisma.credential.findUnique once per calendar reference inside the loop instead of batching the missing credential ids into one findMany.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/views/layouts/embed.html.erb",
+    "lines": [
+     11,
+     11
+    ],
+    "texto": "`request.referer` is interpolated unescaped into a single-quoted JavaScript string (`'<%= request.referer %>'`). `ensure_embeddable` only validates the referer's host, so path or query string can contain a `'` and break out of the literal, injecting arbitrary script into the embedded frame. Escape the value as a JS string (e.g. `raw request.referer.to_json`) or pass it via a data attribute instead of string interpolation."
+   },
+   {
+    "id": "S2",
+    "file": "app/jobs/scheduled/poll_feed.rb",
+    "lines": [
+     35,
+     36
+    ],
+    "texto": "`i.content.scrub` raises NoMethodError when a feed item has no `<content>` node (simple-rss returns nil), aborting the entire poll since the job runs with `retry: false`. Guard the value (`content = (i.content || i.summary || '').scrub`) before unescaping so one malformed item does not drop the whole feed."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/topic_embed.rb",
+    "lines": [
+     15,
+     29
+    ],
+    "texto": "The `embed.blank?` check followed by `TopicEmbed.create!` is a check-then-act with no lock; two concurrent imports of the same URL (the hourly PollFeed job and the RetrieveTopic job, which runs with `retry: false`) both pass the check and the second `create!` raises `ActiveRecord::RecordNotUnique` on the unique `embed_url` index, which is not rescued, so the post/topic is lost silently. Rescue the unique-violation or reload the existing embed instead of failing the job."
+   },
+   {
+    "id": "S4",
+    "file": "lib/topic_retriever.rb",
+    "lines": [
+     40,
+     42
+    ],
+    "texto": "`perform_retrieve` calls `Jobs::PollFeed.new.execute({})` synchronously, so every embed request whose URL is not found triggers a full feed fetch and import of all items inline before falling back to `fetch_http`. This blocks the request/job for the duration of the network fetch and all post creations. Enqueue the feed poll asynchronously (or reuse a cached feed) rather than executing it in the request path."
+   },
+   {
+    "id": "S5",
+    "file": "app/views/embed/best.html.erb",
+    "lines": [
+     2,
+     6
+    ],
+    "texto": "The conditional closes with `<%- end if %>` (line 6), which emits the Ruby `if @topic_view.posts.present? ... else ... end if`. The trailing `if` has no condition and is not valid Ruby, so the template can fail to compile. Remove the stray `if` so the block closes with a plain `end`."
+   },
+   {
+    "id": "S6",
+    "file": "app/assets/javascripts/embed.js",
+    "lines": [
+     17,
+     17
+    ],
+    "texto": "The postMessage origin check uses substring containment (`discourseUrl.indexOf(e.origin) === -1`) instead of an exact origin comparison. Any page whose origin is a substring of the configured `discourseUrl` (or a page whose origin appears inside it) passes the check, so an attacker-controlled frame can deliver `discourse-resize` messages and drive the embedded iframe; compare the parsed origin for strict equality (`e.origin === new URL(discourseUrl).origin`) and reject otherwise."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+    "descricao": "The postMessage handler in embed.js checks the sender with discourseUrl.indexOf(e.origin), a substring test instead of exact origin equality, so a page on an origin that is a substring of the Discourse URL can send forged discourse-resize messages to the embedding page.",
+    "textoGolden": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+    "comentarios": [
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "The message-origin check uses substring matching: `discourseUrl.indexOf(e.origin) === -1`. Any origin that is a substring of discourseUrl is accepted (e.g. discourseUrl `https://discourse.example.com` accepts origin `https://discourse`), so a malicious page can post `discourse-resize` messages into the embed. Compare against the iframe's actual origin exactly (`e.origin !== expectedOrigin`) instead of a substring test."
+     },
+     {
+      "file": "embed.js",
+      "lines": [
+       17,
+       17
+      ],
+      "texto": "Uses indexOf containment instead of origin equality, but it cannot be bypassed."
+     },
+     {
+      "file": "app/assets/javascripts/embed.js",
+      "lines": [
+       15,
+       17
+      ],
+      "texto": "WHAT: postMessage origin check is reversed (`discourseUrl.indexOf(e.origin)===-1`) instead of strict origin equality. WHY: any e.origin that is a substring of discourseUrl passes, letting a foreign iframe drive `iframe.height` handling and future message branches."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+    "descricao": "The referer and embed_url host checks compare against SiteSetting.embeddable_host case-sensitively, so a host differing only in case is rejected even though hostnames are case-insensitive.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/embed_controller.rb",
+      "lines": [
+       26,
+       26
+      ],
+      "texto": "Host identity is compared case-sensitively: `URI(request.referer).host != SiteSetting.embeddable_host`. Hostnames are case-insensitive, so a referer such as `http://EVILTROUT.COM/...` never matches the configured `eviltrout.com` (and the same flaw exists in lib/topic_retriever.rb:15 for `URI(@embed_url).host`). Normalize both sides with downcase before comparing so case variations of the same host are treated identically."
+     },
+     {
+      "file": "embed_controller.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+     },
+     {
+      "file": "topic_retriever.rb",
+      "lines": [
+       null,
+       null
+      ],
+      "texto": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+    "descricao": "PollFeed reads i.content.scrub for every feed item, so items without a content element (common in RSS feeds that only have description) raise NoMethodError and abort the import of the remaining items.",
+    "textoGolden": "Calling `i.content.scrub` assumes that `i.content` is always populated. However, many RSS feeds do not provide a `content` field, leading to a potential nil pointer exception when `i.content` is nil. A fallback to `description` should be implemented to prevent crashes.",
+    "comentarios": [
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       35,
+       35
+      ],
+      "texto": "WHAT: `CGI.unescapeHTML(i.content.scrub)` assumes every feed item has a `content` element. WHY: many RSS 2.0 items expose only `<description>` (simple-rss returns nil for `content`), so `nil.scrub` raises NoMethodError and, because the job is `sidekiq_options retry: false`, the entire hourly feed import for all items is aborted. HOW: fall back to the available field, e.g. `(i.content || i.description || i.summary).to_s.scrub`, and skip items whose body is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       36
+      ],
+      "texto": "The feed item is consumed unconditionally: url = i.link, then i.title, and content = CGI.unescapeHTML(i.content.scrub). SimpleRSS item accessors raise NoMethodError when the element is absent (RSS 2.0 feeds frequently carry only <description>, no <content>, and some items have no <link>/<title>), so a single malformed or content-less item aborts the whole hourly job with an unhandled exception instead of skipping it. The code already anticipates a blank link (line 33 fallback) but reads i.content/i.title without a nil guard; use i.content.to_s (or fall back to i.description/summary) and skip items whose content is blank."
+     },
+     {
+      "file": "app/jobs/scheduled/poll_feed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+    "descricao": "Posts imported from RSS or remote pages use cook_method raw_html, which makes Post#cook return the raw HTML without sanitization, and the embed view outputs it with raw post.cooked, allowing stored XSS from imported content.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       136
+      ],
+      "texto": "WHAT: the new `return raw if cook_method == Post.cook_methods[:raw_html]` makes `Post#cook` return completely unsanitized HTML, and Jobs::PollFeed stores untrusted feed content this way (poll_feed.rb:35-36 \u2192 TopicEmbed.import, unlike import_remote which sanitizes via Readability's tag/attribute whitelist). WHY: the stored `cooked` value is then emitted with `<%= raw post.cooked %>` in app/views/embed/best.html.erb:19, and that page is served from the forum's own origin \u2014 so a malicious/compromised RSS feed item containing `<script>` or `onerror=` runs attacker JavaScript in the forum origin and can read cookies/session and perform authenticated actions (stored XSS). HOW: sanitize the raw HTML before persisting it (e.g. run the feed content through the same HTML sanitizer used for regular posts, or restrict the raw_html cook path to trusted, pre-sanitized sources only)."
+     },
+     {
+      "file": "app/models/post.rb",
+      "lines": [
+       130,
+       133
+      ],
+      "texto": "WHAT: Post#cook returns raw verbatim for cook_method raw_html, skipping the cooking/sanitization pipeline and plugin filters. WHY: any RSS/readability HTML imported via TopicEmbed is rendered unsanitized in embed/best.html.erb, executing attacker script in the Discourse origin."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       22,
+       22
+      ],
+      "texto": "Feed-provided HTML is persisted with raw_html cooking after only Nokogiri parsing and URL rewriting, which do not sanitize scripts or event-handler attributes. A malicious feed entry containing executable HTML is stored as post.cooked and executed under the forum origin when rendered, including through the new raw cooked embed view. Sanitize imported HTML with an explicit safe tag, attribute and URL-scheme allowlist before storing it or returning it from the raw_html cooking path."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#09",
+    "descricao": "TopicEmbed.import appends a footer that interpolates the URL unescaped into an <a href='...'> tag in raw HTML that is later rendered unsanitized, so a crafted URL can inject markup; it also appends to contents with << without handling nil.",
+    "textoGolden": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       13
+      ],
+      "texto": "WHAT: TopicEmbed.import interpolates feed-controlled url unescaped into raw HTML (`<a href='#{url}'>#{url}</a>`) and stores feed HTML as raw_html. WHY: url passing /^https?\\:\\/\\// can still contain `'`, `>` or script, and RSS content is never sanitized, giving stored XSS when rendered via `raw post.cooked`. HOW: HTML-escape url and sanitize content instead of raw_html passthrough."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       10,
+       14
+      ],
+      "texto": "TopicEmbed.import interpolates feed-controlled url unescaped into HTML link stored with cook_method raw_html (Post#cook returns raw, bypassing pipeline) and rendered with raw post.cooked: XSS via quote/script break-out. Escape url for text and attribute contexts before storing."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#16",
+    "descricao": "TopicEmbed.import appends the footer with contents <<, mutating the caller's string in place instead of building a new string.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       13,
+       13
+      ],
+      "texto": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#17",
+    "descricao": "TopicEmbed.import checks for an existing embed and then creates the post and TopicEmbed without handling the unique-index conflict, so two concurrent imports of the same URL make one job fail with RecordNotUnique.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       15,
+       30
+      ],
+      "texto": "TopicEmbed.import does a check-then-insert on embed_url (where(...).first, then TopicEmbed.create!) with no rescue for the unique index declared on topic_embeds.embed_url. The only guard against concurrent intake is the Redis throttle in TopicRetriever, which is bypassed for staff (retrieve_topic.rb:17 passes no_throttle: user.try(:staff?)) and can expire while a slow retrieval (which may synchronously run a full PollFeed, topic_retriever.rb:41) is still running. Two interleaved retrievals for the same URL both see embed.blank? and both attempt creation; the loser raises ActiveRecord::RecordNotUnique, which is unhandled anywhere in the job path, breaking execution. Guard the create against the race (rescue/retry on RecordNotUnique, or use find_or_create_by on embed_url inside the transaction) so concurrent retrievals cannot raise."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       28
+      ],
+      "texto": "Make creation idempotent under concurrent imports. Two workers can both read no embed at line 15 and create posts before attempting the same unique embed_url insert. The unique index correctly rolls back the losing transaction, but its unhandled uniqueness exception aborts that job (and potentially the rest of a feed polling run). This is reachable when scheduled polling overlaps retrieval-triggered polling; the per-URL retrieval throttle does not serialize those paths. Handle the conflict outside the transaction and return the winning embed/post, or serialize imports for the URL."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       20,
+       30
+      ],
+      "texto": "Race on check-then-create: two concurrent imports both see TopicEmbed.where(embed_url:url).first blank, both create Post + TopicEmbed.create!. Unique index on embed_url then raises RecordNotUnique (unhandled) or creates duplicates. Need atomic find-or-create / rescue unique violation."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+    "descricao": "When the embedded post has been deleted, TopicEmbed.import's update path passes a nil embed.post to PostRevisor and crashes on every later import of that URL.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       39
+      ],
+      "texto": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       32,
+       37
+      ],
+      "texto": "WHAT: update path uses `embed.post` without nil guard then `PostRevisor.new(post)`. WHY: if the first post was deleted, post is nil and revise! dereferences nil, crashing feed-poll updates instead of recreating/skipping."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       31,
+       37
+      ],
+      "texto": "Orphan-post crash on update path: post = embed.post can be nil if the post/topic was deleted, then PostRevisor.new(nil).revise! raises NoMethodError. Must handle missing post (recreate or skip) instead of assuming present."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+    "descricao": "Claims import_remote crashes on unparseable pages (nil content) and dead URLs because it does no nil check or network error handling around open(url).read.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       44,
+       52
+      ],
+      "texto": "WHAT: import_remote passes `doc.content` (and title) directly to import where `contents <<` assumes a String, with no nil check or network-error handling around `open(url).read`. WHY: unparseable pages (nil content) raise NoMethodError and dead URLs raise OpenURI errors, crashing RetrieveTopic/Disqus imports with no topic created."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#22",
+    "descricao": "absolutize_urls only handles root-relative paths: protocol-relative URLs like //cdn.example.com/x.png are rewritten to http://host/cdn.example.com/x.png and path-relative links are left unresolved, breaking links and images in imported posts.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       64,
+       71
+      ],
+      "texto": "The URL rewrite treats protocol-relative URLs such as `//cdn.example.com/image.jpg` as paths on the article host, producing `http://article-host/cdn.example.com/image.jpg`. Imported images and links using protocol-relative external URLs therefore point to the wrong server. Resolve both href and src using URI joining against the article URL, which also handles ordinary relative paths correctly."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       72
+      ],
+      "texto": "Resolve relative href/src references with URI joining rather than handling only leading slashes. For an article at http://example.com/blog/article, href='next' and src='images/photo.jpg' remain relative and resolve against the forum instead of the imported article. Moreover, '//cdn.example.com/photo.jpg' is rewritten to 'http://example.com/cdn.example.com/photo.jpg'. Both yield incorrect links/images in imported posts; apply proper URI resolution to both anchors and images."
+     },
+     {
+      "file": "app/models/topic_embed.rb",
+      "lines": [
+       62,
+       73
+      ],
+      "texto": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#24",
+    "descricao": "The embed view formats post dates with a hard-coded strftime pattern, so users in non-English locales see English month names and a fixed order while the rest of the view is translated.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "The post date uses a hard-coded strftime format `\"%e %b %Y\"`. `%b` emits English month abbreviations (Jan, Feb, ...) no matter what locale the viewer is in, so the date is frozen to en-US while the surrounding strings in this same view are localized via I18n.t. This is a locale-pinned user-facing format; it should be localized (e.g. via the app's localized date helper / l( ) rather than a literal strftime pattern)."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Use a localized date formatter rather than strftime(\"%e %b %Y\"). %b produces English month abbreviations and the fixed day-month-year order ignores the selected locale, although the neighbouring header and footer labels are translated. Embedded comments therefore show English-formatted dates for users of other locales."
+     },
+     {
+      "file": "app/views/embed/best.html.erb",
+      "lines": [
+       14,
+       14
+      ],
+      "texto": "Date uses strftime(\"%e %b %Y\") hard-coding one locale's month names/order while neighbouring strings go through I18n.t. Use I18n.l with a locale date format so non-English users see localized dates."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+    "descricao": "The Disqus importer now creates topics through TopicEmbed.import_remote, dropping the thread's created_at and the category option and requiring a live HTTP fetch per thread, so imported topics get wrong dates/categories and a dead link aborts the import.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       143,
+       149
+      ],
+      "texto": "WHAT: Disqus import replaced PostCreator (title/raw/created_at/category) with `TopicEmbed.import_remote` per thread, dropping category_id, created_at, and strip handling. WHY: imported topics lose categories/timestamps and now require a live HTTP fetch per thread, failing when links are dead."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "Preserve the Disqus thread creation timestamp when switching to TopicEmbed.import_remote. The previous PostCreator call passed `created_at: Date.parse(t[:created_at])`, but this replacement passes only the title, and TopicEmbed.import_remote/import never forward a timestamp to PostCreator. Imported historical topics now get the migration time as their initial post creation date while their replies retain historical dates, losing the importer's chronological fidelity. Extend the import options to forward created_at and pass the thread timestamp here."
+     },
+     {
+      "file": "lib/tasks/disqus.thor",
+      "lines": [
+       148,
+       148
+      ],
+      "texto": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+    "descricao": "Every retrieval of an article not yet embedded synchronously polls and imports the entire RSS feed, and since throttling is per URL, many different article requests repeat the full feed download and processing.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "lib/topic_retriever.rb",
+      "lines": [
+       40,
+       42
+      ],
+      "texto": "Every uncached article retrieval synchronously downloads and processes the complete configured feed before fetching the article. Because the retrieval throttle is keyed by individual embed URL, simultaneous requests for different articles each repeat the feed download and all per-item database lookups/imports, multiplying worker load by the number of requests times feed size. Coalesce feed polling with a feed-wide throttle or lock and reuse its recent results instead of executing a full poll per article."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#32",
+    "descricao": "The 'is 404 without an embed_url' spec never sets an embeddable host, so the request is rejected by ensure_embeddable before the embed_url check runs, and the test would pass even without that check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named 'is 404 without an embed_url' but passes for the wrong reason: it never sets embeddable_host, which defaults to '' so the before_filter `ensure_embeddable` raises at the blank-host check before `params.require(:embed_url)` is reached. The request is rejected regardless of whether the embed_url requirement exists, so the test would still pass if that requirement were removed. Stub a valid embeddable_host here so the failure is actually attributable to the missing embed_url."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       10
+      ],
+      "texto": "The missing-embed_url test does not establish a valid embeddable host and referer, so ensure_embeddable rejects this request before best reaches params.require(:embed_url). It also only checks non-success despite claiming a 404. Removing the required-parameter check would therefore leave this test green. Configure an allowed host/referer for this case and assert the intended missing-parameter response."
+     },
+     {
+      "file": "spec/controllers/embed_controller_spec.rb",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+    "descricao": "The 'requires feed_polling_url' and 'requires embed_by_username' specs leave feed_polling_enabled at its false default, so they never reach the condition they name and would pass with those checks deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       12,
+       28
+      ],
+      "texto": "The three 'requires ...' tests do not isolate the guard they name: each stubs only one setting to falsy while the other two remain falsy by default, so poll_feed is never called even if the named check were deleted. Stub the other two settings to truthy values in each test so removing the named guard would cause poll_feed to run and fail the test."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       28
+      ],
+      "texto": "These two tests do not verify the conditions they name. `execute` is guarded by `feed_polling_enabled? && feed_polling_url.present? && embed_by_username.present?`, and feed_polling_enabled defaults to false. Neither test stubs feed_polling_enabled? to true, so the guard short-circuits at the first clause and poll_feed is never called no matter what feed_polling_url/embed_by_username are. Both would still pass if the URL/username checks were deleted entirely. Stub `SiteSetting.stubs(:feed_polling_enabled?).returns(true)` in each so the specific condition under test is actually reached."
+     },
+     {
+      "file": "spec/jobs/poll_feed_spec.rb",
+      "lines": [
+       18,
+       27
+      ],
+      "texto": "The URL and username prerequisite tests never enable feed polling (whose configured default is false) or supply the other required setting. execute consequently short-circuits at feed_polling_enabled? and never evaluates the prerequisite each test claims to cover. Both tests still pass if their corresponding presence checks are removed. Set all other prerequisites to valid values before making only the setting under test absent, so the poll_feed.never expectation actually detects removal of that guard."
+     }
+    ]
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-02",
+    "descricao": "PollFeed.feed_key computes a per-feed cache key that is never used, so the feed is re-fetched and re-processed every hour without a modified-since check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+    "descricao": "The embed layout references the 'embed' stylesheet and embed.js, but neither is in config.assets.precompile, so with precompiled assets in production the embed page fails to load them.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-01",
+    "descricao": "The retrieve throttle is keyed by the full embed URL, so an anonymous client can vary the query string on the embeddable host to bypass it and make the server create an unbounded number of topics.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+    "descricao": "The \"requires feed_polling_enabled?\" spec leaves feed_polling_url and embed_by_username at their blank defaults, so poll_feed is skipped regardless and the test would pass even without the enabled check.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01",
+    "descricao": "TopicEmbed.import_remote fetches the embed URL with open(url).read and no timeout or size limit, so a slow or huge remote page can block the background job and exhaust memory.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-02",
+    "descricao": "The retrieve throttle sets the Redis key with setnx and sets its TTL in a separate expire call, so a crash between the two leaves a key without expiry that blocks retrieval of that URL forever.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#kimip-01",
+    "descricao": "`import_remote` fetches the embed URL with open-uri, which follows redirects, so the embeddable-host check on the initial URL can be bypassed to reach internal services (SSRF).",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     46,
+     48
+    ],
+    "texto": "`isTeamAdminOrOwner` is computed as `isTeamAdmin(...) && isTeamOwner(...)`, but `isTeamAdmin` (packages/lib/server/queries/teams/index.ts:264) already returns truthy for role ADMIN *or* OWNER while `isTeamOwner` returns true only for OWNER \u2014 so the `&&` requires an OWNER membership and a team ADMIN is wrongly denied. The established pattern in confirm.handler.ts:127-128 and teams/get.handler.ts:48-49 uses `role === OWNER || role === ADMIN`; replace the `&&` with an OR of the two checks."
+   },
+   {
+    "id": "S2",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     70,
+     78
+    ],
+    "texto": "`blacklistedGuestEmails` entries are lowercased but compared with `blacklistedGuestEmails.includes(guest)` against the raw `guest` string, and `guests` arrives unnormalized (addGuests.schema.ts uses plain `z.string().email()`), so a blacklisted address submitted with different casing (e.g. `Foo@Bar.com` for a blacklisted `foo@bar.com`) bypasses the blacklist and is added. Normalize both sides, e.g. compare `guest.toLowerCase()` against the lowercased blacklist."
+   },
+   {
+    "id": "S3",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     74,
+     104
+    ],
+    "texto": "`uniqueGuests` only removes guests already present in `booking.attendees`; it never dedups duplicates within the submitted `guests` array, and the server schema (addGuests.schema.ts) has no uniqueness refine \u2014 only the client dialog enforces it. Since Attendee has no unique constraint on (bookingId, email) (packages/prisma/schema.prisma:526-539), a direct API call with `guests: [\"a@b.com\", \"a@b.com\"]` inserts two attendee rows for the same address. Dedup the input server-side (e.g. `Array.from(new Set(guests))`) before filtering."
+   },
+   {
+    "id": "S4",
+    "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "lines": [
+     58,
+     68
+    ],
+    "texto": "`prisma.user.findFirstOrThrow({ where: { id: booking.userId || 0 } })` runs with id `0` when `booking.userId` is null (the column is nullable in the schema). A team OWNER passes the authorization gate (an owner satisfies both `isTeamAdmin` and `isTeamOwner`), so for a team booking without an assigned user this throws an unhandled `P2025` and returns a 500. Guard for a missing `booking.userId` and resolve the organizer from the booking's event type users (or skip the email path) instead of defaulting to id 0."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+    "descricao": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so only team owners pass; team admins who are not organizer or attendee are wrongly rejected with FORBIDDEN.",
+    "textoGolden": "The logic for checking team admin/owner permissions is incorrect. This condition uses AND (&&) which requires both isTeamAdmin AND isTeamOwner to be true, but it should use OR (||) since a user needs to be either an admin OR an owner to have permission.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "WHAT: isTeamAdminOrOwner is computed with && instead of ||. WHY: isTeamAdmin returns truthy for role ADMIN or OWNER while isTeamOwner returns true only for OWNER, so the && expression is only true for OWNERs; team ADMINs are treated as unauthorized and get FORBIDDEN when adding guests, contradicting the variable's intent. HOW: use `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The flag is named `isTeamAdminOrOwner` but is computed with `&&` (both admin AND owner). A team admin who is not the owner, or the owner who is not flagged admin, will fail this check, so the guard at line 54 wrongly throws FORBIDDEN for legitimate admins/owners. Use `||` between isTeamAdmin and isTeamOwner."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       46,
+       48
+      ],
+      "texto": "The variable `isTeamAdminOrOwner` names an OR condition, but the code combines `isTeamAdmin(...)` and `isTeamOwner(...)` with `&&`, so it is true only when the user is both admin AND owner. Either the name is wrong or the operator is; as written the permission check at line 54 denies a plain team admin, contradicting what the identifier promises. Use `||` to match the name (or rename if AND is intended)."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#02",
+    "descricao": "The guest blacklist is lowercased but incoming guest emails are compared without normalization, so a blacklisted address submitted with different casing bypasses BLACKLISTED_GUEST_EMAILS and is added and emailed.",
+    "textoGolden": "The addGuests.handler.ts blacklist check uses blacklistedGuestEmails.includes(guest) after lowercasing the blacklist but not the input guest emails, allowing attackers to bypass BLACKLISTED_GUEST_EMAILS restrictions by submitting emails with uppercase characters.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: The blacklist is compared case-sensitively against guest input while blacklistedGuestEmails are lowercased. WHY: blacklistedGuestEmails entries are lowercased but the filter compares `guest` verbatim (`!blacklistedGuestEmails.includes(guest)`); an authenticated user can add a blacklisted address simply by changing its case (e.g. `Foo@bar.com` vs `foo@bar.com`), bypassing the configured BLACKLISTED_GUEST_EMAILS restriction. HOW: normalize the guest before comparison, e.g. `!blacklistedGuestEmails.includes(guest.toLowerCase())`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "Case-sensitivity bypass of the guest blacklist. `blacklistedGuestEmails` is lowercased on the list side (line 71) but the input side is compared raw: `blacklistedGuestEmails.includes(guest)` (line 77). A guest email submitted with any different casing (e.g. `Foo@Bar.com` when the blacklist holds `foo@bar.com`) passes the filter and is persisted, defeating BLACKLISTED_GUEST_EMAILS. Normalize the input before comparison, e.g. filter on `!blacklistedGuestEmails.includes(guest.toLowerCase())` (and likewise lowercase `guest` for the attendee dedup check)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       70,
+       78
+      ],
+      "texto": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased but the incoming guest string is compared without lowercasing/normalizing. WHY: an attacker bypasses the blocklist with case variation (e.g. Spam@Example.com) and gets added/emailed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#03",
+    "descricao": "The server never deduplicates the guests array, so a request with the same email twice inserts duplicate attendee rows for the booking.",
+    "textoGolden": "uniqueGuests filters out existing attendees and blacklisted emails but does not deduplicate duplicates within the input; createMany can insert duplicate attendee rows if the client submits repeated emails.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "WHAT: uniqueGuests filter only dedupes against existing booking.attendees with case-sensitive === and never dedupes duplicates within the input guests array itself (server schema has no uniqueness refine unlike the client). WHY: a request with the same new email twice creates duplicate attendee rows via createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       106
+      ],
+      "texto": "uniqueGuests filters only against existing attendees/blacklist but never dedupes guests[] itself and schema has no uniqueness check. A request like guests=[a@x.com,a@x.com] passes the filter twice and createMany inserts duplicate attendee rows or throws an unhandled DB unique-constraint exception. Dedupe/normalize input (and reject intra-request duplicates) before createMany."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       74,
+       78
+      ],
+      "texto": "uniqueGuests filters against existing attendees but does not deduplicate addresses within the incoming guests array. A direct mutation with the same new address twice inserts two Attendee records and sends duplicate invitations because the server schema permits duplicates and the Attendee model has no unique booking/email constraint. Deduplicate normalized input before filtering and inserting."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#04",
+    "descricao": "Check-then-insert without a transaction or unique constraint lets two concurrent addGuests calls for the same email both pass the existing-attendee check and create duplicate attendees.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       26,
+       106
+      ],
+      "texto": "Race condition: findFirst check for existing attendees then booking.update+createMany is not atomic. Two concurrent addGuests calls with the same new email both see it as absent and both insert, creating duplicates. Guard with a unique constraint and handle conflict or run in a transaction/serializable check."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       92,
+       106
+      ],
+      "texto": "Check-then-insert race: the handler reads `booking.attendees` at the start, filters against it, then inserts in a separate `prisma.booking.update ... createMany` with no transaction or unique guard. Two concurrent addGuests calls for the same guest both see it as absent and both insert, producing duplicate attendees. Wrap the read+filter+insert in a transaction (or rely on a unique constraint on (bookingId, email) and handle the conflict) so concurrent requests cannot both succeed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#05",
+    "descricao": "Attendee authorization and existing-attendee dedup compare emails case-sensitively, so an attendee with differently-cased stored email is FORBIDDEN and a case-variant of an existing attendee is added again.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       76
+      ],
+      "texto": "Inconsistent email normalization for identity checks. Both the authorization check `attendee.email === user.email` (line 52) and the existing-attendee dedup `guest === attendee.email` (line 76) use strict case-sensitive equality, while emails are treated as case-insensitive everywhere else in this handler (the blacklist block directly below lowercases). Consequence: a legitimate attendee whose stored casing differs from their session email is wrongly FORBIDDEN, and a guest differing from an existing attendee only by case is duplicated rather than filtered. Compare on a normalized form (both sides `.toLowerCase()`), consistent with the blacklist normalization."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+    "descricao": "The handler passes the unfiltered guests list to sendAddGuestsEmails, which uses it to pick who gets AttendeeScheduledEmail, so existing attendees included in the request receive a new-booking confirmation instead of the add-guests email.",
+    "textoGolden": "The sendAddGuestsEmails function in email-manager.ts passes the full calendarEvent.attendees array when determining which attendees receive AttendeeScheduledEmail vs AttendeeAddGuestsEmail, but checks if newGuests.includes(attendee.email) where newGuests is the input guests array.",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "WHAT: sendAddGuestsEmails(evt, guests) passes the raw input guests instead of the filtered uniqueGuests. WHY: already-existing attendees included in the request are misclassified as newGuests in email-manager and receive AttendeeScheduledEmail instead of AttendeeAddGuestsEmail (wrong notification)."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       168
+      ],
+      "texto": "Dead-transform / wrong input: `uniqueGuests` is computed (dedup vs existing attendees + blacklist) and written to DB, but `sendAddGuestsEmails(evt, guests)` passes the original `guests`. Existing attendees re-submitted are then `includes()`-matched as new and get AttendeeScheduledEmail instead of AttendeeAddGuestsEmail. Pass `uniqueGuests`."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       167,
+       169
+      ],
+      "texto": "Pass `uniqueGuests` (the filtered set written to DB) to sendAddGuestsEmails instead of raw `guests`; the email layer assumes newGuests exactly equals newly created attendees for its Scheduled vs AddGuests branch."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#08",
+    "descricao": "EventManager is created with the requesting user's credentials, so when a non-organizer adds guests the organizer's calendar event is not updated (or the wrong account is used) for references without a credentialId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       158,
+       162
+      ],
+      "texto": "EventManager is initialized with the requesting user's credentials rather than the booking organizer's credentials. When an attendee or team owner adds guests to a booking whose calendar reference lacks credentialId, updateAllCalendarEvents selects credentials by type from the caller's calendars, so the organizer's event is not updated or the update targets the wrong account. Load credentials for booking.userId and initialize the manager with the booking owner."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#09",
+    "descricao": "Claims a failing calendar update at addGuests.handler.ts:165 aborts the mutation after guests are persisted; the calendar update path already swallows provider errors.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       171
+      ],
+      "texto": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       165,
+       165
+      ],
+      "texto": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#10",
+    "descricao": "Claims any attendee can add guests and trigger invites; this is the deliberate permission model of the new feature.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "lines": [
+       52,
+       56
+      ],
+      "texto": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#11",
+    "descricao": "The guests array has no server-side size limit, so any authorized caller, including an attendee, can add thousands of guests and trigger an unbounded batch of inserts and emails.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       3,
+       6
+      ],
+      "texto": "WHAT: guests is an unbounded z.array(z.string().email()) with no max length. WHY: any authorized caller (including a mere attendee) can submit thousands of emails causing unbounded createMany inserts plus unbounded Promise.all email fanout in sendAddGuestsEmails."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+      "lines": [
+       5,
+       5
+      ],
+      "texto": "The mutation accepts an unbounded guest array that is persisted and immediately expanded into concurrent emails to every attendee. For non-seated bookings each email's ICS serializes the full attendee list, so adding N guests creates O(N) concurrent sends and O(N\u00b2) aggregate attachment work; repeated additions also resend to all existing attendees. Enforce a server-side guest-count and total-attendee limit before insertion and bound notification concurrency."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#12",
+    "descricao": "The Remove email tooltip in MultiEmail is a hard-coded English string instead of a translation key.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       44,
+       51
+      ],
+      "texto": "Tooltip content=\"Remove email\" is hard-coded English user-facing text bypassing i18n while surrounding strings in the same file/PR use t(). Wrap it in t() e.g. content={t(\"remove_email\")} and add the key to locales."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "`Tooltip content=\"Remove email\"` is a hard-coded English user-facing string, while the surrounding code in this same component routes user text through `t()` (e.g. `t(\"add_another\")` on line 69). This string bypasses the translation mechanism and will never be localised; it should use a translation key."
+     },
+     {
+      "file": "packages/ui/form/MultiEmail.tsx",
+      "lines": [
+       46,
+       46
+      ],
+      "texto": "The new removal tooltip hard-codes `Remove email`, so users in non-English locales see English text even though the neighbouring controls use `t(...)` and this component already obtains `t` from useLocale. Route this tooltip through a translation key (and supply its English translation) rather than using the literal."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#13",
+    "descricao": "The onError fallback to unable_to_add_guests is unreachable because the template-string message is always truthy.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       44
+      ],
+      "texto": "Unreachable fallback: `message` is a template string `${code}: ${...}` which is always truthy, so `message || t(\"unable_to_add_guests\")` never takes the fallback. Build message conditionally or test the underlying parts for emptiness."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       42,
+       45
+      ],
+      "texto": "In `onError`, `message` is always a non-empty template string (`\"${err.data?.code}: ${t(err.message)}\"`), so the fallback `|| t(\"unable_to_add_guests\")` is unreachable and the newly added `unable_to_add_guests` translation is never shown. The user is instead shown a raw error code prefix like `BAD_REQUEST: ...` rather than the translated message; the fallback and code prefix handling should be corrected so the intended translated text reaches the user."
+     },
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       43,
+       44
+      ],
+      "texto": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#14",
+    "descricao": "After a validation failure followed by a successful add, isInvalidEmail stays true, so the stale emails_must_be_unique_valid error shows the next time the dialog is opened.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "apps/web/components/dialog/AddGuestsDialog.tsx",
+      "lines": [
+       35,
+       41
+      ],
+      "texto": "WHAT: addGuestsMutation onSuccess resets multiEmailValue and closes the dialog but never resets isInvalidEmail. WHY: after one failed validation the red emails_must_be_unique_valid error persists on the next open/successful add."
+     }
+    ]
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#16",
+    "descricao": "sendAddGuestsEmails ignores the event type's disableStandardEmails settings, so hosts and attendees receive add-guests emails even when standard emails are disabled.",
+    "textoGolden": "The `sendAddGuestsEmails` function does not check the `disableStandardEmails` flags in the `EventType` metadata, which may result in sending emails to hosts/attendees even when standard emails are disabled for the event type.",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01",
+    "descricao": "The add-guests handler omits booking.iCalUID from the CalendarEvent, so the add-guests emails' .ics attachments use booking.uid as UID and recipients' calendars treat them as a new event rather than an update of the original booking invite.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#sncc-01",
+    "descricao": "The addGuests FORBIDDEN error uses the translation key you_do_not_have_permission, which is missing from the locale files, so the dialog shows the raw key to users.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01",
+    "descricao": "The comment in MultiEmailLazy.tsx (\"These are like 40kb\") is copied from the phone input lazy loader and does not apply to MultiEmail, which only uses existing UI components.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#musep-01",
+    "descricao": "addGuests does not check the booking status, so guests can be added to cancelled or rejected bookings, which updates calendars and emails invitations for events that no longer exist.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimi-01",
+    "descricao": "Guest email uniqueness is checked case-sensitively, so case variants of the same address are accepted as distinct guests (and slip past the lowercased blacklist).",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-guest-management-functionality-to-existing-bookings-cal-com#kimip-02",
+    "descricao": "Adding guests ignores `seatsPerTimeSlot`, so a seated event can exceed its configured capacity; reject when attendees plus new guests exceed the seat limit.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "The PR adds a new `self.downsize(from, to, dimensions, opts={})` at line 148 without removing the existing `self.downsize(from, to, max_width, max_height, opts={})` at line 145, so the later definition wins and the 4-argument form becomes dead code. The surviving caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 now binds `dimensions=100` and `opts=100` (the real opts hash is dropped), so `optimize` evaluates `100[:allow_animation]` and raises TypeError, crashing the emoji-resize job. Remove the obsolete 4-arg `downsize` (lines 145-147) and update resize_emoji.rb to pass a proper dimension string such as `\"100x100\"`."
+   },
+   {
+    "id": "S2",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     66,
+     69
+    ],
+    "texto": "The downsize loop ignores the return value of `OptimizedImage.downsize`, which returns false when ImageMagick conversion fails (`convert_with` returns false on non-zero exit, optimized_image.rb:160-169), yet the loop still burns all 5 attempts re-running the same failing shell command on an unchanged file. Because `tempfile.size` never shrinks when conversion fails, the guard `tempfile.size > SiteSetting.max_image_size_kb.kilobytes` stays true and every iteration re-shells out to `convert`. Break out of the loop when `downsize` returns falsy."
+   },
+   {
+    "id": "S3",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     148
+    ],
+    "texto": "A second `self.downsize(from, to, dimensions, opts={})` is defined at line 148 while the existing 5-arg `downsize(from, to, max_width, max_height, opts={})` remains at line 145. Ruby resolves to the last definition, so the 5-arg method at line 145 is dead. The caller at app/jobs/regular/resize_emoji.rb:14 still invokes it with 5 positional args (path, path, 100, 100, opts), which raises an ArgumentError."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     63,
+     70
+    ],
+    "texto": "In the `create_upload` downsize loop (lines 63-70), the boolean return value of `OptimizedImage.downsize` is ignored. When `convert_with` fails and returns false (ImageMagick failure), the loop still decrements `attempt` blindly and proceeds to `Upload.create_for` using the oversized tempfile, allowing a wrong-size upload to go through."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+    "descricao": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "The Lithuanian (lt) login file now sets loginTotpStep1 to Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"), replacing the previous Lithuanian sentence. Users of the Lithuanian locale will see Italian instructions, and the referenced TOTP app links were dropped entirely. Restore the Lithuanian translation (or an equivalent lt string) for this key."
+   },
+   {
+    "id": "S2",
+    "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+    "lines": [
+     101,
+     101
+    ],
+    "texto": "The Lithuanian (lt) account file sets totpStep1 to Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"), introducing wrong-language content into the Lithuanian locale. This is a copy-paste regression from an it source; replace it with the correct Lithuanian string."
+   },
+   {
+    "id": "S3",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     106,
+     111
+    ],
+    "texto": "The prefix/suffix stripping computes `start` and `end` independently and then calls `value.substring(start, value.length() - end)` and `sanitized.substring(start, sanitized.length() - end)` without ensuring `start <= sanitized.length() - end`. When the shared prefix and suffix overlap the shorter string (e.g. the sanitizer both drops a leading tag and matches a trailing character), the sanitized substring has `begin > end` and throws `StringIndexOutOfBoundsException`, aborting the build for that file. Clamp `end` so that `start <= sanitized.length() - end` and `start <= value.length() - end` before building the substrings."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "descricao": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+    "descricao": "The theme verifier's HTML and anchor regexes are case-sensitive, so uppercase tags in translations are flagged as illegal HTML by the build.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+    "descricao": "The anchor regex </?a[^>]*> in the theme verifier treats any tag starting with 'a' (<abbr>, <area>, ...) as an anchor tag, which can produce misleading anchor errors or strip such tags before HTML sanitizing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+    "descricao": "The anchor-mismatch error in VerifyMessageProperties omits the message key and file, so the failing translation is hard to locate, unlike the 'Illegal HTML' message.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     336,
+     347
+    ],
+    "texto": "join() breaks out of the process loop when the shared `deadline` is exhausted, so every process after the first is left running and never reaches `process.terminate()`. Previously the single process was always terminated after its (deadline-bounded) wait, so this PR introduces a process leak on shutdown/rebalance whenever the first flusher process consumes the whole timeout. Compute a per-process remaining timeout and continue iterating (terminating) the remaining processes instead of `break`."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/consumers/__init__.py",
+    "lines": [
+     432,
+     437
+    ],
+    "texto": "The new `--flusher-processes` option defaults to 1, and `SpanFlusher` then computes `num_processes = min(max_processes, len(buffer.assigned_shards))`, so with the shipped default all Redis shards are multiplexed through a single flusher process. This defeats the PR's stated goal of spawning a process per shard and contradicts `SpanFlusher`'s own fallback (`max_processes or len(buffer.assigned_shards)`), silently creating a throughput regression versus the intended design. Default the option to the number of assigned shards (or `None` so the flusher's fallback applies)."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/spans/consumers/process/flusher.py",
+    "lines": [
+     299,
+     301
+    ],
+    "texto": "get_memory_info() ignores assigned_shards and calls iter_cluster_memory_usage(self.client), which runs cluster.info() over the entire Redis cluster; looping over every buffer in self.buffers therefore issues the same full-cluster INFO query once per flusher process on every submit(). With one process per shard this multiplies cluster-wide metadata round-trips by the process count, so consolidate to a single cluster INFO query (e.g. query once via one buffer) and reuse its result for the used/available computation instead of summing N identical samples."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01",
+    "descricao": "The wait_produce timer is tagged with 'shards' while sibling flusher metrics use 'shard' for the same value, so per-shard dashboards miss it.",
+    "textoGolden": "In the SpanFlusher flush loop, metric tags inconsistently use 'shard' (e.g., in spans.buffer.flusher.produce and spans.buffer.segment_size_bytes) and 'shards' (in spans.buffer.flusher.wait_produce) for the same shard identifier value. This prevents correct metric aggregation across flush stages \u2014 dashboards and alerts filtering by tag 'shard' will miss data tagged as 'shards' and vice versa.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with the key `\"shards\"`, while the other two metrics emitted in this same loop (`spans.buffer.flusher.produce` at line 185 and `spans.buffer.segment_size_bytes` at line 195) use the key `\"shard\"`. All three carry the same `shard_tag` value, so this is a pure key-name disagreement: any dashboard or alert that groups/filters by the `shard` tag will silently receive no data from `wait_produce`. Rename the tag key to `\"shard\"` so all flusher metrics share one tag."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The `spans.buffer.flusher.wait_produce` timer is tagged with key `shards` while every sibling metric introduced/updated in the same method (`spans.buffer.flusher.produce`, `spans.buffer.segment_size_bytes`) uses the singular key `shard`. Anything consuming this metric family by the `shard` tag (dashboards, alerts, tag-based aggregation) will silently receive no data for `wait_produce`, and per-shard breakdowns of produce latency will be incomplete. Change the tag to `tags={\"shard\": shard_tag}` so the tag contract matches the other flusher metrics."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       199,
+       199
+      ],
+      "texto": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02",
+    "descricao": "The time.sleep(0.1) added to test_basic to let flusher threads process is a no-op because the test monkeypatches time.sleep.",
+    "textoGolden": "The test_basic function in test_consumer.py uses a monkeypatched time.sleep that returns immediately, but then calls time.sleep(0.1) expecting it to actually wait.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "WHAT: The added synchronization point `time.sleep(0.1)` added after the second `step.poll()` is neutralized by the test's own `monkeypatch.setattr(\"time.sleep\", lambda _: None)` at line 15 (same `time` module), so it does not actually wait. WHY: The comment says it 'Give[s] flusher threads time to process after drift change', but the call is a no-op, so the test still races the background flusher thread before `step.join()` and is liable to be flaky / to not exercise the intended post-drift flush path. HOW: Use a non-monkeypatched wait (e.g. capture the real sleep before patching, or use the flusher's thread/process join, or poll until `messages` is non-empty with a real timeout)."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` does not wait: line 15 of the same test does `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `sleep` on the global `time` module, so this call (and the flusher's own `time.sleep`) is a no-op. The comment 'Give flusher threads time to process after drift change' is therefore false \u2014 the call returns instantly and provides no synchronisation, so the test does not actually wait for the flusher to process after the drift change. Either synchronise on a real condition (e.g. wait until the expected message is produced) or, if the original `time.sleep` is needed here, patch a module-scoped reference instead of the global `time.sleep`."
+     },
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       60,
+       62
+      ],
+      "texto": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03",
+    "descricao": "The restart path only kills a hung flusher if it is a multiprocessing.Process, but spawn-context workers are SpawnProcess, so hung processes are never killed and a duplicate flusher is started for the same shards.",
+    "textoGolden": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The new isinstance(process, multiprocessing.Process) guard does not match the SpawnProcess instances created by self.mp_context.Process. When a worker hangs, the guard skips kill() and the replacement starts while the original worker remains alive, allowing overlapping flushing of the same shards if the original resumes and leaking hung workers. Check against multiprocessing.process.BaseProcess or self.mp_context.Process, and kill and join the old worker before replacing it."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       253,
+       255
+      ],
+      "texto": "The workers are created with get_context(\"spawn\").Process, which produces SpawnProcess instances; these are not instances of multiprocessing.Process (the default-context Process class). Consequently this guard skips kill() for actual production workers. When a worker hangs, the replacement starts while the original remains alive and can resume flushing the same shards. Use multiprocessing.process.BaseProcess or the spawn-context Process class for the check, and fix the identical check in join() so shutdown also terminates surviving workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       254,
+       255
+      ],
+      "texto": "Workers created by multiprocessing.get_context(\"spawn\").Process are SpawnProcess instances, not instances of the separate multiprocessing.Process class. Consequently this guard skips kill() for production workers. When a live worker exceeds max-unhealthy-seconds, the code starts a replacement and overwrites its handle while the original is still running. If the original resumes, both workers flush the same shards, and repeated hangs can exceed the configured process limit. Check against multiprocessing.process.BaseProcess (or explicitly distinguish threads) and stop the old worker before replacing it."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#04",
+    "descricao": "join() breaks out of the per-process loop when the shared deadline expires, skipping termination of the remaining flusher processes and leaving them running after shutdown.",
+    "textoGolden": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       338,
+       341
+      ],
+      "texto": "join() breaks out of the worker loop when the shared deadline expires, skipping cleanup for every remaining worker. If next_step.join consumes the timeout or an earlier worker exhausts it, remaining flushers can continue running after shutdown or partition reassignment. Use the deadline only to limit waiting and still terminate and reap every remaining process."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       341
+      ],
+      "texto": "Do not break out of worker cleanup when the join deadline expires. If the first worker consumes the timeout, the next iteration breaks before terminating that worker or any subsequent workers. They may still be blocked in Redis or producer calls despite the shared stopped flag, leaving old workers running after strategy shutdown/reassignment. Apply the deadline only to waiting, and perform termination cleanup for every worker regardless of remaining time (using a type check that recognizes spawn-context workers)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       337,
+       344
+      ],
+      "texto": "join() waits for processes sequentially against a single shared deadline and breaks without terminating remaining processes once it expires, leaking them."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05",
+    "descricao": "The SpanFlusher docstring says it creates one process per shard, but shards are distributed across at most max_processes processes.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       30,
+       32
+      ],
+      "texto": "The docstring says the flusher \"Creates one process per shard for parallel processing,\" but the code at lines 60-66 shares shards across a capped number of processes (num_processes = min(self.max_processes, len(buffer.assigned_shards)); each shard assigned via i % self.num_processes). With the new --flusher-processes default of 1, a single process handles every shard, so the documented contract is the opposite of the behaviour this PR introduces (confirmed by test_flusher_processes_limit, which asserts 4 shards served by 2 processes). Update the docstring to say shards are distributed across up to max_processes flusher processes."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The new docstring says this creates one process per shard, but workers are capped by max_processes and shards are distributed among them. In particular, the CLI default of 1 means all assigned shards share one process. Describe capped workers with potentially multiple shards per worker so callers do not rely on per-shard process isolation."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       31,
+       32
+      ],
+      "texto": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#06",
+    "descricao": "max_processes uses a truthiness fallback, so --flusher-processes 0 silently becomes one process per shard instead of being rejected.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` treats a falsy value as 'not provided'. The new `--flusher-processes` click option is `type=int`, so a user can pass `0`; that legitimate-but-falsy value is discarded and the flusher silently spawns one process per shard instead of honoring the requested limit. Use an explicit None check, e.g. `self.max_processes = max_processes if max_processes is not None else len(buffer.assigned_shards)` (and validate/reject 0 upstream)."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "An explicit max_processes=0 is treated as an omitted limit by `or`, so passing `--flusher-processes 0` starts one process per assigned shard instead of respecting or rejecting the supplied zero limit. The CLI accepts zero as an integer and the factory forwards it unchanged. Default only when max_processes is None, and explicitly validate that supplied process limits are positive so zero cannot silently enable potentially many workers."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       51,
+       51
+      ],
+      "texto": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#07",
+    "descricao": "A negative --flusher-processes value is not validated and makes SpanFlusher construction fail with KeyError.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "`flusher_processes` is not validated to be >= 1. `self.max_processes = max_processes or len(buffer.assigned_shards)` lets a negative value through (it is truthy), so `self.num_processes = min(self.max_processes, len(...))` becomes negative and `range(self.num_processes)` is empty, leaving `process_to_shards_map` as `{}`. The following loop computes `process_index = i % self.num_processes`, which for any negative divisor is 0, so `self.process_to_shards_map[0].append(shard)` raises KeyError and the consumer fails to construct. Since `flusher_processes` is exposed as an int CLI option (`--flusher-processes`), a negative value is reachable from configuration. Guard with `max(1, self.num_processes)` / validate the input."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       60,
+       66
+      ],
+      "texto": "negative max_processes flows through `or` guard into min() -> empty map -> KeyError on i % num_processes; empty assigned_shards yields zero processes."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#08",
+    "descricao": "submit() queries cluster-wide Redis memory once per flusher buffer, repeating identical INFO calls per process on every submit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "The new loop calls get_memory_info() once per flusher buffer even though SpansBuffer.get_memory_info delegates to iter_cluster_memory_usage(self.client), which fetches INFO for the entire Redis cluster regardless of assigned_shards. With P flusher processes and memory backpressure enabled, each submitted batch now performs P identical cluster-wide memory queries on the consumer thread instead of one, increasing Redis traffic and blocking ingestion. Fetch cluster memory information once from a single buffer."
+     },
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       299,
+       301
+      ],
+      "texto": "submit() loop calls buffer.get_memory_info() per flusher but each call is cluster-wide from same client, repeating identical INFO N\u00d7 per submit."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10",
+    "descricao": "_create_process_for_shard is added but never called.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/spans/consumers/process/flusher.py",
+      "lines": [
+       127,
+       132
+      ],
+      "texto": "WHAT: `_create_process_for_shard(self, shard)` is newly added but has no caller anywhere (grep for `_create_process_for_shard(` finds only its definition); the restart path actually used is `_create_process_for_shards(process_index, shards)`. WHY: This is dead code that indicates the intended per-shard restart wiring was left incomplete \u2014 any future caller relying on restarting only the process owning a given shard will silently do nothing, and it is confusing which restart path is authoritative. HOW: Remove `_create_process_for_shard`, or wire it into `_ensure_processes_alive` if per-shard restart was intended."
+     }
+    ]
+   },
+   {
+    "issueId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#12",
+    "descricao": "test_flusher_processes_limit counts assigned shards instead of checking that each shard is assigned exactly once.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/spans/consumers/process/test_consumer.py",
+      "lines": [
+       119,
+       121
+      ],
+      "texto": "The assertion counts shard entries rather than verifying shard assignment. A broken distribution such as {0: [0, 1], 1: [0, 1]} still passes all assertions in this test while shards 2 and 3 are never flushed. Assert that the flattened mapping contains exactly the expected assigned shards, with no duplicates (and verify each worker's shard buffer uses that mapping), rather than only asserting a total of four."
+     }
+    ]
+   }
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/services/assignment_source.py",
+    "lines": [
+     18,
+     18
+    ],
+    "texto": "`queued: datetime = timezone.now()` evaluates `timezone.now()` once at class-definition/import time, so every `AssignmentSource` built without an explicit `queued` (all production instances, via `from_integration`) carries the same frozen process-start timestamp instead of the time the assignment was actually queued. The stale value is serialized into the Celery payload by `to_dict()`/`asdict()`, so any consumer that later uses `queued` for staleness/loop-window decisions will read the wrong time. Use `field(default_factory=timezone.now)` from `dataclasses`."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+    "descricao": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued.",
+    "textoGolden": "The AssignmentSource dataclass uses queued: datetime = timezone.now() as a default field value, which evaluates timezone.now() once at class definition time and shares that single datetime instance across all objects.",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "WHAT: `queued: datetime = timezone.now()` evaluates once at class-definition time so every AssignmentSource without explicit queued shares the same timestamp. WHY: queued time is wrong/stale for all later instances and defeats its purpose as a queue-time marker. HOW: use `field(default_factory=timezone.now)` (with `field` import)."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       14,
+       18
+      ],
+      "texto": "Field `queued: datetime = timezone.now()` is evaluated once at import so all AssignmentSources share the same timestamp. Use `field(default_factory=timezone.now)` so each instance measures its actual creation/queue time."
+     },
+     {
+      "file": "src/sentry/integrations/services/assignment_source.py",
+      "lines": [
+       18,
+       18
+      ],
+      "texto": "The dataclass field default `queued: datetime = timezone.now()` is evaluated a single time when the module is imported, so every AssignmentSource created without an explicit `queued` value (which is exactly what `from_integration` does, and what `from_dict` falls back to when the key is absent) shares the same frozen import-time timestamp instead of the moment the assignment was actually queued. This makes the `queued` timestamp semantically wrong/meaningless (it reflects process start, not assignment time) and would silently misreport the queue time anywhere this value is later inspected. Fix by defaulting in a factory/`__post_init__` or making the caller pass the timestamp, e.g. set `queued` inside `from_integration` (`queued=timezone.now()`), or use `field(default_factory=timezone.now)`."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#02",
+    "descricao": "The test method name test_from_dict_inalid_data has a typo; it should be test_from_dict_invalid_data.",
+    "textoGolden": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       13,
+       19
+      ],
+      "texto": "Typo in test name test_from_dict_inalid_data hides it from name-filtered runs (e.g. -k invalid_data): fix spelling to test_from_dict_invalid_data so the invalid-payload guard is actually selected and verified."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#03",
+    "descricao": "test_from_dict_empty_array actually passes an empty dict, so the name does not match what the test exercises.",
+    "textoGolden": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "The test is named test_from_dict_empty_array but it passes an empty dict ({}), not an empty array; a caller reading the name will believe the empty-list/array input path is covered when it is not. Rename it to test_from_dict_empty_dict (or pass [] to actually cover the empty-array case) so the identifier agrees with the input it exercises."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array names an empty array but constructs an empty dict (`data: dict[str, Any] = {}`), so it only re-exercises the empty/None path and never covers empty-array input; a regression specific to that input would pass unnoticed. Pass a real empty array or rename the test to match its body."
+     },
+     {
+      "file": "tests/sentry/integrations/services/test_assignment_source.py",
+      "lines": [
+       8,
+       11
+      ],
+      "texto": "test_from_dict_empty_array passes {} rather than an empty array. It therefore only tests missing required dictionary keys and would still pass if rejection of an array input were broken. Pass [] to exercise the named case (or rename this test to empty_dict if that is the intended contract)."
+     }
+    ]
+   }
+  ]
+ }
+}

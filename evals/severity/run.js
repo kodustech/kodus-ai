@@ -21,7 +21,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
 const { parseSeverityResponse } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/engine/severity-prompt.ts'));
-const { createModel } = require('../investigation/agent-provider-1821');
+const { createSlot } = require('../investigation/agent-provider-1821');
 const PROMPTS = require('./prompts');
 
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=').slice(1).join('=') || d;
@@ -79,13 +79,13 @@ const view = (it) => ({
     excerpt: excerpt(it),
 });
 
-async function sample(list, model) {
+async function sample(list, slot) {
     let last = '';
     // A dropped connection or an unreadable answer is retried; production would
     // fall back to medium for the whole PR instead.
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            const text = await LLM.run({ user: PROMPTS[PROMPT].build(list.map(view)), prebuiltModel: model, runName: 'eval-severity' });
+            const text = await LLM.run({ user: PROMPTS[PROMPT].build(list.map(view)), byokConfig: slot, runName: 'eval-severity' });
             const { classifications, parseOk } = parseSeverityResponse(text || '');
             if (parseOk) return { got: classifications };
             last = `unparsed: ${String(text).slice(0, 300)}`;
@@ -109,9 +109,9 @@ function vote(votes) {
     return LEVELS[sorted[Math.floor((sorted.length - 1) / 2)]];
 }
 
-async function one(list, model) {
+async function one(list, slot) {
     const t0 = Date.now();
-    const runs = await Promise.all(Array.from({ length: SAMPLES }, () => sample(list, model)));
+    const runs = await Promise.all(Array.from({ length: SAMPLES }, () => sample(list, slot)));
     if (runs.every((r) => r.error)) return list.map((it) => ({ issueId: it.issueId, gold: it.severity, got: null, error: runs[0].error }));
     return list.map((it, i) => {
         const votes = runs.map((r) => r.got?.get(i) ?? null);
@@ -124,14 +124,14 @@ async function one(list, model) {
         console.log(PROMPTS[PROMPT].build(items.filter((x) => x.caseId === items[0].caseId).map(view)));
         process.exit(0);
     }
-    const model = await createModel({ provider: 'tier0' });
+    const slot = createSlot({ provider: 'tier0' });
     const byCase = new Map();
     for (const it of items) (byCase.get(it.caseId) || byCase.set(it.caseId, []).get(it.caseId)).push(it);
     const todo = SINGLE ? items.map((it) => [it]) : [...byCase.values()];
     const rows = [];
     let i = 0;
     await Promise.all(Array.from({ length: PAR }, async () => {
-        while (i < todo.length) rows.push(...(await one(todo[i++], model)));
+        while (i < todo.length) rows.push(...(await one(todo[i++], slot)));
     }));
     const measured = rows.filter((r) => LEVELS.includes(r.got));
     const perLevel = Object.fromEntries(LEVELS.map((l) => {

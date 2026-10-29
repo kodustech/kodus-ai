@@ -1,0 +1,237 @@
+{
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": [
+  {
+   "id": "S1",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "refreshOAuthTokens returns raw fetch Response in sync mode while callers expect parsed provider shapes."
+  },
+  {
+   "id": "S2",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "Zoho Bigin passes credentialId instead of userId to refreshOAuthTokens."
+  },
+  {
+   "id": "S3",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "Google Calendar stores the safeParse wrapper instead of .data as credential key."
+  },
+  {
+   "id": "S4",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "parseRefreshTokenResponse injects literal \"refresh_token\" when missing."
+  },
+  {
+   "id": "S5",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Same Response-vs-parsed-shape mismatch of refreshOAuthTokens in sync mode, at the zohocrm caller named by the issue (Zoho)."
+  },
+  {
+   "id": "S6",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Webhook secret compared with non-constant-time !==."
+  },
+  {
+   "id": "S7",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "Sync branch returns raw Response; callers expect parsed token body."
+  },
+  {
+   "id": "S8",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#15",
+   "newGroup": null,
+   "reason": "credentialId passed as calcom user id to refreshOAuthTokens."
+  },
+  {
+   "id": "S9",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#10",
+   "newGroup": null,
+   "reason": "SafeParse wrapper persisted as Google credential key."
+  },
+  {
+   "id": "S10",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#07",
+   "newGroup": null,
+   "reason": "Placeholder \"refresh_token\" string persisted, breaking later refreshes."
+  },
+  {
+   "id": "S11",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#09",
+   "newGroup": null,
+   "reason": "zohocrm reads .data on the raw Response returned in sync mode (same helper return-shape bug)."
+  },
+  {
+   "id": "S12",
+   "match": "oauth-credential-sync-and-app-integration-enhancements-cal-com#01",
+   "newGroup": null,
+   "reason": "Timing-unsafe !== webhook secret comparison."
+  }
+ ],
+ "add-guest-management-functionality-to-existing-bookings-cal-com": [
+  {
+   "id": "S1",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "isTeamAdminOrOwner uses && so plain admins are rejected."
+  },
+  {
+   "id": "S2",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "sendAddGuestsEmails receives raw guests instead of uniqueGuests, so existing attendees get the wrong email."
+  },
+  {
+   "id": "S3",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Unguarded attendees[0] in organizer add-guests email template; no golden issue covers it."
+  },
+  {
+   "id": "S4",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#01",
+   "newGroup": null,
+   "reason": "&& instead of || in isTeamAdminOrOwner."
+  },
+  {
+   "id": "S5",
+   "match": "add-guest-management-functionality-to-existing-bookings-cal-com#06",
+   "newGroup": null,
+   "reason": "Raw guests passed to sendAddGuestsEmails instead of filtered uniqueGuests."
+  }
+ ],
+ "feature-localization-fallbacks-server-side-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims nil SiteSetting.default_locale.to_sym crash in FallbackLocaleList; no golden issue about nil default locale."
+  },
+  {
+   "id": "S2",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Translation cache key omits default locale that fallbacks now depend on."
+  },
+  {
+   "id": "S3",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "Fallback locales only loaded in set_locale; translate outside requests cannot fall back."
+  },
+  {
+   "id": "S4",
+   "match": "feature-localization-fallbacks-server-side-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "Cache key missing site default locale -> stale fallback translations."
+  }
+ ],
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "getClientsWithPermission returns the type-level \"Clients\" resource name, which callers resolve via getClientById to null."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "V2 ClientPermissionsV2.setPermissionsEnabled throws in the removal listener; different from #01 (orphaned cleanup when listener gated by V1 flag)."
+  },
+  {
+   "id": "S3",
+   "match": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#03",
+   "newGroup": null,
+   "reason": "Type-level \"Clients\" name returned as client id, null client in AvailableRoleMappingResource."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same: removal listener calls V2 setPermissionsEnabled which throws UnsupportedOperationException."
+  }
+ ],
+ "feat-2fa-backup-codes-cal-com": [
+  {
+   "id": "S1",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "resetState does not clear backup codes/secret nor revoke object URL."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "TwoFactorAuthAPI.disable signature now requires backupCode while DisableTwoFactorModal calls it with two args; not in golden set."
+  },
+  {
+   "id": "S3",
+   "match": "feat-2fa-backup-codes-cal-com#15",
+   "newGroup": null,
+   "reason": "resetState leaves backup codes/secret/URL in state and does not revoke URL."
+  }
+ ],
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03",
+   "newGroup": null,
+   "reason": "record_for_host lowercases column but not the bound host value; fix normalizes the comparison."
+  },
+  {
+   "id": "S2",
+   "match": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#02",
+   "newGroup": null,
+   "reason": "where(id:).first nil not checked in update/destroy -> 500."
+  }
+ ],
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Contextual logger middleware dereferences req.PluginContext without nil-req guard; not in golden set."
+  },
+  {
+   "id": "S2",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Same missing nil-req guard in contextual_logger_middleware methods."
+  }
+ ],
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": [
+  {
+   "id": "S1",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread never joined before asserting no exceptions."
+  },
+  {
+   "id": "S2",
+   "match": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#02",
+   "newGroup": null,
+   "reason": "Reader thread not joined; assertion races with reader."
+  }
+ ],
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": [
+  {
+   "id": "S1",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "MetricAlertDetectorHandler lacks abstract method implementations -> TypeError on instantiation."
+  },
+  {
+   "id": "S2",
+   "match": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "newGroup": null,
+   "reason": "Abstract StatefulDetectorHandler subclass cannot be instantiated."
+  }
+ ],
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": []
+}

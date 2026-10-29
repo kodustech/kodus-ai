@@ -71,8 +71,6 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
         user: buildDedupPrompt(suggestions, { withCode: !!opts.withCode }),
         runName: 'code-review-dedup',
         spanName: 'code-review::dedup',
-        // Rota de assinatura (Codex/SDK): o modelo pronto, senao o LLM.run cai no default do env.
-        ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
     });
 
@@ -111,7 +109,6 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
                 user: buildDedupFollowupPrompt(suggestions, groups, unique, leftOut),
                 runName: 'code-review-dedup-followup',
                 spanName: 'code-review::dedup',
-                ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
             });
             const merged = applyDedupFollowup(n, groups, unique, leftOut, Array.isArray(out?.assignments) ? out.assignments : []);
             groups.splice(0, groups.length, ...merged.groups);
@@ -197,7 +194,6 @@ async function runDedup(suggestions, modelKey = SECONDARY_BASELINE, opts = {}) {
                     schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA),
                     user: buildTiebreakPrompt(a, b),
                     runName: 'dedup-tiebreak',
-                    ...(opts.prebuiltModel ? { prebuiltModel: opts.prebuiltModel } : {}),
                 });
                 return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
             } catch { return null; }

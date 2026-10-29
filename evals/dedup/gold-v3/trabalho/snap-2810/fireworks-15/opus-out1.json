@@ -1,0 +1,186 @@
+{
+ "dual-storage-architecture-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Delete success path passes name instead of options.Kind as the metric kind label."
+  },
+  {
+   "id": "S2",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Legacy DeleteCollection goroutine records with recordStorageDuration instead of recordLegacyDuration."
+  },
+  {
+   "id": "S3",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Storage Update failure recorded via recordLegacyDuration, misattributing to legacy metric."
+  },
+  {
+   "id": "S4",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Delete puts d.Log instead of the enriched log into the context."
+  },
+  {
+   "id": "S5",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Legacy.Update receives raw objInfo instead of updateWrapper with the stored object."
+  },
+  {
+   "id": "S6",
+   "match": "dual-storage-architecture-grafana-codex#07",
+   "newGroup": null,
+   "reason": "Mode 3 tests never verify the async legacy writes, so dropping them would not fail tests."
+  },
+  {
+   "id": "S7",
+   "match": "dual-storage-architecture-grafana-codex#03",
+   "newGroup": null,
+   "reason": "Same as #03: name passed where options.Kind belongs at line 106."
+  },
+  {
+   "id": "S8",
+   "match": "dual-storage-architecture-grafana-codex#02",
+   "newGroup": null,
+   "reason": "Same as #02: recordStorageDuration used for legacy DeleteCollection."
+  },
+  {
+   "id": "S9",
+   "match": "dual-storage-architecture-grafana-codex#04",
+   "newGroup": null,
+   "reason": "Same as #04: storage Update failure recorded as legacy duration."
+  },
+  {
+   "id": "S10",
+   "match": "dual-storage-architecture-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same as #01: d.Log installed instead of enriched log."
+  },
+  {
+   "id": "S11",
+   "match": "dual-storage-architecture-grafana-codex#06",
+   "newGroup": null,
+   "reason": "Same as #06: updateWrapper dropped, raw objInfo passed to legacy."
+  }
+ ],
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": [
+  {
+   "id": "S1",
+   "match": "new",
+   "newGroup": "N1",
+   "reason": "Claims `<%- end if %>` in best.html.erb is a syntax error; no golden issue covers the template syntax."
+  },
+  {
+   "id": "S2",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#06",
+   "newGroup": null,
+   "reason": "PollFeed i.content.scrub with nil content raises NoMethodError and aborts the import."
+  },
+  {
+   "id": "S3",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#08",
+   "newGroup": null,
+   "reason": "raw_html cook_method returns unsanitized HTML rendered with raw post.cooked: stored XSS."
+  },
+  {
+   "id": "S4",
+   "match": "new",
+   "newGroup": "N2",
+   "reason": "Referer-based authorization is spoofable and X-Frame-Options ALLOWALL is invalid; #04 is only case-sensitive host comparison, a different problem."
+  },
+  {
+   "id": "S5",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#01",
+   "newGroup": null,
+   "reason": "embed.js origin check uses indexOf substring test instead of exact equality."
+  },
+  {
+   "id": "S6",
+   "match": "new",
+   "newGroup": "N3",
+   "reason": "postMessage targetOrigin uses the raw request.referer in the embed layout; no golden issue covers it."
+  },
+  {
+   "id": "S7",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#29",
+   "newGroup": null,
+   "reason": "Disqus import now depends on import_remote live fetch, so unfetchable/dead links drop the thread and its replies; covered by #29."
+  },
+  {
+   "id": "S8",
+   "match": "enhance-embed-url-handling-and-validation-system-discourse-cursor#30",
+   "newGroup": null,
+   "reason": "Comment includes that TopicRetriever synchronously re-polls the whole feed on each embed request (#30), alongside per-item query amplification."
+  }
+ ],
+ "add-html-sanitizer-for-translated-message-resources-keycloak": [
+  {
+   "id": "S1",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+   "newGroup": null,
+   "reason": "Missing English counterpart file throws a raw RuntimeException that aborts the build."
+  },
+  {
+   "id": "S2",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "newGroup": null,
+   "reason": "Independently computed prefix/suffix can overlap, substring throws StringIndexOutOfBoundsException."
+  },
+  {
+   "id": "S3",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+   "newGroup": null,
+   "reason": "HTML-detection regex is case-sensitive, so uppercase tags get misclassified."
+  },
+  {
+   "id": "S4",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian login TOTP step replaced with Italian text."
+  },
+  {
+   "id": "S5",
+   "match": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+   "newGroup": null,
+   "reason": "Lithuanian account TOTP step replaced with Italian text (issue covers both bundles)."
+  }
+ ],
+ "github-oauth-security-enhancement-sentry": [
+  {
+   "id": "S1",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "metadata[\"sender\"][\"login\"] indexed without guard, KeyError when sender missing."
+  },
+  {
+   "id": "S2",
+   "match": "github-oauth-security-enhancement-sentry#06",
+   "newGroup": null,
+   "reason": "Integration.DoesNotExist early return skips the OAuth user vs installer check."
+  },
+  {
+   "id": "S3",
+   "match": "github-oauth-security-enhancement-sentry#09",
+   "newGroup": null,
+   "reason": "Same as #09: unguarded sender access raises KeyError."
+  }
+ ],
+ "frontend-asset-optimization-grafana-codex": [
+  {
+   "id": "S1",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "No re-check of the cache after acquiring the write lock, so concurrent misses each reload the manifest."
+  },
+  {
+   "id": "S2",
+   "match": "frontend-asset-optimization-grafana-codex#01",
+   "newGroup": null,
+   "reason": "Same as #01: missing re-check after write lock."
+  }
+ ]
+}

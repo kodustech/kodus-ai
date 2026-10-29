@@ -1,0 +1,1945 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/core/EventManager.ts",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "`mainHostDestinationCalendar` is `undefined` when `evt.destinationCalendar` is `null` or an empty array (the new default for events with no destination calendar), so `mainHostDestinationCalendar.integration` throws `TypeError: Cannot read properties of undefined`. This crashes event creation/rescheduling whenever `evt.location === MeetLocationType` and no destination calendar is configured; the previous code used optional chaining (`evt.destinationCalendar?.integration`) and was safe. Guard with `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+   },
+   {
+    "id": "S2",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     254,
+     256
+    ],
+    "texto": "The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` is only evaluated when `externalCalendarId` is falsy, so the predicate always compares `cal.externalId === undefined` and returns `undefined` \u2014 the fallback to the event's destination calendar is dead. Previously it fell back to `event.destinationCalendar?.externalId`; now `selectedCalendar` is `undefined` and the Google API update targets the wrong/primary calendar. Select the destination calendar by credential/integration (e.g. `event.destinationCalendar?.[0]?.externalId`) instead of matching against the already-falsy `externalCalendarId`."
+   },
+   {
+    "id": "S3",
+    "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "lines": [
+     315,
+     317
+    ],
+    "texto": "Same dead-fallback defect as in `updateEvent`: the `find((cal) => cal.externalId === externalCalendarId)` branch only runs when `externalCalendarId` is falsy, so it can never match and `calendarId` stays `undefined`, causing `deleteEvent` to fall back to the `\"primary\"` calendar instead of the event's destination calendar. Use the event's destination calendar directly (e.g. `event.destinationCalendar?.[0]?.externalId`) for the fallback."
+   },
+   {
+    "id": "S4",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1077,
+     1078
+    ],
+    "texto": "`evt.destinationCalendar?.push(...teamDestinationCalendars)` is a silent no-op when `evt.destinationCalendar` is `null` \u2014 which happens exactly when neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` is set (line 1063-1067 assigns `null`). In that case the collective hosts' destination calendars collected at line 993 are dropped and team members are not invited to their own calendars, which is the bug this PR targets. Initialize to an array (e.g. `evt.destinationCalendar = evt.destinationCalendar ?? []`) before pushing."
+   },
+   {
+    "id": "S5",
+    "file": "EventManager",
+    "lines": [
+     118,
+     119
+    ],
+    "texto": "EventManager.create (line 118-119): `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` followed by an unconditional `mainHostDestinationCalendar.integration` will throw a TypeError when `evt.destinationCalendar` is null (the new default in handleNewBooking.ts line 1063-1067) or an empty array (many new call sites pass `[]`), because the destructured value is `undefined`. This is a regression from the previous `evt.destinationCalendar?.integration`, which used optional chaining and returned undefined safely."
+   },
+   {
+    "id": "S6",
+    "file": "GoogleCalendarService",
+    "lines": [
+     256,
+     256
+    ],
+    "texto": "GoogleCalendarService.updateEvent (line 256): the expression `externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` has a dead fallback \u2014 the `.find` predicate compares `cal.externalId` to `externalCalendarId`, but the `find` only runs in the falsy branch where `externalCalendarId` is empty/undefined, so it can never match a non-empty externalId and always yields undefined."
+   },
+   {
+    "id": "S7",
+    "file": "GoogleCalendarService",
+    "lines": [
+     317,
+     317
+    ],
+    "texto": "GoogleCalendarService.deleteEvent (line 317): the expression `externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` has a dead fallback \u2014 the `.find` predicate compares `cal.externalId` to `externalCalendarId`, but the `find` only runs in the falsy branch where `externalCalendarId` is empty/undefined, so it can never match a non-empty externalId and always yields undefined."
+   },
+   {
+    "id": "S8",
+    "file": "handleNewBooking.ts",
+    "lines": [
+     1078,
+     1078
+    ],
+    "texto": "handleNewBooking.ts line 1078: `evt.destinationCalendar?.push(...)` is a no-op when `evt.destinationCalendar` is null \u2014 which is exactly the `null` default set two lines above when neither eventType nor organizerUser has a destinationCalendar \u2014 silently dropping all collective team members' calendars."
+   },
+   {
+    "id": "S9",
+    "file": "packages/features/bookings/lib/handleNewBooking.ts",
+    "lines": [
+     1078,
+     1078
+    ],
+    "texto": "handleNewBooking.ts line 1078: `evt.destinationCalendar?.push(...)` is a no-op when `evt.destinationCalendar` is null \u2014 which is exactly the `null` default set two lines above when neither eventType nor organizerUser has a destinationCalendar \u2014 silently dropping all collective team members' calendars."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#02",
+    "descricao": "Claims the optional chaining in mainHostDestinationCalendar?.integration is redundant because a ternary already checks it.",
+    "textoGolden": "The optional chaining on mainHostDestinationCalendar?.integration is redundant since you already check mainHostDestinationCalendar in the ternary condition.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+    "descricao": "When externalCalendarId is absent, updateEvent/deleteEvent look for a destination calendar whose externalId equals that absent value, so the lookup never matches and the configured destination calendar is no longer used.",
+    "textoGolden": "Logic error: when externalCalendarId is provided, you're searching for a calendar where externalId === externalCalendarId, but this will always fail since you're looking for a calendar that matches itself. Should likely find by credentialId or use different logic.",
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "WHAT: The fallback `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId` only executes when `externalCalendarId` is falsy, so it compares `cal.externalId` against `null`/`undefined` and matches nothing (the same wrong pattern is duplicated in deleteEvent at lines 315-317).\nWHY: When `updateEvent`/`deleteEvent` are called without an externalCalendarId, `selectedCalendar`/`calendarId` now resolves to `undefined` instead of the host's destination calendar externalId (old code fell back to `event.destinationCalendar?.externalId`), so the Google API is invoked with an undefined calendarId and the update/delete targets the wrong (or default) calendar or errors.\nHOW: Find the destination calendar for the current credential (e.g. by credentialId) rather than comparing `externalId` to the already-falsy `externalCalendarId`, or restore the single fallback `event.destinationCalendar?.[0]?.externalId`."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       254,
+       256
+      ],
+      "texto": "Dead computation in the fallback: the else branch runs only when externalCalendarId is falsy, yet it calls `event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)`, comparing every cal.externalId to undefined. Nothing can match, so selectedCalendar is always undefined and the fallback that previously returned `event.destinationCalendar?.externalId` is lost. Match the intended criterion (destination calendar's own externalId/credentialId), not the already-falsy externalCalendarId."
+     },
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       315,
+       317
+      ],
+      "texto": "Same dead-computation defect in deleteEvent: the else branch executes only when externalCalendarId is falsy, yet the predicate `(cal) => cal.externalId === externalCalendarId` compares against undefined and can never match, so calendarId falls through to \"primary\" and the event is deleted from the wrong calendar instead of the booking's destination calendar. Fix the predicate to use the destination calendar's externalId (or credentialId) rather than the falsy externalCalendarId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+    "descricao": "The organization slug is now set only when team billing is enabled (inverted condition), so with billing both slug and requestedSlug are set and without billing neither is.",
+    "textoGolden": "Logic inversion in organization creation: The slug property is now conditionally set when IS_TEAM_BILLING_ENABLED is true, instead of when it's false as originally intended. This change, combined with requestedSlug still being set when IS_TEAM_BILLING_ENABLED is true, results in both properties being set when billing is enabled, and neither when disabled",
+    "comentarios": [
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       151,
+       151
+      ],
+      "texto": "Organization creation no longer assigns a slug when team billing is disabled, while requestedSlug is also omitted in that mode. New self-hosted organizations therefore have neither publication field, and publish.handler rejects them because requestedSlug is missing. Restore the non-billing slug assignment."
+     },
+     {
+      "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "lines": [
+       148,
+       152
+      ],
+      "texto": "WHAT: slug spread condition was inverted from ...(!IS_TEAM_BILLING_ENABLED && {slug}) to ...(IS_TEAM_BILLING_ENABLED ? {slug} : {}). WHY: organizations get slug when billing enabled and lose it when disabled, opposite of prior contract and breaking slug/requestedSlug pairing. HOW: restore negation for slug branch."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+    "descricao": "Office365 (and Lark) createEvent ignore the new credentialId argument and always use the first destination calendar, so in collective bookings other hosts' credentials target the organizer's calendar instead of their own.",
+    "textoGolden": "The Calendar interface now requires createEvent(event, credentialId), but some implementations (e.g., Lark/Office365) still declare createEvent(event) only\u2014this breaks the interface contract (also applies to other locations in the PR).",
+    "comentarios": [
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Office365 creation always selects the first host's destination despite being invoked separately with each host's credential. A collective booking with distinct Office365 calendars sends the second host's token to the first host's calendar ID, causing failed or incorrectly targeted creation. Accept the credentialId supplied by CalendarManager and select the matching destination."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       73,
+       76
+      ],
+      "texto": "Select the destination belonging to the current credential rather than always taking the first array entry. EventManager now calls createEvent once per destination with that destination's credential, while passing the full event array each time. In a collective booking with two Outlook hosts, the second host therefore attempts to insert into the first host's calendar using the second host's token, typically failing instead of creating the second calendar event. Accept the credentialId passed by CalendarManager and match the destination by that ID (or pass a destination-specific event)."
+     },
+     {
+      "file": "packages/app-store/office365calendar/lib/CalendarService.ts",
+      "lines": [
+       72,
+       76
+      ],
+      "texto": "Select the destination belonging to the credential passed by CalendarManager, rather than always selecting the first array element. EventManager now invokes creation for each collective host with the full destination array. A second Office365 host therefore attempts to write to the first host's calendar using its own token, causing creation to fail or target the wrong calendar; meanwhile the saved reference records the second host's externalId."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#06",
+    "descricao": "Claims updateAllCalendarEvents passes an undefined credential to updateEvent when reference.credentialId points to a credential that cannot be found.",
+    "textoGolden": "The `credential` may be undefined when passed to `updateEvent` if `reference.credentialId` is set but the credential is not found. This can lead to a runtime error when `updateEvent` is called with an undefined credential, which should be handled to prevent crashes.",
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+    "descricao": "The Google Meet fallback reads mainHostDestinationCalendar.integration without optional chaining, so a Meet booking with a null or empty destinationCalendar throws instead of falling back to Cal Video.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       119,
+       119
+      ],
+      "texto": "WHAT: `mainHostDestinationCalendar.integration` is dereferenced without optional chaining after destructuring `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []`.\nWHY: The previous code was `evt.destinationCalendar?.integration !== \"google_calendar\"`, which was null-safe; now when `destinationCalendar` is null/empty (e.g. handleNewBooking.ts:1063-1067 sets it to `null` when neither eventType nor organizer has one) and `evt.location === MeetLocationType`, destructuring yields `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined`, crashing the booking creation flow.\nHOW: Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"`."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "`mainHostDestinationCalendar` can be `undefined` because `evt.destinationCalendar` may now be null or an empty array (callers such as handleNewBooking pass `: null` / `: []`). The old code used `evt.destinationCalendar?.integration`, but the new line dereferences `mainHostDestinationCalendar.integration` without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'integration')` whenever `evt.location === MeetLocationType`. Use `mainHostDestinationCalendar?.integration !== \"google_calendar\"` to preserve the null-safe fallback."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       118,
+       119
+      ],
+      "texto": "The Meet-location fallback destructures `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` and then reads `mainHostDestinationCalendar.integration` without optional chaining. When `destinationCalendar` is an empty array (which this PR now produces in many callers, e.g. handleCancelBooking.ts, the payment webhooks, confirm/editLocation/deleteCredential/requestReschedule handlers all set `[]` when there is no destination calendar), the destructured value is `undefined` and `.integration` throws `TypeError: Cannot read properties of undefined (reading 'integration')`, aborting event creation. Use `mainHostDestinationCalendar?.integration` to preserve the previous optional-chained behavior."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+    "descricao": "For collective events whose organizer has no destination calendar, destinationCalendar is null and the optional push drops all other hosts' destination calendars, so those hosts never get calendar events.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "WHAT: `evt.destinationCalendar?.push(...teamDestinationCalendars)` silently does nothing when `evt.destinationCalendar` is `null`.\nWHY: For a COLLECTIVE event where neither `eventType.destinationCalendar` nor `organizerUser.destinationCalendar` exists, the evt field is set to `null` (lines 1063-1067), so the collected `teamDestinationCalendars` of the other hosts are dropped and those hosts are never invited \u2014 defeating the multi-host support this PR adds.\nHOW: Initialize to an array (e.g. `evt.destinationCalendar ?? []` before pushing, or default the field to `[]` instead of `null`) so team destination calendars are always appended."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1078
+      ],
+      "texto": "The optional push discards all collected team destinations when the organizer has no destination calendar. A collective booking with configured secondary hosts therefore creates none of their calendar events even though teamDestinationCalendars contains them. Initialize the array before appending the team destinations."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleNewBooking.ts",
+      "lines": [
+       1077,
+       1079
+      ],
+      "texto": "Initialize destinationCalendar to an array before appending collective hosts' destinations. When neither the event type nor organizer has a destination, it is set to null above, so optional push silently discards all the computed teamDestinationCalendars. Hosts with configured destination calendars consequently receive no calendar events."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+    "descricao": "Video booking references are now saved without their credentialId, so cancelling the booking can no longer find the video credential and the meeting is not deleted.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       169,
+       170
+      ],
+      "texto": "WHAT: `credentialId: isCalendarType ? result.credentialId : undefined` drops the previous non-calendar fallback `result.credentialId`.\nWHY: For non-calendar results (video events) `referencesToCreate` now stores `credentialId: undefined` where it previously stored `result.credentialId`, so the persisted video reference loses its credentialId; later code that looks the reference up by credentialId (e.g. handleCancelBooking.ts:491-502 deleting the video meeting, or EventManager.updateLocation) can no longer resolve the credential and the meeting is not cleaned up.\nHOW: Keep the fallback for non-calendar results: `credentialId: isCalendarType ? result.credentialId : result.credentialId` (i.e. just `result.credentialId` for both branches)."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "The reference mapping discards credentialId for every video result. createMeeting returns the video credential ID, and handleCancelBooking only deletes a video meeting when its reference has that ID, so newly created video meetings are left behind on cancellation. Preserve result.credentialId for video results as well."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       170,
+       170
+      ],
+      "texto": "Retain result.credentialId for non-calendar references as well. The previous mapping saved the dedicated video integration's credential ID; this change unconditionally replaces it with undefined for video results, losing the association needed to identify the account that created the meeting during subsequent lifecycle operations."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#10",
+    "descricao": "createAllCalendarEvents and updateAllCalendarEvents fetch each missing host credential with a separate findUnique inside the loop instead of one batched query.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       341,
+       355
+      ],
+      "texto": "WHAT: The new `for (const destination of event.destinationCalendar)` loop performs a `prisma.credential.findUnique` on every destination whose credential is not found in the cached `this.calendarCredentials` (line 344); the same per-reference DB lookup was added in updateAllCalendarEvents at line 517.\nWHY: For collective bookings with multiple hosts this turns one in-memory lookup into up to N sequential database round-trips added to the booking-creation hot path, scaling with host count.\nHOW: Resolve all missing credential ids in a single batched query (`prisma.credential.findMany({ where: { id: { in: missingIds } } })`) before the loop and build a lookup map."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12",
+    "descricao": "updateLocation stores externalCalendarId and credentialId from updateEvent's result, which never returns them, so calendar references rewritten on location edit lose their calendar and credential and later updates or cancellations misroute.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       208,
+       209
+      ],
+      "texto": "updateLocation now reads externalId and credentialId exclusively from results, but CalendarManager.updateEvent returns neither field. Calendar references produced by location editing consequently lose their calendar and credential routing information, breaking subsequent updates or cancellation, particularly for secondary collective hosts. Return those fields from updateEvent or preserve them from the corresponding booking reference."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+    "descricao": "Cancelling all remaining occurrences of a recurring collective booking deletes only the first calendar reference of each booking, repeated once per host, so the other hosts' events stay on their calendars.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       423,
+       424
+      ],
+      "texto": "The new per-reference loop runs the recurring-series deletion branch for every host, but that branch still iterates only bookingToDelete.user.credentials and selects the first calendar reference in each occurrence. Canceling all remaining collective occurrences repeatedly deletes the owner's events while leaving secondary hosts' events untouched. For each occurrence, delete the reference matching the current host credential using the resolved calendarCredential."
+     },
+     {
+      "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "lines": [
+       449,
+       457
+      ],
+      "texto": "For cancel-all-remaining recurring collective bookings, delete each updated booking's reference matching the current outer reference/credential. The new outer loop iterates all calendar references, but this inner block still iterates only the organizer's credentials and takes the first calendar reference of each booking. Every outer iteration therefore repeats deletion of the first host's event, while the additional hosts' recurring events remain on their calendars after cancellation."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14",
+    "descricao": "Google createEvent picks the target calendar only by matching credentialId, so destination calendars without a credentialId are ignored and events are created on the primary calendar instead.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+      "lines": [
+       145,
+       154
+      ],
+      "texto": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#15",
+    "descricao": "For destination calendars without a credentialId, createEvent is called without the externalId, so the booking reference is stored with an undefined externalCalendarId.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       376,
+       381
+      ],
+      "texto": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+     },
+     {
+      "file": "packages/core/EventManager.ts",
+      "lines": [
+       375,
+       381
+      ],
+      "texto": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+     }
+    ]
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+    "descricao": "When cancelling a recurring booking with multiple calendar references, the recurring-event deletion over all remaining bookings and credentials runs once per reference, causing duplicate delete calls and errors.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-03",
+    "descricao": "loadUsers forwards raw Prisma error messages to the client in a 400 response, exposing internal model and query details.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-01",
+    "descricao": "loadUsers throws a plain Error for an empty/invalid dynamicUserList, which the catch block converts into a generic 500 'Unable to load users', hiding a client input error behind a server error.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#opa-02",
+    "descricao": "Collective bookings now push every team member's DestinationCalendar row (externalId, credentialId, userId) into evt.destinationCalendar, and since evt is spread into the webhook payload these other members' calendar identifiers are sent to webhook subscribers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+    "descricao": "In Google createEvent, when no destination calendar matches the credentialId, the hangout-link events.patch is called with an undefined calendarId and fails, so the Meet link is not added to the event description.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01",
+    "descricao": "In updateAllCalendarEvents the catch block builds an error `message` that is no longer logged or used after the PR removed console.error, leaving dead code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01",
+    "descricao": "When updateAllCalendarEvents fails before the calendar references are loaded, its catch now returns an empty array instead of a failed result, so a failed reschedule or location update looks successful to callers.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01",
+    "descricao": "The hidden-notes placeholder written into calendar events is a hard-coded English string not routed through i18n.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimip-01",
+    "descricao": "When rescheduling merges into a new booking, only the first old `_calendar` reference is deleted via `.find()`, leaving stale events on other hosts' calendars for collective bookings; iterate all old calendar references.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+    "descricao": "handleCancelBooking queries prisma.credential.findUnique once per calendar reference inside the loop instead of batching the missing credential ids into one findMany.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "replays-self-serve-bulk-delete-system-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "`validate_timestamp` and `validate_age` use `self.initial_data.get(\"age\")` / `.get(\"timestamp\")` truthiness tests to enforce mutual exclusion, so falsy-but-valid values bypass the check. A report containing both `age` and `timestamp=0` (0 is allowed by `min_value=0`) passes validation, defeating the Working-Draft-vs-Editor's-Draft exclusivity guarantee. Use membership tests (`\"age\" in self.initial_data`) instead of truthiness."
+   },
+   {
+    "id": "S2",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     110,
+     120
+    ],
+    "texto": "`fetch_error_details` builds `ErrorEvent`s by zipping `error_ids` with `events.values()`, but `nodestore.backend.get_multi` returns a dict keyed by node id whose value order is not guaranteed to match the input `error_ids` order, and the `if data is not None` filter drops entries from `values` while `error_ids` stays full-length. When any node is missing, the zip misaligns and error metadata (title/message/timestamp) is attached to the wrong event id. Build the result by iterating `error_ids` and indexing the returned dict by the generated node id."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+    "lines": [
+     81,
+     86
+    ],
+    "texto": "`analytics.record(\"preprod_artifact.api.assemble\", ...)` is emitted before the `organizations:preprod-artifact-assemble` feature check, so requests that are then rejected with a 404 still record a successful-assemble analytics event. This inflates the assemble metric with requests that never assembled anything. Move the `analytics.record` call after the feature-flag gate."
+   },
+   {
+    "id": "S4",
+    "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "lines": [
+     50,
+     60
+    ],
+    "texto": "`validate_timestamp` and `validate_age` test presence with `self.initial_data.get(\"age\")` / `.get(\"timestamp\")` using truthiness, so a report carrying `age: 0` or `timestamp: 0` (valid falsy values) bypasses the mutual-exclusion check and both fields are accepted. Use membership tests (`\"age\" in self.initial_data`) instead of truthiness."
+   },
+   {
+    "id": "S5",
+    "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "lines": [
+     107,
+     120
+    ],
+    "texto": "`fetch_error_details` pairs `error_ids` with `events.values()` via `zip`, but `nodestore.get_multi` (`DjangoNodeStorage._get_bytes_multi`) omits ids that are not found instead of returning `None`, so the returned dict is shorter than `error_ids` and the two sequences misalign \u2014 each error id is attributed another event's title/message (the `if data is not None` guard is a no-op). Iterate the dict items and look up the event id from the key, e.g. `for node_id, data in events.items() if data is not None` mapping back to the original id."
+   },
+   {
+    "id": "S6",
+    "file": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py",
+    "lines": [
+     81,
+     91
+    ],
+    "texto": "`analytics.record(\"preprod_artifact.api.assemble\", ...)` is emitted before the `organizations:preprod-artifact-assemble` feature check, so the assemble event is recorded for every caller including users without access, inflating the metric and misrepresenting actual usage. Move the `analytics.record` call after the feature-flag guard."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+    "descricao": "The age/timestamp mutual-exclusion validators check truthiness via initial_data.get(), so a zero value is treated as absent and a report carrying both fields passes validation.",
+    "textoGolden": "Validation logic incorrectly uses .get('timestamp'), which treats a timestamp of 0 as absent. It should directly check 'timestamp' in self.initial_data to ensure proper field presence detection, preventing both 'age=0' and 'timestamp' from passing mutual-exclusion validation.",
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       47,
+       59
+      ],
+      "texto": "The timestamp/age validators test truthiness and make both fields optional instead of enforcing exactly one field. Reports with both age=0 and timestamp=0, or with neither field, pass validation despite violating the stated mutually exclusive report formats. Enforce field presence and exclusivity in object-level validate using key membership rather than truthiness."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check key presence rather than truthiness when enforcing age/timestamp mutual exclusion. Both fields permit 0, so a report with age=0 and timestamp=0 passes both validators even though both fields are present; a zero-valued counterpart also bypasses the corresponding check. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` (or object-level validation) and add zero-value tests."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       50,
+       59
+      ],
+      "texto": "Check field presence rather than truthiness when enforcing timestamp/age exclusivity. A report containing both `timestamp: 0` and `age: 0` passes both validators, despite the declared constraint that they must not coexist; with only one zero value, validation is also asymmetric. Use membership checks on initial_data (or object-level validation) and add zero-value mixed-field tests."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+    "descricao": "The validation-failure warning logs the entire raw, attacker-controlled browser report instead of a redacted subset.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "The new validation-failure warning logs `raw_report`, the full unvalidated report object supplied by the caller. This endpoint is public and unauthenticated (permission_classes = (), @csrf_exempt), so the payload is attacker-controlled, and browser report bodies routinely carry sensitive values (CSP blocked-uri/document-uri/script-sample, sourceFile, plus the full user_agent). Logging the raw payload on every validation failure writes potentially sensitive data into application logs; log only the report `type` (or a sanitized/redacted subset) instead of the entire raw object."
+     },
+     {
+      "file": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+      "lines": [
+       111,
+       114
+      ],
+      "texto": "Do not attach the complete raw report to the validation warning. Browser reports contain page URLs (potentially including tokens or personal data in query strings) and arbitrary body contents. Any invalid field now causes that entire payload to be emitted at warning level, exposing it in operational logs even where the existing info-level request logging is filtered out. Log the failed field names/report type or a redacted diagnostic instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#06",
+    "descricao": "fetch_error_details pairs error_ids positionally with nodestore get_multi values, but get_multi does not preserve input order (cached items are appended last) and drops missing nodes, so error details get attached to the wrong error IDs.",
+    "textoGolden": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       110,
+       120
+      ],
+      "texto": "WHAT: fetch_error_details zips error_ids with events.values() instead of mapping by node_id, misaligning ids to payloads and dropping/mismatching on missing keys. WHY: assigns wrong title/message/timestamp to wrong error id and yields incorrect Seer logs. HOW: look up each node_id in the get_multi dict (e.g. dict keyed by node_id) and preserve error_ids order."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       120
+      ],
+      "texto": "`zip(error_ids, events.values())` assumes `nodestore.backend.get_multi(node_ids)` values preserve input order and that all keys exist. Dict values give no such guarantee; missing keys shorten/misalign the zip, attaching the wrong event payload to the wrong error_id. Lookup per-id: iterate node_ids/error_ids and do `events.get(node_id)` instead of zipping with `.values()`."
+     },
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       104,
+       121
+      ],
+      "texto": "fetch_error_details pairs IDs to payloads with zip(error_ids, events.values()) where events is dict from nodestore get_multi. Values order need not match IDs and missing keys misalign, attaching wrong title/message to wrong error. Look up per node_id instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+    "descricao": "The Snuba replay lookup for error IDs runs even when enable_error_context=false, adding a needless query (and failure point) to opt-out requests.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+      "lines": [
+       67,
+       77
+      ],
+      "texto": "The new Snuba replay lookup executes even when enable_error_context=false. Every opt-out summary request incurs an unnecessary database round trip and can now fail on Snuba availability even though it only needs recording storage. Evaluate the flag first and perform the replay lookup only when error context is enabled."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#12",
+    "descricao": "With the use-table-widget-visualization flag on, the widget renders TableWidgetVisualization with hardcoded empty columns and data instead of the query results, so every table widget shows an empty table.",
+    "textoGolden": "Hardcoded empty data passed to TableWidgetVisualization causes it to always render an empty table instead of displaying actual results when the feature flag is enabled.",
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "WHAT: the `use-table-widget-visualization` branch renders `<TableWidgetVisualization columns={[]} tableData={{data: [], meta: {fields: {}, units: {}}}} />`, hardcoding empty rows and no columns instead of the actual query result. WHY: when the feature flag is enabled for an org, every table widget renders an empty table and silently drops `result.data`/`result.meta`/`columns`, a functional regression for all dashboard table widgets. HOW: build `columns`/`tableData` from the existing `result` (and `widget.queries[i].fields`/`fieldAliases`) rather than the empty placeholder objects."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "In the new feature-flagged branch, TableWidgetVisualization is rendered with hardcoded empty props: columns={[]} (an empty array, which is truthy for the `columns ?? fallback` logic, so no columns are derived) and tableData={data: [], meta: {fields: {}, units: {}}}. All the real result data computed above (result.data, result.meta, fields, fieldAliases, eventView) is discarded, so any organization with 'use-table-widget-visualization' enabled gets an empty table instead of the query results. Pass the actual result data/columns into the visualization (or keep the old StyledSimpleTableChart) until the widget is properly wired."
+     },
+     {
+      "file": "static/app/views/dashboards/widgetCard/chart.tsx",
+      "lines": [
+       164,
+       174
+      ],
+      "texto": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+    "descricao": "The custom cell renderers fall back to default rendering on any falsy return (0, '', null), not only undefined, so a renderer cannot render zero or an empty cell.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       73
+      ],
+      "texto": "The documented custom-renderer contract says fallback runs when the callback returns undefined, but `if (cell)` also falls back for valid ReactNode results such as `0`, an empty string, or `null`. A caller trying to render zero or deliberately suppress a cell instead gets the default field rendering. Check `cell !== undefined` here and in the head-cell renderer so the implementation honors the advertised contract."
+     },
+     {
+      "file": "static/app/views/dashboards/widgets/tableWidget/defaultTableCellRenderers.tsx",
+      "lines": [
+       70,
+       72
+      ],
+      "texto": "Use `cell !== undefined` instead of `if (cell)` to select the custom renderer result, and apply the same correction to the header renderer. The API documents undefined as the fallback sentinel, but valid ReactNode results such as numeric 0, an empty string, or null are falsy. A custom renderer returning 0 or intentionally hiding a cell with null therefore unexpectedly renders the default value instead."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#19",
+    "descricao": "The attribute-keys query key no longer includes the organization slug, so two organizations with the same filters share a cache entry and switching orgs can show the previous org's attribute names.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       41
+      ],
+      "texto": "The new attribute query key omits the organization even though its query function fetches an organization-specific endpoint. Switching organizations with identical project selections such as all projects and the same date range reuses the singleton query client's prior organization's attribute metadata, including while the new request refetches. Include organization.slug or organization.id in the query key."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug in this query key. The new useGetTraceItemAttributeKeys implementation fetches `/organizations/${organization.slug}/trace-items/attributes/`, but makeTraceItemAttributeKeysQueryOptions contains no organization identity. Two organizations with identical filters (particularly the default all-project selection) therefore share this cache entry. Switching organizations can display the previous organization's attribute names, and concurrently mounted consumers can reuse a request for the wrong organization. Preserve the organization-specific cache identity that the previous endpoint-based key provided."
+     },
+     {
+      "file": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+      "lines": [
+       39,
+       42
+      ],
+      "texto": "Include the organization slug or ID in this query key. The query function fetches `/organizations/${organization.slug}/trace-items/attributes/`, but the key contains only query options. Two organizations with the same project selection (especially the all-projects selection), date range and dataset therefore share a cache entry. Switching organizations can display the previous organization's attributes, and overlapping requests can populate the shared entry with the wrong organization's result."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#20",
+    "descricao": "The UseTraceItemAttributeBaseProps doc says only LOGS is supported, although the hooks are also used with SPANS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "static/app/views/explore/types.tsx",
+      "lines": [
+       9,
+       12
+      ],
+      "texto": "The new shared prop documentation claims the endpoint currently supports only LOGS, but this PR also uses these hooks with TraceItemDataset.SPANS (for example in TransactionNameSearchBar). Update this comment to describe both supported datasets; as written it incorrectly tells callers that a supported and actively used input is unsupported."
+     }
+    ]
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-01",
+    "descricao": "Error event timestamps (seconds) are compared with replay recording event timestamps (milliseconds), so errors are not interleaved chronologically with breadcrumbs.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#sncc-03",
+    "descricao": "dedupedYAxes is now just [yAxis], so its name misdescribes the code.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+    "descricao": "Every paginated breadcrumb-summary request queries the replay and fetches all of its error events from nodestore with no cap, adding latency and memory proportional to the replay's error count on each page.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+    "descricao": "HIDDEN_ATTRIBUTES is applied only when a search query is present; the no-search early return shows all attributes, so the hidden attributes still appear in the default span attributes view.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+    "descricao": "The bulk delete test sets max_segment_id to None to cover the new guard in _make_recording_filenames, but it mocks delete_matched_rows, so the guard is never executed and removing it would not fail the test.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "replays-self-serve-bulk-delete-system-sentry#snloop-01",
+    "descricao": "BrowserReportSerializer's validate_timestamp/validate_age docstrings claim one of age/timestamp must be present, but the code only enforces mutual exclusion, so reports with neither are accepted.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "repo": "/Users/juniorsartori/projects/benchmark/discourse",
+  "head": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     145,
+     151
+    ],
+    "texto": "`downsize` is defined twice: the 4-arg version at line 145 (from, to, max_width, max_height) and the 3-arg version at line 149 (from, to, dimensions). The later definition overrides the earlier one, so callers that pass width/height as separate integers now bind the first integer to `dimensions`. `app/jobs/regular/resize_emoji.rb:14` calls `OptimizedImage.downsize(path, path, 100, 100, opts)`, which now yields `dimensions = 100` and emits `-resize 100` (width-only) instead of the intended `100x100` square constraint, silently changing emoji resizing output. Remove the duplicate definition and keep a single `downsize(from, to, dimensions, opts)` that only accepts a dimensions string, updating the integer-passing callers accordingly."
+   },
+   {
+    "id": "S2",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     179,
+     185
+    ],
+    "texto": "`maxSizeKB` is now a hardcoded `10 * 1024` instead of the admin-configured `Discourse.SiteSettings['max_' + type + '_size_kb']`, so client-side validation ignores the server's configured upload limit and rejects files the server would accept (or reports a bogus `max_size_kb` in the error message). Keep reading the site setting so the client-side cap and error text match the server configuration."
+   },
+   {
+    "id": "S3",
+    "file": "app/assets/javascripts/discourse/lib/utilities.js",
+    "lines": [
+     243,
+     249
+    ],
+    "texto": "The 413 (entity too large) handler hardcodes `maxSizeKB = 10 * 1024` instead of `Discourse.SiteSettings.max_image_size_kb`, so the error toast reports a max size that does not match the server's configured limit. Restore the site-setting lookup so the displayed limit reflects the actual server configuration."
+   },
+   {
+    "id": "S4",
+    "file": "app/controllers/uploads_controller.rb",
+    "lines": [
+     52,
+     70
+    ],
+    "texto": "The API URL download cap was raised from `SiteSetting.max_image_size_kb.kilobytes` to a hardcoded `10.megabytes`, so `FileHelper.download` now streams and buffers up to 10MB of remote data before the (up to 5-iteration) downsize loop rewrites it in place, roughly a 10x increase in per-request memory/temp-file work regardless of the configured image limit. Gate the download cap on a site setting (or the new auto-downsize limit) rather than a fixed 10MB constant."
+   },
+   {
+    "id": "S5",
+    "file": "app/models/optimized_image.rb",
+    "lines": [
+     149,
+     151
+    ],
+    "texto": "`downsize` is defined twice: the 4-arg version at line 145 (from, to, max_width, max_height) and this 3-arg version (from, to, dimensions). Ruby keeps only the last definition, so the effective method has arity 3-4, but caller `app/jobs/regular/resize_emoji.rb:14` still invokes `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, raising ArgumentError and breaking emoji resizing. Remove the duplicate definition (or update the emoji caller) so a single consistent signature is enforced."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#01",
+    "descricao": "downsize is defined twice in OptimizedImage; the new (from, to, dimensions, opts) version overrides the (max_width, max_height) one, so existing callers such as ResizeEmoji that pass width and height now raise ArgumentError.",
+    "textoGolden": "The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.",
+    "comentarios": [
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       149,
+       151
+      ],
+      "texto": "WHAT: A second `def self.downsize(from, to, dimensions, opts={})` is defined that overrides the existing `downsize(from, to, max_width, max_height, opts={})` at lines 145-147. WHY: Ruby uses the last definition, so the effective downsize now only accepts 3-4 args, and the existing caller app/jobs/regular/resize_emoji.rb:14 (`OptimizedImage.downsize(path, path, 100, 100, opts)`) passes 5 args and raises ArgumentError (wrong number of arguments, given 5, expected 3..4), breaking emoji resizing. HOW: Remove the duplicate; keep a single downsize method whose signature matches all callers (the 4-arg uploads_controller call `downsize(path, path, \"80%\", allow_animation: ...)` and the 5-arg ResizeEmoji call), or rename one of them."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`downsize` is defined twice: the original 5-param form `downsize(from, to, max_width, max_height, opts)` at lines 145-147 and the new 4-param form `downsize(from, to, dimensions, opts)` at lines 149-151. Ruby keeps only the last definition, so the effective signature is now 4 params and the 5-param version is dead code. The pre-existing consumer app/jobs/regular/resize_emoji.rb:14 still calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 positional args, which now raises ArgumentError on every emoji resize. Either update that caller to the new `dimensions` form or remove the redundant override so the old signature keeps working."
+     },
+     {
+      "file": "app/models/optimized_image.rb",
+      "lines": [
+       145,
+       151
+      ],
+      "texto": "`self.downsize` is defined twice in the same class scope (line 145 `(from, to, max_width, max_height, opts={})` and the new line 149 `(from, to, dimensions, opts={})`). Ruby keeps only the last definition, so the 4-argument version is dead and unreachable. The existing caller `OptimizedImage.downsize(path, path, 100, 100, opts)` in app/jobs/regular/resize_emoji.rb:14 passes 5 arguments and will now raise ArgumentError (expected 3..4). Remove the duplicate definition (keep only the `dimensions`-based one, or convert resize_emoji's call), otherwise emoji resizing breaks."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#02",
+    "descricao": "The client-side upload size check hardcodes 10 MB instead of the per-type max_<type>_size_kb setting, so attachment limits diverge from the server: larger allowed attachments are blocked and smaller limits are only enforced server-side.",
+    "textoGolden": "Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).",
+    "comentarios": [
+     {
+      "file": "utilities.js",
+      "lines": [
+       179,
+       249
+      ],
+      "texto": "Hardcoded max size literal 10 * 1024 replaces site-setting-derived max size. Behavioral concern outside assigned class."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       182,
+       182
+      ],
+      "texto": "The fixed 10 MB client limit is applied to attachments as well as images, replacing max_attachment_size_kb. Sites configured to allow attachments larger than 10 MB can no longer upload those valid files through the composer, although UploadValidator still permits them. Apply the new input ceiling only to images and retain the configured attachment limit."
+     },
+     {
+      "file": "app/assets/javascripts/discourse/lib/utilities.js",
+      "lines": [
+       180,
+       184
+      ],
+      "texto": "WHAT: Client check hardcodes maxSizeKB to 10*1024 instead of Discourse.SiteSettings['max_'+type+'_size_kb'], losing image vs attachment distinction. WHY: Sites with smaller max_attachment_size_kb pass client validation then fail server-side, and sites with limits >10MB incorrectly block valid uploads with wrong max_size_kb message. HOW: Restore per-type SiteSetting lookup (keep 10MB only as image downsize ceiling)."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#03",
+    "descricao": "The upload downsizing passes a percentage ('80%') as dimensions, but for animated GIFs the gifsicle path uses --resize-fit, which expects WxH geometry, so downsizing silently fails.",
+    "textoGolden": "Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.",
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "The controller passes the percentage string `\"80%\"` as the dimensions argument to `OptimizedImage.downsize`, but the consumer requires explicit `WxH` geometry: the code this PR deleted built exactly `\"#{width}x#{height}\"`, and the animated path runs `gifsicle --resize-fit #{dimensions}`, which rejects a percentage. Pass an explicit size (e.g. a computed `\"WxH\"` from the max KB target) so the auto-downsize actually reduces the file, rather than silently no-oping and leaving oversized uploads."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "Caller passes \"80%\" as dimensions to OptimizedImage.downsize, but the downsize/optimize instruction builders in optimized_image.rb expect explicit \"WxH\" geometry (interpolated as -resize #{dimensions}\\>). A bare percentage does not satisfy that contract and will produce a malformed geometry. Fix the caller to supply WxH dimensions or add explicit percentage handling to the callee."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#04",
+    "descricao": "Auto-downsizing passes the upload tempfile path, which lacks a .gif extension, so the animated branch is never chosen and convert keeps only the first frame, flattening oversized animated GIFs.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       70
+      ],
+      "texto": "WHAT: The new auto-downsize call passes a tempfile path whose name has no `.GIF` extension, so `optimize` never selects the animated branch (`method_name += \"_animated\" if opts[:allow_animation] && from =~ /\\.GIF$/i`) and uses `downsize_instructions`, which runs `convert from[0]` and keeps only the first frame. WHY: Animated GIFs larger than max_image_size_kb that are uploaded through this path have their animation flattened to a single frame even though SiteSetting.allow_animated_thumbnails is enabled. HOW: Detect the image type from the original filename/content-type rather than the tempfile path (or pass a flag) so the gifsicle animated downsize path is used for GIF inputs."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       67,
+       67
+      ],
+      "texto": "Passing the multipart tempfile path to downsize prevents animation detection when that path does not end in .gif, even when allow_animated_thumbnails is enabled. OptimizedImage.optimize checks the path suffix and otherwise uses convert with input[0], so oversized animated GIF uploads are permanently flattened to their first frame. Preserve the original image extension in the processing path or pass the image format explicitly to select animated processing."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#05",
+    "descricao": "The comment promises images are reduced to the allowed size, but the loop only tries five 80% reductions with no guarantee of reaching the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       70
+      ],
+      "texto": "The comment says large images are \"automatically reduced to allowed size\", but the loop only resizes by 80% up to 5 attempts (\u22480.33\u00d7 of the original in the best case) and then stops without any check that the result actually meets `max_image_size_kb`. The prose promises a guarantee the code does not provide; either make the loop actually converge to the allowed size or reword the comment to state that the image is only attempted to be reduced."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#06",
+    "descricao": "The downsize retry loop ignores the false return of a failed conversion and repeats the same failing ImageMagick call up to five times.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       66,
+       68
+      ],
+      "texto": "The retry loop ignores downsize's false return value and retries failed conversions while the file remains oversized. convert_with returns false on converter failure, so an unsupported or malformed oversized image launches the same failing external conversion up to five times per upload without any changed input. Break on a failed downsize result and return an upload error rather than repeating the conversion."
+     },
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       64,
+       69
+      ],
+      "texto": "WHAT: Downsize loop ignores OptimizedImage.downsize return value and retries up to 5 times unconditionally while checking tempfile.size. WHY: Failed converts (e.g. SVG, invalid 80%> geometry, corrupt image) burn 5 ImageMagick runs then Upload.create_for still runs with oversized/unmodified file and fails validation, wasting CPU and breaking the feature. HOW: Break on false return and handle failure."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#08",
+    "descricao": "Claims up to five synchronous ImageMagick runs per oversized upload block request threads and enable DoS.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "app/controllers/uploads_controller.rb",
+      "lines": [
+       63,
+       69
+      ],
+      "texto": "WHAT: Up to 5 synchronous OptimizedImage.downsize + ImageOptim convert runs execute inline in create_upload request cycle for every oversized image. WHY: Blocks the Rails request thread with CPU-intensive shell-outs per upload, enabling easy request-thread exhaustion/DoS with large images. HOW: Move downsizing to background job or enforce single-pass/timeout."
+     }
+    ]
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#09",
+    "descricao": "Claims the downsize loop checking tempfile.size may never terminate because of a stale cached size, causing infinite loops.",
+    "textoGolden": "The loop checking `tempfile.size` may never terminate correctly due to stale cached size, leading to potential infinite loops or incorrect file handling after modifications.",
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#sncc-01",
+    "descricao": "The 413 upload error message states a hard-coded 10 MB maximum that may not match the limit the server or web server actually enforces.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#opa-01",
+    "descricao": "The upload tempfile path, which for API URL uploads embeds the request-controlled type param, is now passed to OptimizedImage.downsize and run unescaped in a shell via backticks, allowing command injection through type.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feature-automatically-downsize-large-images-discourse-cursor#musep-01",
+    "descricao": "Oversized SVG uploads go through the new ImageMagick downsize loop because SVG counts as an image, so the vector file is rasterized or corrupted in place before Upload.create_for parses it as SVG.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     102,
+     111
+    ],
+    "texto": "The preview code computes the common prefix length (`start`) and common suffix length (`end`) independently, then calls `value.substring(start, value.length() - end)` and `sanitized.substring(start, sanitized.length() - end)`. When the sanitizer collapses a value to a short string that is both a prefix and a suffix of the original (so `start + end` exceeds the shorter string's length), the second `substring` gets `beginIndex > endIndex` and throws `StringIndexOutOfBoundsException`, aborting the Maven build with a confusing error instead of reporting the illegal-HTML message. Clamp the ranges, e.g. use `start = Math.min(start, ...)` and `end = Math.min(end, ...)` so that `start <= length - end` for both strings before slicing."
+   },
+   {
+    "id": "S2",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     132,
+     135
+    ],
+    "texto": "The email-file detection uses `file.getAbsolutePath().contains(\"email\")`, which matches anywhere in the whole absolute path rather than in the file's own directory. A checkout path or parent directory containing the substring `email` makes non-email message files take this branch, silently stripping ` style=\"direction: rtl;\"` from the value and thus masking real RTL HTML differences from the sanitizer. Restrict the check to the file's parent directory (e.g. `file.getParentFile().getName().equals(\"email\")`)."
+   },
+   {
+    "id": "S3",
+    "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "lines": [
+     71,
+     71
+    ],
+    "texto": "`loginTotpStep1` in the Lithuanian locale file was replaced with Italian text (`Installa una delle seguenti applicazioni sul tuo cellulare:`), so Lithuanian users now see Italian in the login TOTP setup step. The same Italian string was also pasted into `themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101` (`totpStep1`); provide the correct Lithuanian translation instead."
+   },
+   {
+    "id": "S4",
+    "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "lines": [
+     102,
+     111
+    ],
+    "texto": "The common-prefix (`start`) and common-suffix (`end`) lengths are computed independently and can overlap, so `start + end` may exceed a string length. When that happens, `value.substring(start, value.length() - end)` or `sanitized.substring(start, sanitized.length() - end)` has `begin > end` (e.g. value=\"aa\", sanitized=\"a\" \u2192 start=1, end=1 \u2192 `sanitized.substring(1, 0)`), throwing `StringIndexOutOfBoundsException` and aborting the whole verification with an unhandled `RuntimeException` instead of reporting the offending key. Clamp `end` to `Math.min(end, value.length() - start)` (and the sanitized equivalent) before slicing."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#01",
+    "descricao": "The Lithuanian TOTP setup step was replaced with Italian text in both the account and login bundles.",
+    "textoGolden": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The Lithuanian OTP setup instruction has been replaced with an Italian sentence. login-config-totp.ftl renders this message directly, so users selecting Lithuanian receive an instruction in the wrong language; the same copied sentence also appears in the Lithuanian account bundle at line 101. Replace both values with the Lithuanian translation of the new installation instruction."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+      "lines": [
+       101,
+       101
+      ],
+      "texto": "The replacement OTP setup instruction is Italian (\u201cInstalla una delle seguenti applicazioni sul tuo cellulare\u201d), but this is the Lithuanian locale and the surrounding setup steps are Lithuanian. Translate the new instruction into Lithuanian rather than copying the Italian translation. The same incorrect replacement appears in the login bundle at themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71 and should be corrected there too; otherwise Lithuanian users see an untranslated first step in both OTP setup flows."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+      "lines": [
+       71,
+       71
+      ],
+      "texto": "The replacement OTP setup instruction is Italian, not Lithuanian (`Installa una delle seguenti applicazioni sul tuo cellulare`). The same replacement was made for `totpStep1` in the Lithuanian account bundle. Translate both replacements into Lithuanian so selecting Lithuanian does not display Italian instructions during authenticator setup."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#02",
+    "descricao": "The zh_CN totpStep1 translation is written in Traditional Chinese instead of Simplified Chinese.",
+    "textoGolden": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+    "comentarios": [
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The zh_CN (Simplified Chinese) file was given Traditional Chinese characters: totpStep1=\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a. Compare the unchanged neighbouring lines (e.g. '\u6253\u5f00\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u2026') which use Simplified forms; \u624b\u6a5f/\u61c9\u7528\u7a0b\u5f0f/\u5b89\u88dd are Traditional. zh_CN must be Simplified Chinese, so this string is in the wrong script/variant for the locale."
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "totpStep1 in messages_zh_CN uses Traditional Chinese (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: \u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a"
+     },
+     {
+      "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+      "lines": [
+       112,
+       112
+      ],
+      "texto": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a\"). Use the Simplified form, \"\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u7a0b\u5e8f\u4e4b\u4e00\uff1a\"."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#04",
+    "descricao": "The method santizeAnchors is misspelled; it should be sanitizeAnchors.",
+    "textoGolden": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#05",
+    "descricao": "HTML_TAGS is a non-static, non-private field instead of a private static final constant.",
+    "textoGolden": "Field HTML_TAGS should be declared as 'private static final' following Java naming conventions for constants",
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+    "descricao": "The diff-trimming code computes common prefix and suffix independently, so they can overlap and substring throws StringIndexOutOfBoundsException, crashing the verifier instead of reporting the illegal HTML.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       101,
+       111
+      ],
+      "texto": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       102,
+       111
+      ],
+      "texto": "WHAT: Common prefix/suffix stripping for the diff message can compute start+end larger than the string length and call substring(start, length-end) with start > end. WHY: Throws StringIndexOutOfBoundsException inside the key loop and crashes verification instead of reporting Illegal HTML. HOW: Clamp end so start+end <= min lengths, e.g. stop suffix scan when end >= length-start."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#07",
+    "descricao": "normalizeValue blanks the entire choice expression for some keys before HTML validation, so markup placed inside a choice branch of those keys bypasses the new verifier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       126
+      ],
+      "texto": "Choice normalization removes all branch content before HTML validation, allowing prohibited markup to bypass the new translation policy. A translated error-invalid-multivalued-size value such as `{2,choice,0#values|1#<a href=\"https://malicious.example\">value</a>|1<values}` becomes `...` and passes without checking the injected link, while consumers using MessageFormat expand that branch into the rendered message. Preserve and validate branch text, normalizing only the choice comparison syntax that conflicts with HTML parsing."
+     },
+     {
+      "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+      "lines": [
+       124,
+       127
+      ],
+      "texto": "WHAT: normalizeValue replaces the entire {n,choice,...} block with ... before sanitizing, so HTML inside choice options is never checked. WHY: A translation can smuggle tags (e.g. {2,choice,0#<script>...}) in error-invalid-multivalued-size/linkExpirationFormatter keys and pass the verifier, reaching UI rendering as XSS. HOW: Sanitize/validate the choice body instead of blanking it, or run the HTML policy on the inner choice text as well."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+    "descricao": "The account and admin UI bundles now use Java MessageFormat placeholders and choice syntax for error-invalid-multivalued-size, but i18next expects {{n}}, so the UI shows literal {0}/{1}/{2} and the raw choice text.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+      "lines": [
+       3138,
+       3138
+      ],
+      "texto": "The admin-ui bundle is consumed by react-i18next, which interpolates with double-brace `{{0}}` syntax (the previous value was `Attribute {{0}} ... {{2}}`). This line was rewritten to Java MessageFormat/ICU syntax (`{0}` ... `{2,choice,0#values|1#value|1<values}`), which i18next does not understand: the placeholders will not be substituted and the literal `{2,choice,...}` text will be shown to users. Keep the JS-side value in `{{0}}` form (and don't introduce ICU ChoiceFormat into the JS bundle); the ICU/choice spelling belongs only in the Java theme properties."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "Same contract break in the account-ui bundle: the value was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).` (i18next double-brace interpolation) and was changed to `{0}`/`{2,choice,...}` MessageFormat+ICU syntax. The account console's i18next based consumer was not updated to match, so interpolation will fail and the raw placeholder/choice syntax will be rendered. Restore `{{0}}`-style placeholders for the JS bundle."
+     },
+     {
+      "file": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+      "lines": [
+       188,
+       188
+      ],
+      "texto": "The account-ui bundle is consumed by i18next, which interpolates with double braces (the original string was `Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).`). This PR aligned the value to the Java theme convention, replacing `{{0}}/{{1}}/{{2}}` with `{0}/{1}/{2}` and adding ICU `{2,choice,...}`. i18next will no longer substitute the placeholders and cannot interpret the ICU choice, so the account UI shows the raw `{0}`, `{1}`, `{2}` and literal choice text. Keep the JS-side double-brace form for this bundle (adapt the choice accordingly) rather than the Java single-brace/ICU form used by the theme messages."
+     }
+    ]
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#opa-01",
+    "descricao": "If the English counterpart of a messages_*.properties file does not exist, verifySafeHtml throws an unchecked RuntimeException that escapes the mojo, crashing the build instead of reporting a validation message.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#kimi-01",
+    "descricao": "The theme verifier's HTML and anchor regexes are case-sensitive, so uppercase tags in translations are flagged as illegal HTML by the build.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-kimi-C1",
+    "descricao": "The anchor regex </?a[^>]*> in the theme verifier treats any tag starting with 'a' (<abbr>, <area>, ...) as an anchor tag, which can produce misleading anchor errors or strip such tags before HTML sanitizing.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2",
+    "descricao": "The anchor-mismatch error in VerifyMessageProperties omits the message key and file, so the failing translation is hard to locate, unlike the 'Illegal HTML' message.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "repo": "/Users/juniorsartori/projects/benchmark/sentry",
+  "head": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "base": "344aa102e7818606e29426ebe69d5a680d8727c6",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     500,
+     505
+    ],
+    "texto": "`integration.metadata[\"sender\"][\"login\"]` is dereferenced unguarded, but `sender` is only written when the installation webhook carried it (build_integration, line 376 guards with `if state.get(\"sender\")`). Any Integration created before the sender field existed, or via a path that omitted it, has no `sender` key and raises KeyError (HTTP 500) on a legitimate install; GitHub also sends `sender: null` for events triggered by the app itself, which fails the same way. Use `integration.metadata.get(\"sender\", {})` (or `.get(\"login\")`) and route a missing login to `error(...)` instead of crashing."
+   },
+   {
+    "id": "S2",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     378,
+     396
+    ],
+    "texto": "The rewritten `test_installation_not_found` only asserts the new \"Invalid installation request.\" copy and never asserts the outcome of the user-match check, so no positive-path test asserts that `github_authenticated_user` equals the installation sender. The new authorization check at integration.py:500-505 is therefore covered only by the single negative `test_github_user_mismatch`, and deleting the check would leave the happy-path tests green. Add an assertion to a positive flow (e.g. assert the install succeeds when the authenticated login matches the sender) so the security check cannot be removed silently."
+   },
+   {
+    "id": "S3",
+    "file": "src/sentry/integrations/github/integration.py",
+    "lines": [
+     416,
+     420
+    ],
+    "texto": "The token-exchange request omits `redirect_uri`, even though the authorize URL (line 408) sends it as `absolute_uri(reverse(\"sentry-extension-setup\", ...))`. GitHub's `/login/oauth/access_token` requires `redirect_uri` to be present and byte-identical to the authorize request when it was supplied, otherwise it responds with `redirect_uri_mismatch` and no `access_token`; the code then takes the `\"access_token\" not in payload` branch and returns `error()`, so every GitHub install fails in production. Add the same `redirect_uri` used in the authorize redirect to the `data` dict (mirroring `OAuth2CallbackView.get_token_params` at src/sentry/identity/oauth2.py:273-284, which always includes it); the `responses`-mocked test never validates this parameter, so it does not catch the gap."
+   },
+   {
+    "id": "S4",
+    "file": "tests/sentry/integrations/github/test_integration.py",
+    "lines": [
+     385,
+     396
+    ],
+    "texto": "The rewritten `test_installation_not_found` only asserts the new \"Invalid installation request.\" copy and never asserts the outcome of the user-match check, so no positive-path test asserts that `github_authenticated_user` equals the installation sender. The new authorization check at integration.py:500-505 is therefore covered only by the single negative `test_github_user_mismatch`, and deleting the check would leave the happy-path tests green. Add an assertion to a positive flow (e.g. assert the install succeeds when the authenticated login matches the sender) so the security check cannot be removed silently."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#01",
+    "descricao": "error() calls _(error_short) on a variable and callers pass plain literals, so the short error strings are no longer extractable for translation.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       129,
+       146
+      ],
+      "texto": "error_short strings bypass translation extraction: _(error_short) uses a variable so makemessages cannot collect them. Wrap literals at definition/call sites, e.g. error_short=_(\"Invalid installation request.\") and pass _(\"...\") literals, then use data error value directly without re-wrapping."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       132,
+       141
+      ],
+      "texto": "Translate the short-message literals at their definition/call sites instead of calling `_(error_short)` on a variable. Django's message extraction cannot extract the default `\"Invalid installation request.\"` or the plain-string arguments at the two call sites from this dynamic gettext invocation. The existing pending-deletion and already-installed messages previously appeared directly inside `_()`; this refactor removes their extraction sites, and the new default message cannot enter translation catalogs. Use a translated default and translated arguments, then place `error_short` directly into the payload so these user-facing errors remain localizable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#02",
+    "descricao": "The org parameter of error()/get_document_origin is actually the active-organization context, not an Organization, so the name is misleading.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       149,
+       152
+      ],
+      "texto": "The parameter is named `org` but the code treats it as the pipeline's active-organization context: it dereferences `org.organization` and every caller (error() and the GitHubInstallation sites) passes `self.active_organization`, not an Organization. The name misstates the argument's type/contract \u2014 a caller following the name and passing a real Organization would hit AttributeError on `.organization`. Rename the parameter (e.g. `active_organization`) and correct the corresponding name in `error()` at line 131 so the two signatures match what is actually passed."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#03",
+    "descricao": "The GitHub OAuth state is pipeline.signature, a static md5 of the pipeline view names, instead of a per-attempt random nonce, so it gives no CSRF protection.",
+    "textoGolden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       412
+      ],
+      "texto": "The OAuth state is pipeline.signature, which Pipeline.__init__ computes solely from pipeline view class names and therefore shares across all users and installation attempts. An attacker can obtain an OAuth code for their own GitHub account and send a callback using this known state to a victim with an active installation pipeline, binding the attacker's GitHub identity to the victim's flow instead of rejecting the forged callback. Generate a random per-attempt nonce, store it in pipeline state, and validate that nonce on the OAuth callback."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       401,
+       413
+      ],
+      "texto": "Do not use pipeline.signature as OAuth state. It is a deterministic MD5 of the pipeline identifiers, not an unpredictable nonce tied to this user's authorization attempt (the tests reuse it across users). An attacker can know the expected state and submit a callback containing a code authorized under the attacker's GitHub account, defeating the OAuth login-CSRF protection and the intended binding to the installing user. Generate a cryptographically random per-attempt state, store it in the session/pipeline, and validate and consume it on callback."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#05",
+    "descricao": "The new OAuth step's token exchange and user lookup are not wrapped in error handling, so GitHub/network failures surface as 500s instead of the installation-failed page.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       425
+      ],
+      "texto": "The token request is executed outside the try block. If GitHub's token endpoint is unavailable or the request fails with a connection/timeout error, safe_urlopen raises before the guarded response parsing is reached, and this new installation step returns an unhandled server error instead of the installation-failed response. Include the request itself in the error handling and handle the relevant transport exceptions."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       423,
+       436
+      ],
+      "texto": "WHAT: safe_urlopen token exchange and get_user_info() (which calls resp.raise_for_status()) are called with no exception handling. WHY: Any network error, timeout, or non-2xx from GitHub bubbles up as an unhandled exception and 500s the install instead of rendering the invalid-request page. HOW: Wrap the exchange plus get_user_info in try/except and return error() on failure."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       422,
+       436
+      ],
+      "texto": "safe_urlopen() and get_user_info() are called outside any try/except, so network errors, non-2xx responses, or API failures raise unhandled exceptions instead of returning error(). Wrap the token exchange + user-info fetch in try/except and return error() on failure, matching the handled missing-access_token path."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#06",
+    "descricao": "When no Integration exists yet for the installation_id the pipeline advances without comparing the OAuth user to the installer, bypassing the new ownership check.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The missing Integration branch advances the pipeline without verifying that github_authenticated_user installed the supplied installation_id. When the installation webhook has not created a record, or the local record was deleted, finish_pipeline calls build_integration using app credentials and attaches the installation without checking the OAuth user's access, allowing a user with another account's installation ID to bypass the new ownership check. Fail closed until trusted installer information is available and apply the ownership check before every successful next_step."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "The record-absent path advances the pipeline before checking whether the authenticated GitHub user installed this app. Installation IDs arrive from the request, and a missing Integration record (for example before the installation webhook is processed) does not establish ownership. As a result, this path can attach an installation belonging to a different GitHub user despite the new authenticity check. Verify the authenticated user's authorization for the installation before advancing in this branch too, rather than relying on the webhook-created record existing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       481,
+       482
+      ],
+      "texto": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#09",
+    "descricao": "The installer check indexes integration.metadata['sender']['login'] without checking that sender exists, raising KeyError for integrations created without sender metadata.",
+    "textoGolden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "comentarios": [
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "integration.metadata[\"sender\"][\"login\"] is indexed without checking that \"sender\" exists, so an ACTIVE integration whose metadata has no sender raises KeyError (500) here. metadata[\"sender\"] is only populated when state.get(\"sender\") is set (integration.py:376-377), and the only writer of that state is the installation webhook (webhook.py:202-208); integrations created through the pipeline itself carry no sender (confirmed by installation.py:44 which explicitly guards `if \"sender\" not in integration.metadata`, and by the pipeline-created integration in test_integration.py:730-743). Previously this branch only bound state and called pipeline.next_step(), so this crash is newly introduced. Fix: guard the lookup, e.g. `if pipeline.fetch_state(\"github_authenticated_user\") != (integration.metadata.get(\"sender\") or {}).get(\"login\"):` and decide the desired fallback when sender is absent."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       500,
+       505
+      ],
+      "texto": "`integration.metadata[\"sender\"][\"login\"]` can raise KeyError. build_integration (line 376-377) only sets metadata[\"sender\"] when state.get(\"sender\") is truthy, so an existing Integration without a sender entry makes this subscripting throw an unhandled KeyError (500) instead of routing to the intended error page. Use `integration.metadata.get(\"sender\", {}).get(\"login\")` (and treat a missing sender as a failed verification) so the mismatch/absence case returns error() rather than crashing."
+     },
+     {
+      "file": "src/sentry/integrations/github/integration.py",
+      "lines": [
+       501,
+       503
+      ],
+      "texto": "The new ownership check indexes integration.metadata['sender']['login'] even though GitHubIntegrationProvider.build_integration omits sender for normal pipeline-created integrations. Reconnecting an existing active integration without an OrganizationIntegration and without webhook-populated sender now raises KeyError and returns a server error rather than an installation failure. Handle missing sender explicitly and return the invalid-installation response when trusted installer metadata is unavailable."
+     }
+    ]
+   },
+   {
+    "issueId": "github-oauth-security-enhancement-sentry#10",
+    "descricao": "test_installation_not_found uses a wrong OAuth state, so it fails at the state check and never reaches the installation-not-found path it is meant to test.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       385,
+       396
+      ],
+      "texto": "First response (installation_id) is overwritten by second response (bad state) with no assertion, so the Integration.DoesNotExist / not-ACTIVE branch in GitHubInstallation is never verified. Keep/assert the first flow through a valid OAuth step to reach the installation check instead of only asserting the OAuth state-mismatch error."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "This test no longer verifies the \"installation not found\" path it exists for. The second GET supplies state=ddd023d87a913d5226e2a882c4c4cc05, which is not the github pipeline signature (that is the 9cae5e88803f35ed7970fc131e6e65d3 asserted in test_github_setup and reused elsewhere). OAuthLoginView.dispatch (integration.py:412-413) therefore returns error() before GitHubInstallation runs, producing the same generic \"Invalid installation request.\" message and the same failed template via the state-mismatch branch. The Integration.DoesNotExist handling at integration.py:493-498 is never reached, so the test would still pass if that handling were removed or broken. Use the real pipeline state so the request advances into GitHubInstallation, or assert on something that distinguishes the state-mismatch branch from the missing-installation branch."
+     },
+     {
+      "file": "tests/sentry/integrations/github/test_integration.py",
+      "lines": [
+       388,
+       396
+      ],
+      "texto": "The replacement assertion no longer verifies that a nonexistent installation is rejected: 'Invalid installation request.' is also returned for a state mismatch, missing access token, or missing authenticated login before GitHubInstallation is reached. This test can therefore pass with installation-not-found handling broken if the callback fails OAuth validation instead. Establish a successful OAuth exchange with the actual pipeline state and verify that the nonexistent installation lookup is reached and rejected, rather than accepting this shared authentication-error message alone."
+     }
+    ]
+   }
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "base": "3ce1a5b0caab215346a51629b0344b90d67e9478",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     45,
+     49
+    ],
+    "texto": "The cache is never re-validated after acquiring the write lock, so this is incomplete double-checked locking. Every concurrent request that observes `ret == nil` on the fast path proceeds to take the exclusive lock and re-read the manifest from disk, serializing redundant file I/O under the write lock while blocking all other readers; add a re-check of `entryPointAssetsCache` (and return it if already populated) immediately after `Lock()` to collapse the stampede."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/api/webassets/webassets.go",
+    "lines": [
+     48,
+     48
+    ],
+    "texto": "Incomplete double-checked locking: after acquiring the write lock (line 48), entryPointAssetsCache is not re-checked before re-reading the manifest, so concurrent cold-start callers that passed the initial RLock fast-path check can each redundantly re-read the manifest under the write lock. Re-check entryPointAssetsCache once the write lock is held and return the cached value if it was populated by another goroutine."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#01",
+    "descricao": "GetWebAssets does not re-check the cache after acquiring the write lock, so concurrent callers that missed the cache each reload the assets manifest.",
+    "textoGolden": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+    "comentarios": [
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       69
+      ],
+      "texto": "WHAT: The exclusive lock acquired at line 48 is held (via defer on line 49) across the blocking file read / synchronous CDN HTTP request (lines 56-67) and there is no re-check of entryPointAssetsCache after acquiring the lock. WHY: On a cold cache, all concurrent callers (api/index.go:82, api/frontendsettings.go:62, middleware/recovery.go:141) block on the write lock and then each sequentially re-executes the full load (file I/O or blocking http.DefaultClient.Do), producing a thundering-herd serialization and N redundant loads instead of one; in Dev mode this happens on every request since the fast path is skipped, serializing all concurrent page loads. HOW: after `entryPointAssetsCacheMu.Lock()` re-check the cache (`if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`) so only the first goroutine performs the load, and drop the defer in favor of releasing the lock immediately after assigning `entryPointAssetsCache = result` to avoid holding it during I/O."
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       41,
+       48
+      ],
+      "texto": "cache is not re-checked under the lock after re-acquiring write Lock, so concurrent callers can each recompute web assets"
+     },
+     {
+      "file": "pkg/api/webassets/webassets.go",
+      "lines": [
+       48,
+       49
+      ],
+      "texto": "The cache is not rechecked after acquiring the write lock, so concurrent production requests that initially observe a nil cache each reload and decode the manifest even after another request has populated it. During a cold-start request burst, these redundant filesystem reads and JSON decodes execute serially under the global lock, delaying queued page and frontend-settings requests and blocking cache readers while each reload runs. After acquiring the write lock, return the populated cache when cfg.Env != setting.Dev before performing asset loading."
+     }
+    ]
+   },
+   {
+    "issueId": "frontend-asset-optimization-grafana-codex#sncc-02",
+    "descricao": "GetWebAssets holds a global exclusive mutex through the whole manifest load, so in Dev mode, where the cache is bypassed, every request serializes behind it.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "base": "871af07203177ce59a24e742107119409274f48a",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     139
+    ],
+    "texto": "Removing the function-wide `b.cacheMu.Lock()` from `BuildIndex` leaves the final `b.cache[key] = idx` as the only locked section, so two concurrent callers for the same key can both pass the `GetIndex`==nil check in `getOrCreateIndex` (search.go:292-306) and build simultaneously. For file-backed keys (`size > b.opts.FileThreshold`) both call `bleve.New` on the identical `dir` (bleve.go:96-98), and the second `b.cache[key] = idx` overwrites the first, orphaning the index the first caller is still using so its writes never become searchable. Re-introduce per-key serialization (e.g. a per-key mutex / singleflight in `getOrCreateIndex` or `BuildIndex`) so only one build per key runs and later callers reuse the first result."
+   },
+   {
+    "id": "S2",
+    "file": "pkg/storage/unified/search/bleve.go",
+    "lines": [
+     137,
+     138
+    ],
+    "texto": "`BuildIndex` now writes `b.cache[key] = idx` without checking whether another goroutine already inserted a build for the same key while this build was running. Because the build phase is no longer under `cacheMu`, a second, concurrent build for the same key overwrites the entry and the first caller's returned index is silently detached from the cache. Insert under the lock only if the key is still absent, or return the already-cached index instead of overwriting it."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+    "descricao": "BuildIndex now locks only the final cache assignment, so concurrent callers for the same uncached key all build the same expensive index in parallel and the last one overwrites the others.",
+    "textoGolden": "A race condition in BuildIndex allows multiple goroutines to concurrently build the same expensive index for the same key. This is caused by moving the b.cacheMu lock from protecting the entire function to only protecting the final cache assignment. ",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "WHAT: Removing the function-wide `b.cacheMu.Lock()/defer Unlock()` and keeping only the lock around `b.cache[key]=idx` removes the only thing that serialized GetIndex against an in-flight build. WHY: getOrCreateIndex (resource/search.go:287-307) does GetIndex -> if nil -> build; previously BuildIndex held the write lock for its whole body so a concurrent caller's GetIndex (RLock) blocked until the first build cached the index and then saw it (no second build). Now GetIndex can return nil while a build for the same key is still running, so two requests/watch events build the SAME key concurrently \u2014 producing two distinct index instances where the caller holding the non-cached one never observes later writes (stale search results), and, for file-backed indices (size > FileThreshold), two concurrent `bleve.New(dir, mapper)` opening the same on-disk directory. HOW: guard the build per key (e.g. re-check the cache under the write lock after acquiring it, or use a per-key single-flight/lock so only one build runs per NamespacedResource), rather than relying on a global write lock held for the entire body."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "The cache mutex was moved to cover only the cache assignment, removing the serialization that previously surrounded the whole BuildIndex. Two concurrent BuildIndex calls for the same key can now both construct an index (including `bleve.New(dir, mapper)` on the same on-disk path) and both write `b.cache[key]`; the second overwrites the first, so callers get distinct index instances for one key and writes made through the losing instance are invisible to readers of the cached one (and the file-backed build may collide on the same directory). Keep the build for a given key serialized (e.g. restore the lock around the build, or take a per-key lock) instead of locking only the map write."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "Locking only cache publication allows concurrent requests for the same uncached key to build separate indexes and overwrite each other's cache entries. Search and handleEvent both call getOrCreateIndex, whose GetIndex previously blocked behind the build-wide lock; now an event can update one newly built index before another build replaces it, losing that update from subsequent search results and leaving the discarded index open. Serialize builds per NamespacedResource and recheck the cache after acquiring that per-key guard."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+    "descricao": "The new startup log calls TotalDocs, which iterates the index cache without a lock, after the event goroutine that can add indexes has started, so a concurrent map read and write can crash the process.",
+    "textoGolden": "Calling s.search.TotalDocs() here may race with concurrent index creation: TotalDocs iterates b.cache without synchronization, and the event watcher goroutine started just above could trigger BuildIndex writes concurrently, potentially causing a concurrent map read/write panic.",
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The newly added `s.search.TotalDocs()` call is unsafe: `bleveBackend.TotalDocs()` (pkg/storage/unified/search/bleve.go:144-150) iterates `b.cache` without holding `cacheMu`, while the bleve.go hunk in this same PR keeps `cacheMu` for the `b.cache[key] = idx` write only. Because search.go:207-213 already started the watch-event goroutine that can call `build` \u2192 `BuildIndex` \u2192 cache write, line 216 can iterate the map concurrently with that write, causing a `concurrent map iteration and map write` panic or data race. Either guard the `TotalDocs` read with `cacheMu`, or move this call to a point where no build can run concurrently."
+     },
+     {
+      "file": "pkg/storage/unified/resource/search.go",
+      "lines": [
+       216,
+       216
+      ],
+      "texto": "The new startup log calls TotalDocs after launching the write-event listener, but bleveBackend.TotalDocs iterates b.cache without cacheMu.RLock. A write event for an unindexed resource can concurrently publish an index through BuildIndex, causing a map iteration/write race and potentially a fatal runtime error during initialization. Protect TotalDocs cache iteration with the same read lock used by GetIndex."
+     },
+     {
+      "file": "pkg/storage/unified/search/bleve.go",
+      "lines": [
+       137,
+       139
+      ],
+      "texto": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#03",
+    "descricao": "NewResourceServer returns an error when Init fails without cancelling the server context created earlier.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer now calls s.Init(ctx) and, on error, returns `nil, err` without invoking the `cancel` func created at line 229 and without running any lifecycle cleanup. WHY: Init may have already started long-lived goroutines \u2014 searchSupport.init's event-consumption loop uses context.Background() (resource/search.go:202) and initWatcher starts a watcher bound to s.ctx (server.go:752-770) \u2014 so if search.init succeeds and initWatcher (or a later step) fails, the constructor discards the server while those goroutines keep running with no way to stop them, leaking the internal context and watcher goroutines. HOW: on the error path call `cancel()` (and any needed lifecycle.Stop) before returning, or defer the cancel until success."
+     },
+     {
+      "file": "pkg/storage/unified/resource/server.go",
+      "lines": [
+       258,
+       262
+      ],
+      "texto": "WHAT: NewResourceServer calls s.Init(ctx) synchronously but returns nil,err without calling the cancel created for s.ctx. WHY: Failed startup leaks the server context (and any lifecycle/watch resources partially started by Init), leaving goroutines/channel watches alive. HOW: On Init error call s.cancel() (and lifecycle Stop cleanup) before returning."
+     }
+    ]
+   },
+   {
+    "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+    "descricao": "The PR skips the storage-server module integration test on postgres instead of fixing the failure, removing coverage of the new eager initialization on postgres.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {
+  "repo": "/Users/juniorsartori/projects/benchmark/keycloak",
+  "head": "25bf964a844ea0bc64dc838bff038345048cb1fa",
+  "base": "744e031019af8dbaacf407e792fbb3756364e2b4",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl",
+    "lines": [
+     4,
+     18
+    ],
+    "texto": "The passkey conditional-UI block was added only to `keycloak.v2/login/login-password.ftl`, while `PasswordForm.authenticate`/`challenge` now unconditionally set `ENABLE_WEBAUTHN_CONDITIONAL_UI` via `fillContextForm` for any user with a passkey. The parallel `themes/src/main/resources/theme/base/login/login-password.ftl` still lacks the `<@passkeys.conditionalUIData />` include, so realms using the base theme silently lose the passkey option on the password page, defeating the re-authentication fix this PR targets. Add the `passkeys.ftl` import and `<@passkeys.conditionalUIData />` call to the base theme's `login-password.ftl` as well."
+   },
+   {
+    "id": "S2",
+    "file": "themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl",
+    "lines": [
+     4,
+     7
+    ],
+    "texto": "The passkey conditional-UI block was added only to `keycloak.v2/login/login-password.ftl`, while `PasswordForm.authenticate`/`challenge` now unconditionally set `ENABLE_WEBAUTHN_CONDITIONAL_UI` via `fillContextForm` for any user with a passkey. The parallel `themes/src/main/resources/theme/base/login/login-password.ftl` still lacks the `<@passkeys.conditionalUIData />` include, so realms using the base theme silently lose the passkey option on the password page, defeating the re-authentication fix this PR targets. Add the `passkeys.ftl` import and `<@passkeys.conditionalUIData />` call to the base theme's `login-password.ftl` as well."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#03",
+    "descricao": "PasswordForm now accepts passkey-only users, but only the keycloak.v2 login-password.ftl renders the passkeys conditional UI; the base template (used by the legacy keycloak theme) does not, so a passkey-only user is shown a password-only form they cannot complete.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+      "lines": [
+       63,
+       63
+      ],
+      "texto": "PasswordForm.configuredFor now accepts passkey-only users even when the active login theme renders the unchanged base login-password.ftl, which contains no passkeys UI. The legacy keycloak theme inherits that template, so a user without a password reaches a password-only challenge with no way to authenticate instead of being able to use the newly accepted passkey credential. Add the passkeys import and conditionalUIData invocation to the base login-password.ftl as well as the keycloak.v2 override."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+    "descricao": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+      "lines": [
+       114,
+       117
+      ],
+      "texto": "The new comment says webauthn data is set up \"when passkeys enabled\", but the guard `isConditionalPasskeysEnabled(context.getUser())` also requires that a known/already-selected user actually has a passkey credential. With realm passkeys enabled and a selected user without a passkey, `fillContextForm` is skipped (the test `passwordLogin_reauthenticationOfUserWithoutPasskey` relies on exactly this), so the comment misdescribes the condition it documents. Rephrase it to match the code, e.g. \"setup webauthn data when conditional passkeys can be used (user unknown or user has a passkey)\"."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#06",
+    "descricao": "The test comment says it sets the passwordless policy for discoverable keys, but the updater only disables passkeys for the realm.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+      "lines": [
+       281,
+       283
+      ],
+      "texto": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+     }
+    ]
+   },
+   {
+    "issueId": "fixing-re-authentication-with-passkeys-keycloak#snapi-01",
+    "descricao": "reauthenticationOfUserWithoutPasskey disables passkeys for the realm, so the hidden webauthn form is guaranteed by isPasskeysEnabled() and the new per-user isConfiguredFor check for users without a passkey is never exercised in UsernamePasswordForm.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {
+  "repo": "/Users/juniorsartori/projects/benchmark/cal.com",
+  "head": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "packages/lib/server/service/insightsBooking.ts",
+    "lines": [
+     68,
+     81
+    ],
+    "texto": "getAuthorizationConditions() can never return a falsy value because buildAuthorizationConditions() returns NOTHING_CONDITION (`1=0`) in every failure branch (lines 127, 131, 141), so the `else if (filterConditions)` and `else` branches in getBaseConditions are unreachable and a filter-only query can never be produced. If the intent is that a caller with no authorization constraint should still get the filter conditions, the auth check must return null (or the empty case must be handled explicitly) instead of `1=0`; otherwise the two dead branches should be removed to avoid masking a future logic change."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01",
+    "descricao": "In getBaseConditions, the branches for a missing authorization condition are unreachable because getAuthorizationConditions always returns a Prisma.Sql.",
+    "textoGolden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       72,
+       80
+      ],
+      "texto": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       68,
+       81
+      ],
+      "texto": "Unreachable branches in getBaseConditions: authConditions is always a truthy Prisma.Sql object (never null, NOTHING is `1=0`), so `else if (filterConditions)` and final `else { return NOTHING }` can never execute. Simplify to if(filter) return auth AND filter else return auth, or make the nothing-case explicit."
+     },
+     {
+      "file": "packages/lib/server/service/insightsBooking.ts",
+      "lines": [
+       76,
+       77
+      ],
+      "texto": "WHAT: `getBaseConditions` returns `filterConditions` alone (no authorization predicate) when `authConditions` is falsy (`else if (filterConditions) { return filterConditions; }`). WHY: The WHERE clause returned to consumers then contains no ownership/authorization restriction, so a caller using it would return every booking matching the filters (e.g. all bookings for the given eventTypeId/memberUserId) regardless of the requesting user's org/team membership \u2014 an authorization-boundary bypass if `getAuthorizationConditions()` ever yields a falsy value. HOW: Always AND the authorization predicate with the filters and fall back to `NOTHING_CONDITION` when no auth predicate exists, e.g. `return filterConditions ? Prisma.sql`(${authConditions}) AND (${filterConditions})` : authConditions;` (or keep the `NOTHING_CONDITION` default when auth is missing)."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#03",
+    "descricao": "The getBaseConditions test uses a single booking matching both auth and filter conditions, so it would pass even if the conditions were not combined.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+      "lines": [
+       480,
+       491
+      ],
+      "texto": "The rewritten \"should combine authorization and filter conditions\" test cannot fail if the combination is broken. The fixture creates a single booking that satisfies the auth condition (userId = user.id AND teamId IS NULL) and the filter condition (eventTypeId = eventType.id) independently, so getBaseConditions returning auth-only, filter-only, or the AND combination all yield the same single-row result asserted here. Only a `1=0` result would be caught. Make the data distinguish the two: add a booking that matches the filter but not the auth (e.g. a team booking with the same eventTypeId), then assert the result excludes it, so that dropping either branch changes the returned rows."
+     }
+    ]
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-01",
+    "descricao": "The caching tests for getAuthorizationConditions/getFilterConditions were removed in the Prisma.sql conversion, leaving the cached-condition logic untested.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#prod-02",
+    "descricao": "Claims getBaseConditions returns OR fragments without parentheses, so a caller appending `AND <extra>` would leak rows outside the authorization scope.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#kimi-03",
+    "descricao": "The new public options type makes teamId optional for team scope, so a missing teamId compiles and silently yields empty insights instead of a type error.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "repo": "/Users/juniorsartori/projects/benchmark/grafana",
+  "head": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "base": "50f4e78a39914711d0d231a501ba215becf17ebc",
+  "sugestoes": [
+   {
+    "id": "S1",
+    "file": "pkg/services/anonymous/anonimpl/client.go",
+    "lines": [
+     44,
+     50
+    ],
+    "texto": "`TagDevice` was previously executed in a detached goroutine with a 2-minute `context.WithTimeout`, but it now runs synchronously with the request context on the authentication path. With a device limit configured, every anonymous request performs an inline `CountDevices` plus a possible `updateDevice` round-trip (database.go:110,116), so a slow or hung database now blocks login for anonymous users with no timeout and no recovery. Restore a bounded, non-blocking path (detached context with timeout) for the tagging work while still surfacing `ErrDeviceLimitReached` to the caller."
+   }
+  ],
+  "issues": [
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#01",
+    "descricao": "The device limit check counts devices and then inserts in separate non-atomic steps, so concurrent requests from new devices can all pass the check and exceed the configured limit.",
+    "textoGolden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       108,
+       118
+      ],
+      "texto": "WHAT: CreateOrUpdateDevice does check-then-act (CountDevices then INSERT/UPSERT) with no lock, transaction, or unique-guard when deviceLimit>0. WHY: Two concurrent new-device requests can both observe count < limit and both insert, exceeding the configured limit and breaking the enforcement contract. HOW: Enforce atomically (e.g., conditional insert guarded by count in one statement/transaction with serializable lock, or re-check count on conflict)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#02",
+    "descricao": "Device slots are keyed by the client-controlled X-Grafana-Device-Id header with no validation or rate limiting, so an anonymous caller can fill the limit with fake IDs and deny anonymous access to every new legitimate device.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+      "lines": [
+       109,
+       117
+      ],
+      "texto": "WHAT: Device slots counted toward deviceLimit are keyed by the unauthenticated X-Grafana-Device-Id header (read in impl.go TagDevice) with no validation or rate-limit. WHY: Any anonymous caller can mint arbitrary device IDs to fill the table up to the limit, after which all legitimate new anonymous devices get ErrDeviceLimitReached and authentication is denied \u2014 a trivial anonymous-access DoS introduced by the limit. HOW: Do not let a single client consume many slots (e.g., bind slot consumption to IP/fingerprint, rate-limit new-device creation, or require proof of distinct device)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#05",
+    "descricao": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit and never verifies that an existing device can still be updated at the limit.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "The at-limit call reuses a brand-new device ID (\"keep\") that was never inserted, so it only reaches updateDevice's `rowsAffected == 0` -> ErrDeviceLimitReached branch. The success branch of the newly added updateDevice (an existing device still being updated while the store is at the limit) is never exercised by any test \u2014 every other call uses deviceLimit 0, so updateDevice is never invoked. A regression that made updateDevice always affect 0 rows, use a wrong WHERE/SET, or unconditionally return ErrDeviceLimitReached whenever limit>0 would leave this and all other tests green. Add a case that, after the store is at the limit, calls CreateOrUpdateDevice again with the SAME DeviceID and asserts require.NoError (and ideally that client_ip/user_agent/updated_at were changed), so the update path is actually verified."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+      "lines": [
+       51,
+       70
+      ],
+      "texto": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+    "descricao": "tagDeviceUI caches the device key before CreateOrUpdateDevice; when the store returns ErrDeviceLimitReached the entry stays, so the next request from the same device skips the limit check and authenticates for up to 29 minutes.",
+    "textoGolden": "The `tagDeviceUI` function populates the local cache with the device ID before the `CreateOrUpdateDevice` call. If `ErrDeviceLimitReached` is returned, the cache entry remains set, allowing subsequent requests to bypass the device limit until the cache expires after 29 minutes.",
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       47
+      ],
+      "texto": "WHAT: TagDevice failures that triggered the new ErrDeviceLimitReached early-return are not permanent, because tagDeviceUI (impl.go:87) writes the device key into localCache BEFORE CreateOrUpdateDevice (impl.go:93) and never evicts it on error; tagDeviceUI returns early on any cache hit (impl.go:83-84). WHY: the first request from a new over-limit device is denied, but the poisoned cache makes every subsequent request from that same device skip the limit check entirely and authenticate successfully, so the configurable device limit is bypassed by simply retrying. HOW: only set the cache key after CreateOrUpdateDevice returns nil (e.g. move a.localCache.SetDefault after the successful DB write, or delete the key when it returns ErrDeviceLimitReached)."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/impl.go",
+      "lines": [
+       144,
+       148
+      ],
+      "texto": "TagDevice now propagates ErrDeviceLimitReached to deny an over-limit anonymous device, but tagDeviceUI (impl.go:83-95) records the device in localCache at line 87 *before* calling a.anonStore.CreateOrUpdateDevice. When the store rejects the device with ErrDeviceLimitReached, the key is already cached, so the next request for that same device returns early at line 83 with a nil error and the device is admitted. The limit therefore only blocks the first request and is silently bypassed on retry. Fix by only setting the cache entry after CreateOrUpdateDevice succeeds (move SetDefault after the store call), or by removing/not caching the key on failure."
+     },
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       46
+      ],
+      "texto": "The new authentication gate accepts retries from devices that were rejected by the limit because tagDeviceUI inserts the cache entry before CreateOrUpdateDevice succeeds. At capacity, the first request with a new X-Grafana-Device-Id fails, but subsequent requests with that same ID hit the 29-minute cache and receive an anonymous identity without admission to the device store. Cache only successful admissions, and ensure concurrent requests cannot treat an in-progress admission as successful."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#09",
+    "descricao": "Device tagging now runs synchronously in Authenticate, adding DB round-trips on cache-miss anonymous requests where it used to be fire-and-forget.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/services/anonymous/anonimpl/client.go",
+      "lines": [
+       44,
+       50
+      ],
+      "texto": "WHAT: Anonymous.Authenticate changed from fire-and-forget goroutine TagDevice to synchronous TagDevice(ctx) that runs CountDevices + INSERT/UPDATE inline. WHY: Every cache-miss anonymous authentication now blocks on two DB round-trips in the login hot path, adding latency and DB load per request where previously auth returned immediately. HOW: Restore async tagging for the non-limit path or at least decouple denial from the hot path (e.g., async count with cached count, or only synchronously enforce when near limit)."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#11",
+    "descricao": "The new auth.anonymous device_limit setting has no entry in conf/defaults.ini, so the GF_AUTH_ANONYMOUS_DEVICE_LIMIT environment override is ignored and the limit stays 0.",
+    "textoGolden": null,
+    "comentarios": [
+     {
+      "file": "pkg/setting/setting.go",
+      "lines": [
+       1654,
+       1654
+      ],
+      "texto": "The new device_limit setting is read without adding a corresponding key to conf/defaults.ini. applyEnvVariableOverrides only visits keys already present in the loaded INI and runs before readAuthSettings, so setting GF_AUTH_ANONYMOUS_DEVICE_LIMIT alone is ignored and leaves the limit at zero, disabling enforcement. Add an uncommented device_limit = 0 entry under auth.anonymous in defaults.ini so the standard environment override mechanism can apply it."
+     }
+    ]
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-02",
+    "descricao": "The anonymous device limit is enforced only through TagDevice, which returns nil when the client-controlled device ID header is missing, so requests without the header authenticate anonymously regardless of the configured limit.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#opa-04",
+    "descricao": "The doc comment on updateDevice says it updates a device \"updated between the given times\", but the function takes no times, computes the 30-day window itself and returns ErrDeviceLimitReached when no row matches.",
+    "textoGolden": null,
+    "comentarios": []
+   },
+   {
+    "issueId": "anonymous-add-configurable-device-limit-grafana-codex#prod-02",
+    "descricao": "updateDevice prepends the query to the captured args inside the retried DB callback, so a SQLite lock retry runs Exec with the query duplicated in the arguments and the update fails.",
+    "textoGolden": null,
+    "comentarios": []
+   }
+  ]
+ }
+}

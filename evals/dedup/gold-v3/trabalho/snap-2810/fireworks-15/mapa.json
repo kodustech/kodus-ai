@@ -1,0 +1,236 @@
+{
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "finder": [
+   "S1",
+   "S2"
+  ],
+  "dedup": [
+   "S1",
+   "S2"
+  ]
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9"
+  ],
+  "dedup": [
+   "S1",
+   "S3",
+   "S4",
+   "S5",
+   "S10"
+  ]
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ]
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3"
+  ]
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9",
+   "S10",
+   "S11"
+  ],
+  "dedup": [
+   "S6",
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5"
+  ]
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8"
+  ]
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "finder": [
+   "S1"
+  ],
+  "dedup": [
+   "S1"
+  ]
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4"
+  ],
+  "dedup": [
+   "S1",
+   "S4",
+   "S3"
+  ]
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7"
+  ]
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8",
+   "S9",
+   "S10",
+   "S11",
+   "S12"
+  ],
+  "dedup": [
+   "S7",
+   "S2",
+   "S4",
+   "S5",
+   "S12"
+  ]
+ },
+ "frontend-asset-optimization-grafana-codex": {
+  "finder": [
+   "S1"
+  ],
+  "dedup": [
+   "S2"
+  ]
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3"
+  ],
+  "dedup": [
+   "S2",
+   "S3"
+  ]
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6"
+  ],
+  "dedup": [
+   "S3",
+   "S5",
+   "S1",
+   "S2"
+  ]
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3",
+   "S4",
+   "S5",
+   "S6",
+   "S7",
+   "S8"
+  ],
+  "dedup": [
+   "S2",
+   "S3",
+   "S4",
+   "S8",
+   "S1",
+   "S9",
+   "S6"
+  ]
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {
+  "finder": [
+   "S1",
+   "S2",
+   "S3"
+  ],
+  "dedup": [
+   "S1",
+   "S2",
+   "S3"
+  ]
+ }
+}
