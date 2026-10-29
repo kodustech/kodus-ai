@@ -85,7 +85,7 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const NO_MATCHES = GREP_NO_MATCHES;
 
 /** Grep answers repo-relative; Azure Repos names files with a leading "/". */
-const normalizePath = toRepoPath;
+const normalizePath = (p: string): string => toRepoPath(p.trim());
 
 /**
  * Whether a claimed path names a file rather than a directory.

@@ -120,7 +120,7 @@ const parentDirOf = (filePath: string): string => {
  * reaches one or is compared with a listing.
  */
 export const toRepoPath = (p: string): string =>
-    p.trim().replace(/^\.\//, '').replace(/^\/+/, '');
+    p.replace(/^\.\//, '').replace(/^\/+/, '');
 
 /**
  * Build the lookup for one review from the sandbox handle the pipeline already
@@ -215,10 +215,12 @@ export function buildRepoLookup(
                     listing.slice('Error:'.length).trim(),
                 );
             }
+            // Listing lines are compared trimmed, as they always were: `find`
+            // output can carry a trailing `\r` or padding.
             return listing
                 .split('\n')
-                .map(toRepoPath)
-                .some((entry) => entry === wanted);
+                .map((entry) => toRepoPath(entry.trim()))
+                .some((entry) => entry === wanted.trim());
         },
 
         async probe(knownChangedFile: string) {

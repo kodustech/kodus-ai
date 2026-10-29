@@ -176,6 +176,15 @@ describe('paths reach the sandbox relative to the repository root', () => {
         expect(read).toHaveBeenCalledWith('src/a.ts', 1, 1);
     });
 
+    it('read keeps the spaces a file name carries', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/src/ notes.ts ', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('src/ notes.ts ', 1, 1);
+    });
+
     it('probe forwards a name without its leading slash', async () => {
         const read = jest.fn().mockResolvedValue('line 1\n');
         const lookup = buildRepoLookup(realHandle({ read }));
@@ -219,8 +228,9 @@ describe('toRepoPath', () => {
         ['/src/a.ts', 'src/a.ts'],
         ['//src/a.ts', 'src/a.ts'],
         ['./src/a.ts', 'src/a.ts'],
-        [' src/a.ts ', 'src/a.ts'],
         ['src/a.ts', 'src/a.ts'],
+        // A file name may legitimately start or end with a space.
+        ['/src/ a.ts ', 'src/ a.ts '],
     ])('%j -> %j', (input, expected) => {
         expect(toRepoPath(input)).toBe(expected);
     });
