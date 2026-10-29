@@ -52,7 +52,7 @@ describe('orderPullRequestsNewestFirst', () => {
         expect(ordered.map((pr: any) => pr.pull_number)).toEqual([1, 2]);
     });
 
-    it('leaves the caller\'s array alone', () => {
+    it("leaves the caller's array alone", () => {
         const input = [
             { pull_number: 1, created_at: '2026-01-01T00:00:00Z' },
             { pull_number: 2, created_at: '2026-02-01T00:00:00Z' },
@@ -146,8 +146,8 @@ describe('fetchPullRequestComments (the walk itself)', () => {
 
         await useCase.fetchPullRequestComments({}, prs(816), {});
 
-        const fetched = useCase.fetchSinglePullRequestComments.mock.calls
-            .length;
+        const fetched =
+            useCase.fetchSinglePullRequestComments.mock.calls.length;
         expect(fetched).toBeLessThanOrEqual(
             TARGET_SAMPLED_COMMENTS / 10 + PR_FETCH_CONCURRENCY,
         );
@@ -161,9 +161,9 @@ describe('fetchPullRequestComments (the walk itself)', () => {
 
         await useCase.fetchPullRequestComments({}, prs(816), {});
 
-        expect(
-            useCase.fetchSinglePullRequestComments.mock.calls.length,
-        ).toBe(MAX_PULL_REQUESTS_SCANNED);
+        expect(useCase.fetchSinglePullRequestComments.mock.calls.length).toBe(
+            MAX_PULL_REQUESTS_SCANNED,
+        );
     });
 
     it('walks a small repo completely and says nothing about stopping', async () => {
@@ -213,6 +213,82 @@ describe('fetchPullRequestComments (the walk itself)', () => {
                 metadata: expect.objectContaining({ organizationId: 'org-1' }),
             }),
         );
+    });
+
+    // On gitlab.com the walk kept the token in 429 for 12 minutes after
+    // onboarding, and the first review on the repo was skipped as
+    // rate-limited. Once the provider refuses the rate, the sample is done.
+    it('stops walking once the provider rate-limits a pull request', async () => {
+        const useCase = makeUseCase(0);
+        const plain =
+            useCase.fetchSinglePullRequestComments.getMockImplementation();
+        useCase.fetchSinglePullRequestComments.mockImplementation(
+            async (repo: any, pr: any) => ({
+                ...(await plain(repo, pr)),
+                rateLimited: pr.pull_number === 810,
+            }),
+        );
+
+        const out = await useCase.fetchPullRequestComments({}, prs(816), {});
+
+        expect(
+            useCase.fetchSinglePullRequestComments.mock.calls.length,
+        ).toBeLessThanOrEqual(816 - 810 + PR_FETCH_CONCURRENCY);
+        expect(out.length).toBeGreaterThan(0);
+        expect(useCase.logger.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ rateLimited: true }),
+            }),
+        );
+    });
+
+    it('flags a pull request whose fetch was refused with a 429', async () => {
+        const useCase: any = Object.create(GenerateKodyRulesUseCase.prototype);
+        useCase.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        const rateLimited = Object.assign(
+            new Error('GitLab answered HTTP 429; retry after 1s'),
+            { name: 'GitbeakerRetryError', status: 429 },
+        );
+        useCase.codeManagementService = {
+            getAllCommentsInPullRequest: jest.fn(async () => []),
+            getPullRequestReviewComment: jest.fn(async () => {
+                throw rateLimited;
+            }),
+            getFilesByPullRequestId: jest.fn(async () => []),
+        };
+
+        jest.useFakeTimers({ advanceTimers: true });
+        try {
+            const entry = await useCase.fetchSinglePullRequestComments(
+                {},
+                { pull_number: 1 },
+                {},
+            );
+            expect(entry.rateLimited).toBe(true);
+            expect(entry.reviewComments).toEqual([]);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('does not flag a pull request whose fetch failed for another reason', async () => {
+        const useCase: any = Object.create(GenerateKodyRulesUseCase.prototype);
+        useCase.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        useCase.codeManagementService = {
+            getAllCommentsInPullRequest: jest.fn(async () => []),
+            getPullRequestReviewComment: jest.fn(async () => {
+                throw new Error('404 Not Found');
+            }),
+            getFilesByPullRequestId: jest.fn(async () => []),
+        };
+
+        const entry = await useCase.fetchSinglePullRequestComments(
+            {},
+            { pull_number: 1 },
+            {},
+        );
+
+        expect(entry.rateLimited).toBe(false);
     });
 
     it('takes the NEWEST pull requests, not the first ones the API returned', async () => {

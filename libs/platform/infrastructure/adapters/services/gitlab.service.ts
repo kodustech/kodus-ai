@@ -122,6 +122,7 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
 
 /**
@@ -382,6 +383,7 @@ export class GitlabService implements Omit<
             }),
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     }
 

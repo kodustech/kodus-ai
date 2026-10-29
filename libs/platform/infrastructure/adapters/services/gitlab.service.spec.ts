@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
@@ -235,6 +236,7 @@ describe('GitlabService', () => {
             host: 'https://gitlab.example.com',
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     });
 
