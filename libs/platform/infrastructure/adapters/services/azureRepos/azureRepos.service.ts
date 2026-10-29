@@ -1688,12 +1688,31 @@ export class AzureReposService implements Omit<
                 targetCommitId,
             });
 
-            const fileChanges = diffResponse?.filter(
+            // A partial list can leave out every PR file, which reads as
+            // "nothing new" (#2268); the caller has to know it is unreadable.
+            if (!diffResponse.allChangesIncluded) {
+                this.logger.warn({
+                    message: `Diff of PR#${prNumber} since ${lastCommit.sha} was not read in full`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        baseCommit: lastCommit.sha,
+                        targetCommitId,
+                        entriesRead: diffResponse.changes.length,
+                        reason: 'diff_incomplete',
+                    },
+                });
+                return null;
+            }
+
+            const fileChanges = diffResponse.changes.filter(
                 (change) => change?.item?.gitObjectType === 'blob',
             );
 
-            if (!fileChanges?.length) {
-                return null;
+            if (!fileChanges.length) {
+                return [];
             }
 
             // Get the PR file list to filter out files that came from merge commits
@@ -1769,6 +1788,7 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,

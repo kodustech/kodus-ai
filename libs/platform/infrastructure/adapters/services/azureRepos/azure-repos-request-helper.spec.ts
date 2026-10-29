@@ -227,3 +227,76 @@ describe('AzureReposRequestHelper.getFileContent — 404 wrapper preserves statu
         expect(thrown.status).not.toBe(404);
     });
 });
+
+describe('AzureReposRequestHelper.getDiff — pages until allChangesIncluded', () => {
+    let helper: AzureReposRequestHelper;
+    let axiosInstance: { get: jest.Mock };
+
+    const params = {
+        orgName: 'org',
+        token: 'enc-token',
+        projectId: 'proj',
+        repositoryId: 'repo',
+        baseCommit: 'base-sha',
+        targetCommitId: 'head-sha',
+    };
+
+    const blob = (path: string) => ({
+        changeType: 'add',
+        item: { path, gitObjectType: 'blob' },
+    });
+
+    beforeEach(() => {
+        helper = new AzureReposRequestHelper();
+        axiosInstance = { get: jest.fn() };
+        jest.spyOn(helper as any, 'azureRequest').mockResolvedValue(
+            axiosInstance,
+        );
+    });
+
+    it('reads every page and reports the diff as complete', async () => {
+        // Azure leaves `allChangesIncluded` out of a page that was cut off.
+        axiosInstance.get
+            .mockResolvedValueOnce({
+                data: { changes: [blob('/a.ts'), blob('/b.ts')] },
+            })
+            .mockResolvedValueOnce({
+                data: { changes: [blob('/z.ts')], allChangesIncluded: true },
+            });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(true);
+        expect(result.changes.map((c) => c.item?.path)).toEqual([
+            '/a.ts',
+            '/b.ts',
+            '/z.ts',
+        ]);
+        const urls = axiosInstance.get.mock.calls.map(([url]) => url);
+        expect(urls[0]).toContain('$skip=0');
+        expect(urls[1]).toContain('$skip=2');
+        expect(urls.every((url) => url.includes('$top='))).toBe(true);
+    });
+
+    it('reports the diff as incomplete when a page comes back empty without the flag', async () => {
+        axiosInstance.get
+            .mockResolvedValueOnce({ data: { changes: [blob('/a.ts')] } })
+            .mockResolvedValueOnce({ data: { changes: [] } });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+        expect(result.changes).toHaveLength(1);
+    });
+
+    it('stops at the page cap and reports the diff as incomplete', async () => {
+        axiosInstance.get.mockResolvedValue({
+            data: { changes: [blob('/a.ts')] },
+        });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+        expect(axiosInstance.get.mock.calls.length).toBeLessThanOrEqual(50);
+    });
+});
