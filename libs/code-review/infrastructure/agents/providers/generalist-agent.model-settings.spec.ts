@@ -86,7 +86,7 @@ describe('GeneralistAgentProvider — settings by model', () => {
         ['claude-sonnet-5-5', 12, false],
         ['deepseek-v4-flash', 34, false],
         ['kimi-k2.7-code', 34, false],
-        ['an-unmapped-model', 12, true],
+        ['an-unmapped-model', 34, false],
     ])('runs %s with %s steps (skip rescue: %s)', async (model, maxSteps, skipSynthesisRescue) => {
         expect(await loopParamsFor(model)).toEqual({ maxSteps, skipSynthesisRescue });
     });

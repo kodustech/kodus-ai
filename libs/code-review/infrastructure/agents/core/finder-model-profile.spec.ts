@@ -47,7 +47,7 @@ describe('finderProfileFor', () => {
         expect(settings('claude-sonnet-5-5')).toEqual({ maxSteps: 12, synthesisRescue: true });
         expect(settings('deepseek-v4-flash')).toEqual({ maxSteps: 'adaptive', synthesisRescue: true });
         expect(settings('kimi-k2.7-code')).toEqual({ maxSteps: 'adaptive', synthesisRescue: true });
-        expect(settings('some-new-model')).toEqual({ maxSteps: 12, synthesisRescue: false });
+        expect(settings('some-new-model')).toEqual({ maxSteps: 'adaptive', synthesisRescue: true });
     });
 });
 

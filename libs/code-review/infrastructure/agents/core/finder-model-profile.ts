@@ -65,10 +65,12 @@ const FAMILIES: ReadonlyArray<FinderModelProfile & { match: RegExp }> = [
     },
 ];
 
+// A family the profile was not measured on keeps main's settings: the
+// adaptive budget and the rescue.
 export const DEFAULT_FINDER_PROFILE: FinderModelProfile = {
     family: 'default',
-    maxSteps: 12,
-    synthesisRescue: false,
+    maxSteps: 'adaptive',
+    synthesisRescue: true,
 };
 
 export function finderProfileFor(modelName?: string): FinderModelProfile {
