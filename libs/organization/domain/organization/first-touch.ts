@@ -47,6 +47,10 @@ const URL_INPUT_MAX = 2048;
 
 // eslint-disable-next-line no-control-regex -- intentional: strip control characters from client input
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
+// Half of a surrogate pair: Postgres rejects it in jsonb, failing the insert
+// of the organization. Comes from a cut through an emoji or straight from JSON.
+const LONE_SURROGATE =
+    /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 const EMAIL_LOCAL_CHAR = /[a-z0-9._%+-]/i;
 const EMAIL_DOMAIN = /[a-z0-9.-]+/iy;
 const EMAIL_TLD = /\.[a-z]{2,}/i;
@@ -116,12 +120,13 @@ function sanitizeText(value: unknown): string | null {
     const text = value
         .slice(0, TEXT_SCAN_MAX)
         .replace(CONTROL_CHARS, '')
+        .replace(LONE_SURROGATE, '')
         .trim();
     if (!text || containsEmail(text)) {
         return null;
     }
 
-    return text.slice(0, FIRST_TOUCH_TEXT_MAX);
+    return text.slice(0, FIRST_TOUCH_TEXT_MAX).replace(LONE_SURROGATE, '');
 }
 
 /**
@@ -130,11 +135,7 @@ function sanitizeText(value: unknown): string | null {
  * inputs such as a run of '%'.
  */
 function containsEmail(text: string): boolean {
-    for (
-        let at = text.indexOf('@');
-        at !== -1;
-        at = text.indexOf('@', at + 1)
-    ) {
+    for (let at = text.indexOf('@'); at >= 0; at = text.indexOf('@', at + 1)) {
         if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
             continue;
         }
@@ -171,13 +172,15 @@ function sanitizeUrl(
         return null;
     }
 
+    // A path that does not decode is dropped: scanning it still encoded would
+    // miss an address written as %40.
     let path: string;
     try {
         path = decodeURIComponent(url.pathname);
     } catch {
-        path = url.pathname;
+        return null;
     }
-    if (containsEmail(path)) {
+    if (containsEmail(path) || containsEmail(path.replace(/%40/gi, '@'))) {
         return null;
     }
 

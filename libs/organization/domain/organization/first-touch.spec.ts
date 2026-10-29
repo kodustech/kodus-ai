@@ -131,6 +131,25 @@ describe('sanitizeFirstTouch', () => {
         expect(Date.now() - started).toBeLessThan(200);
     });
 
+    it('never stores half of a surrogate pair (Postgres rejects it in jsonb)', () => {
+        const result = sanitizeFirstTouch(
+            {
+                // The cut at FIRST_TOUCH_TEXT_MAX lands inside the emoji.
+                utm_content: `${'x'.repeat(FIRST_TOUCH_TEXT_MAX - 1)}\u{1F600}`,
+                utm_term: 'abc\ud83d',
+                utm_source: '\udc00google',
+            },
+            now,
+        );
+
+        expect(result).toEqual({
+            utm_content: 'x'.repeat(FIRST_TOUCH_TEXT_MAX - 1),
+            utm_term: 'abc',
+            utm_source: 'google',
+        });
+        expect(JSON.stringify(result)).not.toMatch(/\\ud[89a-f]/i);
+    });
+
     it('drops a gclid with characters Google never uses', () => {
         expect(sanitizeFirstTouch({ gclid: 'abc<script>' }, now)).toBeNull();
         expect(sanitizeFirstTouch({ gclid: 'Cj0K-Q_jw1' }, now)).toEqual({
@@ -167,6 +186,8 @@ describe('sanitizeFirstTouch', () => {
         });
 
         it.each([
+            'https://example.com/u/jane%40acme.com%FF',
+            'https://example.com/u/jane%2540acme.com',
             'javascript:alert(1)',
             'data:text/html,hi',
             'not a url',

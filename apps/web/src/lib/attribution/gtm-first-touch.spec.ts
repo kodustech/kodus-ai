@@ -130,6 +130,18 @@ describe("GTM first-touch tag", () => {
         ).toBeUndefined();
     });
 
+    it("keeps the attribution when the 100-character cut lands inside an emoji", () => {
+        const jar = new CookieJar();
+        visit(
+            jar,
+            `https://kodus.io/?utm_source=google&utm_content=${"x".repeat(99)}${encodeURIComponent("\u{1F600}")}`,
+        );
+
+        const touch = firstTouchOn(jar, "https://kodus.io/");
+        expect(touch?.utm_source).toBe("google");
+        expect(touch?.utm_content).toBe("x".repeat(99));
+    });
+
     it("does nothing outside kodus.io (self-hosted installs load the app container too)", () => {
         const jar = new CookieJar();
         visit(jar, "https://kodus.acme.internal/sign-up?utm_source=google");
