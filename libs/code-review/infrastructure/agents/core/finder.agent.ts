@@ -1007,28 +1007,13 @@ export async function runFinderWithVerify(
     );
     // The generalist as a pass, measured like the others: without it its cost
     // and time only showed up summed into the review total (#1821).
-    const baseStat: RecallPassStat = (() => {
-        const u = usageOf(finderState.usage);
-        const calls = collectToolCalls(finderState);
-        return {
-            label: 'generalist-base',
-            added: base.suggestions?.length ?? 0,
-            ms: baseMs,
-            startMs: 0,
-            startEpochMs: baseT0,
-            steps: finderState.steps.length,
-            toolCalls: calls.length,
-            fullFileReads: calls.filter(
-                (c) =>
-                    c.tool === 'readFile' &&
-                    !(c.args as { startLine?: number })?.startLine,
-            ).length,
-            inputTokens: u.inputTokens,
-            cacheReadTokens: u.cacheReadTokens,
-            outputTokens: u.outputTokens,
-            reasoningTokens: u.reasoningTokens,
-        };
-    })();
+    const baseStat = passStatOf(finderState, {
+        label: 'generalist-base',
+        added: base.suggestions?.length ?? 0,
+        ms: baseMs,
+        startMs: 0,
+        startEpochMs: baseT0,
+    });
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
     // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
@@ -1676,6 +1661,33 @@ export interface RecallPassStat {
     cacheReadTokens: number;
 }
 
+/** One pass's stats from its run: steps (what maxSteps bounds; a step can
+ *  fire several tool calls), tool calls, whole-file reads and tokens. */
+function passStatOf(
+    state: RunState,
+    pass: Pick<
+        RecallPassStat,
+        'label' | 'added' | 'ms' | 'startMs' | 'startEpochMs'
+    >,
+): RecallPassStat {
+    const u = usageOf(state.usage);
+    const calls = collectToolCalls(state);
+    return {
+        ...pass,
+        steps: state.steps.length,
+        toolCalls: calls.length,
+        fullFileReads: calls.filter(
+            (c) =>
+                c.tool === 'readFile' &&
+                !(c.args as { startLine?: number })?.startLine,
+        ).length,
+        inputTokens: u.inputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        outputTokens: u.outputTokens,
+        reasoningTokens: u.reasoningTokens,
+    };
+}
+
 export async function runRecallPasses(
     base: FinderFindings,
     params: RecallPassesParams,
@@ -1744,28 +1756,15 @@ export async function runRecallPasses(
         const before = findings.suggestions.length;
         findings = mergeSuggestions(findings, extracted);
         const added = findings.suggestions.length - before;
-        const passCalls = collectToolCalls(state);
-        passStats.push({
-            label,
-            added,
-            ms: elapsedMs,
-            startMs: relativeStart,
-            // Steps, not tool calls: a step can fire several tool calls at
-            // once, so toolCalls alone can't confirm a maxSteps cap held —
-            // this is the number ForceFinalizePolicy/maxSteps actually bounds.
-            steps: state.steps.length,
-            toolCalls: passCalls.length,
-            fullFileReads: passCalls.filter(
-                (c) =>
-                    c.tool === 'readFile' &&
-                    !(c.args as { startLine?: number })?.startLine,
-            ).length,
-            inputTokens: passUsage.inputTokens,
-            cacheReadTokens: passUsage.cacheReadTokens,
-            outputTokens: passUsage.outputTokens,
-            reasoningTokens: passUsage.reasoningTokens,
-            startEpochMs: t0,
-        });
+        passStats.push(
+            passStatOf(state, {
+                label,
+                added,
+                ms: elapsedMs,
+                startMs: relativeStart,
+                startEpochMs: t0,
+            }),
+        );
     };
 
     // Synthesis rescue — re-think from the evidence already gathered, surface
