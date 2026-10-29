@@ -17,7 +17,7 @@ export function withClaudeOneProblem(prompt: string): string {
 }
 
 /** The category writing policy (WHAT/WHY/HOW), as tightened for Claude. */
-const WRITING_POLICY_SWAPS: ReadonlyArray<readonly [string, string]> = [
+export const WRITING_POLICY_SWAPS: ReadonlyArray<readonly [string, string]> = [
     [
         'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:',
         'Each finding must be technical, direct, and verifiable, and cover ONE problem only. Structure every suggestionContent as:',
@@ -33,31 +33,4 @@ const WRITING_POLICY_SWAPS: ReadonlyArray<readonly [string, string]> = [
 
 export function withClaudeWritingPolicy(systemPrompt: string): string {
     return WRITING_POLICY_SWAPS.reduce((p, [from, to]) => p.split(from).join(to), systemPrompt);
-}
-
-/** Muse: besides combining problems, it submits entries that report no defect
- *  ("checked, it is correct"). The examples are invented code, never benchmark PRs. */
-export const MUSE_ONE_PROBLEM_REINFORCEMENT = `Every entry in "suggestions" must report a defect that requires a code change. Do not submit an entry to say that you checked something and it is correct, that the code is safe or already handled, that no change is needed, or to describe what the code does. Those notes belong in "reasoning", not in "suggestions". If you found nothing that needs fixing, submit an empty suggestions array.
-
-Each suggestion describes ONE defect and the fix for that defect only. If you found two defects, even in the same lines or caused by the same change, write two suggestions. Do not append a second problem with "also", and do not add extra recommendations (hardening, try/catch, rate limiting, refactors) that the defect itself does not need.
-
-WRONG — two problems in one entry:
-"\`parseLimit\` calls Number(req.query.limit) with no check, so a non-numeric value becomes NaN and the query returns every row. Also, the result of \`cache.get\` is never awaited, so the handler returns before the cached page is read."
-RIGHT — two entries: one for the NaN limit returning every row, one for the missing await on \`cache.get\`.
-
-WRONG — one change, two defects with different fixes:
-"The retry loop now uses \`attempts <= maxAttempts\`, so it runs one extra time, and the backoff is \`attempts * 1000\` seconds instead of milliseconds, so retries wait a thousand times longer than intended."
-RIGHT — two entries: one for the extra iteration, one for the backoff unit.
-
-WRONG — a defect plus unrelated recommendations:
-"\`deleteAccount\` skips the ownership check when \`req.user.isAdmin\` is undefined, so any logged-in user can delete another user's account. Also wrap the handler in try/catch and add rate limiting."
-RIGHT — one entry about the skipped ownership check only.
-
-RIGHT — single-problem suggestions:
-"\`formatPrice\` divides \`cents\` by 10 instead of 100, so every price is shown ten times higher. Divide by 100."
-"\`logout\` deletes the session row but never clears the \`sid\` cookie, so the browser keeps sending a session id the server no longer knows and the user lands on the error page. Clear the cookie on logout."`;
-
-/** Muse only: the reinforcement right after every occurrence of the base rule. */
-export function withMuseOneProblem(prompt: string): string {
-    return prompt.split(ONE_PROBLEM_RULE).join(`${ONE_PROBLEM_RULE}\n\n${MUSE_ONE_PROBLEM_REINFORCEMENT}\n`);
 }
