@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import {
@@ -21,6 +21,11 @@ import { SETUP_PATHS } from "@services/setup";
 import { useGetGithubOrganizationName } from "@services/setup/hooks";
 import { deleteCookie, getCookie } from "cookies-next/client";
 import { SaveIcon } from "lucide-react";
+import {
+    GITHUB_CODE_PARAM,
+    GITHUB_STATE_PARAM,
+    startGithubInstallationAuthorization,
+} from "src/core/integrations/github-installation-authorization";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
@@ -70,6 +75,15 @@ export default function Redirect() {
 
     const code = searchParams.get("code");
     const installationId = searchParams.get("installation_id");
+    const githubCode = searchParams.get(GITHUB_CODE_PARAM);
+    const githubState = searchParams.get(GITHUB_STATE_PARAM);
+    // A GitHub installation is linked only with GitHub's authorization of
+    // the user (see github-installation-authorization); get it first.
+    const needsGithubAuthorization =
+        integration === INTEGRATIONS_KEY.GITHUB &&
+        !!installationId &&
+        (!githubCode || !githubState);
+    const authorizingRef = useRef(false);
 
     useEffect(() => {
         const id =
@@ -83,7 +97,25 @@ export default function Redirect() {
     }, [params]);
 
     useEffect(() => {
-        if (hasMounted) {
+        if (
+            hasMounted &&
+            organizationId &&
+            needsGithubAuthorization &&
+            !authorizingRef.current
+        ) {
+            authorizingRef.current = true;
+            startGithubInstallationAuthorization(
+                installationId!,
+                `/setup/github?installation_id=${encodeURIComponent(installationId!)}`,
+            ).catch(() => {
+                authorizingRef.current = false;
+                setError(true);
+            });
+        }
+    }, [hasMounted, organizationId, needsGithubAuthorization, installationId]);
+
+    useEffect(() => {
+        if (hasMounted && !needsGithubAuthorization) {
             const selectedTeamCookie = getCookie("selectedTeam") as any;
             const savedTeam =
                 selectedTeamCookie &&
@@ -121,6 +153,7 @@ export default function Redirect() {
         router,
         organizationId,
         hasMounted,
+        needsGithubAuthorization,
     ]);
 
     useEffect(() => {
@@ -162,6 +195,8 @@ export default function Redirect() {
                     code,
                     organizationAndTeamData,
                     installationId,
+                    githubCode: githubCode ?? undefined,
+                    githubState: githubState ?? undefined,
                 });
             }
         } else if (integration === INTEGRATIONS_KEY.GITLAB) {

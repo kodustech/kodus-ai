@@ -36,6 +36,12 @@ Este paso es fundamental para garantizar que la instalación y la redirección f
   ```
   Esta URL se utiliza para completar el flujo de autorización.
 
+- **Segunda Callback URL** (haz clic en **Add Callback URL**):
+  ```
+  WEB_DOMAIN/github-integration
+  ```
+  Kodus envía al usuario aquí después de que GitHub confirma que tiene acceso a la instalación que se está conectando. Sin ella, la conexión de la app falla.
+
 - **Setup URL**:
   ```
   WEB_DOMAIN/setup/github
