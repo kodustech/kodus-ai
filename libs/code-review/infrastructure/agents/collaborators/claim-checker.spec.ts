@@ -786,6 +786,31 @@ describe('claim check groups by (rule, file), not by finding', () => {
 // Azure Repos names changed files with a leading "/" ("/src/a.ts") while grep
 // answers repo-relative ("src/a.ts"). Both forms name the same file.
 describe('checkClaims — a file named with a leading slash', () => {
+    it('checks a claim once when siblings name its path with and without the slash', async () => {
+        const exists = jest.fn().mockReturnValue(true);
+        const lookup = fakeLookup({ exists });
+        const sibling = (relevantFile: string, claimPath: string, line: number) =>
+            violation({
+                relevantFile,
+                relevantLinesStart: line,
+                relevantLinesEnd: line,
+                claimKind: 'missing',
+                claimPath,
+            });
+
+        const res = await checkClaims({
+            violations: [
+                sibling('/src/orders/order-mapper.ts', '/src/orders/order-mapper.spec.ts', 3),
+                sibling('src/orders/order-mapper.ts', 'src/orders/order-mapper.spec.ts', 7),
+            ],
+            changedFiles: [{ filename: '/src/orders/order-mapper.ts' }],
+            lookup,
+        });
+
+        expect(exists).toHaveBeenCalledTimes(1);
+        expect(res.dropped).toHaveLength(2);
+    });
+
     it('keeps an unused finding whose only matches are its own lines', async () => {
         const lookup = fakeLookup({
             grep: () =>

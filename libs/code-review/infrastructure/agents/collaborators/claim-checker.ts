@@ -334,7 +334,7 @@ function restates(violation: ShardViolation, claim: Claim): boolean {
 
 /** Identity of a claim, so one repository check serves every finding making it. */
 const claimKeyOf = (claim: Claim): string =>
-    `${claim.kind}::${claim.symbol ?? ''}::${claim.path ?? ''}`;
+    `${claim.kind}::${claim.symbol ?? ''}::${normalizePath(claim.path ?? '')}`;
 
 /**
  * The group's own lines, as one span. `refute` excludes a finding's own lines
