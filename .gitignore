@@ -298,3 +298,7 @@ reports/mutation/
 # Nao versionar: kodus-common/kodus-flow vem do registry, e test.json carrega
 # credencial de producao.
 packages/
+
+# Research run outputs (#1821): kept locally, out of the repo.
+evals/enrichment/results/
+evals/severity/results/

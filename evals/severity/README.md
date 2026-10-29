@@ -8,6 +8,6 @@
 
 The prompt versions of #1821 (`prompts.js`; `prod` is the criteria prompt teams with their own
 flags still get) over the severity dataset (`dataset/items.json`), each suggestion rated from
-its text against `definitions.md`. `report.py` builds the results page from `results/` and
+its text against `definitions.md`. `report.py` builds the results page from `results/` (local, not committed) and
 `tests.json`. Test 17b is what production runs (`severity-prompt.ts`), measured by
 `evals/severity-levels`.
