@@ -57,3 +57,13 @@ describe('GeneralistAgentProvider — coding-agent instructions', () => {
         expect(prompt).not.toContain('repository-instructions lens');
     });
 });
+
+describe('GeneralistAgentProvider — a run without a submitted result', () => {
+    // Whether the finder submitted a result (a tool call or a whole final
+    // answer) only matters to an agent that reads a missing one as stopped
+    // early: custom agents. The generalist's prose answers stay with prose
+    // recovery, so an org with no custom agent sees no change (#2172 AC #16).
+    it('is not read as stopped early', () => {
+        expect((provider as any).readsMissingResultAsIncomplete()).toBe(false);
+    });
+});
