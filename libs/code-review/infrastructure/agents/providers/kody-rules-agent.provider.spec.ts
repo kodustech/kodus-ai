@@ -4,7 +4,12 @@ import {
     KodyRulesScope,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
+import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     judgeKodyRulesSharded,
@@ -2124,5 +2129,89 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
         ).toBe(true);
         // claim-check side: the same flipped instance dropped the finding
         expect(out.suggestions).toEqual([]);
+    });
+});
+
+// Azure Repos names changed files with a leading "/" ("/src/util.ts") and the
+// sandbox rejects absolute paths. A companion-file rule on such a PR has to be
+// judged with the repository's answer, not skipped as context unavailable.
+describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Azure Repos)', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kody-azure-paths-'));
+        const write = (rel: string, content: string) => {
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(dir, rel), content);
+        };
+        write('src/main.ts', 'export const total = (n: number[]) => n.length;\n');
+        write('src/util.ts', 'export const slugify = (t: string) => t;\n');
+        write('src/main.spec.ts', "import { total } from './main';\n");
+    });
+
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    it('judges a companion-file rule with what the repository holds', async () => {
+        const lookup = buildRepoLookup({
+            type: 'local',
+            sandboxId: dir,
+            repoDir: dir,
+            remoteCommands: (
+                new LocalSandboxService({} as any) as any
+            ).buildRemoteCommands(dir),
+        } as any);
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute({
+            prNumber: 9,
+            organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+            changedFiles: [
+                {
+                    filename: '/src/util.ts',
+                    status: 'modified',
+                    patch: '@@ -1 +1 @@\n-export const slugify = (t: string) => t.trim();\n+export const slugify = (t: string) => t;',
+                },
+                {
+                    filename: '/src/main.ts',
+                    status: 'modified',
+                    patch: '@@ -1 +1 @@\n-export const total = (n: number[]) => 0;\n+export const total = (n: number[]) => n.length;',
+                },
+            ],
+            prTitle: 'p',
+            prBody: '',
+            remoteCommands: undefined,
+            repoLookup: lookup,
+            kodyRules: [
+                {
+                    uuid: RULE_UUID,
+                    title: 'modules have a companion spec',
+                    rule: 'Every changed module must have a companion spec file.',
+                    status: 'active',
+                    severity: 'high',
+                    scope: 'file',
+                    path: '**/*.ts',
+                    contextNeed: {
+                        need: 'sibling-file',
+                        sourceHash: 'h',
+                        source: 'compiler',
+                        inferredAt: new Date(0),
+                    },
+                },
+            ],
+        } as any);
+
+        expect(lookup.available).toBe(true);
+        expect(
+            out.warnings?.some((w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE'),
+        ).toBeFalsy();
+        const prompts = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(prompts).toContain('- /src/main.spec.ts: exists');
+        expect(prompts).toContain('- /src/util.spec.ts: does not exist');
     });
 });
