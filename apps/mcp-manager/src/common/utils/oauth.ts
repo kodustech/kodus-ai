@@ -2,6 +2,9 @@ import { Logger } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
 import { createHash, randomBytes } from 'crypto';
 
+/** The provider refused to refresh the grant: the user has to connect again. */
+export class OAuthGrantRejectedError extends Error {}
+
 export function generatePKCE() {
     const verifier = randomBytes(32).toString('base64url');
     const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -372,6 +375,14 @@ export async function checkAndRefreshOAuth(
             validateStatus: () => true,
         });
 
+        // RFC 6749 §5.2: the provider answers 400 (invalid_grant) or 401 when
+        // the refresh token is revoked or expired. Only a new authorization fixes
+        // that; any other failure can pass.
+        if (tokenResp.status === 400 || tokenResp.status === 401) {
+            throw new OAuthGrantRejectedError(
+                `Failed to refresh tokens${tokenError(tokenResp)}`,
+            );
+        }
         if (tokenResp.status >= 400) {
             throw new Error(`Failed to refresh tokens${tokenError(tokenResp)}`);
         }

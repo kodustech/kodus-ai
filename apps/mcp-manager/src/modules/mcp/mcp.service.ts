@@ -8,7 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
-import { MCPIntegrationAuthType } from '../integrations/enums/integration.enum';
+import {
+    MCPIntegrationAuthType,
+    MCPIntegrationOAuthStatus,
+} from '../integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../integrations/interfaces/mcp-integration.interface';
 import { IntegrationsService } from '../integrations/integrations.service';
 import {
@@ -581,6 +584,21 @@ export class McpService {
                 organizationId,
                 integrationId,
             );
+
+        // A lost OAuth grant takes the connection out of the runtime's ACTIVE
+        // list until the user connects again (which sets it back to ACTIVE).
+        if (
+            Object.keys(headers).length === 0 &&
+            (await this.integrationOAuthService.getOAuthStatus(
+                organizationId,
+                integrationId,
+            )) === MCPIntegrationOAuthStatus.INACTIVE
+        ) {
+            await this.connectionRepository.update(
+                { organizationId, integrationId },
+                { status: MCPConnectionStatus.EXPIRED },
+            );
+        }
 
         return { headers };
     }
