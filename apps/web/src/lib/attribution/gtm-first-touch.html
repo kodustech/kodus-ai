@@ -18,6 +18,8 @@
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
   var GCLID = /^[A-Za-z0-9_-]{1,255}$/;
+  // A UTF-8 lead byte at the end with fewer continuation bytes than it needs.
+  var PARTIAL_CHAR = /(?:%[CD][0-9A-F]|%E[0-9A-F](?:%[89AB][0-9A-F])?|%F[0-7](?:%[89AB][0-9A-F]){0,2})$/i;
 
   // Email-shaped anywhere in the text, however it is encoded: percent-escapes
   // decoded (nested ones too, at most 4 passes; only the valid ASCII ones when
@@ -44,9 +46,10 @@
     return text.slice(0, max).replace(/[\uD800-\uDBFF]$/, '');
   }
 
-  // Nor leave half a %XX escape at the end of a URL.
+  // Nor leave half a %XX escape at the end of a URL, or part of a character
+  // encoded in several: /%E2%9C%93 cut to /%E2%9C no longer decodes.
   function cutUrl(url, max) {
-    return cut(url, max).replace(/%[0-9A-Fa-f]?$/, '');
+    return cut(url, max).replace(/%[0-9A-Fa-f]?$/, '').replace(PARTIAL_CHAR, '');
   }
 
   // Rebuilt whole at each size, so the landing page's query always carries

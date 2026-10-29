@@ -236,13 +236,13 @@ describe('sanitizeFirstTouch', () => {
             ).toBeNull();
         });
 
-        it('keeps a path that does not decode, minus a trailing partial escape', () => {
+        it('keeps a path cut mid-character, minus the partial character', () => {
             expect(
                 sanitizeFirstTouch(
                     { landing_page: 'https://kodus.io/blog/caf%C3%A' },
                     now,
                 ),
-            ).toEqual({ landing_page: 'https://kodus.io/blog/caf%C3' });
+            ).toEqual({ landing_page: 'https://kodus.io/blog/caf' });
         });
 
         it.each([
@@ -297,6 +297,29 @@ describe('sanitizeFirstTouch', () => {
 
             expect(result?.landing_page).toHaveLength(FIRST_TOUCH_URL_MAX);
         });
+
+        // é, ✓ and 😀 take 2, 3 and 4 bytes; the padding moves the cut through
+        // every byte of the last character that fits.
+        it.each(['é', '✓', '😀'])(
+            'cuts a non-ASCII path between characters, never inside one (%s)',
+            (character) => {
+                for (let pad = 0; pad < 12; pad++) {
+                    const url = `https://kodus.io/${'a'.repeat(pad)}${character.repeat(300)}`;
+
+                    const landingPage = sanitizeFirstTouch(
+                        { landing_page: url },
+                        now,
+                    )?.landing_page;
+
+                    expect(
+                        url.startsWith(decodeURIComponent(landingPage!)),
+                    ).toBe(true);
+                    expect(landingPage!.length).toBeGreaterThan(
+                        FIRST_TOUCH_URL_MAX - 12,
+                    );
+                }
+            },
+        );
     });
 
     describe('captured_at', () => {
@@ -309,11 +332,20 @@ describe('sanitizeFirstTouch', () => {
             ).toEqual({ captured_at: '2026-10-01T13:00:00.000Z' });
         });
 
+        it('keeps a visit as old as the one-year cookie', () => {
+            expect(
+                sanitizeFirstTouch(
+                    { captured_at: '2025-10-29T12:00:00.000Z' },
+                    now,
+                ),
+            ).toEqual({ captured_at: '2025-10-29T12:00:00.000Z' });
+        });
+
         it.each([
             ['not a date', 'garbage'],
             ['a number', 1793236553000],
             ['two days ahead', '2026-10-31T12:00:00.000Z'],
-            ['older than two years', '2024-01-01T00:00:00.000Z'],
+            ['older than the cookie lives', '2025-10-27T12:00:00.000Z'],
         ])('drops %s', (_label, captured_at) => {
             expect(sanitizeFirstTouch({ captured_at }, now)).toBeNull();
         });

@@ -167,6 +167,28 @@ describe("GTM first-touch tag", () => {
         );
     });
 
+    // é, ✓ and 😀 take 2, 3 and 4 bytes; the padding moves the 300-character
+    // cut through every byte of the last character that fits.
+    it.each(["é", "✓", "😀"])(
+        "cuts a non-ASCII landing page between characters, never inside one (%s)",
+        (character) => {
+            for (let pad = 0; pad < 12; pad++) {
+                const jar = new CookieJar();
+                const url = `https://kodus.io/${"a".repeat(pad)}${character.repeat(100)}`;
+                visit(jar, url);
+
+                const landingPage = firstTouchOn(jar, "https://kodus.io/")
+                    ?.landing_page as string;
+                expect(url.startsWith(decodeURIComponent(landingPage))).toBe(
+                    true,
+                );
+                expect(landingPage.length).toBeGreaterThan(
+                    "https://kodus.io".length + 300 - 12,
+                );
+            }
+        },
+    );
+
     it("leaves out a referrer or landing path that carries an email", () => {
         const jar = new CookieJar();
         visit(

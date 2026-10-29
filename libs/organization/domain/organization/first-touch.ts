@@ -39,8 +39,9 @@ export const FIRST_TOUCH_URL_MAX = 500;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Browser clocks drift; anything further ahead than this is not a real visit.
 const MAX_CLOCK_SKEW_MS = DAY_MS;
-// The cookie lives one year; older than this is not a real visit either.
-const MAX_AGE_MS = 2 * 365 * DAY_MS;
+// The cookie lives one year (by that same clock); older is not a real visit
+// either.
+const MAX_AGE_MS = 365 * DAY_MS + MAX_CLOCK_SKEW_MS;
 // The body is client-controlled and the endpoint is public: bound every value
 // before scanning it. Text keeps room past the cut for an email that starts
 // before it (254 = longest valid address); the tag never writes longer URLs.
@@ -60,6 +61,9 @@ const EMAIL_TLD = /\.[a-z]{2,}/i;
 const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
 const NON_ASCII_ESCAPE = /%[89a-f][0-9a-f]/gi;
 const NOT_PRINTABLE_ASCII = /[^\x20-\x7e]/g;
+// A UTF-8 lead byte at the end with fewer continuation bytes than it needs.
+const PARTIAL_CHARACTER =
+    /(?:%[cd][0-9a-f]|%e[0-9a-f](?:%[89ab][0-9a-f])?|%f[0-7](?:%[89ab][0-9a-f]){0,2})$/i;
 // Enough for any real nesting (an address encoded twice in an ad URL).
 const MAX_DECODE_PASSES = 4;
 const GCLID = /^[a-z0-9_-]+$/i;
@@ -166,11 +170,6 @@ function containsEmail(value: string): boolean {
 }
 
 /**
- * http(s) URLs only, reduced to origin + path. The landing page keeps the
- * campaign parameters (cleaned like the fields above); the referrer keeps no
- * query at all.
- */
-/**
  * The text as an address would read in it: percent-escapes decoded (nested
  * ones too, a bounded number of times; only the valid ASCII ones when the
  * whole does not decode), lookalikes folded by NFKC, and everything outside
@@ -200,6 +199,11 @@ function revealForEmailCheck(value: string): string {
         .replace(NOT_PRINTABLE_ASCII, '');
 }
 
+/**
+ * http(s) URLs only, reduced to origin + path. The landing page keeps the
+ * campaign parameters (cleaned like the fields above); the referrer keeps no
+ * query at all.
+ */
 function sanitizeUrl(
     value: unknown,
     keepCampaignParams: boolean,
@@ -219,8 +223,8 @@ function sanitizeUrl(
         return null;
     }
 
-    // A path that does not decode (e.g. cut mid-escape by the tag) is scanned
-    // as is; containsEmail reads an encoded '@' too.
+    // A path that does not decode (e.g. a stray '%') is scanned as is;
+    // containsEmail reads an encoded '@' too.
     let path: string;
     try {
         path = decodeURIComponent(url.pathname);
@@ -253,9 +257,15 @@ function sanitizeUrl(
     return `${url.origin}${cutUrl(url.pathname, room)}${suffix}`;
 }
 
-/** Cut without leaving half a %XX escape at the end. */
+/**
+ * Cut without leaving half a %XX escape at the end, nor part of a character
+ * encoded in several: '/%E2%9C%93' cut to '/%E2%9C' no longer decodes.
+ */
 function cutUrl(url: string, max: number): string {
-    return url.slice(0, max).replace(/%[0-9a-f]?$/i, '');
+    return url
+        .slice(0, max)
+        .replace(/%[0-9a-f]?$/i, '')
+        .replace(PARTIAL_CHARACTER, '');
 }
 
 function sanitizeTimestamp(value: unknown, now: Date): string | null {

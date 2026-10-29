@@ -60,8 +60,17 @@ export class OrganizationModel extends CoreModel {
      * organization (UTMs, gclid, referrer, landing page). Written once, when
      * the organization is created; NULL for organizations created before it
      * was tracked or without the cookie.
+     *
+     * Read only by the warehouse, so never selected by default: a user loaded
+     * with its organization (as the public signup returns it) must not carry
+     * the owner's attribution. Select it explicitly where it is needed.
      */
-    @Column({ name: 'first_touch', type: 'jsonb', nullable: true })
+    @Column({
+        name: 'first_touch',
+        type: 'jsonb',
+        nullable: true,
+        select: false,
+    })
     firstTouch?: FirstTouch | null;
 
     @OneToMany('TeamModel', 'organization')
