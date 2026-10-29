@@ -164,22 +164,13 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                         name: 'repo',
                         platform: PlatformType.GITLAB,
                     }),
+                    // The author's git id drives the permission check downstream.
+                    pullRequest: expect.objectContaining({
+                        user: gitlabMergePayload.user,
+                    }),
                     prFiles: mockPrFiles,
                 }),
             );
-        });
-
-        it('should pass the user from the webhook payload through to processClosedPr', async () => {
-            await useCase.execute({
-                payload: gitlabMergePayload,
-                platformType: PlatformType.GITLAB,
-            });
-
-            const callArgs =
-                kodyIssuesManagementServiceMock.processClosedPr.mock
-                    .calls[0][0];
-            expect(callArgs.pullRequest.user).toEqual(gitlabMergePayload.user);
-            expect(callArgs.pullRequest.user.id).toBe(101);
         });
 
         it('should clear issues cache after processing', async () => {
@@ -238,24 +229,12 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                         name: 'repo',
                         platform: PlatformType.GITHUB,
                     }),
+                    pullRequest: expect.objectContaining({
+                        user: githubMergePayload.pull_request.user,
+                    }),
                     prFiles: mockPrFiles,
                 }),
             );
-        });
-
-        it('should pass the user from the webhook payload through to processClosedPr', async () => {
-            await useCase.execute({
-                payload: githubMergePayload,
-                platformType: PlatformType.GITHUB,
-            });
-
-            const callArgs =
-                kodyIssuesManagementServiceMock.processClosedPr.mock
-                    .calls[0][0];
-            expect(callArgs.pullRequest.user).toEqual(
-                githubMergePayload.pull_request.user,
-            );
-            expect(callArgs.pullRequest.user.id).toBe(202);
         });
     });
 
@@ -335,7 +314,7 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
     });
 
     describe('error handling', () => {
-        it('should not throw when processClosedPr fails', async () => {
+        it('swallows a processClosedPr failure without clearing the issues cache', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [mockIntegrationConfig],
             );
@@ -351,24 +330,7 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                     payload: gitlabMergePayload,
                     platformType: PlatformType.GITLAB,
                 }),
-            ).resolves.not.toThrow();
-        });
-
-        it('should not call clearIssuesCache when processClosedPr fails', async () => {
-            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [mockIntegrationConfig],
-            );
-            pullRequestServiceMock.findByNumberAndRepositoryName.mockResolvedValue(
-                { files: mockPrFiles },
-            );
-            kodyIssuesManagementServiceMock.processClosedPr.mockRejectedValue(
-                new Error('LLM timeout'),
-            );
-
-            await useCase.execute({
-                payload: gitlabMergePayload,
-                platformType: PlatformType.GITLAB,
-            });
+            ).resolves.toBeUndefined();
 
             expect(
                 kodyIssuesManagementServiceMock.clearIssuesCache,

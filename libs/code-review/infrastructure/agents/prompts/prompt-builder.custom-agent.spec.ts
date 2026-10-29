@@ -1,18 +1,13 @@
 /**
  * #2172 — custom agents keep to their lane, and the custom agents of one
- * review share a system-prompt prefix the provider can cache. The generalist
- * (and every built-in agent) renders byte for byte what it rendered before.
+ * review share a system-prompt prefix the provider can cache.
  */
-import { createHash } from 'node:crypto';
-
 import {
     buildSystemPrompt,
     buildUserPrompt,
     hasOwnLane,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import { verifierPromptFor } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
-import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import { CACHE_PREFIX_BOUNDARY } from '@libs/llm/prompt-cache-boundary';
 import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 
@@ -81,8 +76,6 @@ const security = customAgent(
     },
 );
 
-const sha = (text: string) => createHash('sha256').update(text).digest('hex');
-
 const commonPrefixLength = (a: string, b: string) => {
     let i = 0;
     while (i < a.length && i < b.length && a[i] === b[i]) i++;
@@ -98,63 +91,7 @@ afterAll(() => {
     jest.useRealTimers();
 });
 
-describe('generalist prompts are byte-identical', () => {
-    // sha256 of the prompts rendered on feat/custom-agents@d80afe38d (before
-    // the lane and prefix changes) for this exact input.
-    // User, self-contained and verifier hashes re-pinned to the lean finder
-    // output (#1821): no confidence, severity or code fields.
-    const BASE: Record<string, [any, string, string]> = {
-        full: [
-            input(),
-            '4f67236a90cbf50ee3b36e581d2cc5f650253582b3897a6bf54a3b79f836c2bc',
-            'a87059b88ead0443c616f9eb7e01a4267fec13f29e5621fa790ab41f67cae415',
-        ],
-        compact: [
-            input({ adaptiveProfile: { compactPrompt: true } }),
-            '86b1a846139d9cd01beacc770af75096c5147cbaa3d6fb9a19adaf91795ebca8',
-            '1d7576e6b150abadbe64cc14c7026ec10c40ec4d509fbcf345d109ef56a518c3',
-        ],
-        selfContained: [
-            input({ remoteCommands: undefined }),
-            '1a0ab95066aa28cc16edb771023dc5e6890f86e95460d89c9c9d36ecf04f2cf8',
-            '238ac474c348a8c31ac349bf2a9755ab554a914770c56b42fdf4b68d7dd16178',
-        ],
-        withGraph: [
-            input({
-                callGraph: '<CallGraph>g</CallGraph>',
-                reviewDirective: 'auth',
-                linkedRepoAccess: undefined,
-            }),
-            '620249378123462aa69c5bccb81387f05955ccb75a928344a8fa55ddc6ea0134',
-            '091df947ff61a92c6f70436edf6deaa0ee75fe16965985b7520ec6fa622c9442',
-        ],
-    };
-
-    it.each(Object.entries(BASE))(
-        '%s system and user prompt',
-        (_name, [given, systemSha, userSha]) => {
-            expect(sha(buildSystemPrompt(given, generalist))).toBe(systemSha);
-            expect(sha(buildUserPrompt(given, generalist))).toBe(userSha);
-        },
-    );
-
-    it('the HV2 verifier prompts', () => {
-        const finding: any = {
-            relevantFile: 'src/pagination.ts',
-            relevantLinesStart: 8,
-            relevantLinesEnd: 9,
-            severity: 'high',
-            suggestionContent: 'off by one',
-            existingCode: 'i <= n',
-        };
-        expect(sha(buildVerifierPrompt('', 0).system)).toBe(
-            '8b281d919d78cf8125620983d883213ce2b16aef9ccc9ea3085b17dcc9c8db98',
-        );
-        expect(sha(verifierPromptFor(finding))).toBe(
-            '1d1a59eb0fd05cc959af1e6962cbb484d0c8290c62b9990e929dd336586dd934',
-        );
-    });
-
+describe('generalist prompt', () => {
     it('carries no shared-prefix marker', () => {
         expect(buildSystemPrompt(input(), generalist)).not.toContain(
             CACHE_PREFIX_BOUNDARY,

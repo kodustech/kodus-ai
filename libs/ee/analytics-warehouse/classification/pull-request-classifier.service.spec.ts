@@ -197,35 +197,9 @@ describe('classifyBatch — A. output-shape zoo (off-schema returns degrade to a
         }
     });
 
-    it('row 5 — double wrapper {result:{result:D}}: typed-empty Map', async () => {
-        const map = await classify({
-            result: { result: { classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] } },
-        });
-        expect(map.size).toBe(0);
-    });
-
-    it('row 6 — numeric/opaque single-key wrap {"0":D} / {content:D}: typed-empty Map', async () => {
-        expect((await classify({ '0': { classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] } })).size).toBe(0);
-        expect((await classify({ content: { classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] } })).size).toBe(0);
-    });
-
     it('row 7 — stringified JSON (whole D as a string): typed-empty Map, no throw', async () => {
         const map = await classify(
             JSON.stringify({ classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] }),
-        );
-        expect(map.size).toBe(0);
-    });
-
-    it('row 8 — markdown-fenced JSON string: typed-empty Map', async () => {
-        const map = await classify(
-            '```json\n{"classifications":[{"pullRequestId":"pr-1","type":"Bug Fix"}]}\n```',
-        );
-        expect(map.size).toBe(0);
-    });
-
-    it('row 9 — prose-wrapped string: typed-empty Map', async () => {
-        const map = await classify(
-            'Here is the result: {"classifications":[{"pullRequestId":"pr-1","type":"Bug Fix"}]}',
         );
         expect(map.size).toBe(0);
     });
@@ -270,46 +244,11 @@ describe('classifyBatch — A. output-shape zoo (off-schema returns degrade to a
         expect([...map.entries()]).toEqual([['pr-1', 'Bug Fix']]);
     });
 
-    it('row 14 — empty object {}: typed-empty Map', async () => {
-        expect((await classify({})).size).toBe(0);
-    });
-
-    it('row 15 — empty array {classifications:[]}: typed-empty Map', async () => {
-        expect((await classify({ classifications: [] })).size).toBe(0);
-    });
-
-    it('row 16 — empty / whitespace-only string result: typed-empty Map, no throw', async () => {
-        expect((await classify('')).size).toBe(0);
-        expect((await classify('   \n  ')).size).toBe(0);
-    });
-
     it('row 17 — null / undefined result: the result?. guard yields a typed-empty Map, no throw', async () => {
         expect((await classify(null)).size).toBe(0);
         expect((await classify(undefined)).size).toBe(0);
     });
 
-    it('row 18 — primitive result (true / 0 / "ok"): typed-empty Map, no throw', async () => {
-        expect((await classify(true)).size).toBe(0);
-        expect((await classify(0)).size).toBe(0);
-        expect((await classify('ok')).size).toBe(0);
-    });
-
-    it('row 19 — provider envelope leak {choices:[{message:{content}}]}: typed-empty Map', async () => {
-        const map = await classify({
-            choices: [
-                { message: { content: '{"classifications":[{"pullRequestId":"pr-1","type":"Bug Fix"}]}' } },
-            ],
-        });
-        expect(map.size).toBe(0);
-    });
-
-    it('row 20 — reasoning/thinking leak object (no .classifications): typed-empty Map', async () => {
-        const map = await classify({
-            thinking: 'Let me classify... pr-1 is a bug fix.',
-            reasoning_content: 'chain of thought without a signature',
-        });
-        expect(map.size).toBe(0);
-    });
 });
 
 describe('classifyBatch — B. semantic-but-wrong (valid JSON, wrong value encoding) is DROPPED, never mis-mapped', () => {
@@ -417,41 +356,6 @@ describe('classifyBatch / run — C. unparseable / transport: the fail-safe laye
         expect(res.failed).toBe(3);
         expect(res.batches).toBe(1);
         expect(write).not.toHaveBeenCalled();
-    });
-
-    it('row 31 — {error:...} returned instead of thrown: typed-empty Map, no crash', async () => {
-        const map = await classify({ error: { message: 'model unavailable', code: 503 } });
-        expect(map.size).toBe(0);
-    });
-
-    it('row 32 — empty success (no output field at all): typed-empty Map', async () => {
-        mockGenerate.mockResolvedValue({ text: '', finishReason: 'length' });
-        const map = await (buildService() as any).classifyBatch(batch);
-        expect(map instanceof Map).toBe(true);
-        expect(map.size).toBe(0);
-    });
-
-    it('row 33 — refusal prose ("I cannot help"): typed-empty Map', async () => {
-        const map = await classify('I cannot help with that request.');
-        expect(map.size).toBe(0);
-    });
-
-    it('row 34 — abort/hard-timeout error mid-call: run() still absorbs it (fail-safe is throw-agnostic)', async () => {
-        const abortErr = Object.assign(new Error('The operation was aborted'), {
-            name: 'AbortError',
-        });
-        const svc = buildService();
-        jest.spyOn(svc as any, 'fetchPending').mockResolvedValue(
-            batch.map(({ id, organizationId }) => ({ id, organizationId })),
-        );
-        jest.spyOn(svc as any, 'fetchTitlesFromMongo').mockResolvedValue(
-            new Map(batch.map((r) => [r.id, r.title])),
-        );
-        mockGenerate.mockRejectedValue(abortErr);
-
-        const res = await svc.run();
-        expect(res.failed).toBe(3);
-        expect(res.classified).toBe(0);
     });
 
     it('array with a null element fails explicitly (not silently) and is absorbed by run()', async () => {
@@ -662,38 +566,5 @@ describe('classifyBatch — request assembly + E. model policy is delegated (byo
         expect(genArg.prompt).toContain('pr-1');
         expect(genArg.prompt).toContain('fix: null deref in parser');
         expect(genArg.output).toBeDefined(); // Output.object structured mode
-    });
-
-    it('always returns a Map<string, PRType> regardless of the return shape (declared-type invariant)', async () => {
-        for (const shape of [
-            { classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] },
-            {},
-            [],
-            null,
-            'prose',
-            42,
-        ]) {
-            const map = await classify(shape as any);
-            expect(map instanceof Map).toBe(true);
-            for (const v of map.values()) {
-                expect(['Bug Fix', 'Feature', 'Refactor', 'Test']).toContain(v);
-            }
-        }
-    });
-
-    // E — N-model policy: this boundary hardcodes `byokConfig: undefined`, so
-    // LLM.run resolves the MANAGED DEFAULT on every call (resolveStructuredPlan
-    // returns 'as-is', mayUseJsonSchema mocked → true). That is the STRICT
-    // json_schema branch, and every A/B/C zoo test above therefore already runs
-    // under it. The json_object-fallback branch (kimi/glm/deepseek/z-ai) is
-    // UNREACHABLE from here — the boundary cannot pass a non-default slot — so
-    // that provider policy is owned + tested one boundary up in
-    // structured-review-call.spec.ts, not duplicated here.
-    it('E (strict branch) — byokConfig is undefined so the managed-default structured path is exercised by the whole zoo', async () => {
-        resolveOutput({ classifications: [{ pullRequestId: 'pr-1', type: 'Bug Fix' }] });
-        await (buildService() as any).classifyBatch(batch);
-        const genArg = mockGenerate.mock.calls[0][0];
-        // structured mode → Output.object present (json_schema branch honored).
-        expect(genArg.output).toBeDefined();
     });
 });

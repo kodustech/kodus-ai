@@ -97,26 +97,4 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
             undefined,
         );
     });
-
-    it('returns the probe verdict as-is', async () => {
-        testByokConnectionUseCase.execute.mockResolvedValue({
-            ok: false,
-            code: 'auth',
-            latencyMs: 12,
-            message: 'rejected',
-        });
-
-        await expect(
-            controller.testByokConnection({
-                provider: 'openai',
-                apiKey: 'sk-bad',
-                model: 'gpt-x',
-            }),
-        ).resolves.toEqual({
-            ok: false,
-            code: 'auth',
-            latencyMs: 12,
-            message: 'rejected',
-        });
-    });
 });

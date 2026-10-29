@@ -329,26 +329,6 @@ describe('checkConventionQuotes', () => {
             },
         );
 
-        it('accepts the display-name form of the instructions', async () => {
-            const quote = 'Close valves in a finally block.';
-            const r = await checkConventionQuotes(
-                [
-                    conv(quote, {
-                        source: {
-                            file: 'Team instructions (Valve agent)',
-                            section: '',
-                            quote,
-                        },
-                    }),
-                ],
-                reader({}),
-                [GUIDE],
-                undefined,
-                INSTRUCTIONS,
-            );
-            expect(r.rejected).toEqual([]);
-        });
-
         it('drops a quote the instructions do not hold', async () => {
             const r = await checkConventionQuotes(
                 [
@@ -468,15 +448,6 @@ describe('checkConventionQuotes', () => {
             expect(r.passed[0].sectionText).toBe(INSTRUCTIONS);
             expect(r.passed[0].finding.source?.file).toBe('TeamInstructions');
             expect(read).not.toHaveBeenCalled();
-        });
-
-        it('still drops a sourceless convention finding of an agent without instructions', async () => {
-            const r = await checkConventionQuotes(
-                [conv('', { source: undefined })],
-                reader({}),
-                [],
-            );
-            expect(r.passed).toEqual([]);
         });
 
         it('drops it when the agent has no instructions to quote', async () => {

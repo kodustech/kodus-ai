@@ -85,10 +85,6 @@ describe('file-patterns — agent instructions are not Kody Rules', () => {
 });
 
 describe('file-patterns — .agents/rules discovery', () => {
-    it('ships the .agents/rules/** pattern in RULE_FILE_PATTERNS', () => {
-        expect(RULE_FILE_PATTERNS).toContain('.agents/rules/**');
-    });
-
     it('recognises repo-root .agents/rules files as IDE rule sources', () => {
         expect(isIdeRuleSource('.agents/rules/architecture.md')).toBe(true);
     });

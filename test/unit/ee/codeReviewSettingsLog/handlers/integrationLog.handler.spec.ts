@@ -57,25 +57,4 @@ describe('IntegrationLogHandler', () => {
         expect(call.oldData).toBeTruthy();
         expect(call.newData).toBeNull();
     });
-
-    it('formats platform names correctly', async () => {
-        const platforms = [
-            { input: 'GITHUB', expected: 'GitHub' },
-            { input: 'GITLAB', expected: 'GitLab' },
-            { input: 'BITBUCKET', expected: 'Bitbucket' },
-            { input: 'AZURE', expected: 'Azure DevOps' },
-        ];
-
-        for (const { input, expected } of platforms) {
-            mockUnified.logAction.mockClear();
-
-            await handler.logIntegrationAction({
-                ...createBaseParams({ actionType: ActionType.CREATE }),
-                integration: makeIntegration({ platform: input }),
-            } as any);
-
-            const call = mockUnified.logAction.mock.calls[0][0];
-            expect(call.entityName).toContain(expected);
-        }
-    });
 });

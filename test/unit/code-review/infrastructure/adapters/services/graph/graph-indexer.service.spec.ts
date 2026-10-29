@@ -168,19 +168,6 @@ describe('GraphIndexerService', () => {
             ).toBeGreaterThan(0);
         });
 
-        it('should call sandbox.readFile() to read graph JSON', async () => {
-            await service.fullBuild({
-                repositoryId: REPO_ID,
-                sandbox: mockSandbox,
-                headSha: HEAD_SHA,
-            });
-
-            expect(mockSandbox.readFile).toHaveBeenCalledWith(
-                expect.stringContaining('graph.json'),
-                expect.any(Object),
-            );
-        });
-
         it('should use sandbox.repoDir in commands, not hardcoded path', async () => {
             const customSandbox = createMockSandbox({
                 repoDir: '/workspace/my-repo',

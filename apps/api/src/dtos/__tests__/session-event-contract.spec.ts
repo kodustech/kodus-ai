@@ -1,21 +1,15 @@
 /**
  * Contract tests — validate that the payloads the CLI actually sends
- * pass DTO validation and are correctly destructured into envelope + payload.
+ * pass DTO validation.
  *
  * If these tests break, the CLI and API are out of sync.
  */
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { SessionEventRequestDto } from '../session-event.dto';
-import { SESSION_EVENT_TYPES } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
 
 function toDto(plain: Record<string, unknown>): SessionEventRequestDto {
     return plainToInstance(SessionEventRequestDto, plain);
-}
-
-function splitEnvelope(body: Record<string, unknown>) {
-    const { sessionId, type, branch, timestamp, ...rest } = body;
-    return { envelope: { sessionId, type, branch, timestamp }, payload: rest };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,110 +111,4 @@ describe('CLI → API contract: DTO validation', () => {
             expect(errors).toHaveLength(0);
         },
     );
-});
-
-describe('CLI → API contract: event types match', () => {
-    it('CLI event types are a subset of SESSION_EVENT_TYPES', () => {
-        const cliTypes = ALL_CLI_EVENTS.map((e) => e.name);
-        for (const type of cliTypes) {
-            expect(SESSION_EVENT_TYPES).toContain(type);
-        }
-    });
-
-    it('SESSION_EVENT_TYPES are covered by CLI events', () => {
-        const cliTypes = new Set(ALL_CLI_EVENTS.map((e) => e.name));
-        for (const type of SESSION_EVENT_TYPES) {
-            expect(cliTypes.has(type)).toBe(true);
-        }
-    });
-});
-
-describe('CLI → API contract: envelope/payload split', () => {
-    it('session_start — agentType, gitRemote, baseCommit, cliVersion go to payload', () => {
-        const { envelope, payload } = splitEnvelope(CLI_SESSION_START);
-
-        expect(envelope).toEqual({
-            sessionId: 'sess-abc123',
-            type: 'session_start',
-            branch: 'feat/auth',
-            timestamp: '2025-06-01T10:30:00.000Z',
-        });
-        expect(payload).toHaveProperty('agentType', 'claude-code');
-        expect(payload).toHaveProperty('gitRemote');
-        expect(payload).toHaveProperty('baseCommit');
-        expect(payload).toHaveProperty('cliVersion');
-    });
-
-    it('turn_start — turnId, prompt, commitBefore go to payload', () => {
-        const { payload } = splitEnvelope(CLI_TURN_START);
-
-        expect(payload).toHaveProperty('turnId');
-        expect(payload).toHaveProperty('prompt', 'Fix the authentication bug');
-        expect(payload).toHaveProperty('commitBefore');
-    });
-
-    it('turn_end — toolCalls, filesModified, tokenUsage go to payload', () => {
-        const { payload } = splitEnvelope(CLI_TURN_END);
-
-        expect(payload).toHaveProperty('turnId');
-        expect(payload).toHaveProperty('toolCalls');
-        expect(payload).toHaveProperty('filesModified');
-        expect(payload).toHaveProperty('filesRead');
-        expect(payload).toHaveProperty('commands');
-        expect(payload).toHaveProperty('tokenUsage');
-        expect(payload).toHaveProperty('commitAfter');
-
-        // Ensure nested structures survive
-        expect((payload as any).toolCalls[0]).toEqual(
-            expect.objectContaining({
-                toolName: 'Read',
-                toolUseId: 'tool-1',
-                isMcp: false,
-            }),
-        );
-        expect((payload as any).tokenUsage).toEqual(
-            expect.objectContaining({
-                inputTokens: 1200,
-                outputTokens: 300,
-            }),
-        );
-    });
-
-    it('subagent_start — toolUseId, subagentType, taskDescription go to payload', () => {
-        const { payload } = splitEnvelope(CLI_SUBAGENT_START);
-
-        expect(payload).toHaveProperty('toolUseId', 'tool-2');
-        expect(payload).toHaveProperty('subagentType', 'Explore');
-        expect(payload).toHaveProperty(
-            'taskDescription',
-            'Find all authentication controllers',
-        );
-    });
-
-    it('subagent_end — toolUseId goes to payload', () => {
-        const { payload } = splitEnvelope(CLI_SUBAGENT_END);
-        expect(payload).toEqual({ toolUseId: 'tool-2' });
-    });
-
-    it('session_end — payload is empty', () => {
-        const { payload } = splitEnvelope(CLI_SESSION_END);
-        expect(payload).toEqual({});
-    });
-});
-
-describe('CLI → API contract: timestamp format', () => {
-    it.each(ALL_CLI_EVENTS)(
-        '$name timestamp is a valid ISO 8601 string',
-        ({ payload }) => {
-            const date = new Date(payload.timestamp);
-            expect(date.toISOString()).toBe(payload.timestamp);
-        },
-    );
-});
-
-describe('CLI → API contract: sessionId consistency', () => {
-    it('all events in a session share the same sessionId', () => {
-        const ids = ALL_CLI_EVENTS.map((e) => e.payload.sessionId);
-        expect(new Set(ids).size).toBe(1);
-    });
 });

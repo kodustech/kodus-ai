@@ -165,7 +165,7 @@ describe('SSODomainVerificationService', () => {
         });
 
         it('allows a contact email outside the SSO domain (no requireDomainMatch)', async () => {
-            const { svc } = make();
+            const { svc, notification } = make();
             const res = await svc.requestDomainVerification({
                 organizationId: orgTeam.organizationId,
                 organizationName: orgTeam.organizationName,
@@ -173,6 +173,26 @@ describe('SSODomainVerificationService', () => {
                 contactEmail: 'admin@my-msp.com',
             });
             expect(res.sent).toBe(false);
+            expect(notification.emit).not.toHaveBeenCalled();
+        });
+
+        it('still rejects a missing/invalid email or a missing domain (shape validation stays)', async () => {
+            const { svc, notification } = make();
+            for (const [domain, contactEmail] of [
+                ['acme.com', ''],
+                ['acme.com', 'not-an-email'],
+                ['', 'admin@acme.com'],
+            ]) {
+                await expect(
+                    svc.requestDomainVerification({
+                        organizationId: orgTeam.organizationId,
+                        organizationName: orgTeam.organizationName,
+                        domain,
+                        contactEmail,
+                    }),
+                ).rejects.toBeInstanceOf(BadRequestException);
+            }
+            expect(notification.emit).not.toHaveBeenCalled();
         });
     });
 

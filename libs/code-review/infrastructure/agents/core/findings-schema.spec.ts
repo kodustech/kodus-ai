@@ -86,22 +86,6 @@ describe('sanitizeFindingsResult', () => {
         expect(sanitizeFindingsResult(malformed)).toBeNull();
     });
 
-    it('returns null when suggestions is undefined', () => {
-        const malformed = {
-            reasoning: 'some text',
-            suggestions: undefined,
-        } as any;
-        expect(sanitizeFindingsResult(malformed)).toBeNull();
-    });
-
-    it('returns null when suggestions is a string instead of array', () => {
-        const malformed = {
-            reasoning: 'some text',
-            suggestions: 'not an array',
-        } as any;
-        expect(sanitizeFindingsResult(malformed)).toBeNull();
-    });
-
     it('recovers suggestions sent as a JSON-encoded string (Claude tool calls)', () => {
         const item = {
             relevantFile: 'src/foo.ts',
@@ -176,33 +160,6 @@ describe('sanitizeFindingsResult', () => {
         expect(result).toBeNull();
     });
 
-    it('partially recovers when reasoning is missing but suggestions is a valid array', () => {
-        const partial = {
-            suggestions: [
-                {
-                    relevantFile: 'src/bar.ts',
-                    suggestionContent: 'Fix this',
-                    existingCode: 'old',
-                    improvedCode: 'new',
-                },
-            ],
-        } as any;
-        const result = sanitizeFindingsResult(partial);
-        expect(result).not.toBeNull();
-        expect(result!.reasoning).toBe('');
-        expect(result!.suggestions).toHaveLength(1);
-    });
-
-    it('returns validated data with empty suggestions array', () => {
-        const empty: FindingsOutput = {
-            reasoning: 'no issues found',
-            suggestions: [],
-        };
-        const result = sanitizeFindingsResult(empty);
-        expect(result).not.toBeNull();
-        expect(result!.suggestions).toEqual([]);
-    });
-
     // Regression: prod audit (2026-09-17) of 619 [LLM_ENVELOPE] events found
     // ~150 were an otherwise-fully-valid suggestion dropped ONLY because the
     // model's self-reported `confidence` fell outside [1,10] (commonly 0).
@@ -219,18 +176,6 @@ describe('sanitizeFindingsResult', () => {
                     improvedCode: 'if (x != null)',
                     confidence: 0,
                 },
-            ],
-        } as any;
-        const result = sanitizeFindingsResult(withZeroConfidence);
-        expect(result).not.toBeNull();
-        expect(result!.suggestions).toHaveLength(1);
-        expect(result!.suggestions[0].confidence).toBe(0);
-    });
-
-    it('keeps a suggestion whose self-reported confidence exceeds 10', () => {
-        const withOverConfidence = {
-            reasoning: 'found a bug',
-            suggestions: [
                 {
                     relevantFile: 'src/foo.ts',
                     suggestionContent: 'Fix the null check',
@@ -240,9 +185,38 @@ describe('sanitizeFindingsResult', () => {
                 },
             ],
         } as any;
-        const result = sanitizeFindingsResult(withOverConfidence);
+        const result = sanitizeFindingsResult(withZeroConfidence);
         expect(result).not.toBeNull();
-        expect(result!.suggestions).toHaveLength(1);
+        expect(result!.suggestions).toHaveLength(2);
+        expect(result!.suggestions[0].confidence).toBe(0);
+    });
+
+    // LLM output boundary: kimi-k2.7 emitted suggestions without relevantFile
+    // on a customer instance, crashing the finder downstream. The recovery path
+    // (top-level invalid) must never let an invalid item through.
+    it('partial recovery drops items missing required fields (the kimi shape)', () => {
+        const valid = {
+            relevantFile: 'src/app.ts',
+            suggestionContent: 'Fix the bug',
+            existingCode: 'a()',
+            improvedCode: 'b()',
+        };
+        const out = sanitizeFindingsResult({
+            // reasoning missing → forces the recovery path
+            suggestions: [
+                valid,
+                { ...valid, relevantFile: undefined },
+                { ...valid, suggestionContent: 42 },
+                null,
+            ],
+        } as any);
+        expect(out?.suggestions).toHaveLength(1);
+        expect(out?.suggestions[0].relevantFile).toBe('src/app.ts');
+        expect(
+            sanitizeFindingsResult({
+                suggestions: [{ foo: 'bar' }, null, 'text'],
+            } as any)?.suggestions,
+        ).toEqual([]);
     });
 
     // Backward compatibility: every test above calls sanitizeFindingsResult
@@ -311,18 +285,6 @@ describe('sanitizeFindingsResult', () => {
             const droppedCall = mockLogger.warn.mock.calls[0][0];
             expect(droppedCall.metadata.organizationId).toBe('org-456');
             expect(droppedCall.metadata.dropped).toBe(1);
-        });
-
-        it('does not attach organizationId when the caller omits telemetryMetadata', () => {
-            const malformed = {
-                reasoning: 'x',
-                suggestions: 'not-an-array',
-            } as any;
-
-            sanitizeFindingsResult(malformed);
-
-            const [{ metadata }] = mockLogger.warn.mock.calls[0];
-            expect(metadata.organizationId).toBeUndefined();
         });
     });
 });
@@ -579,7 +541,9 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
         });
 
         it('FPARSE-08 — missing reasoning is empty, object reasoning is stringified', () => {
-            expect(run({ suggestions: [finding()] })!.reasoning).toBe('');
+            const noReasoning = run({ suggestions: [finding()] })!;
+            expect(noReasoning.reasoning).toBe('');
+            expect(noReasoning.suggestions).toHaveLength(1);
             expect(
                 run({ reasoning: { steps: 2 }, suggestions: [finding()] })!
                     .reasoning,

@@ -159,6 +159,18 @@ function resolveDelayMs(
 
 function parseRetryAfter(err: unknown): number | null {
     if (!err || typeof err !== 'object') return null;
+    // Errors that already know the wait: GitLab's cooldown error carries
+    // `retryAfterMs`, a translated `RateLimitError` carries `resetAt`.
+    const { retryAfterMs, resetAt } = err as {
+        retryAfterMs?: unknown;
+        resetAt?: unknown;
+    };
+    if (typeof retryAfterMs === 'number' && retryAfterMs >= 0) {
+        return retryAfterMs;
+    }
+    if (resetAt instanceof Date && Number.isFinite(resetAt.getTime())) {
+        return Math.max(0, resetAt.getTime() - Date.now());
+    }
     const headers =
         (err as { headers?: Record<string, unknown> }).headers ??
         (err as { response?: { headers?: Record<string, unknown> } }).response

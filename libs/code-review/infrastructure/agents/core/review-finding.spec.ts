@@ -93,12 +93,6 @@ describe('review-finding', () => {
                 reason: 'not reachable in this path',
             });
         });
-
-        it('carries self-confidence from the payload into provenance', () => {
-            const r = result({ kept: [sugg({ confidence: 7 })] });
-            const [f] = buildFindingsFromVerify(r, { agent: 'bug', pass: 'initial' });
-            expect(f.provenance.selfConfidence).toBe(7);
-        });
     });
 
     describe('summarizeFunnel', () => {

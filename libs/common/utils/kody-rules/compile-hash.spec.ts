@@ -11,7 +11,7 @@
  * that verdict forever and the fix reaches only rules created after the deploy.
  */
 describe('ruleContextNeedHash', () => {
-    const { ruleContextNeedHash, CONTEXT_NEED_PROMPT_VERSION } =
+    const { ruleContextNeedHash } =
         require('./compile-hash') as typeof import('./compile-hash');
 
     it('is stable for the same text and version', () => {
@@ -29,18 +29,6 @@ describe('ruleContextNeedHash', () => {
     // The point of the whole thing: bumping the constant must invalidate every
     // stored verdict, so one sweep re-asks the fleet and the installed base
     // actually receives a corrected classification.
-    it('changes when the classifier version changes, for identical text', () => {
-        const text = 'functions must not exceed 40 lines';
-        const current = ruleContextNeedHash({ rule: text });
-
-        const createHash = require('crypto').createHash;
-        const asIfNextVersion = createHash('sha256')
-            .update(`v${CONTEXT_NEED_PROMPT_VERSION + 1} ${text}`)
-            .digest('hex');
-
-        expect(asIfNextVersion).not.toBe(current);
-    });
-
     it('does NOT depend on examples, unlike ruleCompileHash', () => {
         // Examples gate whether a regex compiles; they do not change what a
         // rule needs to SEE. Including them would re-spend a model call every

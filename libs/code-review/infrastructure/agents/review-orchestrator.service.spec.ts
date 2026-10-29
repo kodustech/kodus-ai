@@ -1,10 +1,6 @@
 /**
  * Dispatch rules of the review orchestrator — which agents run for which
- * review mode / enabled categories.
- *
- * The case that matters: security must get its OWN agent outside deep mode.
- * It used to be a lens inside the single generalist pass, so a vulnerability
- * competed for attention with bug and performance hunting in the same run.
+ * review mode / enabled categories — and how it collects their outcomes.
  */
 import { AgentDegradedError } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
@@ -59,46 +55,26 @@ function inputFor(
 }
 
 describe('ReviewOrchestratorService dispatch', () => {
-    // PENDING the Security Review milestone: outside deep mode, security is still
-    // a lens inside the single generalist pass — the dedicated-agent dispatch it
-    // describes below isn't wired yet. Skipped (not deleted) so the intended
-    // contract stays documented and these flip to active when the milestone lands.
-    it.skip('runs a dedicated security agent in normal mode, alongside the generalist', async () => {
-        const { service, security, generalist, calls } = setup();
+    it('runs only the generalist in normal mode, with every enabled category', async () => {
+        const { service, bug, security, performance, generalist, calls } =
+            setup();
 
-        await service.execute(inputFor(ALL_ON));
+        const out = await service.execute(inputFor(ALL_ON));
 
-        expect(security.execute).toHaveBeenCalledTimes(1);
         expect(generalist.execute).toHaveBeenCalledTimes(1);
-        // The generalist no longer claims security — otherwise both agents
-        // hunt the same category and the PR gets duplicate comments.
+        expect(bug.execute).not.toHaveBeenCalled();
+        expect(security.execute).not.toHaveBeenCalled();
+        expect(performance.execute).not.toHaveBeenCalled();
         expect(calls.get('generalist')?.requestedCategories).toEqual([
             'bug',
+            'security',
             'performance',
         ]);
-    });
-
-    it.skip('runs the dedicated security agent in fast mode too', async () => {
-        const { service, security } = setup();
-
-        await service.execute(inputFor(ALL_ON, 'fast'));
-
-        expect(security.execute).toHaveBeenCalledTimes(1);
-    });
-
-    it.skip('skips the generalist entirely when security is the only enabled category', async () => {
-        const { service, security, generalist } = setup();
-
-        await service.execute(
-            inputFor({ bug: false, performance: false, security: true }),
-        );
-
-        expect(security.execute).toHaveBeenCalledTimes(1);
-        expect(generalist.execute).not.toHaveBeenCalled();
+        expect(out.agentResults).toHaveLength(1);
     });
 
     it('does not run the security agent when security is disabled', async () => {
-        const { service, security, generalist, calls } = setup();
+        const { service, security, calls } = setup();
 
         await service.execute(
             inputFor({ bug: true, performance: true, security: false }),
@@ -122,6 +98,42 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(generalist.execute).not.toHaveBeenCalled();
     });
 
+    it("collects every agent's suggestions, overlapping ones included", async () => {
+        const { service, bug, security, performance } = setup();
+        // Same file and lines from two agents: both are kept here, the LLM
+        // dedup downstream owns merging them.
+        const finding = (label: string) => ({
+            relevantFile: 'src/auth.ts',
+            relevantLinesStart: 10,
+            relevantLinesEnd: 15,
+            label,
+        });
+        bug.execute.mockResolvedValue({ suggestions: [finding('bug')], durationMs: 1 });
+        security.execute.mockResolvedValue({ suggestions: [finding('security')], durationMs: 1 });
+        performance.execute.mockResolvedValue({ suggestions: [finding('performance')], durationMs: 1 });
+
+        const out = await service.execute(inputFor(ALL_ON, 'deep'));
+
+        expect(out.suggestions.map((s: any) => s.label)).toEqual([
+            'bug',
+            'security',
+            'performance',
+        ]);
+        expect(out.agentResults).toHaveLength(3);
+    });
+
+    it('skips disabled categories in deep mode', async () => {
+        const { service, bug, security, performance } = setup();
+
+        await service.execute(
+            inputFor({ bug: true, security: false, performance: false }, 'deep'),
+        );
+
+        expect(bug.execute).toHaveBeenCalledTimes(1);
+        expect(security.execute).not.toHaveBeenCalled();
+        expect(performance.execute).not.toHaveBeenCalled();
+    });
+
     it('dispatches nothing when every category is disabled', async () => {
         const { service, security, generalist } = setup();
 
@@ -132,6 +144,96 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(security.execute).not.toHaveBeenCalled();
         expect(generalist.execute).not.toHaveBeenCalled();
         expect(out.suggestions).toEqual([]);
+    });
+
+    it('keeps the other agents when one fails', async () => {
+        const { service, security } = setup();
+        security.execute.mockRejectedValue(new Error('LLM timeout'));
+
+        const out = await service.execute(inputFor(ALL_ON, 'deep'));
+
+        expect(out.agentResults).toHaveLength(2);
+        expect(out.failures).toEqual([
+            expect.objectContaining({ agentName: 'security' }),
+        ]);
+    });
+});
+
+// An agent that runs out of time or steps is NOT a failure — it returns,
+// possibly with findings. But it stopped looking, so an empty result from it
+// means "couldn't tell", not "clean". The orchestrator has to report that
+// separately or the pipeline auto-approves an unfinished review (#1568).
+describe('ReviewOrchestratorService — incomplete agents (budget/step ceiling)', () => {
+    // A turn the provider truncated is the other way an agent returns
+    // without finishing (#2171).
+    it('reports a truncated agent as incomplete, not as a failure', async () => {
+        const { service, generalist } = setup();
+        generalist.execute.mockResolvedValue({
+            suggestions: [],
+            durationMs: 1,
+            hitHardLimit: true,
+            finishReason: 'truncated',
+        });
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.failures).toHaveLength(0);
+        expect(result.incomplete).toEqual([
+            expect.objectContaining({
+                agentName: 'generalist',
+                finishReason: 'truncated',
+                suggestionsFound: 0,
+            }),
+        ]);
+    });
+
+    it('reports an agent that left findings unverified (#2171)', async () => {
+        const { service, generalist } = setup();
+        generalist.execute.mockResolvedValue({
+            suggestions: [],
+            durationMs: 1,
+            discardedByVerifyError: [
+                { relevantFile: 'src/index.ts' },
+                { relevantFile: 'src/other.ts' },
+            ],
+        });
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.failures).toHaveLength(0);
+        expect(result.unverified).toEqual([
+            expect.objectContaining({
+                agentName: 'generalist',
+                unverifiedCount: 2,
+            }),
+        ]);
+    });
+
+    it('reports a max-steps agent as incomplete even when it found something', async () => {
+        const { service, generalist } = setup();
+        generalist.execute.mockResolvedValue({
+            suggestions: [{ relevantFile: 'src/index.ts', label: 'bug' }],
+            durationMs: 1,
+            hitHardLimit: true,
+            finishReason: 'max-steps',
+        });
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.suggestions).toHaveLength(1);
+        expect(result.incomplete[0]).toMatchObject({
+            agentName: 'generalist',
+            finishReason: 'max-steps',
+            suggestionsFound: 1,
+        });
+    });
+
+    it('leaves incomplete empty when every agent ran to completion', async () => {
+        const { service } = setup();
+
+        const result = await service.execute(inputFor(ALL_ON));
+
+        expect(result.incomplete).toEqual([]);
     });
 });
 

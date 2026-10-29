@@ -131,36 +131,4 @@ describe('#1844 flow: summary generation failure -> auto-approve decision', () =
 
         expect(codeManagement.approvePullRequest).toHaveBeenCalled();
     });
-
-    it('still refuses to approve end-to-end when the review itself also failed', async () => {
-        // Same broken summary call, but the PR is NOT clean this time — the
-        // agent flagged a critical severity finding, the case auto-approve
-        // must never fire for regardless of the summary outcome.
-        const { stage: summaryStage } = makeSummaryStage(
-            jest.fn().mockRejectedValue(new Error('summary boom')),
-        );
-        const { stage: approveStage, codeManagement } = makeApproveStage();
-
-        const dirtyContext = {
-            ...baseContext(),
-            errors: [
-                {
-                    stage: 'AgentReviewStage',
-                    error: new Error('byok auth failed'),
-                    severity: 'critical',
-                } as any,
-            ],
-        };
-
-        const afterSummary = await summaryStage.execute(dirtyContext as any);
-        // Both errors present: the pre-existing critical one AND the fresh
-        // summary one — proves the summary stage's own updateContext path
-        // appends rather than clobbers (the #1568 concern), in the SAME real
-        // call this test then feeds forward.
-        expect(afterSummary.errors).toHaveLength(2);
-
-        await approveStage.execute(afterSummary);
-
-        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-    });
 });

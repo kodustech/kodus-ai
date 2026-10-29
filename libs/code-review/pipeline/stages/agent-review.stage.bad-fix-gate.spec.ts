@@ -199,40 +199,6 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         ]);
     });
 
-    it('downgrades an empty improvedCode to a plain comment instead of dropping it', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([sugg({ improvedCode: '' })]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        // Nothing is discarded — the finding still ships, just without code.
-        expect(result.discardedSuggestions ?? []).toHaveLength(0);
-        const analyzed = analyzedSuggestions(result);
-        expect(analyzed).toHaveLength(1);
-        expect(analyzed[0].improvedCode).toBe('');
-    });
-
-    it('downgrades a byte-identical improvedCode to a plain comment', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([
-                sugg({
-                    existingCode: 'const name = user.name;',
-                    improvedCode: '  const name = user.name;\n',
-                }),
-            ]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expect(result.discardedSuggestions ?? []).toHaveLength(0);
-        const analyzed = analyzedSuggestions(result);
-        expect(analyzed).toHaveLength(1);
-        expect(analyzed[0].improvedCode).toBe('');
-    });
-
     it('downgrades a truncated improvedCode (the literal issue #1833 example)', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(

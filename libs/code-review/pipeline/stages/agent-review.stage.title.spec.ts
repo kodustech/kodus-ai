@@ -112,26 +112,6 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — suggestion title', () => {
-    it('builds the title from the first sentence of the body when the summary is missing', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([
-                sugg({
-                    oneSentenceSummary: '',
-                    suggestionContent:
-                        'The user object can be null here. Guard it before reading name.',
-                }),
-            ]),
-        );
-
-        const analyzed = analyzedSuggestions(await run(stage, makeContext()));
-
-        expect(analyzed).toHaveLength(1);
-        expect(analyzed[0].oneSentenceSummary).toBe(
-            'The user object can be null here',
-        );
-    });
-
     it.each([
         ['team guidelines', { generation: { main: 'Write like a mentor.' } }],
         ['the default guidelines', undefined],

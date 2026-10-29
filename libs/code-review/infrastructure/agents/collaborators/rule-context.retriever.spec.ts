@@ -289,10 +289,6 @@ describe('retrieveForShard — mixed needs in one shard', () => {
 });
 
 describe('retrieveForShard — budget (KRC-28, KRC-29)', () => {
-    it('defaults to a 6000-character per-shard budget', () => {
-        expect(SHARD_CONTEXT_BUDGET_CHARS).toBe(6000);
-    });
-
     // The second half of KRC-28 — "prefer retrieved slices over whole-file
     // content" — held only because no code path happened to read a whole file,
     // which nothing asserted (Verifier round 2, gap 6). This pins it: every

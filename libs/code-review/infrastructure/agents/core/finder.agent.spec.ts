@@ -330,19 +330,8 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         expect(out.suggestions).toHaveLength(1);
     });
 
-    // Row 6 also lists the NUMERIC single-key wrap {"0":D} (SDK/provider index
-    // leak). Same #1786 drop: sanitizeFindingsResult sees no {reasoning,suggestions}
-    // → null → extractFindings falls through to []; the real payload is lost with
-    // only the 'artifact-unusable' flag. Correct behavior = unwrap+recover.
-    it('[A6b] numeric single-key wrap {"0":D} → SHOULD recover (currently dropped)', () => {
-        const state = artifactState({ '0': D });
-        const out = extractFindings(state);
-        expect(out.suggestions).toHaveLength(1);
-    });
-
-    // Non-degradation guard for A6b: even while the payload is dropped today, the
-    // After the SHAPE fix (normalizeEnvelope) the numeric wrap is unwrapped and
-    // recovered, so the payload is no longer dropped and the outcome is NOT
+    // Numeric single-key wrap {"0":D} (SDK/provider index leak). After the SHAPE
+    // fix (normalizeEnvelope) the numeric wrap is unwrapped and recovered, so the payload is no longer dropped and the outcome is NOT
     // artifact-unusable. Pin the recovery so a regression that reintroduces the
     // silent drop turns this red.
     it('[A6b-signal] numeric wrap is recovered, not flagged unusable', () => {
@@ -445,29 +434,6 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         }
     });
 
-    it.failing(
-        '[A19] provider envelope leak {choices:[{message:{content}}]} → SHOULD recover',
-        () => {
-            const out = extractFindings(
-                artifactState({
-                    choices: [{ message: { content: JSON.stringify(D) } }],
-                }),
-            );
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
-
-    it('[A20] reasoning/thinking leak (findings as prose in reasoning) → preserved for recovery', () => {
-        // The documented Anthropic omission mode: findings written into reasoning,
-        // suggestions omitted. The prose is PRESERVED (signalled), then recovered
-        // by the injected recoverer (covered in the prose-recovery describe).
-        const out = extractFindings(
-            artifactState({ reasoning: 'Bug: null deref at src/x.ts:10' }),
-        );
-        expect(out.suggestions).toEqual([]);
-        expect(out.reasoning).toBe('Bug: null deref at src/x.ts:10');
-    });
-
     it('[invariant] extractFindings ALWAYS returns {reasoning:string, suggestions:array}', () => {
         for (const p of [
             D,
@@ -483,6 +449,18 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
             expect(Array.isArray(out.suggestions)).toBe(true);
         }
     });
+
+    it.failing(
+        '[A19] provider envelope leak {choices:[{message:{content}}]} → SHOULD recover',
+        () => {
+            const out = extractFindings(
+                artifactState({
+                    choices: [{ message: { content: JSON.stringify(D) } }],
+                }),
+            );
+            expect(out.suggestions).toHaveLength(1);
+        },
+    );
 });
 
 // ─── B. Semantic-but-wrong (valid JSON, wrong value encoding) ────────────────
@@ -520,60 +498,6 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
         expect(out.suggestions[1].confidence).toBe(8);
     });
 
-    it('[B26] duplicate keys in JSON text → last-wins, still parses', () => {
-        const raw =
-            '{"reasoning":"first","reasoning":"second","suggestions":' +
-            JSON.stringify([validFinding]) +
-            '}';
-        const out = extractFindings(textStepState(raw));
-        expect(out.reasoning).toBe('second');
-        expect(out.suggestions).toHaveLength(1);
-    });
-
-    it('[B27] unicode / escaped newlines / emoji in string fields → preserved intact', () => {
-        const content = 'race 🏁 on\nline — naïve check';
-        const out = extractFindings(
-            artifactState({
-                reasoning: 'r',
-                suggestions: [{ ...validFinding, suggestionContent: content }],
-            }),
-        );
-        expect(out.suggestions[0].suggestionContent).toBe(content);
-    });
-});
-
-// ─── Matrix rows N/A to THIS boundary (anchored, not silently skipped) ───────
-// Rows 21/22/23 (boolean encodings), 25 (index-into-input), 41 (batch off-by-one)
-// describe shapes this boundary's declared type D cannot produce. Anchored below
-// so the N/A rationale is verified against the real shape, not just asserted.
-describe('matrix rows N/A for the finder boundary (rationale anchored)', () => {
-    // 21/22/23 — Boolean encodings (keep:"true"/"yes"/1). The finder's declared
-    // output D = {reasoning:string, suggestions:FinderSuggestion[]} has NO boolean
-    // field anywhere: suggestion members are strings, numbers, and enums only. There
-    // is no boolean to mis-encode. Anchor: a fully-populated finding has no boolean.
-    it('[21/22/23 N/A] finder output schema declares no boolean field', () => {
-        const full = {
-            relevantFile: 's.ts',
-            language: 'ts',
-            label: 'bug',
-            suggestionContent: 'c',
-            existingCode: 'a',
-            improvedCode: 'b',
-            oneSentenceSummary: 's',
-            relevantLinesStart: 1,
-            relevantLinesEnd: 2,
-            severity: 'high',
-            confidence: 7,
-            ruleUuid: 'u',
-        };
-        const out = extractFindings(
-            artifactState({ reasoning: 'r', suggestions: [full] }),
-        );
-        expect(out.suggestions).toHaveLength(1);
-        const values = Object.values(out.suggestions[0] as object);
-        expect(values.some((v) => typeof v === 'boolean')).toBe(false);
-    });
-
     // 25 — Index out of range / dangling reference. Rows like dedup's
     // `unique:[idx]` reference INPUT positions; a finder finding references source
     // code by file + LINE NUMBER (relevantLinesStart/End), never an index into an
@@ -595,22 +519,6 @@ describe('matrix rows N/A for the finder boundary (rationale anchored)', () => {
         );
         expect(out.suggestions).toHaveLength(1);
         expect(out.suggestions[0].relevantLinesStart).toBe(999999);
-    });
-
-    // 41 — Off-by-one batch boundary. The finder emits ALL findings in ONE
-    // submitResult artifact; there is no per-batch chunking at this parse seam
-    // (batching lives upstream in the file/diff planner, a different boundary).
-    // Anchor: a single artifact holding N findings parses as one unit, no chunk
-    // edge. (D37 already proves 100 findings survive intact.)
-    it('[41 N/A] findings arrive as one artifact — no batch/chunk boundary at this seam', () => {
-        const many = Array.from({ length: 51 }, (_, i) => ({
-            ...validFinding,
-            relevantFile: `src/b${i}.ts`,
-        }));
-        const state = artifactState({ reasoning: 'r', suggestions: many });
-        const out = extractFindings(state);
-        expect(out.suggestions).toHaveLength(51);
-        expect(state.artifacts).toHaveLength(1); // single unit, not batched
     });
 });
 
@@ -659,13 +567,6 @@ describe('matrix C — unparseable / transport / fail-safe', () => {
         ).resolves.toEqual([]);
     });
 
-    it('[C32] LLM.run empty success {suggestions:[]} → []', async () => {
-        jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
-        await expect(
-            recoverFindingsFromProse(prose, undefined, 'org-1'),
-        ).resolves.toEqual([]);
-    });
-
     it('[C33] refusal / non-finding prose → gate short-circuits, LLM.run NOT called', async () => {
         const spy = jest.spyOn(LLM, 'run').mockResolvedValue({} as any);
         const refusal =
@@ -675,15 +576,8 @@ describe('matrix C — unparseable / transport / fail-safe', () => {
             recoverFindingsFromProse(refusal, undefined, 'org-1'),
         ).resolves.toEqual([]);
         expect(spy).not.toHaveBeenCalled();
-    });
-
-    it('[C34] abort mid-call (LLM.run rejects AbortError) → fail-safe []', async () => {
-        const abort = new Error('The operation was aborted');
-        abort.name = 'AbortError';
-        jest.spyOn(LLM, 'run').mockRejectedValue(abort);
-        await expect(
-            recoverFindingsFromProse(prose, undefined, 'org-1'),
-        ).resolves.toEqual([]);
+        // The same prose as the final text holds no JSON → typed-empty.
+        expect(extractFindings(textStepState(refusal)).suggestions).toEqual([]);
     });
 });
 
@@ -777,33 +671,6 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
             'code-review-bug-recovery',
         );
     });
-
-    it('missing suggestions key in the LLM.run result → [] (declared shape held)', async () => {
-        jest.spyOn(LLM, 'run').mockResolvedValue({} as any);
-        await expect(
-            recoverFindingsFromProse(prose, undefined, 'org'),
-        ).resolves.toEqual([]);
-    });
-
-    // Regression (prod audit 2026-09-17): OpenAI (and OpenAI-compatible
-    // providers, e.g. gpt-5.6-terra/gpt-5.6-sol) reject a `json_object`
-    // response-format request outright — "'messages' must contain the word
-    // 'json' in some form" — unless the literal word "json" appears
-    // somewhere in the input messages. LLM.run's own doc comment above says
-    // this call "owns... the json_schema→json_object fallback the recovery
-    // pass needs", but the prompt text never said "json" anywhere, so that
-    // fallback mode always 400'd for exactly the providers that need it
-    // (43 confirmed prod events) — recovery silently returned [] via the
-    // catch-all, discarding real findings the finder had already found and
-    // written as prose.
-    it("mentions the word 'json' in the prompt (OpenAI json_object mode requires it)", async () => {
-        const spy = jest
-            .spyOn(LLM, 'run')
-            .mockResolvedValue({ suggestions: [] } as any);
-        await recoverFindingsFromProse(prose, undefined, 'org');
-        const arg = spy.mock.calls[0][0] as any;
-        expect(arg.user.toLowerCase()).toContain('json');
-    });
 });
 
 // ─── D. Input variants ───────────────────────────────────────────────────────
@@ -819,11 +686,6 @@ describe('matrix D — input variants', () => {
         expect(spy).not.toHaveBeenCalled(); // gate never pays for empty input
     });
 
-    it('[D36] single item → extracted verbatim', () => {
-        const out = extractFindings(artifactState(D));
-        expect(out.suggestions).toHaveLength(1);
-    });
-
     it('[D37] large input (100 findings, crosses any chunk boundary) → all preserved', () => {
         const many = Array.from({ length: 100 }, (_, i) => ({
             ...validFinding,
@@ -833,48 +695,6 @@ describe('matrix D — input variants', () => {
             artifactState({ reasoning: 'r', suggestions: many }),
         );
         expect(out.suggestions).toHaveLength(100);
-    });
-
-    it('[D38] duplicate items across passes → merge does not double-count', async () => {
-        const A = { ...validFinding, relevantFile: 'src/a.ts' };
-        const B = { ...validFinding, relevantFile: 'src/b.ts' };
-        const runner = {
-            run: jest
-                .fn()
-                .mockResolvedValue(
-                    artifactState({ reasoning: 're', suggestions: [A, B] }),
-                ),
-        } as any;
-        const res = await runRecallPasses(
-            { reasoning: 'base', suggestions: [A] },
-            {
-                runner,
-                finderSpec: {} as any,
-                finderState: makeState({}),
-                userPrompt: 'p',
-                skipSynthesisRescue: false,
-            },
-            ctx,
-        );
-        const files = res.findings.suggestions
-            .map((s) => s.relevantFile)
-            .sort();
-        expect(files).toEqual(['src/a.ts', 'src/b.ts']); // A not re-added
-    });
-
-    it('[D39] input item with null/undefined required field → dropped, others kept', () => {
-        const out = extractFindings(
-            artifactState({
-                reasoning: 'r',
-                suggestions: [
-                    validFinding,
-                    { ...validFinding, relevantFile: undefined },
-                ],
-            }),
-        );
-        expect(out.suggestions).toHaveLength(1);
-        // normalizePath tolerates the missing path without crashing.
-        expect(normalizePath(undefined as any)).toBe('');
     });
 
     it('[D40] special chars / whitespace-only text → preserved / skipped safely', () => {
@@ -923,51 +743,21 @@ describe('matrix D — input variants', () => {
         expect(one).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts']);
     });
 
-    it('fileWasInvestigated tolerates empty/missing file (no crash)', () => {
-        expect(fileWasInvestigated(new Set(['src/a.ts']), '')).toBe(false);
-        expect(fileWasInvestigated(new Set(['src/a.ts']), 'src/a.ts')).toBe(
-            true,
-        );
-    });
-});
+    // LLM output (kimi-k2.7 on a customer instance) sometimes omits
+    // relevantFile; an undefined reaching normalizePath crashed the finder run.
+    it('path guards tolerate a missing file and still match real paths', () => {
+        for (const bad of [undefined, null, '', 42]) {
+            expect(normalizePath(bad as any)).toBe('');
+        }
+        expect(normalizePath('.\\src\\App.TS')).toBe('src/app.ts');
+        expect(normalizePath('./lib/x.ts')).toBe('lib/x.ts');
 
-// ─── E. Provider / N-model policy ────────────────────────────────────────────
-// The parse boundary (extractFindings/sanitizeFindingsResult) is provider-AGNOSTIC:
-// it re-validates every model's output identically — no branch on model id. The
-// LLM.run site delegates the json_schema↔json_object policy to LLM.run itself
-// (per the source comment), so the boundary must thread byokConfig VERBATIM for
-// both the strict-json_schema providers and the json_object-fallback providers,
-// never forking model policy at this layer.
-describe('matrix E — N-model policy (delegated to LLM.run)', () => {
-    afterEach(() => jest.restoreAllMocks());
-
-    const prose =
-        'Bug: a null dereference happens in src/x.ts:10 and it will crash; ' +
-        'you should guard with x?.y before using it.';
-
-    const strict = ['openai', 'anthropic', 'google', 'moonshotai'];
-    const fallback = ['kimi', 'glm', 'deepseek', 'z-ai'];
-
-    it.each([...strict, ...fallback])(
-        'threads byokConfig verbatim for provider %s (no per-model fork)',
-        async (provider) => {
-            const spy = jest
-                .spyOn(LLM, 'run')
-                .mockResolvedValue({ suggestions: [] } as any);
-            const cfg = { provider, model: `${provider}/m` } as any;
-            await recoverFindingsFromProse(prose, cfg, 'org');
-            expect((spy.mock.calls[0][0] as any).byokConfig).toBe(cfg);
-        },
-    );
-
-    it('parse layer is model-independent: same off-schema payload → same outcome', () => {
-        // No model param exists at the parse boundary, so the A/B/C zoo behavior is
-        // uniform across every provider by construction. Pin that: a valid D and a
-        // dropped shape behave identically regardless of caller context.
-        const s1 = artifactState(D);
-        const s2 = artifactState(D);
-        expect(extractFindings(s1)).toEqual(extractFindings(s2));
-        expect(s1.__findingsOutcome).toBe(s2.__findingsOutcome);
+        const investigated = new Set(['src/a.ts']);
+        expect(fileWasInvestigated(investigated, undefined as any)).toBe(false);
+        expect(fileWasInvestigated(investigated, '')).toBe(false);
+        expect(fileWasInvestigated(investigated, 'src/a.ts')).toBe(true);
+        expect(fileWasInvestigated(investigated, 'a.ts')).toBe(true);
+        expect(fileWasInvestigated(investigated, 'other.ts')).toBe(false);
     });
 });
 

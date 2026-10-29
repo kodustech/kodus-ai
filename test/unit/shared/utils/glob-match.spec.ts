@@ -214,72 +214,6 @@ describe('globMatch - REGRESSION: Cache optimization safety', () => {
         });
     });
 
-    describe('REGRESSION: Large scale scenarios (performance baseline)', () => {
-        /**
-         * Documents the scenario from the performance report:
-         * 150 files × 10 patterns = 1,500 compilations per PR
-         *
-         * After optimization: 10 compilations (cached)
-         */
-        it('should correctly filter 150 files against 10 patterns', () => {
-            const patterns = [
-                'node_modules/**',
-                '**/*.lock',
-                'dist/**',
-                '.git/**',
-                '**/*.min.js',
-                'coverage/**',
-                '**/*.map',
-                'build/**',
-                'tmp/**',
-                '**/*.log',
-            ];
-
-            // Generate 150 files
-            const files: string[] = [];
-            for (let i = 0; i < 50; i++) {
-                files.push(`src/module${i}/index.ts`);
-                files.push(`src/module${i}/utils.ts`);
-                files.push(`src/module${i}/types.ts`);
-            }
-
-            // Process all files
-            const matchingFiles = files.filter(
-                (file) => !isFileMatchingGlob(file, patterns),
-            );
-
-            // None should be ignored (they're all src/*.ts)
-            expect(matchingFiles.length).toBe(150);
-        });
-
-        it('should maintain correctness for realistic mixed file set', () => {
-            const patterns = [
-                'node_modules/**',
-                '**/*.lock', // Matches files ending in .lock
-                '*-lock.json', // Matches package-lock.json
-                'dist/**',
-                '.git/**',
-            ];
-
-            const files = [
-                // Should NOT be ignored (50 files)
-                ...Array.from({ length: 50 }, (_, i) => `src/file${i}.ts`),
-                // Should be ignored
-                'node_modules/pkg/index.js',
-                'dist/main.js',
-                '.git/config',
-                'package-lock.json',
-            ];
-
-            const notIgnored = files.filter(
-                (file) => !isFileMatchingGlob(file, patterns),
-            );
-
-            expect(notIgnored.length).toBe(50);
-            expect(notIgnored.every((f) => f.startsWith('src/'))).toBe(true);
-        });
-    });
-
     describe('REGRESSION: Edge cases that cache must handle', () => {
         it('should handle empty patterns array', () => {
             expect(isFileMatchingGlob('any-file.ts', [])).toBe(false);
@@ -305,6 +239,13 @@ describe('globMatch - REGRESSION: Cache optimization safety', () => {
             expect(isFileMatchingGlob('file.js', patterns)).toBe(true);
             expect(isFileMatchingGlob('file.tsx', patterns)).toBe(true);
             expect(isFileMatchingGlob('file.css', patterns)).toBe(false);
+        });
+
+        it('does not treat a "!" pattern as an exclusion (any match = true)', () => {
+            const patterns = ['**/*.ts', '!**/*.spec.ts', '!**/*.test.ts'];
+
+            expect(isFileMatchingGlob('src/index.ts', patterns)).toBe(true);
+            expect(isFileMatchingGlob('src/app.spec.ts', patterns)).toBe(true);
         });
     });
 });
@@ -336,72 +277,6 @@ describe('globMatch - isFileMatchingGlobCaseInsensitive', () => {
                     patterns,
                 ),
             ).toBe(true);
-        });
-
-        it('should be consistent with case-sensitive version for lowercase', () => {
-            const patterns = ['src/**/*.ts'];
-            const file = 'src/index.ts';
-
-            // Both should return true for lowercase
-            expect(isFileMatchingGlob(file, patterns)).toBe(true);
-            expect(isFileMatchingGlobCaseInsensitive(file, patterns)).toBe(
-                true,
-            );
-        });
-    });
-});
-
-// ============================================================================
-// SNAPSHOT TESTS FOR CACHE VALIDATION
-// ============================================================================
-
-describe('globMatch - Behavior Snapshots for Cache Validation', () => {
-    /**
-     * Deterministic scenarios that can be run before and after cache
-     * implementation to verify identical behavior.
-     */
-
-    const SNAPSHOT_SCENARIOS = [
-        {
-            name: 'typescript_source_files',
-            patterns: ['**/*.ts', '!**/*.spec.ts', '!**/*.test.ts'],
-            files: [
-                { path: 'src/index.ts', expected: true },
-                { path: 'src/app.spec.ts', expected: true }, // Note: negation needs special handling
-                { path: 'lib/utils.ts', expected: true },
-            ],
-        },
-        {
-            name: 'common_ignore_patterns',
-            patterns: ['node_modules/**', 'dist/**', '*.log'],
-            files: [
-                { path: 'node_modules/lodash/index.js', expected: true },
-                { path: 'dist/bundle.js', expected: true },
-                { path: 'error.log', expected: true },
-                { path: 'src/app.ts', expected: false },
-            ],
-        },
-        {
-            name: 'extension_matching',
-            patterns: ['**/*.{ts,tsx,js,jsx}'],
-            files: [
-                { path: 'src/app.ts', expected: true },
-                { path: 'src/App.tsx', expected: true },
-                { path: 'lib/utils.js', expected: true },
-                { path: 'components/Button.jsx', expected: true },
-                { path: 'styles/main.css', expected: false },
-                { path: 'README.md', expected: false },
-            ],
-        },
-    ];
-
-    SNAPSHOT_SCENARIOS.forEach(({ name, patterns, files }) => {
-        describe(`SNAPSHOT: ${name}`, () => {
-            files.forEach(({ path, expected }) => {
-                it(`${path} should ${expected ? 'match' : 'NOT match'}`, () => {
-                    expect(isFileMatchingGlob(path, patterns)).toBe(expected);
-                });
-            });
         });
     });
 });

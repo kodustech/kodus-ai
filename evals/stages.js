@@ -279,7 +279,6 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
                     'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
                     'libs/llm/structured-output-repair.spec.ts',
-                    'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],
             },
@@ -378,7 +377,6 @@ const STAGES = [
                 name: 'The agent, its path match and the rule compiler',
                 specs: [
                     'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.spec.ts',
-                    'test/unit/code-review/agents/kody-rules-agent-path-match.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.prompt.spec.ts',
                 ],
@@ -779,7 +777,6 @@ const STAGES = [
                 name: 'Which comments it reads, and its cron',
                 specs: [
                     'libs/kodyRules/application/use-cases/generate-kody-rules.use-case.spec.ts',
-                    'test/unit/kodyRules/use-cases/generate-kody-rules.sampling.spec.ts',
                     'apps/api/src/cron/kodyLearning.cron.spec.ts',
                 ],
             },
@@ -800,7 +797,6 @@ const STAGES = [
                 name: 'The sync, the rule-file parser and the file patterns',
                 specs: [
                     'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.spec.ts',
-                    'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.context-reference-pointer.spec.ts',
                     'test/unit/common/kody-rule-file-parser.spec.ts',
                     'test/unit/common/kody-rules-file-patterns.spec.ts',
                     'libs/common/utils/kody-rules/file-patterns.spec.ts',

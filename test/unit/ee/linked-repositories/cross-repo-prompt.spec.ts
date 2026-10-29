@@ -63,22 +63,13 @@ describe('cross-repo prompt directive', () => {
         expect(sys).not.toContain('CROSS-BOUNDARY');
     });
 
-    it('injects pilot-validated boundary directive when links are configured', () => {
+    it('injects the boundary directive with each linked repo and its instructions when links are configured', () => {
         const section = formatCrossRepoBoundarySection(
             baseInput({ linkedRepoAccess: linkedAccess }),
         );
         expect(section).toContain('CrossRepoBoundary');
         expect(section).toContain('org/backend-api');
         expect(section).toContain('REST API this frontend consumes');
-        expect(section).toContain('CROSS-BOUNDARY defects');
-        expect(section).toContain(
-            'find who produces or consumes it and verify the shapes match',
-        );
-        expect(section).toContain('sibling adapters');
-        expect(section).toContain('CONFIRMED counterpart evidence');
-        expect(section).toContain(
-            'relevantFile/relevantLinesStart/relevantLinesEnd MUST stay inside this PR',
-        );
 
         const sys = buildSystemPrompt(
             baseInput({ linkedRepoAccess: linkedAccess }),

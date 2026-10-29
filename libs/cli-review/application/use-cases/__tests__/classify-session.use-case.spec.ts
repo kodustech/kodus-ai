@@ -161,6 +161,7 @@ describe('ClassifySessionUseCase', () => {
             'end-1',
             'No textual context for classification',
         );
+        expect(repo.markClassificationProcessing).not.toHaveBeenCalled();
     });
 
     it('should call LLM and mark completed on success', async () => {
@@ -212,66 +213,6 @@ describe('ClassifySessionUseCase', () => {
         ).toHaveBeenCalledWith(
             { organizationId: 'org-1', teamId: 'team-1' },
             LLM_TASK.prSummary,
-        );
-    });
-
-    it('should fallback to heuristics when LLM returns empty', async () => {
-        repo.findByUuid.mockResolvedValue(
-            makeEvent({ uuid: 'end-1', type: 'session_end' }),
-        );
-        repo.findBySessionId.mockResolvedValue([
-            makeEvent({
-                type: 'turn_start',
-                payload: {
-                    prompt: 'We decided to use Redis for caching instead of Memcached',
-                },
-            }),
-            makeEvent({
-                type: 'turn_end',
-                payload: { filesModified: ['src/cache.ts'] },
-            }),
-            makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
-        ]);
-
-        mockLLMDecisions([]);
-
-        await useCase.execute('end-1');
-
-        expect(repo.markClassificationCompleted).toHaveBeenCalledWith(
-            'end-1',
-            expect.arrayContaining([
-                expect.objectContaining({ type: expect.any(String) }),
-            ]),
-            'heuristic',
-        );
-    });
-
-    it('should fallback to heuristics when LLM throws', async () => {
-        repo.findByUuid.mockResolvedValue(
-            makeEvent({ uuid: 'end-1', type: 'session_end' }),
-        );
-        repo.findBySessionId.mockResolvedValue([
-            makeEvent({
-                type: 'turn_start',
-                payload: {
-                    prompt: 'Adopt convention: always use snake_case for DB columns',
-                },
-            }),
-            makeEvent({
-                type: 'turn_end',
-                payload: { filesModified: ['src/db.ts'] },
-            }),
-            makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
-        ]);
-
-        mockGenerate.mockRejectedValue(new Error('LLM timeout'));
-
-        await useCase.execute('end-1');
-
-        expect(repo.markClassificationCompleted).toHaveBeenCalledWith(
-            'end-1',
-            expect.any(Array),
-            'heuristic-fallback',
         );
     });
 
@@ -330,18 +271,13 @@ describe('ClassifySessionUseCase', () => {
     }
 
     describe('heuristic type inference', () => {
+        // One row proves the fallback wires inferDecisionType in; the keyword
+        // table itself is covered directly in ../classify-session.use-case.spec.ts.
         it.each([
             [
                 'We decided to use a microservice architecture',
                 'architectural_decision',
             ],
-            ['Convention: always use snake_case for DB columns', 'convention'],
-            [
-                'Used Redis instead of Memcached because of better pub/sub',
-                'tradeoff',
-            ],
-            ['Added express framework as dependency', 'tooling'],
-            ['Implemented JWT validation middleware', 'implementation_detail'],
         ])(
             'prompt "%s" should map to type "%s"',
             async (prompt, expectedType) => {
@@ -366,129 +302,6 @@ describe('ClassifySessionUseCase', () => {
     // ---------------------------------------------------------------
 
     describe('auto-promote logic', () => {
-        it('should set autoPromoteCandidate=true for high-confidence promotable types via LLM', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Set up the architecture' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/arch.ts'] },
-                }),
-                makeEvent({ type: 'session_end', uuid: 'end-ap', payload: {} }),
-            ]);
-
-            mockLLMDecisions([
-                {
-                    type: 'architectural_decision',
-                    decision: 'Use event-driven architecture',
-                    confidence: 0.9,
-                },
-                {
-                    type: 'convention',
-                    decision: 'Always use camelCase',
-                    confidence: 0.75,
-                },
-                {
-                    type: 'tradeoff',
-                    decision: 'Chose SQL over NoSQL',
-                    confidence: 0.7,
-                },
-            ]);
-
-            await useCase.execute('end-ap');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions).toHaveLength(3);
-            expect(decisions[0].autoPromoteCandidate).toBe(true);
-            expect(decisions[1].autoPromoteCandidate).toBe(true);
-            expect(decisions[2].autoPromoteCandidate).toBe(true);
-        });
-
-        it('should set autoPromoteCandidate=false for low-confidence promotable types', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap2', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Some architecture work' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/x.ts'] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-ap2',
-                    payload: {},
-                }),
-            ]);
-
-            mockLLMDecisions([
-                {
-                    type: 'architectural_decision',
-                    decision: 'Maybe use microservices',
-                    confidence: 0.5,
-                },
-            ]);
-
-            await useCase.execute('end-ap2');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions[0].autoPromoteCandidate).toBe(false);
-        });
-
-        it('should set autoPromoteCandidate=false for non-promotable types even with high confidence', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap3', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Implement feature' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/y.ts'] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-ap3',
-                    payload: {},
-                }),
-            ]);
-
-            mockLLMDecisions([
-                {
-                    type: 'implementation_detail',
-                    decision: 'Use singleton pattern',
-                    confidence: 0.95,
-                },
-                {
-                    type: 'tooling',
-                    decision: 'Use webpack',
-                    confidence: 0.8,
-                },
-                {
-                    type: 'other',
-                    decision: 'Some other choice',
-                    confidence: 0.9,
-                },
-            ]);
-
-            await useCase.execute('end-ap3');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions[0].autoPromoteCandidate).toBe(false);
-            expect(decisions[1].autoPromoteCandidate).toBe(false);
-            expect(decisions[2].autoPromoteCandidate).toBe(false);
-        });
-
         it('heuristic fallback decisions always have autoPromoteCandidate=false (confidence too low)', async () => {
             setupSessionWithPrompt(
                 'We decided to use a microservice architecture',
@@ -509,67 +322,6 @@ describe('ClassifySessionUseCase', () => {
     // ---------------------------------------------------------------
 
     describe('aggregateEvents edge cases', () => {
-        it('should SKIP session with only session_start and session_end (no turns)', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-empty', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'session_start',
-                    payload: {
-                        agentType: 'claude-code',
-                        gitRemote: 'github.com/org/repo',
-                    },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-empty',
-                    payload: {},
-                }),
-            ]);
-
-            await useCase.execute('end-empty');
-
-            expect(repo.markClassificationSkipped).toHaveBeenCalledWith(
-                'end-empty',
-                'No textual context for classification',
-            );
-            expect(repo.markClassificationProcessing).not.toHaveBeenCalled();
-        });
-
-        it('should SKIP session with empty prompts and no tool calls', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-blank', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({ type: 'session_start', payload: {} }),
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: '' },
-                }),
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: '   ' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { toolCalls: [], filesModified: [], commands: [] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-blank',
-                    payload: {},
-                }),
-            ]);
-
-            await useCase.execute('end-blank');
-
-            expect(repo.markClassificationSkipped).toHaveBeenCalledWith(
-                'end-blank',
-                'No textual context for classification',
-            );
-        });
-
         it('should include subagent info in aggregation', async () => {
             repo.findByUuid.mockResolvedValue(
                 makeEvent({ uuid: 'end-sub', type: 'session_end' }),
@@ -848,17 +600,6 @@ describe('ClassifySessionUseCase', () => {
                 1,
             );
             expect(mockGenerate).toHaveBeenCalledTimes(1);
-        });
-
-        it('empty decisions → empty mapping (no throw)', async () => {
-            mockLLMDecisions([]);
-
-            const decisions = await (useCase as any).extractWithLLM(
-                aggregated,
-                { organizationId: 'org-123' },
-            );
-
-            expect(decisions).toEqual([]);
         });
     });
 });

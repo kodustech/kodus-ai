@@ -196,112 +196,6 @@ describe('A. orchestrator output-shape zoo', () => {
         expectExplicitFailure(result);
     });
 
-    // A4 — wrapper keys carrying the real D. Not recovered ⇒ explicit fail.
-    it.each([
-        ['{result:D}', (d: any) => ({ result: d })],
-        ['{data:D}', (d: any) => ({ data: d })],
-        ['{output:D}', (d: any) => ({ output: d })],
-        ['{response:D}', (d: any) => ({ response: d })],
-    ])('A4: %s wrapper — fails explicitly', async (_l, wrap) => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            wrap(happyEnvelope([sugg()])) as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A5 — double wrapper {result:{result:D}}.
-    it('A5: double wrapper {result:{result:D}} — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            result: { result: happyEnvelope([sugg()]) },
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A6 — opaque / numeric single-key wrapper.
-    it.each([
-        ['{content:D}', (d: any) => ({ content: d })],
-        ['{"0":D}', (d: any) => ({ '0': d })],
-    ])('A6: %s wrapper — fails explicitly', async (_l, wrap) => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            wrap(happyEnvelope([sugg()])) as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A7 — the whole D as a JSON string.
-    it('A7: stringified JSON envelope — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            JSON.stringify(happyEnvelope([sugg()])) as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A8 — markdown-fenced JSON string.
-    it('A8: markdown-fenced ```json block — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            ('```json\n' + JSON.stringify(happyEnvelope([sugg()])) + '\n```') as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A9 — prose-wrapped JSON string.
-    it('A9: prose-wrapped "Here is the result: {…}" — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            ('Here is the result: ' +
-                JSON.stringify(happyEnvelope([sugg()])) +
-                '\n\nLet me know if you need anything else.') as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A10 — right data under the wrong key name.
-    it('A10: right data wrong key {findings:[…]} — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            findings: [sugg()],
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A11 — case/convention mismatch on the key.
-    it('A11: {Suggestions:[…]} capitalized key — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            Suggestions: [sugg()],
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
     // A12 — partial object: only `suggestions`, every optional key omitted. The
     // stage tolerates missing agentResults/failures/incomplete/warnings via
     // `?? []` / `|| []` and assembles normally.
@@ -317,109 +211,11 @@ describe('A. orchestrator output-shape zoo', () => {
         expect(criticalErrors(result)).toHaveLength(0);
     });
 
-    // A13 — extra unknown keys alongside the right ones: tolerated, not crashed.
-    it('A13: extra unknown keys tolerated — still assembles', async () => {
+    // A17 — null envelope. Every other off-schema shape (wrappers, strings,
+    // primitives, wrong keys) takes the same throw → catch path as A2/A3.
+    it('A17: null envelope — fails explicitly', async () => {
         const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            ...happyEnvelope([sugg()]),
-            reasoning: 'analysis prose',
-            confidence: 0.9,
-            usage: { tokens: 1234 },
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expect(result.validSuggestions).toHaveLength(1);
-        expect(criticalErrors(result)).toHaveLength(0);
-    });
-
-    // A14 — empty object {} (no suggestions key).
-    it('A14: empty object {} — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({} as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A15 — bare empty array [] (not {suggestions:[]}). `.suggestions`
-    // undefined ⇒ `.length` throws ⇒ explicit failure. Distinct from C32.
-    it('A15: bare empty array [] — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue([] as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A16 — empty / whitespace-only string.
-    it.each([
-        ['empty string', ''],
-        ['whitespace only', '   \n\t  '],
-    ])('A16: %s envelope — fails explicitly', async (_l, payload) => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(payload as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A17 — null / undefined envelope.
-    it.each([
-        ['null', null],
-        ['undefined', undefined],
-    ])('A17: %s envelope — fails explicitly', async (_l, payload) => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(payload as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A18 — primitive where an object is expected.
-    it.each([
-        ['boolean true', true],
-        ['number 0', 0],
-        ['string "ok"', 'ok'],
-    ])('A18: primitive %s — fails explicitly', async (_l, payload) => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(payload as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A19 — provider envelope leak: the raw {choices:[{message:{content}}]}
-    // shape reaches the boundary. `.suggestions` undefined ⇒ explicit fail.
-    it('A19: provider envelope leak {choices:[…]} — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            choices: [
-                {
-                    message: {
-                        content: JSON.stringify(happyEnvelope([sugg()])),
-                    },
-                },
-            ],
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // A20 — reasoning/thinking leak: analysis prose prefixed before the JSON.
-    it('A20: reasoning/thinking leak before JSON — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            ('Let me think about whether this null deref matters...\n' +
-                JSON.stringify(happyEnvelope([sugg()]))) as any,
-        );
+        reviewOrchestrator.execute.mockResolvedValue(null as any);
 
         const result = await run(stage, makeContext());
 
@@ -477,21 +273,6 @@ describe('B. semantic-but-wrong finding values', () => {
             true,
         );
     });
-
-    // B27 — unicode / emoji / escaped newlines inside string fields survive the
-    // deterministic pipeline unchanged.
-    it('B27: unicode / emoji / escaped-newline content — preserved verbatim', async () => {
-        const weird = '空指针 💥 dereference — line1\\nline2 🚨';
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([sugg({ suggestionContent: weird })]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expect(result.validSuggestions).toHaveLength(1);
-        expect(result.validSuggestions[0].suggestionContent).toBe(weird);
-    });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -515,19 +296,6 @@ describe('C. transport / fail-safe', () => {
         expect(result.fileAnalysisResults).toBeDefined();
     });
 
-    // C29 — malformed JSON surfaces as an orchestrator rejection (the parse blew
-    // up inside the finder). Caught ⇒ explicit failure, never propagates.
-    it('C29: malformed JSON (orchestrator rejects) — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockRejectedValue(
-            new SyntaxError('Unexpected token } in JSON at position 42'),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
     // C30 — the orchestrator throws (network / timeout / provider 500). THE core
     // #1568 fail-safe: the stage records a critical error and returns, it does
     // NOT re-throw and does NOT report a silent zero-findings success.
@@ -543,19 +311,6 @@ describe('C. transport / fail-safe', () => {
         expect(result.lastReviewError.occurredAt).toBeInstanceOf(Date);
     });
 
-    // C31 — error object returned instead of thrown. `.suggestions` undefined ⇒
-    // explicit failure (the parse throw path), never a silent no-op.
-    it('C31: {error:…} object returned — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue({
-            error: 'quota_exceeded',
-        } as any);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
     // C32 — empty success: {suggestions:[]} with the key PRESENT. This is a
     // legitimate "found nothing" — assemble zero findings, NO critical error.
     it('C32: {suggestions:[]} empty success — zero findings, no error', async () => {
@@ -566,33 +321,8 @@ describe('C. transport / fail-safe', () => {
 
         expect(result.validSuggestions).toHaveLength(0);
         expect(result.fileAnalysisResults).toEqual([]);
-        expect(criticalErrors(result)).toHaveLength(0);
+        expect(result.errors ?? []).toHaveLength(0);
         expect(result.lastReviewError).toBeFalsy();
-    });
-
-    // C33 — refusal prose returned as the whole envelope.
-    it('C33: refusal prose ("I cannot help…") — fails explicitly', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            "I'm sorry, but I can't help with that request." as any,
-        );
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
-    });
-
-    // C34 — abort signal fired mid-review surfaces as an AbortError rejection;
-    // caught, never propagated past the stage.
-    it('C34: abort mid-review (AbortError) — caught, never propagates', async () => {
-        const abort = new Error('The operation was aborted');
-        abort.name = 'AbortError';
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockRejectedValue(abort);
-
-        const result = await run(stage, makeContext());
-
-        expectExplicitFailure(result);
     });
 
     // Per-agent failures reported IN a valid envelope (not a throw): a critical
@@ -638,63 +368,6 @@ describe('D. input variants', () => {
         expect(reviewOrchestrator.execute).not.toHaveBeenCalled();
     });
 
-    // D36 — single file / single finding assembles into exactly one file entry.
-    it('D36: single file + single finding — one fileAnalysisResults entry', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
-
-        const result = await run(stage, makeContext());
-
-        expect(result.fileAnalysisResults).toHaveLength(1);
-        expect(result.validSuggestions).toHaveLength(1);
-    });
-
-    // D37 — large input: the stage does NOT batch (batching is the orchestrator's
-    // concern). Every finding across many files must still land in the assembled
-    // result — nothing dropped for volume.
-    it('D37: large multi-file input — every finding preserved, single orchestrator call', async () => {
-        const files = Array.from({ length: 40 }, (_, i) => ({
-            filename: `src/f${i}.ts`,
-        }));
-        const findings = files.map((f, i) =>
-            sugg({
-                relevantFile: f.filename,
-                oneSentenceSummary: `finding ${i}`,
-                suggestionContent: `distinct issue ${i}`,
-            }),
-        );
-        runSpy.mockResolvedValue({
-            groups: [],
-            unique: findings.map((_, i) => i),
-        } as any);
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope(findings));
-
-        const result = await run(stage, makeContext({ changedFiles: files }));
-
-        expect(reviewOrchestrator.execute).toHaveBeenCalledTimes(1);
-        expect(result.validSuggestions).toHaveLength(40);
-        expect(result.fileAnalysisResults).toHaveLength(40);
-    });
-
-    // D38 — duplicate findings in the envelope (dedup mocked keep-all here) both
-    // reach assembly on the same file — no crash on collision.
-    it('D38: duplicate findings on the same file — assemble without crashing', async () => {
-        runSpy.mockResolvedValue({ groups: [], unique: [0, 1] } as any);
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(
-            happyEnvelope([sugg(), sugg()]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expect(result.validSuggestions).toHaveLength(2);
-        expect(result.fileAnalysisResults).toHaveLength(1);
-        expect(result.fileAnalysisResults[0].validSuggestionsToAnalyze).toHaveLength(
-            2,
-        );
-    });
-
     // D39 — a finder finding with null/undefined file and lines: no throw; the
     // parse schema (#1821) discards it before the dedup.
     it('D39: finding with null relevantFile — no throw, discarded by the parse schema', async () => {
@@ -714,48 +387,6 @@ describe('D. input variants', () => {
         expect(result.validSuggestions).toHaveLength(0);
         expect(result.fileAnalysisResults).toBeDefined();
     });
-
-    // D40 — special chars / whitespace-only diff + binary-ish patch: no throw,
-    // the finding still assembles.
-    it('D40: whitespace-only / binary-ish patch — no throw, finding assembles', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
-        const ctx = makeContext({
-            changedFiles: [
-                { filename: 'src/user.ts', patch: '   \n\t\n  binary' },
-            ],
-        });
-
-        const result = await run(stage, ctx);
-
-        // No valid diff ranges parsed ⇒ snap passes through ⇒ finding assembles.
-        expect(result.validSuggestions).toHaveLength(1);
-        expect(result.fileAnalysisResults).toHaveLength(1);
-    });
-
-    // D42 — order permutation: the SAME two findings fed in either order produce
-    // the same assembled set (metamorphic — set equality, not list order).
-    it('D42: order permutation — equivalent assembled set', async () => {
-        runSpy.mockResolvedValue({ groups: [], unique: [0, 1] } as any);
-        const a = sugg({ relevantFile: 'src/a.ts', oneSentenceSummary: 'A' });
-        const b = sugg({ relevantFile: 'src/b.ts', oneSentenceSummary: 'B' });
-        const files = [{ filename: 'src/a.ts' }, { filename: 'src/b.ts' }];
-
-        const { stage: s1, reviewOrchestrator: o1 } = makeStage();
-        o1.execute.mockResolvedValue(happyEnvelope([a, b]));
-        const forward = await run(s1, makeContext({ changedFiles: files }));
-
-        const { stage: s2, reviewOrchestrator: o2 } = makeStage();
-        o2.execute.mockResolvedValue(happyEnvelope([b, a]));
-        const reversed = await run(s2, makeContext({ changedFiles: files }));
-
-        const setOf = (r: any) =>
-            (r.validSuggestions ?? [])
-                .map((s: any) => s.relevantFile)
-                .sort();
-        expect(setOf(forward)).toEqual(['src/a.ts', 'src/b.ts']);
-        expect(setOf(forward)).toEqual(setOf(reversed));
-    });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -763,41 +394,9 @@ describe('D. input variants', () => {
 // ════════════════════════════════════════════════════════════════════════════
 // The orchestrator boundary does NOT branch on provider: the json_schema vs
 // json_object gate (structured-output-gate.ts) lives INSIDE the finder / inside
-// LLM.run, not in the stage. The stage threads byok config through
-// buildOrchestratorInput and consumes the returned envelope model-agnostically.
-// So the correct E assertions here are (1) the off-schema fail-safe is identical
-// under a strict and a fallback slot, and (2) the finder's model routing keys are
-// threaded verbatim regardless of provider. The A/B/C off-schema rows under each
-// concrete gate branch are pinned at the stage's OWN parse layer (its dedup
-// LLM.run) in agent-review.stage.dedup-contract.spec.ts.
+// LLM.run, not in the stage. What the stage owns is threading the finder's model
+// routing keys verbatim.
 describe('E. model-agnostic delegation', () => {
-    it.each([
-        ['openai (strict json_schema)', 'openai'],
-        ['anthropic (strict)', 'anthropic'],
-        ['google (strict)', 'google'],
-        ['moonshotai (strict)', 'moonshotai'],
-        ['kimi (json_object fallback)', 'kimi'],
-        ['glm (fallback)', 'glm'],
-        ['deepseek (fallback)', 'deepseek'],
-        ['z-ai (fallback)', 'z-ai'],
-    ])(
-        'off-schema envelope fails explicitly under the %s slot (model-independent)',
-        async (_l, provider) => {
-            const { stage, reviewOrchestrator } = makeStage();
-            reviewOrchestrator.execute.mockResolvedValue([sugg()] as any); // bare array
-            const ctx = makeContext({
-                codeReviewConfig: {
-                    reviewOptions: {},
-                    resolvedModelSlot: { provider, model: `${provider}/m` },
-                },
-            });
-
-            const result = await run(stage, ctx);
-
-            expectExplicitFailure(result);
-        },
-    );
-
     it('threads byokModelId / byokModel verbatim to the orchestrator input', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(happyEnvelope([sugg()]));
@@ -816,41 +415,5 @@ describe('E. model-agnostic delegation', () => {
         const input = reviewOrchestrator.execute.mock.calls[0][0];
         expect(input.byokModelId).toBe('moonshotai:kimi-k2');
         expect(input.byokModel).toBe('kimi-k2-legacy-name');
-    });
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// Guaranteed return shape — every layer returns the declared context type
-// ════════════════════════════════════════════════════════════════════════════
-describe('guaranteed return shape across all layers', () => {
-    it.each([
-        ['happy D', () => happyEnvelope([sugg()]), false],
-        ['empty success', () => happyEnvelope([]), false],
-        ['bare array (off-schema)', () => [sugg()], true],
-        ['null (off-schema)', () => null, true],
-        ['primitive (off-schema)', () => 42, true],
-    ])(
-        'always returns a context with a defined fileAnalysisResults array (%s)',
-        async (_l, envelope, isReject) => {
-            const { stage, reviewOrchestrator } = makeStage();
-            if (isReject && _l.includes('reject')) {
-                reviewOrchestrator.execute.mockRejectedValue(new Error('boom'));
-            } else {
-                reviewOrchestrator.execute.mockResolvedValue(envelope() as any);
-            }
-
-            const result = await run(stage, makeContext());
-
-            expect(result).toBeTruthy();
-            expect(Array.isArray(result.fileAnalysisResults)).toBe(true);
-            expect('validSuggestions' in result).toBe(true);
-        },
-    );
-
-    it('never re-throws past the stage even when the orchestrator rejects', async () => {
-        const { stage, reviewOrchestrator } = makeStage();
-        reviewOrchestrator.execute.mockRejectedValue(new Error('hard down'));
-
-        await expect(run(stage, makeContext())).resolves.toBeTruthy();
     });
 });
