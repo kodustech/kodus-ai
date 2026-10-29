@@ -182,16 +182,19 @@ describe("GTM first-touch tag", () => {
         });
     });
 
-    it("drops values where invisible characters hide an email", () => {
+    it("drops values where invisible, combining or lookalike characters hide an email", () => {
         const jar = new CookieJar();
         visit(
             jar,
-            "https://kodus.io/?utm_source=goo%E2%80%8Bgle&utm_term=jane%40%E2%80%8Bacme.com",
+            "https://kodus.io/?utm_source=x" +
+                "&utm_term=jane%40%E2%80%8Bacme.com" + // zero-width space
+                "&utm_content=jane%40%CC%81acme.com" + // combining acute
+                "&utm_campaign=jane%EF%BC%A0acme.com", // fullwidth @
         );
 
         expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
-            utm_source: "google",
-            landing_page: "https://kodus.io/?utm_source=google",
+            utm_source: "x",
+            landing_page: "https://kodus.io/?utm_source=x",
             captured_at: expect.any(String),
         });
     });

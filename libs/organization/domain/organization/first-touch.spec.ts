@@ -126,6 +126,8 @@ describe('sanitizeFirstTouch', () => {
                     utm_source: 'goo\u200bgle\u00ad',
                     utm_term: 'jane@\u200bacme.com',
                     utm_content: 'jane\u2060@acme.com',
+                    utm_campaign: 'jane@\u0301acme.com',
+                    utm_medium: 'jane\uff20acme.com',
                     referrer: 'https://example.com/u/jane@%E2%80%8Bacme.com',
                 },
                 now,

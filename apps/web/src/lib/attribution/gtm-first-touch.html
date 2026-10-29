@@ -17,18 +17,19 @@
   var MAX_AGE = 60 * 60 * 24 * 365;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
-  // Controls and invisible format characters. ES5 has no \p{...} classes, so
-  // these are ranges; the API filters by Unicode class.
-  var INVISIBLE = /[\u0000-\u001F\u007F-\u009F­؜ᅟᅠ᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]/g;
 
   function decode(text) {
     try { return decodeURIComponent(text); } catch (e) { return text; }
   }
 
-  // Email-shaped anywhere in the text, '@' possibly percent-encoded. Bounded
-  // so the regex stays cheap.
+  // Email-shaped anywhere in the text, '@' possibly percent-encoded. NFKC
+  // folds lookalikes (fullwidth @), and everything outside printable ASCII is
+  // ignored, so no invisible or combining character can split an address.
+  // Bounded so the regex stays cheap.
   function hasEmail(text) {
-    return EMAIL.test(decode(text.slice(0, 600)).replace(INVISIBLE, '').replace(/%(?:25)*40/gi, '@'));
+    var t = decode(text.slice(0, 600));
+    if (t.normalize) t = t.normalize('NFKC');
+    return EMAIL.test(t.replace(/%(?:25)*40/gi, '@').replace(/[^\x20-\x7E]/g, ''));
   }
 
   // Never cut an emoji in half: encodeURIComponent throws on the leftover.
@@ -48,7 +49,7 @@
     var kept = [];
     var query = new URLSearchParams(location.search);
     for (var i = 0; i < PARAMS.length; i++) {
-      var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(INVISIBLE, '').replace(/^\s+|\s+$/g, '');
+      var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(/^\s+|\s+$/g, '');
       if (!full || hasEmail(full)) continue;
       var value = cut(full, valueMax);
       touch[PARAMS[i]] = value;

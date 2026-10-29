@@ -58,6 +58,7 @@ const EMAIL_TLD = /\.[a-z]{2,}/i;
 // '@' percent-encoded once or more (%40, %2540, ...): a UTM tagged with an
 // encoded address arrives here still encoded.
 const ENCODED_AT = /%(?:25)*40/gi;
+const NOT_PRINTABLE_ASCII = /[^\x20-\x7e]/g;
 const GCLID = /^[a-z0-9_-]+$/i;
 
 /**
@@ -144,11 +145,16 @@ function sanitizeText(value: unknown): string | null {
 
 /**
  * Whether the text has something shaped like local@domain.tld, with '@'
- * possibly percent-encoded. Linear on purpose: the equivalent single regex
- * backtracks quadratically on long inputs such as a run of '%'.
+ * possibly percent-encoded. NFKC folds lookalikes (fullwidth @) and
+ * everything outside printable ASCII is ignored, so no invisible or combining
+ * character can split an address. Linear on purpose: the equivalent single
+ * regex backtracks quadratically on long inputs such as a run of '%'.
  */
 function containsEmail(value: string): boolean {
-    const text = value.replace(ENCODED_AT, '@');
+    const text = value
+        .normalize('NFKC')
+        .replace(ENCODED_AT, '@')
+        .replace(NOT_PRINTABLE_ASCII, '');
     for (let at = text.indexOf('@'); at >= 0; at = text.indexOf('@', at + 1)) {
         if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
             continue;
