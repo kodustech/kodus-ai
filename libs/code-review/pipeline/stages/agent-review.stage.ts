@@ -1747,6 +1747,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     if (s.fixStatus && s.fixStatus !== 'local') {
                         continue;
                     }
+                    // Its enrichment call failed: no fix was proposed, and
+                    // the finding posts as a plain comment.
+                    if (
+                        !s.fixStatus &&
+                        s.label !== 'kody_rules' &&
+                        !isAnalyzerSuggestion(s) &&
+                        !isCustomAgentFinding(s)
+                    ) {
+                        continue;
+                    }
                     const reason = checkFix(
                         s.existingCode,
                         s.improvedCode,

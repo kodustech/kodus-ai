@@ -315,6 +315,43 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         expect(badFixWarning.detail).toContain('1 suggestion(s)');
     });
 
+    it('posts a finder finding whose enrichment failed as a plain comment, without the bad-fix warning', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                {
+                    relevantFile: 'src/user.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    label: 'bug',
+                    suggestionContent: 'user can be null and is dereferenced',
+                },
+            ]),
+        );
+        const ctx = makeContext({
+            changedFiles: [
+                {
+                    filename: 'src/user.ts',
+                    fileContent: 'const name = user.name;\n',
+                },
+            ],
+        });
+
+        // The mocked LLM answers every call with the dedup's shape, so the
+        // enrichment call fails: cited code, no fix, no fixStatus.
+        const result = await run(stage, ctx);
+
+        const [posted] = analyzedSuggestions(result);
+        expect(posted.existingCode).toBe('const name = user.name;');
+        expect(posted.fixStatus).toBeUndefined();
+        expect(posted.improvedCode ?? '').toBe('');
+        expect(
+            (result.reviewWarnings ?? []).find(
+                (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
+            ),
+        ).toBeUndefined();
+    });
+
     it('records a BAD_FIX_DOWNGRADED review warning with the count, and publishes both suggestions', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
