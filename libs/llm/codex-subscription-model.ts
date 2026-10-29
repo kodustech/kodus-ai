@@ -25,9 +25,9 @@ const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
 type CodexAuth = { token: string; accountId: string };
 
-/** Lê o token OAuth gravado por `codex login`. Respeita CODEX_HOME, como o
- *  proprio Codex: e assim que uma segunda conta de assinatura fica pronta em
- *  outra pasta e entra quando a cota da primeira acaba. */
+/** Reads the OAuth token `codex login` saved. Honors CODEX_HOME, as Codex
+ *  itself does: a second subscription account lives in another folder and
+ *  takes over when the first one's quota runs out. */
 export function readCodexAuth(
     authPath = `${process.env.CODEX_HOME || `${os.homedir()}/.codex`}/auth.json`,
 ): CodexAuth {
@@ -82,20 +82,20 @@ function withGenerateFromStream(model: any): any {
         get(target, prop, receiver) {
             if (prop === 'doStream') {
                 return async (options: any) => {
-                    // Sem teto: exatamente o caminho de antes.
-                    if (!TETO_CODEX) return target.doStream(withStore(options));
-                    const liberar = await vaga();
+                    // No cap: the path as it always was.
+                    if (!CODEX_CONCURRENCY_CAP) return target.doStream(withStore(options));
+                    const release = await acquireSlot();
                     try {
                         const r = await target.doStream(withStore(options));
-                        // A vaga so volta quando o stream termina (ou quebra).
+                        // The slot is released when the stream ends (or breaks).
                         return {
                             ...r,
                             stream: r.stream.pipeThrough(
-                                new TransformStream({ flush: () => liberar() }),
+                                new TransformStream({ flush: () => release() }),
                             ),
                         };
                     } catch (e) {
-                        liberar();
+                        release();
                         throw e;
                     }
                 };
@@ -104,14 +104,14 @@ function withGenerateFromStream(model: any): any {
                 return Reflect.get(target, prop, receiver);
             }
             return async (options: any) => {
-                const liberar = await vaga();
+                const release = await acquireSlot();
                 try {
-                    return await gerar(options);
+                    return await generate(options);
                 } finally {
-                    liberar();
+                    release();
                 }
             };
-            async function gerar(options: any) {
+            async function generate(options: any) {
                 const { stream } = await target.doStream(withStore(options));
 
                 const content: any[] = [];
@@ -189,24 +189,24 @@ function withGenerateFromStream(model: any): any {
 }
 
 /**
- * Teto de chamadas simultaneas por processo (CODEX_MAX_CONCURRENT). A conta de
- * assinatura nao aguenta as ~20 passadas paralelas de um PR: responde "servers
- * overloaded" em vez de rate limit (27/09, conta C, sem incidente no status da
- * OpenAI). Sem a variavel, sem teto — o comportamento de antes.
+ * Cap on concurrent calls per process (CODEX_MAX_CONCURRENT). A subscription
+ * account cannot take the ~20 parallel passes of one PR: it answers "servers
+ * overloaded" instead of a rate limit (2026-09-27, no incident on OpenAI's
+ * status page). Without the variable there is no cap, as before.
  */
-const TETO_CODEX = Number(process.env.CODEX_MAX_CONCURRENT) || 0;
-let emUso = 0;
-const fila: Array<() => void> = [];
-async function vaga(): Promise<() => void> {
-    if (!TETO_CODEX) return () => {};
-    if (emUso >= TETO_CODEX) await new Promise<void>((ok) => fila.push(ok));
-    emUso++;
-    let solto = false;
+const CODEX_CONCURRENCY_CAP = Number(process.env.CODEX_MAX_CONCURRENT) || 0;
+let inFlight = 0;
+const waiting: Array<() => void> = [];
+async function acquireSlot(): Promise<() => void> {
+    if (!CODEX_CONCURRENCY_CAP) return () => {};
+    if (inFlight >= CODEX_CONCURRENCY_CAP) await new Promise<void>((ok) => waiting.push(ok));
+    inFlight++;
+    let released = false;
     return () => {
-        if (solto) return;
-        solto = true;
-        emUso--;
-        fila.shift()?.();
+        if (released) return;
+        released = true;
+        inFlight--;
+        waiting.shift()?.();
     };
 }
 
