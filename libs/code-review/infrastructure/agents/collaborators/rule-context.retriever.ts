@@ -214,7 +214,8 @@ const extensionOf = (filePath: string): string => {
 const isTestLikePath = (filePath: string): boolean =>
     /(^|\/)__tests__\//.test(filePath) ||
     /\.(spec|test)\.[^./]+$/.test(filePath) ||
-    /_test\.[^./]+$/.test(filePath);
+    /_test\.[^./]+$/.test(filePath) ||
+    /(^|\/)(test_[^/]+|conftest)\.py$/.test(filePath);
 
 /**
  * The RAW unified diff, not `patchWithLinesStr`. The line-numbered variant
@@ -372,6 +373,24 @@ function siblingCandidates(filename: string): string[] {
     const slash = filename.lastIndexOf('/');
     const dir = slash < 0 ? '' : filename.slice(0, slash + 1);
     const base = filename.slice(slash + 1, filename.length - ext.length);
+
+    // pytest collects `test_<name>.py` (or `<name>_test.py`) beside the
+    // module, in a `tests/` next to it, or under a root `tests/` that is flat
+    // or mirrors the source tree. A root path keeps the file's own leading
+    // "/" (Azure Repos) so every candidate reads like a name in this PR.
+    if (ext === '.py') {
+        const root = filename.startsWith('/') ? '/' : '';
+        const relativeDir = dir.slice(root.length);
+        return [
+            ...new Set([
+                `${dir}test_${base}.py`,
+                `${dir}${base}_test.py`,
+                `${dir}tests/test_${base}.py`,
+                `${root}tests/test_${base}.py`,
+                `${root}tests/${relativeDir}test_${base}.py`,
+            ]),
+        ];
+    }
 
     return [
         `${dir}${base}.spec${ext}`,

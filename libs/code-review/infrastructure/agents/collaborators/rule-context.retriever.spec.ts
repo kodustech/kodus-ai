@@ -252,6 +252,99 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
         expect(repo.exists).not.toHaveBeenCalled();
     });
 
+    // Azure Repos names changed files with a leading "/". The companions keep
+    // the PR's own form so they read like the filenames the model sees.
+    it('builds companions in the form the PR names its files', async () => {
+        const exists = jest.fn(
+            async (path: string) => path === '/src/invoice.spec.ts',
+        );
+
+        const result = await retrieveForShard({
+            file: file({ filename: '/src/invoice.ts' }),
+            rules: [rule('sibling-file')],
+            lookup: lookup({ exists }),
+            changedFilenames: ['/src/invoice.ts'],
+        });
+
+        expect(result.unmet).toEqual([]);
+        expect(result.slices[0].content).toContain(
+            '- /src/invoice.spec.ts: exists',
+        );
+    });
+
+    describe('Python companions follow pytest naming', () => {
+        it('looks for test_<name>.py beside the file, in tests/, and under the root tests/', async () => {
+            const exists = jest.fn(
+                async (path: string) => path === 'tests/app/test_main.py',
+            );
+
+            const result = await retrieveForShard({
+                file: file({ filename: 'app/main.py' }),
+                rules: [rule('sibling-file')],
+                lookup: lookup({ exists }),
+                changedFilenames: ['app/main.py'],
+            });
+
+            expect(result.unmet).toEqual([]);
+            expect(result.slices[0].content).toBe(
+                [
+                    '- app/test_main.py: does not exist',
+                    '- app/main_test.py: does not exist',
+                    '- app/tests/test_main.py: does not exist',
+                    '- tests/test_main.py: does not exist',
+                    '- tests/app/test_main.py: exists',
+                ].join('\n'),
+            );
+        });
+
+        it('does not repeat a candidate for a file at the repository root', async () => {
+            const result = await retrieveForShard({
+                file: file({ filename: 'main.py' }),
+                rules: [rule('sibling-file')],
+                lookup: lookup(),
+            });
+
+            expect(result.slices[0].content).toBe(
+                [
+                    '- test_main.py: does not exist',
+                    '- main_test.py: does not exist',
+                    '- tests/test_main.py: does not exist',
+                ].join('\n'),
+            );
+        });
+
+        it('keeps a leading slash on the root tests/ candidates', async () => {
+            const result = await retrieveForShard({
+                file: file({ filename: '/app/main.py' }),
+                rules: [rule('sibling-file')],
+                lookup: lookup(),
+            });
+
+            expect(result.slices[0].content).toContain(
+                '- /tests/test_main.py: does not exist',
+            );
+            expect(result.slices[0].content).toContain(
+                '- /tests/app/test_main.py: does not exist',
+            );
+        });
+
+        it.each(['app/test_main.py', 'tests/conftest.py'])(
+            'retrieves nothing for %s, which is itself a test',
+            async (filename) => {
+                const repo = lookup();
+
+                const result = await retrieveForShard({
+                    file: file({ filename }),
+                    rules: [rule('sibling-file')],
+                    lookup: repo,
+                });
+
+                expect(result).toEqual({ slices: [], unmet: [] });
+                expect(repo.exists).not.toHaveBeenCalled();
+            },
+        );
+    });
+
     it('reports the rule unmet when existence cannot be checked', async () => {
         const rules = [rule('sibling-file')];
 
