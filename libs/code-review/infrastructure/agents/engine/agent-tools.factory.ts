@@ -627,6 +627,18 @@ export function buildAgentTools(
                     const target = safeLinkedPath(linked.rootPath, filePath);
                     if (!target.ok) return `Error: ${target.error}`;
                     try {
+                        // A symlink is not read, as the local sandbox's own
+                        // read refuses one: the secret-file guard checks the
+                        // name the agent asked for, not the file it points to.
+                        const link = await remoteCommands.exec(
+                            `find ${shSingleQuote(target.abs)} -maxdepth 0 -type l`,
+                        );
+                        if (
+                            link.exitCode === 0 &&
+                            link.stdout.trim() === target.abs
+                        ) {
+                            return `Error: ${filePath} in linked repo ${linked.repository} is a symlink; read the file it points to instead.`;
+                        }
                         const cmd =
                             startLine === 0 && endLine === 0
                                 ? `cat ${shSingleQuote(target.abs)}`

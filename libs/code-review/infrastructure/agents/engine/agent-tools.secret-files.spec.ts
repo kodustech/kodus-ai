@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -114,6 +115,74 @@ describe('agent tools — secret files of the repository', () => {
         expect(res.output).not.toContain(VALUE);
         expect(res.output).not.toContain('KEY_1');
         expect(res.output).toContain('secret');
+    });
+
+    it('does not read a linked repository file through a symlink', async () => {
+        const root = path.join(dir, 'linked');
+        fs.mkdirSync(root, { recursive: true });
+        fs.writeFileSync(path.join(root, '.env'), `API_TOKEN=${VALUE}\n`);
+        fs.writeFileSync(path.join(root, 'ok.txt'), 'plain\n');
+        fs.symlinkSync('.env', path.join(root, 'notes.txt'));
+        // Linked repositories are cloned in a remote sandbox, whose exec is
+        // a shell: here, a real one.
+        const shell = {
+            grep: async () => '',
+            read: async () => '',
+            listDir: async () => '',
+            exec: async (cmd: string) => {
+                try {
+                    return {
+                        stdout: execFileSync('sh', ['-c', cmd], {
+                            encoding: 'utf8',
+                        }),
+                        stderr: '',
+                        exitCode: 0,
+                    };
+                } catch (err: any) {
+                    return {
+                        stdout: String(err.stdout ?? ''),
+                        stderr: String(err.stderr ?? ''),
+                        exitCode: err.status ?? 1,
+                    };
+                }
+            },
+        };
+        const linkedRepoAccess: any = {
+            list: () => [
+                {
+                    repository: 'org/api',
+                    preferredRef: 'main',
+                    status: 'ready',
+                },
+            ],
+            ensureCloned: async () => ({
+                ok: true,
+                rootPath: root,
+                repository: 'org/api',
+            }),
+        };
+        const tools = buildAgentTools(
+            shell,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            linkedRepoAccess,
+        );
+
+        const viaLink = await tools.readFile.execute({
+            path: 'notes.txt',
+            repo: 'org/api',
+        });
+        const plain = await tools.readFile.execute({
+            path: 'ok.txt',
+            repo: 'org/api',
+        });
+
+        expect(viaLink).not.toContain(VALUE);
+        expect(viaLink).toContain('symlink');
+        expect(plain).toContain('plain');
     });
 
     it("drops a linked repository's secret files from its tagged grep lines", () => {
