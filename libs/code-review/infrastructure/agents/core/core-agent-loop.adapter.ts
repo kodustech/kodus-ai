@@ -409,6 +409,7 @@ export async function runAgentLoopViaCore(
                     input.previousDecisions,
                     secrets.prebuiltRecoveryModel as LanguageModel | undefined,
                     input.telemetryMetadata?.teamId,
+                    input.conventionGuides !== undefined,
                 ),
         },
         { prompt: finderPrompt },

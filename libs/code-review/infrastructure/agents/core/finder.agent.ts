@@ -617,13 +617,38 @@ const RECOVERY_SCHEMA = z.object({
     ),
 });
 
-const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
+/** A custom agent's recovery: the full finding, as its submitResult asks.
+ *  Its findings skip the enrichment and the severity classifier, so what the
+ *  recovery leaves out would post missing. */
+const FULL_RECOVERY_SCHEMA = z.object({
     suggestions: z.array(
-        RECOVERY_SCHEMA.shape.suggestions.element.extend({
-            revisesSuggestionId: z.string().optional(),
+        z.object({
+            relevantFile: z.string(),
+            suggestionContent: z.string(),
+            existingCode: z.string(),
+            improvedCode: z.string(),
+            language: z.string().nullable(),
+            label: z.string().nullable(),
+            oneSentenceSummary: z
+                .string()
+                .nullable()
+                .describe(TITLE_PROMPT_SPEC),
+            relevantLinesStart: z.number().nullable(),
+            relevantLinesEnd: z.number().nullable(),
+            severity: z.string().nullable(),
+            confidence: z.number().nullable(),
         }),
     ),
 });
+
+const withRevisionId = (schema: typeof RECOVERY_SCHEMA | typeof FULL_RECOVERY_SCHEMA) =>
+    z.object({
+        suggestions: z.array(
+            schema.shape.suggestions.element.extend({
+                revisesSuggestionId: z.string().optional(),
+            }),
+        ),
+    });
 
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
@@ -692,8 +717,11 @@ export async function recoverFindingsFromProse(
     previousDecisions?: readonly PrDecisionRecord[],
     prebuiltModel?: LanguageModel,
     teamId?: string,
+    /** A custom agent: recover the full finding (FULL_RECOVERY_SCHEMA). */
+    fullOutput?: boolean,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
+    const base = fullOutput ? FULL_RECOVERY_SCHEMA : RECOVERY_SCHEMA;
     try {
         // ONE primitive: LLM.run resolves the slot (or managed default), owns the
         // span + the json_schema→json_object fallback the recovery pass needs, and
@@ -702,9 +730,7 @@ export async function recoverFindingsFromProse(
         // it is part of the same review, not a separate `other` area.
         const result = await LLM.run({
             byokConfig,
-            schema: previousDecisions?.length
-                ? REVISION_RECOVERY_SCHEMA
-                : RECOVERY_SCHEMA,
+            schema: previousDecisions?.length ? withRevisionId(base) : base,
             // The title rule (#2157) mirrors the finder's own schema. The
             // "Respond with a JSON object" sentence must stay: the text must
             // literally contain the word "json" somewhere: OpenAI (and
@@ -729,6 +755,9 @@ export async function recoverFindingsFromProse(
                 'present in the code into the structured schema — one ' +
                 'entry per distinct issue, using the file paths and line ' +
                 'numbers mentioned.\n\n' +
+                (fullOutput
+                    ? `For each finding also give the cited code, the fixed code, its severity and a title: ${TITLE_PROMPT_SPEC}.\n\n`
+                    : '') +
                 'Leave out everything the reviewer did not conclude is a ' +
                 'defect:\n' +
                 '- a hypothesis the analysis checked and then dismissed, ' +
