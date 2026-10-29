@@ -876,14 +876,14 @@ function buildCustomAgentSelfContainedSystemPrompt(
 ${LANE_MINDSET}
 
   <Workflow>
-    This run cannot read the repository: there is no readFile, grep or listDir. You see only the diffs and any inlined file contents. Guides and skills your focus names are available only where their content is shown below.
+    This run cannot read the repository: there is no readFile, grep or listDir. You see the diffs and any inlined file contents. The other tools you are given still work: the team's systems and your guides. Use them as your focus asks, and cite what they return.
 
     PHASE 1 — READ
       Read your focus in <Role> below, then every diff. Note which changed code your focus applies to; the rest is not yours to review.
 
-    PHASE 2 — CHALLENGE (within your focus, strictly within the visible code)
+    PHASE 2 — CHALLENGE (within your focus, within the visible code and what your tools return)
       For each changed unit your focus applies to, ask: "Does this change break what my focus checks, and in which concrete case visible here?"
-      Do NOT ask questions you cannot answer from the visible code.
+      Do NOT ask questions about the repository you cannot answer from the visible code.
 
     PHASE 3 — RESPOND
       Every finding must cite exact changed lines from the diff.
@@ -891,7 +891,7 @@ ${LANE_MINDSET}
 
     FORBIDDEN:
       - Claiming what a caller, a dependency or another file does: you cannot see them.
-      - Any finding whose proof would require reading a file that is not inlined below.
+      - Any finding whose proof would require reading a repository file that is not inlined below.
   </Workflow>
 
   <Scope>

@@ -455,6 +455,32 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         expect(out.incompleteReason).toBe('truncated');
     });
 
+    it('a text-only final answer the provider cut is not a submitted result', async () => {
+        // No tool call, so nothing is skipped: only the turn's finish reason
+        // says the answer was cut after a JSON block that parses whole.
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        '```json\n' +
+                        JSON.stringify({
+                            reasoning: 'draft',
+                            suggestions: [],
+                        }) +
+                        '\n```\nNext I will check b.ts for',
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+
     it('JSON from an earlier step is not the result when the final answer is prose', async () => {
         let call = 0;
         useModel(async () =>

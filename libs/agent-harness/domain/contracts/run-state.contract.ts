@@ -39,6 +39,8 @@ export interface RunStep {
     readonly message: AgentMessage;
     /** Token usage for the step, if the provider reported it. */
     readonly usage?: TokenUsage;
+    /** Why the model's turn ended (stop, tool-calls, length, …), if known. */
+    readonly finishReason?: string;
 }
 
 export interface TokenUsage {

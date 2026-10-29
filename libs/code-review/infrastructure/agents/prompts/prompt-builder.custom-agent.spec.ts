@@ -231,6 +231,10 @@ describe('custom agent — no sandbox', () => {
             'Every new booking screen needs an end-to-end test',
         );
         expect(system).toContain('cannot read the repository');
+        // Its team systems and guides do not need the sandbox: the prompt
+        // must not forbid evidence from them.
+        expect(system).toContain("the team's systems and your guides");
+        expect(system).not.toContain('available only where');
         expect(system).not.toContain('Your first action must be a tool call');
         expect(system).not.toContain(
             'Is there a null/undefined dereference on a path the diff introduces?',

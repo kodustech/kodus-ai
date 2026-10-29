@@ -99,7 +99,7 @@ ${files
         : '';
     const evidence =
         options.readsRepository === false
-            ? 'Back each finding with evidence visible in the diff and the file contents shown; this review cannot read the rest of the repository.'
+            ? 'Back each finding with evidence visible in the diff and the file contents shown, or returned by the tools you are given; this review cannot read the rest of the repository.'
             : 'Investigate the codebase before reporting, and back each finding with evidence from the code.';
     return `  <Mission>
     You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. ${evidence}

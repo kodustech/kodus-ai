@@ -696,6 +696,7 @@ describe('buildCustomAgentPrompt — no sandbox', () => {
         });
         expect(prompt).not.toContain('Investigate the codebase');
         expect(prompt).toContain('evidence visible in the diff');
+        expect(prompt).toContain('returned by the tools you are given');
     });
 });
 

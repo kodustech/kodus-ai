@@ -502,11 +502,19 @@ export async function runAgentLoopViaCore(
     const submittedByTool = !!published && isWholeResult(published.payload);
     // A whole result the finder wrote as its final answer instead of calling
     // the tool is a result too, held to the same test: one that lost items to
-    // the schema is not whole. A cut turn stays truncated either way.
+    // the schema is not whole. A cut turn stays truncated either way, and a
+    // final answer the provider cut (length, content filter) is not a result,
+    // however much of it parses: it asked for no tool, so nothing was skipped.
     const finderState = r.finderState as any;
+    const finalTurn = r.finderState.steps[r.finderState.steps.length - 1];
+    const finalTurnCut =
+        !!finalTurn?.finishReason &&
+        finalTurn.finishReason !== 'stop' &&
+        finalTurn.finishReason !== 'tool-calls';
     const submitted =
         submittedByTool ||
         (finderState.__findingsOutcome === 'text' &&
+            !finalTurnCut &&
             isWholeResult(finderState.__textResult));
     const incompleteReason: AgentLoopOutput['incompleteReason'] =
         r.finderState.status === 'budget-exhausted'
