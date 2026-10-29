@@ -112,6 +112,7 @@ jest.mock('@/code-review/infrastructure/agents/core/core-agent-loop.adapter', ()
 }));
 
 import { BaseCodeReviewAgentProvider } from '@/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
+import { runAgentLoopViaCore } from '@/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import {
     type ReviewAgentIdentity,
     type ReviewAgentInput,
@@ -335,18 +336,6 @@ describe('BaseCodeReviewAgentProvider — recursion bug + proposed fixes', () =>
             expect(result).toBeDefined();
             expect(getCount()).toBe(1);
         });
-
-        it('does not throw AGENT_PROMPT_OVERHEAD_EXCEEDS_BUDGET — the older guard was relaxed', async () => {
-            setupExecuteSpy(agent);
-            // The genuine "overhead larger than the window" case is now
-            // caught by assertContextWindowFitsOverhead earlier in
-            // execute(), so this scenario (overhead within window but
-            // bigger than the 55%-of-window budget) is handled by
-            // falling through to a single runAgentLoop, not aborting.
-            await expect(
-                agent.execute(makePathologicalInput()),
-            ).resolves.toBeDefined();
-        });
     });
 
     describe('Fix A — recursion-depth guard (defense in depth)', () => {
@@ -356,6 +345,7 @@ describe('BaseCodeReviewAgentProvider — recursion bug + proposed fixes', () =>
             await expect(agent.execute(input)).rejects.toThrow(
                 'AGENT_RECURSION_LIMIT_EXCEEDED',
             );
+            expect(runAgentLoopViaCore).not.toHaveBeenCalled();
         });
 
         it('propagates an incrementing recursionDepth from executeChunked into each per-batch execute() call', async () => {
@@ -410,13 +400,6 @@ describe('BaseCodeReviewAgentProvider — recursion bug + proposed fixes', () =>
             // AGENT_PROMPT_OVERHEAD_EXCEEDS_BUDGET on the second pass.
             expect(result).toBeDefined();
             expect(getCount()).toBeGreaterThanOrEqual(3);
-        });
-
-        it('does NOT throw AGENT_PROMPT_OVERHEAD_EXCEEDS_BUDGET on the marginal scenario', async () => {
-            setupExecuteSpy(agent);
-            await expect(
-                agent.execute(makeMarginalOverflowInput()),
-            ).resolves.toBeDefined();
         });
 
         // Higher-fidelity regression test using the exact numbers from

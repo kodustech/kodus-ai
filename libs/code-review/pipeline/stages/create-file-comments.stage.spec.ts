@@ -87,12 +87,14 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     it('persists changedFiles even when there are no valid AND no discarded suggestions', async () => {
         // The bug: this exact combination (both arrays empty) used to skip
         // the save call entirely and leave files: [] in the document.
+        // baseContext() is Immer-frozen, so this also guards c886e369a (a
+        // direct write to the frozen pullRequest threw before the save).
         const ctx = baseContext({
             validSuggestions: [],
             discardedSuggestions: [],
         } as any);
 
-        await stage.execute(ctx);
+        const result = await stage.execute(ctx);
 
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,
@@ -106,43 +108,29 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         const enrichedFiles = callArgs[2];
         const orgAndTeam = callArgs[6];
 
+        expect(callArgs[0].number).toBe(99);
         expect(enrichedFiles).toHaveLength(1);
         expect(enrichedFiles[0].filename).toBe('src/foo.ts');
         expect(orgAndTeam.organizationId).toBe('org-A');
         // The pull request here is the one the review started with: the save
         // keeps a close or merge stored while it ran.
         expect(callArgs[9]).toEqual({ keepStoredState: true });
-    });
 
-    it('persists when the context (incl. pullRequest) is Immer-frozen (regression)', async () => {
-        // In production the pipeline context is Immer-frozen (auto-freeze)
-        // after any earlier stage's produce(). A direct write to it (once
-        // `pullRequest.heavy = …`, c886e369a) threw before
-        // aggregateAndSaveDataStructure: comments were posted, but no
-        // suggestion was persisted. baseContext() is frozen, so the guard is
-        // the default, not this one case.
-        await stage.execute(baseContext());
-
+        // An empty (not missing) lineComments is what lets
+        // RequestChangesOrApproveStage approve a clean PR.
+        expect(result.lineComments).toEqual([]);
+        // Comments on suggestions implemented since the last run are
+        // resolved on every review, even one with nothing new to post.
         expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).toHaveBeenCalledTimes(1);
-        const savedPullRequest =
-            mockPullRequestService.aggregateAndSaveDataStructure.mock
-                .calls[0][0];
-        expect(savedPullRequest.number).toBe(99);
-    });
-
-    it('still persists when validSuggestions=0 but discardedSuggestions has items (regression for the prior happy path)', async () => {
-        const ctx = baseContext({
-            validSuggestions: [],
-            discardedSuggestions: [{ id: 'd-1' } as any],
-        } as any);
-
-        await stage.execute(ctx);
-
-        expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).toHaveBeenCalledTimes(1);
+            mockSuggestionService.resolveImplementedSuggestionsOnPlatform,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: expect.objectContaining({
+                    organizationId: 'org-A',
+                }),
+                prNumber: 99,
+            }),
+        );
     });
 
     it('records the reviewed head as analyzed, not whichever commit sorts last (#2037)', async () => {

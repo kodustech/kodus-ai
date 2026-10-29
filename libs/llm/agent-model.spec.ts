@@ -30,34 +30,23 @@ beforeEach(() => {
 });
 
 describe('resolveAgentModel', () => {
-    it('builds from the shared buildModelFromSlot and wraps the result', () => {
-        const out = resolveAgentModel(slot);
+    it('builds from the shared buildModelFromSlot (modelOptions + default override threaded) and wraps the result', () => {
+        const out = resolveAgentModel(slot, {
+            modelOptions: { structuredOutputs: true },
+            defaultModelOverride: 'kimi-k2.7-code',
+        });
 
         expect(buildModelFromSlot).toHaveBeenCalledTimes(1);
-        expect(buildModelFromSlot).toHaveBeenCalledWith(slot, undefined, undefined);
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            slot,
+            { structuredOutputs: true },
+            'kimi-k2.7-code',
+        );
         // The wrapped model IS what buildModelFromSlot returned.
         expect((wrapByokModel as jest.Mock).mock.calls[0][0]).toEqual({
             __built: true,
         });
         expect(out).toMatchObject({ __wrapped: { __built: true } });
-    });
-
-    it('forwards modelOptions (e.g. structuredOutputs) to the build', () => {
-        resolveAgentModel(slot, { modelOptions: { structuredOutputs: true } });
-        expect(buildModelFromSlot).toHaveBeenCalledWith(
-            slot,
-            { structuredOutputs: true },
-            undefined,
-        );
-    });
-
-    it('threads defaultModelOverride to the build (trial / cli-review default)', () => {
-        resolveAgentModel(undefined, { defaultModelOverride: 'kimi-k2.7-code' });
-        expect(buildModelFromSlot).toHaveBeenCalledWith(
-            undefined,
-            undefined,
-            'kimi-k2.7-code',
-        );
     });
 
     it('keys the wrapper off the same slot and defaults provider to the slot provider', () => {
@@ -77,13 +66,6 @@ describe('resolveAgentModel', () => {
         );
     });
 
-    it('omits queueTimeoutMs and reporter when not provided', () => {
-        resolveAgentModel(slot);
-        const cfg = (wrapByokModel as jest.Mock).mock.calls[0][1];
-        expect(cfg).not.toHaveProperty('queueTimeoutMs');
-        expect(cfg).not.toHaveProperty('reporter');
-    });
-
     it('threads queueTimeoutMs and reporter through when provided', () => {
         const reporter = jest.fn();
         resolveAgentModel(slot, { queueTimeoutMs: 5000, reporter });
@@ -92,15 +74,4 @@ describe('resolveAgentModel', () => {
         expect(cfg.reporter).toBe(reporter);
     });
 
-    it('handles an undefined slot (managed / no-BYOK) — build resolves the default, provider is undefined', () => {
-        resolveAgentModel(undefined, { organizationId: 'org-2' });
-        expect(buildModelFromSlot).toHaveBeenCalledWith(
-            undefined,
-            undefined,
-            undefined,
-        );
-        const cfg = (wrapByokModel as jest.Mock).mock.calls[0][1];
-        expect(cfg.byokConfig).toBeUndefined();
-        expect(cfg.provider).toBeUndefined();
-    });
 });

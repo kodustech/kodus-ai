@@ -139,7 +139,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined, // no byokConfig
             true, // isCommitRun = true
         );
 
@@ -181,7 +180,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 
@@ -220,7 +218,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 

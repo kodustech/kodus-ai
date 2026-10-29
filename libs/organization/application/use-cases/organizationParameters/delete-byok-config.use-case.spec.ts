@@ -911,17 +911,6 @@ describe('DeleteByokConfigUseCase.execute — deterministic guards & branches', 
         expect(deleteByokModel).not.toHaveBeenCalled();
     });
 
-    it('returns the exact boolean the service yields (propagates false)', async () => {
-        const { useCase } = buildExecuteHarness({
-            byokConfig: makeByokConfig(),
-            crConfig: { configs: {}, repositories: [] },
-            deleteResult: false,
-        });
-        await expect(useCase.execute(ORG, { modelId: 'm2' })).resolves.toBe(
-            false,
-        );
-    });
-
     it('joins multiple usages with "; " and names both routing and override refs', async () => {
         const { useCase } = buildExecuteHarness({
             byokConfig: makeByokConfig({

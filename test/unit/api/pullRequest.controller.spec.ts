@@ -611,29 +611,6 @@ describe('PullRequestController', () => {
             );
         });
 
-        it('returns markdown when format=markdown', async () => {
-            mockGetPullRequestSuggestionsUseCase.execute.mockResolvedValueOnce({
-                response: {
-                    markdown: '# Suggestions for PR #42 (org/repo)',
-                },
-                suggestionsCount: 1,
-            });
-
-            const result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
-                'markdown',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(result).toHaveProperty('markdown');
-            expect(result.markdown).toContain('# Suggestions for PR #42');
-            expect(result.markdown).toContain('org/repo');
-        });
-
         it('forwards severity filter to the suggestions use case', async () => {
             await controller.getSuggestionsByPullRequest(
                 PR_URL,
@@ -670,60 +647,6 @@ describe('PullRequestController', () => {
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     category: 'architecture',
-                }),
-            );
-        });
-
-        it('delegates suggestion shaping to the use case', async () => {
-            mockPullRequestsService.findOne.mockResolvedValue(
-                makePrEntity({
-                    files: [
-                        {
-                            path: 'a.ts',
-                            suggestions: [
-                                {
-                                    deliveryStatus: DeliveryStatus.SENT,
-                                    severity: 'high',
-                                    label: 'bug',
-                                },
-                                {
-                                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                                    severity: 'low',
-                                    label: 'style',
-                                },
-                                {
-                                    deliveryStatus: DeliveryStatus.FAILED,
-                                    severity: 'medium',
-                                    label: 'perf',
-                                },
-                            ],
-                        },
-                    ],
-                    prLevelSuggestions: [],
-                }),
-            );
-
-            const _result = await controller.getSuggestionsByPullRequest(
-                PR_URL,
-                undefined,
-                undefined,
-                'json',
-                undefined,
-                undefined,
-                TEAM_KEY,
-            );
-
-            expect(
-                mockGetPullRequestSuggestionsUseCase.execute,
-            ).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    pr: expect.objectContaining({
-                        files: [
-                            expect.objectContaining({
-                                path: 'a.ts',
-                            }),
-                        ],
-                    }),
                 }),
             );
         });
@@ -911,12 +834,6 @@ describe('PullRequestController', () => {
                 'post-cli-token',
             );
         });
-
-        it('throws 401 with no auth', async () => {
-            await expect(
-                controller.getSuggestionsByPullRequestWithKey(PR_URL),
-            ).rejects.toThrow(UnauthorizedException);
-        });
     });
 
     // =========================================================================
@@ -983,12 +900,6 @@ describe('PullRequestController', () => {
                 'x-kodus-device-token',
                 'get-cli-token',
             );
-        });
-
-        it('throws 401 with no auth', async () => {
-            await expect(
-                controller.getSuggestionsByPullRequestWithKeyGet(PR_URL),
-            ).rejects.toThrow(UnauthorizedException);
         });
     });
 

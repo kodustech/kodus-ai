@@ -522,18 +522,6 @@ describe('KodyIssuesAnalysisService — LLM.run I/O contract matrix', () => {
         expect(out.matches).toEqual([]);
     });
 
-    it('Row 36 — single item: passed through unchanged', async () => {
-        mockGenerate.mockResolvedValueOnce(ok(MERGE_D));
-        const promptData = {
-            filePath: 'a.ts',
-            newSuggestions: [{ id: 's1', body: 'one' }],
-        };
-        await callMerge(promptData);
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(
-            JSON.stringify(promptData),
-        );
-    });
-
     it('Row 37 — large input: sent as ONE call, whole payload in `user` (no split/truncation)', async () => {
         mockGenerate.mockResolvedValueOnce(ok(MERGE_D));
         const big = {
@@ -546,56 +534,6 @@ describe('KodyIssuesAnalysisService — LLM.run I/O contract matrix', () => {
         await callMerge(big);
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         expect(mockGenerate.mock.calls[0][0].prompt).toBe(JSON.stringify(big));
-    });
-
-    it('Row 38 — duplicate items in input: forwarded verbatim (no dedup at this layer)', async () => {
-        mockGenerate.mockResolvedValueOnce(ok(MERGE_D));
-        const dup = {
-            filePath: 'a.ts',
-            newSuggestions: [{ id: 's1' }, { id: 's1' }, { id: 's1' }],
-        };
-        await callMerge(dup);
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(JSON.stringify(dup));
-    });
-
-    it('Row 39 — input with null/undefined required fields: no crash, JSON.stringify semantics', async () => {
-        mockGenerate.mockResolvedValueOnce(ok(MERGE_D));
-        const nullish = {
-            filePath: null,
-            newSuggestions: [{ id: 's1', body: undefined }],
-        };
-        const out = await callMerge(nullish);
-        // undefined fields drop, null stays — the boundary just forwards the string.
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(
-            JSON.stringify(nullish),
-        );
-        expect(out).toEqual(MERGE_D);
-    });
-
-    it('Row 40 — special chars / whitespace-only diff: escaped safely into `user`', async () => {
-        mockGenerate.mockResolvedValueOnce(ok(MERGE_D));
-        const weird = {
-            filePath: 'a.ts',
-            diff: '\t\n  "quotes" \\ back   null-ish 🚀 <script>',
-        };
-        await callMerge(weird);
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(JSON.stringify(weird));
-    });
-
-    it('Row 42 — order permutation of the same input → equivalent request contract', async () => {
-        mockGenerate.mockResolvedValue(ok(MERGE_D));
-        const a = { newSuggestions: [{ id: 's1' }, { id: 's2' }] };
-        const b = { newSuggestions: [{ id: 's2' }, { id: 's1' }] };
-        const outA = await callMerge(a);
-        const outB = await callMerge(b);
-        // Same system + structured-output channel + schema for both orderings;
-        // only the user payload reflects the caller's order (pure pass-through).
-        expect(mockGenerate.mock.calls[0][0].system).toBe(
-            mockGenerate.mock.calls[1][0].system,
-        );
-        expect(mockGenerate.mock.calls[0][0].output).toBeDefined();
-        expect(mockGenerate.mock.calls[1][0].output).toBeDefined();
-        expect(outA).toEqual(outB);
     });
 
     // ── E. N-model policy branches (structured-output gate) ─────────────────

@@ -176,6 +176,9 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
         const result = await stage.execute(makeContext());
 
         expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        expect(result.statusInfo?.message?.toLowerCase()).toMatch(
+            /(license|subscription|seat)/,
+        );
         expect(notificationService.emit).toHaveBeenCalledWith(
             expect.objectContaining({
                 event: NotificationEvent.REVIEW_SKIPPED_NO_LICENSE,

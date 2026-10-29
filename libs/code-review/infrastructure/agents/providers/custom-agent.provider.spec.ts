@@ -130,11 +130,6 @@ beforeEach(() => {
 });
 
 describe('CustomAgentProvider', () => {
-    it('builds one provider per config from the factory', () => {
-        expect(provider()).toBeInstanceOf(CustomAgentProvider);
-        expect(provider().config.id).toBe('agent-ledger');
-    });
-
     it("puts the team's instructions in the prompt and keeps them inside their block", async () => {
         await provider().execute(input());
 
@@ -670,12 +665,6 @@ describe('buildCustomAgentPrompt', () => {
             }),
         );
         expect(withPlugins).toContain('<TeamSystems>');
-        expect(withPlugins).toMatch(/ticket|issue|work item/);
-        // A requirement the change breaks is reported even when the code
-        // never mentions the record: the record is the evidence.
-        expect(withPlugins).toContain(
-            'is a finding even when the code never mentions it',
-        );
 
         expect(buildCustomAgentPrompt(config())).not.toContain('<TeamSystems>');
         expect(

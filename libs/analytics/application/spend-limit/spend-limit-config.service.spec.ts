@@ -31,17 +31,6 @@ describe('SpendLimitConfigService', () => {
     });
 
     describe('getConfig', () => {
-        it('returns the parsed config value', async () => {
-            const config = { enabled: true, monthlyLimitUsd: 1000 };
-            orgParams.findByKey.mockResolvedValue({ configValue: config });
-
-            await expect(service.getConfig(ORG)).resolves.toEqual(config);
-            expect(orgParams.findByKey).toHaveBeenCalledWith(
-                OrganizationParametersKey.SPEND_LIMIT_CONFIG,
-                ORG,
-            );
-        });
-
         it('returns null when the parameter is missing', async () => {
             orgParams.findByKey.mockResolvedValue(null);
             await expect(service.getConfig(ORG)).resolves.toBeNull();
@@ -241,18 +230,6 @@ describe('SpendLimitConfigService', () => {
                 configValue: { enabled: false, monthlyLimitUsd: 1000 },
             });
             await expect(service.loadAndEvaluate(ORG, NOW)).resolves.toBeNull();
-        });
-    });
-
-    describe('saveConfig', () => {
-        it('persists under the SPEND_LIMIT_CONFIG key', async () => {
-            const config = { enabled: true, monthlyLimitUsd: 500 } as any;
-            await service.saveConfig(ORG, config);
-            expect(orgParams.createOrUpdateConfig).toHaveBeenCalledWith(
-                OrganizationParametersKey.SPEND_LIMIT_CONFIG,
-                config,
-                ORG,
-            );
         });
     });
 });

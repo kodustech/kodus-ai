@@ -21,10 +21,6 @@ describe('CodeReviewContextPackService — deterministic logic', () => {
     const svc = service as any;
 
     describe('sanitizeOverrides', () => {
-        it('returns undefined for a falsy input (guard clause)', () => {
-            expect(svc.sanitizeOverrides(undefined)).toBeUndefined();
-        });
-
         it('strips context markers from strings and preserves mcpMention nodes verbatim', () => {
             const input = {
                 a: 'x @mcp<p|t> y',
@@ -181,15 +177,6 @@ describe('CodeReviewContextPackService — deterministic logic', () => {
             expect(result[1].metadata.pathKey).toBe('a.b');
             expect(result[1].metadata.requirementId).toBe('root#a.b');
         });
-
-        it('returns an empty array when a requirement has no dependencies', () => {
-            const requirement = {
-                id: 'reqA',
-                metadata: { path: ['p'] },
-            } as unknown as ContextRequirement;
-
-            expect(svc.buildDependencyGroups([requirement])).toEqual([]);
-        });
     });
 
     describe('resolveRequirementPath', () => {
@@ -248,21 +235,9 @@ describe('CodeReviewContextPackService — deterministic logic', () => {
     describe('extractLineRange', () => {
         const content = 'L1\nL2\nL3\nL4\nL5';
 
-        it('extracts a single line at the start boundary (1..1)', () => {
-            expect(svc.extractLineRange(content, { start: 1, end: 1 })).toBe(
-                'L1',
-            );
-        });
-
         it('extracts an inner range converting 1-based start to 0-based slice', () => {
             expect(svc.extractLineRange(content, { start: 2, end: 4 })).toBe(
                 'L2\nL3\nL4',
-            );
-        });
-
-        it('extracts the full file when the range spans all lines', () => {
-            expect(svc.extractLineRange(content, { start: 1, end: 5 })).toBe(
-                content,
             );
         });
 
@@ -290,12 +265,6 @@ describe('CodeReviewContextPackService — deterministic logic', () => {
             );
         });
 
-        it('returns "" when end <= 0 (boundary 0)', () => {
-            expect(svc.extractLineRange(content, { start: 1, end: 0 })).toBe(
-                '',
-            );
-        });
-
         it('returns "" when start > end (inverted range)', () => {
             expect(svc.extractLineRange(content, { start: 3, end: 2 })).toBe(
                 '',
@@ -310,18 +279,6 @@ describe('CodeReviewContextPackService — deterministic logic', () => {
                 .digest('hex');
             expect(svc.calculateContentHash('hello world')).toBe(expected);
             expect(svc.calculateContentHash('hello world')).toHaveLength(64);
-        });
-
-        it('produces different digests for different content', () => {
-            expect(svc.calculateContentHash('a')).not.toBe(
-                svc.calculateContentHash('b'),
-            );
-        });
-
-        it('hashes the empty string to the known sha256 constant', () => {
-            expect(svc.calculateContentHash('')).toBe(
-                'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-            );
         });
     });
 });

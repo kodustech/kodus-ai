@@ -36,91 +36,20 @@ const makeContext = (
     }) as unknown as CodeReviewPipelineContext;
 
 describe('buildOrchestratorInput — context→agent wiring', () => {
-    it('forwards the collected coding-agent instructions into the agent input', () => {
+    it('forwards the optional context fields and stage locals the finder reads', () => {
         const repoInstructions = {
-            files: [
-                {
-                    path: 'CLAUDE.md',
-                    content: 'Use pnpm.',
-                    appliesTo: '**',
-                    truncated: false,
-                },
-            ],
+            files: [],
             otherFiles: [],
             dropped: [],
             truncated: false,
-            indexedCount: 1,
+            indexedCount: 0,
         };
-        const input = buildOrchestratorInput(makeContext(), {
-            ...computed,
-            repoInstructions,
-        });
-        expect(input.repoInstructions).toBe(repoInstructions);
-        expect(
-            buildOrchestratorInput(makeContext(), computed).repoInstructions,
-        ).toBeUndefined();
-    });
-
-    it('forwards reviewDirective from context into the agent input', () => {
-        const input = buildOrchestratorInput(
-            makeContext({
-                reviewDirective: 'the auth and session logic',
-            }),
-            computed,
-        );
-        expect(input.reviewDirective).toBe('the auth and session logic');
-    });
-
-    it('forwards ciEvidence from context into the agent input', () => {
         const ciEvidence = [
             { id: 'c1', name: 'semgrep', status: 'completed' },
         ] as CodeReviewPipelineContext['ciEvidence'];
-
-        const input = buildOrchestratorInput(
-            makeContext({ ciEvidence }),
-            computed,
-        );
-
-        expect(input.ciEvidence).toBe(ciEvidence);
-    });
-
-    it('leaves reviewDirective undefined for a normal review (no directive)', () => {
-        expect(
-            buildOrchestratorInput(makeContext(), computed).reviewDirective,
-        ).toBeUndefined();
-    });
-
-    it('maps the load-bearing prompt fields from context', () => {
-        const input = buildOrchestratorInput(
-            makeContext({
-                pullRequest: { title: 'My PR', body: 'desc' },
-                codeReviewConfig: { reviewMode: 'deep' },
-            }),
-            computed,
-        );
-        expect(input.prTitle).toBe('My PR');
-        expect(input.prBody).toBe('desc');
-        expect(input.reviewMode).toBe('deep');
-    });
-
-    it('forwards the exact selected Trace decisions into the agent input', () => {
         const traceDecisions = [
-            {
-                type: 'tradeoff',
-                decision: 'Keep retries bounded to one attempt.',
-                scope: ['src/payments'],
-            },
+            { type: 'tradeoff', decision: 'Keep retries bounded.', scope: [] },
         ];
-
-        const input = buildOrchestratorInput(
-            makeContext({ traceDecisions }),
-            computed,
-        );
-
-        expect(input.traceDecisions).toBe(traceDecisions);
-    });
-
-    it('forwards the exact previous review decisions into the agent input (issue #1313)', () => {
         const previousDecisions = [
             {
                 suggestionId: 'sug-1',
@@ -133,27 +62,41 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         ];
 
         const input = buildOrchestratorInput(
-            makeContext({ previousDecisions }),
-            computed,
+            makeContext({
+                reviewDirective: 'the auth and session logic',
+                ciEvidence,
+                traceDecisions,
+                previousDecisions,
+                pullRequest: { title: 'My PR', body: 'desc' },
+                codeReviewConfig: { reviewMode: 'deep' },
+            }),
+            {
+                ...computed,
+                repoInstructions,
+                callGraph: '<CallGraph>x</CallGraph>',
+                prNumber: 42,
+            },
         );
 
-        expect(input.previousDecisions).toBe(previousDecisions);
-    });
-
-    it('defaults reviewMode to normal when unset', () => {
-        expect(
-            buildOrchestratorInput(makeContext(), computed).reviewMode,
-        ).toBe('normal');
-    });
-
-    it('passes the stage-computed locals through unchanged', () => {
-        const input = buildOrchestratorInput(makeContext(), {
-            ...computed,
+        expect(input).toMatchObject({
+            reviewDirective: 'the auth and session logic',
+            ciEvidence,
+            traceDecisions,
+            previousDecisions,
+            repoInstructions,
+            prTitle: 'My PR',
+            prBody: 'desc',
+            reviewMode: 'deep',
             callGraph: '<CallGraph>x</CallGraph>',
             prNumber: 42,
         });
-        expect(input.callGraph).toBe('<CallGraph>x</CallGraph>');
-        expect(input.prNumber).toBe(42);
+    });
+
+    it('defaults reviewMode to normal and leaves the optional fields unset for a plain review', () => {
+        const input = buildOrchestratorInput(makeContext(), computed);
+        expect(input.reviewMode).toBe('normal');
+        expect(input.reviewDirective).toBeUndefined();
+        expect(input.repoInstructions).toBeUndefined();
     });
 
     it('prefers stage-computed kodyRules (summary-swapped) over the raw config rules', () => {
@@ -218,12 +161,6 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
             expect(input.repoLookup?.unavailableReason).toBe(
                 'no sandbox handle',
             );
-        });
-
-        it('is always populated, so an absent field never has to be interpreted', () => {
-            expect(
-                buildOrchestratorInput(makeContext(), computed).repoLookup,
-            ).toBeDefined();
         });
 
         it('an unavailable lookup raises from grep instead of answering empty', async () => {
