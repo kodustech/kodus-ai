@@ -1367,8 +1367,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // suggestion anchored has a file and lines. The fields it does not
             // carry are removed later (leanFinderSuggestions), after the repeat
             // check, which matches an earlier comment by its existingCode.
+            // Custom agents write the full finding and keep main's anchoring:
+            // one without lines snaps to the first hunk.
             const finderSuggestions = result.suggestions.filter(
-                (s) => s.label !== 'kody_rules',
+                (s) => s.label !== 'kody_rules' && !isCustomAgentFinding(s),
             );
             const parsed = parseFinderSchema(
                 finderSuggestions as Array<Record<string, unknown>>,
@@ -1389,8 +1391,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     },
                 });
             }
+            const discardedByParse = new Set(
+                finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
+            );
             const anchoringInput: Partial<CodeSuggestion>[] = [
-                ...finderSuggestions.filter((_, i) => !parseDiscarded.has(i)),
+                ...result.suggestions.filter(
+                    (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
+                ),
                 ...result.suggestions.filter((s) => s.label === 'kody_rules'),
             ];
 
