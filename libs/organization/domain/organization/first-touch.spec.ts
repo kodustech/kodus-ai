@@ -119,6 +119,20 @@ describe('sanitizeFirstTouch', () => {
         ).toEqual({ utm_source: 'newsletter', utm_campaign: '50%off' });
     });
 
+    it('strips invisible characters, including ones hiding an email', () => {
+        expect(
+            sanitizeFirstTouch(
+                {
+                    utm_source: 'goo\u200bgle\u00ad',
+                    utm_term: 'jane@\u200bacme.com',
+                    utm_content: 'jane\u2060@acme.com',
+                    referrer: 'https://example.com/u/jane@%E2%80%8Bacme.com',
+                },
+                now,
+            ),
+        ).toEqual({ utm_source: 'google' });
+    });
+
     it('drops an email that starts before the truncation point', () => {
         expect(
             sanitizeFirstTouch(
@@ -206,13 +220,13 @@ describe('sanitizeFirstTouch', () => {
             ).toBeNull();
         });
 
-        it('keeps a path that does not decode, as sent', () => {
+        it('keeps a path that does not decode, minus a trailing partial escape', () => {
             expect(
                 sanitizeFirstTouch(
                     { landing_page: 'https://kodus.io/blog/caf%C3%A' },
                     now,
                 ),
-            ).toEqual({ landing_page: 'https://kodus.io/blog/caf%C3%A' });
+            ).toEqual({ landing_page: 'https://kodus.io/blog/caf%C3' });
         });
 
         it.each([
@@ -241,6 +255,20 @@ describe('sanitizeFirstTouch', () => {
                 landing_page:
                     'https://kodus.io/en/?utm_source=google&gclid=ok_1',
             });
+        });
+
+        it('cuts a long path, never the campaign query', () => {
+            const result = sanitizeFirstTouch(
+                {
+                    landing_page: `https://kodus.io/${'a'.repeat(600)}?utm_source=google&gclid=TEST`,
+                },
+                now,
+            );
+
+            expect(result?.landing_page).toHaveLength(FIRST_TOUCH_URL_MAX);
+            expect(result?.landing_page).toMatch(
+                /^https:\/\/kodus\.io\/a+\?utm_source=google&gclid=TEST$/,
+            );
         });
 
         it('truncates long URLs', () => {

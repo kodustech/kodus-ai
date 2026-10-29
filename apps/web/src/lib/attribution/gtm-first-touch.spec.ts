@@ -159,12 +159,41 @@ describe("GTM first-touch tag", () => {
 
     it("does not leave half a percent escape when it cuts a long landing page", () => {
         const jar = new CookieJar();
-        // "https://kodus.io/" + 281 chars = 298; the 300-char cut lands in "%C3".
-        visit(jar, `https://kodus.io/${"a".repeat(281)}%C3%A9`);
+        // The path is cut at 300 characters, inside "%C3".
+        visit(jar, `https://kodus.io/${"a".repeat(297)}%C3%A9`);
 
         expect(firstTouchOn(jar, "https://kodus.io/")?.landing_page).toBe(
-            `https://kodus.io/${"a".repeat(281)}`,
+            `https://kodus.io/${"a".repeat(297)}`,
         );
+    });
+
+    it("leaves out a referrer or landing path that carries an email", () => {
+        const jar = new CookieJar();
+        visit(
+            jar,
+            "https://kodus.io/u/jane%40acme.com/?utm_source=x",
+            "https://example.com/users/jane@example.com",
+        );
+
+        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
+            utm_source: "x",
+            landing_page: "https://kodus.io/?utm_source=x",
+            captured_at: expect.any(String),
+        });
+    });
+
+    it("drops values where invisible characters hide an email", () => {
+        const jar = new CookieJar();
+        visit(
+            jar,
+            "https://kodus.io/?utm_source=goo%E2%80%8Bgle&utm_term=jane%40%E2%80%8Bacme.com",
+        );
+
+        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
+            utm_source: "google",
+            landing_page: "https://kodus.io/?utm_source=google",
+            captured_at: expect.any(String),
+        });
     });
 
     it("does nothing outside kodus.io (self-hosted installs load the app container too)", () => {
@@ -178,21 +207,34 @@ describe("GTM first-touch tag", () => {
         expect(jar.getCookiesSync("https://notkodus.io/")).toHaveLength(0);
     });
 
-    it("keeps the cookie under the browser size limit", () => {
+    it("keeps the worst-case cookie under the browser limit, with consistent values", () => {
         const jar = new CookieJar();
-        const long = encodeURIComponent("ã".repeat(100));
+        // 3-byte characters grow the most once encoded twice.
+        const long = encodeURIComponent("€".repeat(100));
+        const params = [
+            "utm_source",
+            "utm_medium",
+            "utm_campaign",
+            "utm_term",
+            "utm_content",
+            "gclid",
+        ];
         visit(
             jar,
-            `https://kodus.io/?utm_source=${long}&utm_medium=${long}&utm_campaign=${long}&utm_term=${long}&utm_content=${long}`,
+            `https://kodus.io/${"p".repeat(400)}?${params.map((p) => `${p}=${long}`).join("&")}`,
+            `https://example.com/${"r".repeat(400)}`,
         );
 
         const cookie = jar
             .getCookiesSync("https://kodus.io/")
             .find((c) => c.key === FIRST_TOUCH_COOKIE);
         expect(cookie).toBeDefined();
-        expect(cookie!.value.length).toBeLessThan(4000);
-        expect(parseFirstTouchCookie(cookie!.value)?.utm_source).toBe(
-            "ã".repeat(40),
-        );
+        expect(cookie!.value.length).toBeLessThan(3500);
+
+        const touch = parseFirstTouchCookie(cookie!.value)!;
+        // The size fallback ran: shorter values, and the landing page without
+        // a query rather than one that disagrees with the fields.
+        for (const p of params) expect(touch[p]).toBe("€".repeat(40));
+        expect(touch.landing_page).toBe(`https://kodus.io/${"p".repeat(99)}`);
     });
 });

@@ -45,8 +45,9 @@ const MAX_AGE_MS = 2 * 365 * DAY_MS;
 const TEXT_SCAN_MAX = FIRST_TOUCH_TEXT_MAX + 254;
 const URL_INPUT_MAX = 2048;
 
-// eslint-disable-next-line no-control-regex -- intentional: strip control characters from client input
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
+// Controls, format characters and anything else that renders as nothing: they
+// could hide an address from containsEmail (jane@\u200bacme.com).
+const INVISIBLE_CHARS = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
 // Half of a surrogate pair: Postgres rejects it in jsonb, failing the insert
 // of the organization. Comes from a cut through an emoji or straight from JSON.
 const LONE_SURROGATE =
@@ -131,7 +132,7 @@ function sanitizeText(value: unknown): string | null {
 
     const text = value
         .slice(0, TEXT_SCAN_MAX)
-        .replace(CONTROL_CHARS, '')
+        .replace(INVISIBLE_CHARS, '')
         .replace(LONE_SURROGATE, '')
         .trim();
     if (!text || containsEmail(text)) {
@@ -176,7 +177,7 @@ function sanitizeUrl(
 
     let url: URL;
     try {
-        url = new URL(value.replace(CONTROL_CHARS, '').trim());
+        url = new URL(value.replace(INVISIBLE_CHARS, '').trim());
     } catch {
         return null;
     }
@@ -193,7 +194,7 @@ function sanitizeUrl(
     } catch {
         path = url.pathname;
     }
-    if (containsEmail(path)) {
+    if (containsEmail(path.replace(INVISIBLE_CHARS, ''))) {
         return null;
     }
 
@@ -207,10 +208,21 @@ function sanitizeUrl(
         }
     }
 
+    // Cut the path, never the query, so the landing page's campaign values
+    // match the fields. Without room for the query, the fields carry them.
     const search = query.toString();
-    const clean = `${url.origin}${url.pathname}${search ? `?${search}` : ''}`;
+    const suffix = search ? `?${search}` : '';
+    const room = FIRST_TOUCH_URL_MAX - url.origin.length - suffix.length;
+    if (room < 1) {
+        return cutUrl(`${url.origin}${url.pathname}`, FIRST_TOUCH_URL_MAX);
+    }
 
-    return clean.slice(0, FIRST_TOUCH_URL_MAX);
+    return `${url.origin}${cutUrl(url.pathname, room)}${suffix}`;
+}
+
+/** Cut without leaving half a %XX escape at the end. */
+function cutUrl(url: string, max: number): string {
+    return url.slice(0, max).replace(/%[0-9a-f]?$/i, '');
 }
 
 function sanitizeTimestamp(value: unknown, now: Date): string | null {

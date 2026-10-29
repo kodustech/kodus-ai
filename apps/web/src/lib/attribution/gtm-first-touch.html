@@ -17,43 +17,66 @@
   var MAX_AGE = 60 * 60 * 24 * 365;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+  // Controls and invisible format characters. ES5 has no \p{...} classes, so
+  // these are ranges; the API filters by Unicode class.
+  var INVISIBLE = /[\u0000-\u001F\u007F-\u009F­؜ᅟᅠ᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ]/g;
+
+  function decode(text) {
+    try { return decodeURIComponent(text); } catch (e) { return text; }
+  }
+
+  // Email-shaped anywhere in the text, '@' possibly percent-encoded. Bounded
+  // so the regex stays cheap.
+  function hasEmail(text) {
+    return EMAIL.test(decode(text.slice(0, 600)).replace(INVISIBLE, '').replace(/%(?:25)*40/gi, '@'));
+  }
+
+  // Never cut an emoji in half: encodeURIComponent throws on the leftover.
+  function cut(text, max) {
+    return text.slice(0, max).replace(/[\uD800-\uDBFF]$/, '');
+  }
+
+  // Nor leave half a %XX escape at the end of a URL.
+  function cutUrl(url, max) {
+    return cut(url, max).replace(/%[0-9A-Fa-f]?$/, '');
+  }
+
+  // Rebuilt whole at each size, so the landing page's query always carries
+  // the same values as the fields.
+  function build(valueMax, urlMax, landingQuery) {
+    var touch = {};
+    var kept = [];
+    var query = new URLSearchParams(location.search);
+    for (var i = 0; i < PARAMS.length; i++) {
+      var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(INVISIBLE, '').replace(/^\s+|\s+$/g, '');
+      if (!full || hasEmail(full)) continue;
+      var value = cut(full, valueMax);
+      touch[PARAMS[i]] = value;
+      kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
+    }
+
+    // Referrer and landing page without query strings or fragments, which is
+    // where personal data in a URL usually lives, and never with a path that
+    // carries an email.
+    var referrer = document.referrer.split(/[?#]/)[0];
+    if (referrer && !hasEmail(referrer)) touch.referrer = cutUrl(referrer, urlMax);
+    var path = hasEmail(location.pathname) ? '/' : cutUrl(location.pathname, urlMax);
+    touch.landing_page = location.origin + path + (landingQuery && kept.length ? '?' + kept.join('&') : '');
+    touch.captured_at = new Date().toISOString();
+
+    return encodeURIComponent(JSON.stringify(touch));
+  }
 
   try {
     var host = location.hostname;
     if (host !== 'kodus.io' && !/\.kodus\.io$/.test(host)) return;
     if (new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
 
-    var touch = {};
-    var kept = [];
-    var query = new URLSearchParams(location.search);
-    for (var i = 0; i < PARAMS.length; i++) {
-      // Bounded before the email check, with room for an address that starts
-      // before the 100-character cut.
-      var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(/^\s+|\s+$/g, '');
-      if (!full || EMAIL.test(full.replace(/%(?:25)*40/gi, '@'))) continue;
-      // Never cut an emoji in half: encodeURIComponent throws on the leftover.
-      var value = full.slice(0, 100).replace(/[\uD800-\uDBFF]$/, '');
-      touch[PARAMS[i]] = value;
-      kept.push(encodeURIComponent(PARAMS[i]) + '=' + encodeURIComponent(value));
-    }
-
-    // Referrer and landing page without query strings or fragments, which is
-    // where personal data in a URL usually lives.
-    // Cut without leaving half a %XX escape at the end.
-    var cutUrl = function (url) { return url.slice(0, 300).replace(/%[0-9A-Fa-f]?$/, ''); };
-    var referrer = document.referrer.split(/[?#]/)[0];
-    if (referrer) touch.referrer = cutUrl(referrer);
-    touch.landing_page = cutUrl(location.origin + location.pathname + (kept.length ? '?' + kept.join('&') : ''));
-    touch.captured_at = new Date().toISOString();
-
-    var cookie = encodeURIComponent(JSON.stringify(touch));
-    // Browsers drop cookies over 4KB without a word; non-ASCII UTMs can get there.
-    if (cookie.length > 3500) {
-      for (var key in touch) {
-        if (touch.hasOwnProperty(key) && key !== 'captured_at') touch[key] = touch[key].slice(0, 40).replace(/[\uD800-\uDBFF]$/, '');
-      }
-      cookie = encodeURIComponent(JSON.stringify(touch));
-    }
+    var cookie = build(100, 300, true);
+    // Browsers drop cookies over 4KB without a word; non-ASCII UTMs can get
+    // there. Shorter values, and the landing page without its query (the
+    // fields still carry the values).
+    if (cookie.length > 3500) cookie = build(40, 100, false);
 
     document.cookie = COOKIE + '=' + cookie + '; Domain=.kodus.io; Path=/; Max-Age=' + MAX_AGE +
       '; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
