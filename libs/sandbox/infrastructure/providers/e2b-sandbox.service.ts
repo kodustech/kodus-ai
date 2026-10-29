@@ -19,6 +19,7 @@ import {
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { readWithinRootCommand } from './read-within-root';
 import {
     fetchSubmodules,
     isContainedRelativePath,
@@ -157,12 +158,14 @@ export function buildE2BRemoteCommands(
             start: number,
             end: number,
         ): Promise<string> => {
-            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
-            // GNU sed rejects address 0, so start=end=0 means "whole file" (cat).
-            const cmd =
-                start === 0 && end === 0
-                    ? `cat '${escapedPath}'`
-                    : `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
+            // GNU sed rejects address 0, so start=end=0 means "whole file"
+            // (cat). Neither follows a symlink the repository commits.
+            const cmd = readWithinRootCommand(
+                resolveRepoPath(path),
+                REPO_DIR,
+                start,
+                end,
+            );
             const result = await runCmd(cmd, {
                 timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
             });
