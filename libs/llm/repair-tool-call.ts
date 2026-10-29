@@ -42,7 +42,7 @@ export async function repairInvalidToolInput(opts: {
         return null;
     }
 
-    logger.warn({
+    logger.log({
         message: `[tool-repair] invoked for "${toolCall.toolName}" — model sent invalid tool input`,
         context: 'repairInvalidToolInput',
         metadata: {
@@ -81,7 +81,7 @@ export async function repairInvalidToolInput(opts: {
             ].join('\n'),
             } as any),
         );
-        logger.warn({
+        logger.log({
             message: `[tool-repair] repaired "${toolCall.toolName}" via model re-ask`,
             context: 'repairInvalidToolInput',
             metadata: { toolName: toolCall.toolName },
@@ -95,7 +95,7 @@ export async function repairInvalidToolInput(opts: {
         // default "don't repair, fail the step" (kept fully fail-soft).
         const recovered = await salvageStructuredError(err, validatingSchema);
         if (recovered !== undefined) {
-            logger.warn({
+            logger.log({
                 message: `[tool-repair] repaired "${toolCall.toolName}" via deterministic salvage`,
                 context: 'repairInvalidToolInput',
                 metadata: { toolName: toolCall.toolName },
