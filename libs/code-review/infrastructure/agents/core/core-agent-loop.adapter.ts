@@ -408,6 +408,7 @@ export async function runAgentLoopViaCore(
                     input.usageRunName,
                     input.previousDecisions,
                     secrets.prebuiltRecoveryModel as LanguageModel | undefined,
+                    input.telemetryMetadata?.teamId,
                 ),
         },
         { prompt: finderPrompt },

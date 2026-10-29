@@ -691,6 +691,7 @@ export async function recoverFindingsFromProse(
     usageRunName?: string,
     previousDecisions?: readonly PrDecisionRecord[],
     prebuiltModel?: LanguageModel,
+    teamId?: string,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
@@ -756,6 +757,17 @@ export async function recoverFindingsFromProse(
         });
         return (result.suggestions ?? []) as unknown as FinderSuggestion[];
     } catch (err) {
+        finderLogger.warn({
+            message: `[RECOVERY] prose recovery call failed: ${(err as Error)?.message ?? String(err)}`,
+            context: 'finder',
+            metadata: {
+                organizationId,
+                teamId,
+                runName: usageRunName
+                    ? `${usageRunName}-recovery`
+                    : 'code-review-recovery',
+            },
+        });
         // Kimi K3 OMITS the optional fields instead of sending null, and
         // strict validation fails the whole recovery (smoke test, 01/10). The
         // schema cannot make them optional (OpenAI strict mode requires every
