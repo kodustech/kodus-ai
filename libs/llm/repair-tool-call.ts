@@ -32,8 +32,12 @@ export async function repairInvalidToolInput(opts: {
     toolCall: { toolName: string; input: unknown; [k: string]: unknown };
     inputSchema: (o: { toolName: string }) => PromiseLike<unknown>;
     error: unknown;
+    /** Runs the re-ask inside the caller's usage span, so its tokens are
+     *  charged to the org like the loop's own. */
+    inSpan?: <T>(exec: () => Promise<T>) => Promise<T>;
 }): Promise<Record<string, unknown> | null> {
     const { model, abortSignal, toolCall, inputSchema, error } = opts;
+    const inSpan = opts.inSpan ?? (<T>(exec: () => Promise<T>) => exec());
     if (NoSuchToolError.isInstance(error)) {
         return null;
     }
@@ -64,7 +68,8 @@ export async function repairInvalidToolInput(opts: {
         // the review executor: pass `output`, read `experimental_output`/`output`.
         // Output.object now validates the correction against the schema and throws
         // NoObjectGeneratedError if it still doesn't conform.
-        const result = await generateText({
+        const result = await inSpan(() =>
+            generateText({
             model,
             abortSignal,
             output: Output.object({ schema: validatingSchema as any }),
@@ -74,7 +79,8 @@ export async function repairInvalidToolInput(opts: {
                 `Validation error: ${(error as Error)?.message ?? String(error)}`,
                 `Return corrected arguments that satisfy the schema. Keep the original intent; only fix what is malformed.`,
             ].join('\n'),
-        } as any);
+            } as any),
+        );
         logger.warn({
             message: `[tool-repair] repaired "${toolCall.toolName}" via model re-ask`,
             context: 'repairInvalidToolInput',

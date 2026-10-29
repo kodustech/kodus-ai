@@ -72,6 +72,21 @@ describe('repairInvalidToolInput — shared structured-output recovery', () => {
         });
     });
 
+    it("runs the re-ask inside the caller's usage span", async () => {
+        const result = { experimental_output: { path: 'src/a.ts' } };
+        mockGenerate.mockResolvedValueOnce(result);
+        const inSpan = jest.fn((exec: () => Promise<unknown>) => exec());
+        await repairInvalidToolInput({
+            model: {} as any,
+            toolCall,
+            inputSchema,
+            error: validationError,
+            inSpan: inSpan as any,
+        });
+        expect(inSpan).toHaveBeenCalledTimes(1);
+        await expect(inSpan.mock.results[0].value).resolves.toBe(result);
+    });
+
     it('REJECTS a still-wrong correction (→ null, no longer blindly accepted)', async () => {
         // Output.object now validates and throws when the correction still fails
         // the schema. Before the shared validator this was accepted via a blind

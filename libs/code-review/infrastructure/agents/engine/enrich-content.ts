@@ -149,6 +149,9 @@ function stripFence(code: string): string {
     return m ? m[1] : code;
 }
 
+/** One enrichment call; past it the suggestion keeps its cited code. */
+const ENRICH_TIMEOUT_MS = 120_000;
+
 export async function enrichOneShot(
     input: EnrichmentInput,
     opts: {
@@ -156,6 +159,10 @@ export async function enrichOneShot(
         prebuiltModel?: unknown;
         telemetryMetadata?: LangfuseTelemetryMetadata;
         runName?: string;
+        /** Puts the call's tokens on the org's Token Usage and credits. */
+        organizationId?: string;
+        /** Per-review attribution on the usage span (teamId, prNumber). */
+        attrs?: Record<string, unknown>;
     } = {},
 ): Promise<ContentEnrichment | null> {
     const { system, user } = buildEnrichmentPrompt(input, false);
@@ -167,6 +174,9 @@ export async function enrichOneShot(
         prebuiltModel: opts.prebuiltModel as any,
         telemetryMetadata: opts.telemetryMetadata,
         runName: opts.runName ?? 'code-review-enrich',
+        timeoutMs: ENRICH_TIMEOUT_MS,
+        organizationId: opts.organizationId,
+        attrs: opts.attrs,
     } as any);
     return parseEnrichment(out);
 }

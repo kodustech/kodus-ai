@@ -208,6 +208,29 @@ export async function runAgentLoopCall(
         ...(organizationId ? { organizationId } : {}),
     };
 
+    const observability = getLlmObservability();
+    const usageSpan = <T>(
+        name: string,
+        exec: () => Promise<T>,
+        traced: boolean,
+    ): Promise<T> =>
+        observability
+            ? observability.runAiSdkLLMInSpan<any>({
+                  spanName: name,
+                  runName: name,
+                  model: inv.modelName,
+                  byokModelId: identity.byokModelId,
+                  credentialId: identity.credentialId,
+                  // Routing task + fallback flag the slot carried down from
+                  // resolveTaskSlot (route = the LlmTask, not the tier).
+                  route: slot?.route,
+                  usedFallback: slot?.usedFallback,
+                  traced,
+                  attrs: spanAttrs,
+                  exec,
+              })
+            : exec();
+
     const exec = () =>
         generateText({
             model: inv.model as any,
@@ -232,6 +255,8 @@ export async function runAgentLoopCall(
                     toolCall: opts.toolCall,
                     inputSchema: opts.inputSchema,
                     error: opts.error,
+                    inSpan: (repair) =>
+                        usageSpan(`${runName}-tool-repair`, repair, false),
                 })) as any,
             // Loop seams from the runner's policies — forwarded verbatim, plus the
             // hard step ceiling the harness always wants.
@@ -247,7 +272,6 @@ export async function runAgentLoopCall(
 
     // ── ONE observability span — records the run's aggregate usage. Absent port
     // (a bare unit test) runs directly, still gets the model/loop, just no span. ──
-    const observability = getLlmObservability();
     const run = () =>
         observability
         ? observability.runAiSdkLLMInSpan<any>({

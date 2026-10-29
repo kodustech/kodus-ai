@@ -2502,6 +2502,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     !isCustomAgentFinding(s),
                 byokConfig: context.codeReviewConfig?.byokConfig,
                 telemetryMetadata: telemetryMeta,
+                organizationId: context.organizationAndTeamData?.organizationId,
+                usageAttrs: {
+                    prNumber,
+                    ...(context.organizationAndTeamData?.teamId
+                        ? { teamId: context.organizationAndTeamData.teamId }
+                        : {}),
+                },
             },
         );
         this.logger.log({

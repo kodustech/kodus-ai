@@ -94,6 +94,23 @@ describe('enrichSuggestions', () => {
         expect(counts.failed).toBe(2);
     });
 
+    it("charges each call to the review's org", async () => {
+        const enrich = jest.fn().mockResolvedValue(null);
+        await enrichSuggestions([finding()], [file], {
+            shouldEnrich: () => true,
+            enrich: enrich as any,
+            organizationId: 'org-1',
+            usageAttrs: { teamId: 'team-1', prNumber: 7 },
+        });
+        expect(enrich).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                organizationId: 'org-1',
+                attrs: { teamId: 'team-1', prNumber: 7 },
+            }),
+        );
+    });
+
     it('leaves the suggestions it does not take, in their order', async () => {
         const enrich = jest.fn().mockResolvedValue({ oneSentenceSummary: 'T', fixStatus: 'no-code-fix', improvedCode: '' });
         const rule = { label: 'kody_rules', existingCode: 'x', improvedCode: 'y' };

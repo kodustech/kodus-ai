@@ -113,6 +113,10 @@ export async function enrichSuggestions(
         concurrency?: number;
         /** The model half; enrichOneShot unless a caller wraps it. */
         enrich?: typeof enrichOneShot;
+        /** The org the tokens are charged to. */
+        organizationId?: string;
+        /** Per-review attribution on each call's usage span. */
+        usageAttrs?: Record<string, unknown>;
     },
 ): Promise<{ suggestions: Partial<CodeSuggestion>[]; counts: EnrichCounts }> {
     const files = new Map(changedFiles.map((f) => [f.filename, f]));
@@ -141,6 +145,8 @@ export async function enrichSuggestions(
                 result = await enrich(input, {
                     byokConfig: opts.byokConfig,
                     telemetryMetadata: opts.telemetryMetadata,
+                    organizationId: opts.organizationId,
+                    attrs: opts.usageAttrs,
                 });
             } catch {
                 result = null;
