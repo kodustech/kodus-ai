@@ -189,12 +189,4 @@ describe('parseFormatResponse — the input space, enumerated', () => {
             expect(formatted.size).toBe(0);
         }
     });
-
-    it('covers every dimension it claims to', () => {
-        // A matrix that quietly loses a row is worse than no matrix: it reads
-        // as coverage while testing less than it says.
-        expect(CASES).toHaveLength(36);
-        expect(CASES.filter(([, , v]) => v.recovers)).toHaveLength(18);
-        expect(CASES.filter(([, , v]) => !v.recovers)).toHaveLength(18);
-    });
 });

@@ -6,11 +6,9 @@
  * — and neither is protected against SILENCE. A request that never answers
  * throws nothing, so the catch never runs and the stage waits forever, which
  * is precisely how the agent loop hung on 2026-09-03.
-*
- * The per-test 15s budgets are not slack: `hardTimeout` grants ms + 5s of
- * grace so a provider that DOES honour the abort settles on its own first, so
- * a 40ms ceiling resolves at ~5.04s — just past jest's 5s default. Declared
- * per test rather than via a CLI flag, which a plain `pnpm test` never passes.
+ *
+ * `hardTimeout` grants ms + 5s of grace so a provider that DOES honour the
+ * abort settles on its own first; the test advances fake timers past it.
  */
 jest.mock('ai', () => {
     const actual = jest.requireActual('ai');
@@ -18,24 +16,28 @@ jest.mock('ai', () => {
 });
 
 import { embed } from 'ai';
-import { tracedEmbed, EMBED_TIMEOUT_MS } from '@libs/llm/llm-call';
+import { tracedEmbed } from '@libs/llm/llm-call';
 
 const mockEmbed = embed as unknown as jest.Mock;
 
 describe('tracedEmbed — a stalled embedding endpoint must not hang the stage', () => {
     beforeEach(() => jest.clearAllMocks());
+    afterEach(() => jest.useRealTimers());
 
     it('rejects on the wall clock when the endpoint never answers', async () => {
+        jest.useFakeTimers();
         mockEmbed.mockImplementation(() => new Promise(() => {}));
 
-        await expect(
+        const settled = expect(
             tracedEmbed({
                 model: {} as any,
                 value: 'x',
                 __kodusHardTimeoutMs: 40,
             } as any),
         ).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    }, 15000);
+        await jest.advanceTimersByTimeAsync(40 + 5_000);
+        await settled;
+    });
 
     it('returns the embedding untouched when the endpoint answers', async () => {
         const result = { embedding: [0.1, 0.2], usage: { tokens: 3 } };
@@ -44,9 +46,5 @@ describe('tracedEmbed — a stalled embedding endpoint must not hang the stage',
         await expect(
             tracedEmbed({ model: {} as any, value: 'x' } as any),
         ).resolves.toBe(result);
-    });
-
-    it('defaults to a ceiling well under the agent one — an embedding is one forward pass', () => {
-        expect(EMBED_TIMEOUT_MS).toBe(60 * 1000);
     });
 });

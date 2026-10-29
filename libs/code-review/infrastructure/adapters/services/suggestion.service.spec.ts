@@ -96,6 +96,16 @@ describe('SuggestionService — pure logic', () => {
             ]);
         });
 
+        it('returns [] when the full list is nullish', () => {
+            expect(
+                svc().getDiscardedSuggestions(
+                    null,
+                    [],
+                    PriorityStatus.DISCARDED_BY_QUANTITY,
+                ),
+            ).toEqual([]);
+        });
+
         it('getDiscardedByQuantity delegates with the DISCARDED_BY_QUANTITY reason', () => {
             const out = svc().getDiscardedByQuantity(
                 [{ id: '1' }, { id: '2' }],

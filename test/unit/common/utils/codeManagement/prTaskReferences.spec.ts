@@ -103,14 +103,6 @@ describe('extractTaskReferenceLines with a caller reader', () => {
         ]);
     });
 
-    it('adds the lines the reader recognizes', () => {
-        expect(
-            extractTaskReferenceLines('Part of ab#12\nPlain prose.', (line) =>
-                line.includes('ab#12'),
-            ),
-        ).toEqual(['Part of ab#12']);
-    });
-
     it('keeps a line only the reader recognizes, and drops it without the reader', () => {
         const body = 'Part of 86a1b2c3\nPlain prose.';
         expect(

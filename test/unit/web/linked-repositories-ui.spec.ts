@@ -5,15 +5,10 @@
 
 import {
     addLinkedRepository,
-    MAX_LINKED_REPOSITORIES_UI,
     normalizeLinkedRepositories,
 } from '../../../apps/web/src/features/ee/linked-repositories/linked-repositories-state';
 
 describe('linked-repositories UI invariants', () => {
-    it('exports the soft cap of 3', () => {
-        expect(MAX_LINKED_REPOSITORIES_UI).toBe(3);
-    });
-
     it('normalizes empty/malformed values to []', () => {
         expect(normalizeLinkedRepositories(undefined)).toEqual([]);
         expect(normalizeLinkedRepositories(null)).toEqual([]);

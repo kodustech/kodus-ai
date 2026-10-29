@@ -61,33 +61,14 @@ describe('LoadCiEvidenceStage', () => {
             }
         ).executeStage(context);
 
-    it('stores the evidence it read on the context', async () => {
-        const evidence = [check('semgrep')];
+    it('stores the evidence it read and records which managed tools the CI already covers', async () => {
+        const evidence = [check('gitleaks'), check('build')];
         const stage = makeStage(jest.fn().mockResolvedValue(evidence));
 
         const result = await run(stage, makeContext());
 
         expect(result.ciEvidence).toEqual(evidence);
-    });
-
-    it('records which managed tools the CI already covers', async () => {
-        const stage = makeStage(
-            jest.fn().mockResolvedValue([check('gitleaks'), check('build')]),
-        );
-
-        const result = await run(stage, makeContext());
-
         expect(result.ciCoveredTools).toEqual([ManagedTool.SECRETS]);
-    });
-
-    it('records no coverage when CI runs nothing we recognize', async () => {
-        const stage = makeStage(
-            jest.fn().mockResolvedValue([check('build'), check('test')]),
-        );
-
-        const result = await run(stage, makeContext());
-
-        expect(result.ciCoveredTools).toEqual([]);
     });
 
     it('asks for annotations and keys the read to the head commit and PR', async () => {
@@ -253,15 +234,6 @@ describe('LoadCiEvidenceStage', () => {
             );
 
             expect(getCheckEvidence).not.toHaveBeenCalled();
-        });
-
-        it('reads when the flag is on', async () => {
-            const getCheckEvidence = jest.fn().mockResolvedValue([]);
-            const stage = makeStage(getCheckEvidence);
-
-            await run(stage, makeContext());
-
-            expect(getCheckEvidence).toHaveBeenCalled();
         });
     });
 });

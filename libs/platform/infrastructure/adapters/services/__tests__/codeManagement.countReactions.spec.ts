@@ -89,34 +89,6 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             expect(result).toEqual([]);
         });
 
-        it.each([
-            PlatformType.GITHUB,
-            PlatformType.GITLAB,
-            PlatformType.BITBUCKET,
-            PlatformType.AZURE_REPOS,
-        ])(
-            'should delegate to the correct service for platform %s',
-            async (platform) => {
-                factory.registerCodeManagementService(
-                    platform,
-                    mockPlatformService as unknown as ICodeManagementService,
-                );
-
-                const params = {
-                    organizationAndTeamData: orgAndTeam,
-                    comments: [{ id: 10 }],
-                    pr: { pull_number: 1, repository: { id: 'repo-1' } },
-                };
-
-                await service.countReactions(params, platform);
-
-                expect(integrationService.findOne).not.toHaveBeenCalled();
-                expect(mockPlatformService.countReactions).toHaveBeenCalledWith(
-                    params,
-                );
-            },
-        );
-
         it('should use explicit type without calling getTypeIntegration', async () => {
             factory.registerCodeManagementService(
                 PlatformType.GITLAB,

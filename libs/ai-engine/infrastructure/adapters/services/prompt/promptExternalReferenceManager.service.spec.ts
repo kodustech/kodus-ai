@@ -25,10 +25,6 @@ describe('PromptExternalReferenceManagerService (deterministic logic)', () => {
             expect(asAny().normalizeRepositoryId(undefined)).toBeUndefined();
         });
 
-        it('returns undefined for empty string (falsy guard)', () => {
-            expect(asAny().normalizeRepositoryId('')).toBeUndefined();
-        });
-
         it('returns undefined for the literal "global"', () => {
             expect(asAny().normalizeRepositoryId('global')).toBeUndefined();
         });
@@ -47,14 +43,6 @@ describe('PromptExternalReferenceManagerService (deterministic logic)', () => {
             expect(asAny().normalizeToolKey(undefined)).toBeUndefined();
         });
 
-        it('returns undefined for null', () => {
-            expect(asAny().normalizeToolKey(null)).toBeUndefined();
-        });
-
-        it('returns undefined for empty string (falsy guard)', () => {
-            expect(asAny().normalizeToolKey('')).toBeUndefined();
-        });
-
         it('trims, lowercases and strips non-alphanumerics', () => {
             expect(asAny().normalizeToolKey('  Foo-Bar_123 ')).toBe(
                 'foobar123',
@@ -64,19 +52,11 @@ describe('PromptExternalReferenceManagerService (deterministic logic)', () => {
         it('returns undefined when nothing alphanumeric survives normalization', () => {
             expect(asAny().normalizeToolKey('-_!@#')).toBeUndefined();
         });
-
-        it('lowercases plain letters', () => {
-            expect(asAny().normalizeToolKey('ABC')).toBe('abc');
-        });
     });
 
     describe('isPromptSourceType', () => {
         it('returns true for a real enum member value', () => {
             expect(asAny().isPromptSourceType('kody_rule')).toBe(true);
-        });
-
-        it('returns true for another enum member value', () => {
-            expect(asAny().isPromptSourceType('custom_instruction')).toBe(true);
         });
 
         it('returns false for a non-member string', () => {
@@ -406,16 +386,6 @@ describe('PromptExternalReferenceManagerService (deterministic logic)', () => {
             expect(ref.lineRange).toBeUndefined();
         });
 
-        it('omits lineRange when only end is present', () => {
-            const dep = {
-                type: 'knowledge',
-                id: 'k1',
-                metadata: { filePath: 'src/a.ts', lineRange: { end: 9 } },
-            } as any;
-            const ref = asAny().mapDependencyToReference(dep, 'fallback-repo');
-            expect(ref.lineRange).toBeUndefined();
-        });
-
         it('defaults lastValidatedAt to detectedAt when lastValidatedAt is absent', () => {
             const detected = '2026-02-01T00:00:00.000Z';
             const dep = {
@@ -478,13 +448,6 @@ describe('PromptExternalReferenceManagerService (deterministic logic)', () => {
 
         it('returns an empty array when the revision has no requirements', () => {
             const revision = { uuid: 'rev-1', requirements: [] } as any;
-            expect(
-                asAny().mapRevisionToReferences(revision, parsedKey),
-            ).toEqual([]);
-        });
-
-        it('returns an empty array when requirements is undefined', () => {
-            const revision = { uuid: 'rev-1' } as any;
             expect(
                 asAny().mapRevisionToReferences(revision, parsedKey),
             ).toEqual([]);

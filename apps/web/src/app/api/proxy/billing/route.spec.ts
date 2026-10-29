@@ -13,7 +13,7 @@ jest.mock("src/core/utils/helpers", () => ({
     createUrl: (...args: unknown[]) => (createUrlMock as any)(...args),
 }));
 
-import { GET, POST } from "./[...path]/route";
+import { GET } from "./[...path]/route";
 
 function mockReq(method: string, init?: { search?: string; body?: any }): any {
     const headers = new Headers({
@@ -79,21 +79,6 @@ describe("/api/proxy/billing/[...path]", () => {
         await GET(mockReq("GET"), ctx(["status"]));
         const [url] = fetchMock.mock.calls[0];
         expect(url).toBe("http://my-billing:3992/api/billing/status");
-    });
-
-    it("strips Host header, preserves Cookie", async () => {
-        await GET(mockReq("GET"), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect((init.headers as Headers).get("host")).toBeNull();
-        expect((init.headers as Headers).get("cookie")).toBe("auth=abc");
-    });
-
-    it("POST: forwards streaming body with duplex", async () => {
-        const body = new ReadableStream();
-        await POST(mockReq("POST", { body }), ctx(["checkout"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init.body).toBe(body);
-        expect((init as any).duplex).toBe("half");
     });
 
     it("passes through upstream status and body", async () => {

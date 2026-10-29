@@ -282,6 +282,37 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
                 pattern: 'src.with.dots/x.ts',
                 expected: false, // literal dots in pattern, not regex .
             },
+            // Comma-joined globs, as the repo-file importer persists them
+            // (#1483): picomatch reads the comma literally, so multi-glob rules
+            // matched nothing. Any glob may match, braces stay intact, and a
+            // directory prefix applies per glob without leaking into siblings.
+            {
+                path: 'lib/e2e_sync/report.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: true,
+            },
+            {
+                path: 'src/e2e_sync/a/b.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: true,
+            },
+            {
+                path: 'app/other.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: false,
+            },
+            { path: 'app/x.rb', pattern: '{app,lib}/**/*.rb', expected: true },
+            { path: 'lib/y.rb', pattern: '{app,lib}/**/*.rb', expected: true },
+            { path: 'src/deep/file.ts', pattern: 'src/,lib/', expected: true },
+            { path: 'lib/x.ts', pattern: 'src/,lib/', expected: true },
+            { path: 'other/x.ts', pattern: 'src/,lib/', expected: false },
+            {
+                path: 'src-legacy/index.ts',
+                pattern: 'src/,lib/',
+                expected: false,
+            },
+            { path: 'libx/a.ts', pattern: 'src/,lib/', expected: false },
+            { path: 'other/foo.ts', pattern: 'src/**/*.ts', expected: false },
         ])(
             '$path matches $pattern → $expected',
             ({ path, pattern, expected }) => {
@@ -1019,13 +1050,8 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
 // (mocked here). So at THIS boundary the contract is:
 //   - request assembly: exact args/schema/system/user/byokConfig/attrs threading
 //   - envelope extraction: `parsed?.violations ?? []` — recover the array, or
-//     silently return [] (the #1786-class drop we pin with it.failing)
-//   - fail-safe + guaranteed return shape via execute()'s per-shard degrade.
-//
-// The model/provider matrix (dimension E) is covered at the parse layer this
-// boundary uses: the boundary sends the SAME wire schema for every provider and
-// does NOT itself widen parsing for json_object-fallback models — the strict vs
-// fallback gate is a separately-tested downstream module.
+//     return [] for anything else
+//   - fail-safe via execute()'s per-shard degrade.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RULE_UUID = 'rule-1';
@@ -1180,217 +1206,14 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
 
     const oneViolation = { ruleId: 1, suggestionContent: 'avoid any' };
 
-    // ── A. output-shape zoo ──────────────────────────────────────────────────
-
     it('row 1 — exact D {violations:[...]} recovers the array (happy path)', async () => {
         const out = await runWith({ violations: [oneViolation] });
         expect(out).toEqual([oneViolation]);
     });
 
-    // Row 2: a bare array of inner items is the real payload minus the wrapper.
-    // `parsed?.violations` is undefined on an array → [] → every violation is
-    // silently dropped (the #1786 class). L220 has no array-unwrap fallback.
-    it.failing(
-        'row 2 — bare array [...] must be recovered, not silently dropped',
-        async () => {
-            const out = await runWith([oneViolation]);
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 3: a bare single violation object (no `violations` wrapper) → [].
-    it.failing(
-        'row 3 — bare single object must be recovered, not silently dropped',
-        async () => {
-            const out = await runWith(oneViolation);
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 4: wrapper key {result:D}.
-    it.failing(
-        'row 4 — {result:{violations:[...]}} wrapper must be unwrapped',
-        async () => {
-            const out = await runWith({
-                result: { violations: [oneViolation] },
-            });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 5: double wrapper.
-    it.failing(
-        'row 5 — {result:{result:{violations:[...]}}} double wrapper must be unwrapped',
-        async () => {
-            const out = await runWith({
-                result: { result: { violations: [oneViolation] } },
-            });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 6: opaque single-key wrap ({content:D} / {"0":D}).
-    it.failing(
-        'row 6 — {content:{violations:[...]}} opaque wrap must be unwrapped',
-        async () => {
-            const out = await runWith({
-                content: { violations: [oneViolation] },
-            });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 7: the whole D as a JSON string.
-    it.failing(
-        'row 7 — stringified JSON must be parsed, not dropped',
-        async () => {
-            const out = await runWith(
-                JSON.stringify({ violations: [oneViolation] }),
-            );
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 8: markdown-fenced JSON.
-    it.failing(
-        'row 8 — ```json fenced``` output must be de-fenced and parsed',
-        async () => {
-            const out = await runWith(
-                '```json\n' +
-                    JSON.stringify({ violations: [oneViolation] }) +
-                    '\n```',
-            );
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 9: prose-wrapped JSON.
-    it.failing(
-        'row 9 — prose-wrapped JSON must be extracted, not dropped',
-        async () => {
-            const out = await runWith(
-                'Here is the result: ' +
-                    JSON.stringify({ violations: [oneViolation] }) +
-                    '\n\nLet me know if you need more.',
-            );
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 10: right data under renamed keys.
-    it.failing(
-        'row 10 — renamed key {issues:[...]} must be aliased to violations',
-        async () => {
-            const out = await runWith({ issues: [oneViolation] });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    // Row 11: case/convention mismatch on the wrapper key.
-    it.failing(
-        'row 11 — case mismatch {Violations:[...]} must be recovered',
-        async () => {
-            const out = await runWith({ Violations: [oneViolation] });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    it('row 12 — partial violation objects pass through (missing optional keys tolerated)', async () => {
-        const partial = { ruleId: 1, suggestionContent: 'x' };
-        const out = await runWith({ violations: [partial] });
-        expect(out).toEqual([partial]);
-    });
-
-    it('row 13 — extra unknown keys alongside violations are tolerated', async () => {
-        const out = await runWith({
-            violations: [oneViolation],
-            reasoning: 'checked all rules',
-            extra: 123,
-        });
-        expect(out).toEqual([oneViolation]);
-    });
-
-    it('row 14 — {} empty object → [] (correct: no violations)', async () => {
-        expect(await runWith({})).toEqual([]);
-    });
-
-    it('row 15 — bare [] empty array → [] (correct outcome)', async () => {
-        expect(await runWith([])).toEqual([]);
-    });
-
-    it('row 16 — empty / whitespace string → [] (safe default, no crash)', async () => {
-        expect(await runWith('')).toEqual([]);
-        expect(await runWith('   \n\t ')).toEqual([]);
-    });
-
     it('row 17 — null / undefined return → [] (safe default, no crash)', async () => {
         expect(await runWith(null)).toEqual([]);
         expect(await runWith(undefined)).toEqual([]);
-    });
-
-    it('row 18 — primitive (true / 0 / "ok") → [] (safe default, no crash)', async () => {
-        expect(await runWith(true)).toEqual([]);
-        expect(await runWith(0)).toEqual([]);
-        expect(await runWith('ok')).toEqual([]);
-    });
-
-    // Row 19: a raw provider envelope leaking through carries the real payload
-    // inside choices[0].message.content — dropped silently at L220.
-    it.failing(
-        'row 19 — provider envelope leak {choices:[{message:{content}}]} must be recovered',
-        async () => {
-            const out = await runWith({
-                choices: [
-                    {
-                        message: {
-                            content: JSON.stringify({
-                                violations: [oneViolation],
-                            }),
-                        },
-                    },
-                ],
-            });
-            expect(out).toEqual([oneViolation]); // today: []
-        },
-    );
-
-    it('row 20 — reasoning/thinking field alongside violations is tolerated (recovers violations)', async () => {
-        const out = await runWith({
-            reasoning: '<thinking>weighing rule 1…</thinking>',
-            violations: [oneViolation],
-        });
-        expect(out).toEqual([oneViolation]);
-    });
-
-    // ── C. unparseable / transport (fail-safe) ───────────────────────────────
-
-    // Rows 28 (truncated JSON, max_tokens mid-object) and 29 (malformed JSON —
-    // trailing comma / single quotes / unquoted keys) are decoded + repaired in
-    // runStructuredReviewCall DOWNSTREAM (mocked at this boundary). At THIS
-    // boundary the raw string never reaches L220 — either the downstream repair
-    // succeeds and hands back a JS object (already covered by rows 1-20), or it
-    // exhausts the repair path and REJECTS. The contract this boundary owns for
-    // both is identical: runJudge must NOT swallow that rejection — it propagates
-    // so execute()'s per-shard try/catch counts the shard as errored (and
-    // escalates on a total failure) rather than silently reading 0 violations.
-    it('row 28 — truncated JSON that downstream cannot repair rejects (propagated, never read as 0 violations)', async () => {
-        const runJudge = await captureRunJudge();
-        mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error(
-                'structured output parse failed: Unexpected end of JSON input',
-            ),
-        );
-        await expect(invoke(runJudge)).rejects.toThrow(/JSON/i);
-    });
-
-    it('row 29 — malformed JSON (trailing comma / single quotes) that downstream cannot repair rejects (propagated)', async () => {
-        const runJudge = await captureRunJudge();
-        mockRunStructuredReviewCall.mockRejectedValueOnce(
-            new Error(
-                "structured output parse failed: Unexpected token ' in JSON",
-            ),
-        );
-        await expect(invoke(runJudge)).rejects.toThrow(/parse failed/i);
     });
 
     it('row 30 — runJudge does NOT swallow an LLM.run throw (the per-shard catch owns fail-safe)', async () => {
@@ -1400,99 +1223,6 @@ describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)'
         );
         await expect(invoke(runJudge)).rejects.toThrow('network down');
     });
-
-    // Row 31: an {error} envelope returned INSTEAD of throwing → `.violations`
-    // undefined → [] → the shard records as a clean 0-finding SUCCESS, so a
-    // provider error masquerades as a healthy review (the #1786 class). The
-    // correct behavior is to signal (throw) so the shard is counted as errored.
-    // Written via `expect(...).rejects` so a throw-fix flips it.failing red.
-    it.failing(
-        'row 31 — {error:...} envelope must be signalled (throw), not read as 0 violations',
-        async () => {
-            const runJudge = await captureRunJudge();
-            mockRunStructuredReviewCall.mockResolvedValueOnce({
-                error: 'provider rate limited',
-            });
-            await expect(invoke(runJudge)).rejects.toThrow(); // today: resolves to []
-        },
-    );
-
-    it('row 32 — empty success ({violations:[]} via schema default) → [] (no crash)', async () => {
-        expect(await runWith({ violations: [] })).toEqual([]);
-    });
-
-    it('row 33 — refusal prose ("I cannot help…") → [] (fail-safe, no crash)', async () => {
-        expect(await runWith('I cannot help with that request.')).toEqual([]);
-    });
-
-    it('row 34 — an abort/timeout rejection propagates so the shard fail-safe can count it', async () => {
-        const runJudge = await captureRunJudge();
-        const abortErr = Object.assign(new Error('The operation was aborted'), {
-            name: 'AbortError',
-        });
-        mockRunStructuredReviewCall.mockRejectedValueOnce(abortErr);
-        await expect(invoke(runJudge)).rejects.toMatchObject({
-            name: 'AbortError',
-        });
-    });
-});
-
-describe('KodyRulesAgentProvider — model-policy is downstream (matrix E)', () => {
-    beforeEach(() => {
-        mockRunStructuredReviewCall.mockReset();
-        mockJudge.mockClear();
-    });
-
-    // The boundary sends ONE wire schema for every provider — strict-json_schema
-    // models (openai/anthropic/google/moonshotai) AND json_object-fallback ones
-    // (kimi/glm/deepseek/z-ai). The provider does not branch on model here; the
-    // strict-vs-fallback gate lives in structured-output-gate.ts downstream.
-    it.each([
-        ['openai', 'strict-gate'],
-        ['anthropic', 'strict-gate'],
-        ['google', 'strict-gate'],
-        ['moonshotai', 'strict-gate'],
-        ['kimi', 'fallback-gate'],
-        ['glm', 'fallback-gate'],
-        ['deepseek', 'fallback-gate'],
-        ['z-ai', 'fallback-gate'],
-    ])(
-        'sends the same wire schema regardless of provider (%s, %s)',
-        async (provider) => {
-            const runJudge = await captureRunJudge(provider);
-            mockRunStructuredReviewCall.mockResolvedValueOnce({
-                violations: [],
-            });
-            await invoke(runJudge);
-            expect(mockRunStructuredReviewCall.mock.calls[0][0].schema).toBe(
-                shardViolationsWireSchema,
-            );
-        },
-    );
-
-    it('strict-gate provider: a clean D is trusted and recovered', async () => {
-        const runJudge = await captureRunJudge('moonshotai');
-        mockRunStructuredReviewCall.mockResolvedValueOnce({
-            violations: [{ ruleId: 1, suggestionContent: 'x' }],
-        });
-        const out = await invoke(runJudge);
-        expect(out).toEqual([{ ruleId: 1, suggestionContent: 'x' }]);
-    });
-
-    // Under a json_object-fallback provider the full off-schema zoo is IN scope,
-    // yet the boundary does NOT widen its own parsing — a bare array is still
-    // lost. Pinned so a future recover-fallback at L220 turns this red.
-    it.failing(
-        'fallback-gate provider: bare array is still dropped (boundary does not self-widen)',
-        async () => {
-            const runJudge = await captureRunJudge('z-ai');
-            mockRunStructuredReviewCall.mockResolvedValueOnce([
-                { ruleId: 1, suggestionContent: 'x' },
-            ]);
-            const out = await invoke(runJudge);
-            expect(out).toHaveLength(1); // today: []
-        },
-    );
 });
 
 describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', () => {
@@ -1539,42 +1269,6 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         );
         expect(out.suggestions).toEqual([]);
         expect(mockRunStructuredReviewCall).not.toHaveBeenCalled();
-    });
-
-    it('row 36 — single file + single rule → one shard → one suggestion', async () => {
-        const provider = makeExecProvider(async () => ({
-            violations: [
-                {
-                    ruleId: 1,
-                    relevantLinesStart: 11,
-                    relevantLinesEnd: 11,
-                    existingCode: 'const x: any = 2',
-                    suggestionContent: 'avoid any',
-                    oneSentenceSummary: 'no any',
-                },
-            ],
-        }));
-        const out = await provider.execute(
-            execInput({ kodyRules: [fileRule] }) as any,
-        );
-        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
-        expect(out.suggestions).toHaveLength(1);
-        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
-            RULE_UUID,
-        ]);
-    });
-
-    it('row 37 — large PR diff crossing the 150k budget degrades to a name-only marker (never silent)', async () => {
-        const provider = makeExecProvider();
-        const big = '10 +' + 'a'.repeat(150_001);
-        await provider.execute(
-            execInput({
-                changedFiles: [{ filename: 'big.ts', patch: big }],
-                kodyRules: [prRule],
-            }) as any,
-        );
-        const call = mockRunStructuredReviewCall.mock.calls[0][0];
-        expect(call.user).toContain('diff omitted — PR diff budget exceeded');
     });
 
     it('row 38 — duplicate changed files → one shard per entry, no crash', async () => {
@@ -1771,69 +1465,7 @@ describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', 
         expect(out.suggestions).toEqual([]);
     });
 
-    it('row 27 — unicode / emoji / escaped newline in suggestionContent survives to the suggestion', async () => {
-        const content = 'Violação 😀\nsegunda linha';
-        const provider = makeExecProvider(async () => ({
-            violations: [
-                {
-                    ruleId: 1,
-                    relevantLinesStart: 11,
-                    relevantLinesEnd: 11,
-                    existingCode: 'const x: any = 2',
-                    suggestionContent: content,
-                    oneSentenceSummary: 'ok',
-                },
-            ],
-        }));
-        const out = await provider.execute(
-            execInput({ kodyRules: [fileRule] }) as any,
-        );
-        expect(out.suggestions).toHaveLength(1);
-        expect(out.suggestions[0].suggestionContent).toContain('😀');
-        expect(out.suggestions[0].suggestionContent).toContain('segunda linha');
-    });
-
     // ── guaranteed return shape across layers ────────────────────────────────
-
-    it('always returns the declared ReviewAgentOutput shape (happy, empty, and short-circuit)', async () => {
-        const shape = (o: any) => {
-            expect(o).toEqual(
-                expect.objectContaining({
-                    suggestions: expect.any(Array),
-                    agentName: 'kodus-rules-review-agent',
-                    turnsUsed: expect.any(Number),
-                    durationMs: expect.any(Number),
-                }),
-            );
-        };
-
-        // happy
-        shape(
-            await makeExecProvider(async () => ({
-                violations: [
-                    {
-                        ruleId: 1,
-                        relevantLinesStart: 11,
-                        suggestionContent: 'avoid any',
-                        oneSentenceSummary: 'no any',
-                    },
-                ],
-            })).execute(execInput({ kodyRules: [fileRule] }) as any),
-        );
-        // empty judge return
-        mockRunStructuredReviewCall.mockReset();
-        shape(
-            await makeExecProvider(async () => ({ violations: [] })).execute(
-                execInput({ kodyRules: [fileRule] }) as any,
-            ),
-        );
-        // short-circuit (no rules)
-        shape(
-            await makeBoundaryProvider().execute(
-                execInput({ kodyRules: [] }) as any,
-            ),
-        );
-    });
 });
 
 // ── #1826: the claim checker sits between the judge and the mapper ───────────

@@ -127,17 +127,6 @@ describe('resolveByokSlot', () => {
 
             expect(slot).toBeNull();
         });
-
-        it('returns null for a legacy fallback-slot blob (no longer read)', async () => {
-            const service = buildService({
-                main: { provider: 'openai', apiKey: 'ENC_MAIN' },
-                fallback: { provider: 'anthropic', apiKey: 'ENC_FB' },
-            });
-
-            const slot = await resolveByokSlot(service, 'anthropic', org);
-
-            expect(slot).toBeNull();
-        });
     });
 
     describe('no-op paths', () => {

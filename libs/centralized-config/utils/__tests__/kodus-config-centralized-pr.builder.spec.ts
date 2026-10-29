@@ -215,3 +215,80 @@ describe('buildKodusConfigCentralizedMutationRequest — directory group flow', 
         expect(service.buildDirectoryGroupConfigPath).not.toHaveBeenCalled();
     });
 });
+
+// #1688: code review settings and custom PR messages arrive as request bodies
+// with `@Type(() => Dto)` nested classes; these prove both call sites reach
+// the DTO-safe yaml dump.
+class SeverityLimitsDto {
+    high: number;
+}
+
+function configWithNestedDto() {
+    const severityLimits = new SeverityLimitsDto();
+    severityLimits.high = 5;
+    return { languageResultPrompt: 'en-US', severityLimits } as any;
+}
+
+const dtoPrService = {
+    buildCentralizedPath: ({ relativePath }: { relativePath: string }) =>
+        `my-repo/${relativePath}`,
+    buildDirectoryGroupConfigPath: (
+        repositoryFolder: string,
+        folderName: string,
+    ) => `${repositoryFolder}/${folderName}/kodus-config.yml`,
+} as any;
+
+const dtoBase = {
+    centralizedConfigPrService: dtoPrService,
+    organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+    repositoryId: 'repo-1',
+    title: 't',
+    description: 'd',
+    commitMessage: 'c',
+    sourceBranchPrefix: 'kodus-config',
+};
+
+function upsertContent(request: any) {
+    const ops = request.files({ repositoryFolder: 'my-repo' });
+    const upsert = ops.find((op: any) => op.operation === 'upsert');
+    expect(upsert).toBeDefined();
+    return upsert.content;
+}
+
+describe('buildKodusConfigCentralizedMutationRequest — DTO payloads', () => {
+    it('repository-scope config dumps a nested DTO instance', () => {
+        const request = buildKodusConfigCentralizedMutationRequest({
+            ...dtoBase,
+            configFileContent: configWithNestedDto(),
+        } as any);
+
+        expect(yaml.load(upsertContent(request))).toEqual({
+            languageResultPrompt: 'en-US',
+            severityLimits: { high: 5 },
+        });
+    });
+
+    it('directory-group config dumps a nested DTO instance', () => {
+        const request = buildKodusConfigCentralizedMutationRequest({
+            ...dtoBase,
+            folders: [{ path: 'src' }],
+            configFileContent: configWithNestedDto(),
+        } as any);
+
+        expect(yaml.load(upsertContent(request))).toEqual({
+            languageResultPrompt: 'en-US',
+            severityLimits: { high: 5 },
+        });
+    });
+
+    it('a plain payload is written exactly as js-yaml would have written it', () => {
+        const plain = { languageResultPrompt: 'en-US', ignorePaths: ['dist'] };
+
+        const request = buildKodusConfigCentralizedMutationRequest({
+            ...dtoBase,
+            configFileContent: plain,
+        } as any);
+
+        expect(upsertContent(request)).toBe(yaml.dump(plain));
+    });
+});

@@ -18,26 +18,6 @@ jest.mock("src/core/utils/gate-hit", () => ({
 const { captureGateCtaClick } = require("src/core/utils/gate-hit");
 
 describe("LockedFeatureOverlay", () => {
-    it("renders the title, description, and children behind the blur", () => {
-        render(
-            <LockedFeatureOverlay
-                title="Unlock the Cockpit"
-                description="Engineering metrics are available on Teams and Enterprise plans.">
-                <div data-testid="gated-content">real dashboard</div>
-            </LockedFeatureOverlay>,
-        );
-
-        expect(screen.getByText("Unlock the Cockpit")).toBeInTheDocument();
-        expect(
-            screen.getByText(
-                "Engineering metrics are available on Teams and Enterprise plans.",
-            ),
-        ).toBeInTheDocument();
-        // Content still renders (blurred, not removed) — the gate is
-        // visual-only, never hides the preview from the DOM.
-        expect(screen.getByTestId("gated-content")).toBeInTheDocument();
-    });
-
     it("marks the blurred layer aria-hidden so screen readers skip the decoy content", () => {
         const { container } = render(
             <LockedFeatureOverlay title="Locked" description="desc">

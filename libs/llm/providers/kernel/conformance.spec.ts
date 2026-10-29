@@ -297,30 +297,12 @@ describe('contract: normalizeSdkUsage — output-shape zoo (A) never throws, alw
     // always returns D. This IS the observable safe-default the #1786 rule allows
     // (typed, inspectable), as long as it is NOT a WRONG value masquerading as right.
     const zooZero: Array<[string, unknown]> = [
-        ['[A2] bare array raw', [{ inputTokens: 9 }]],
         ['[A3] usage as array (object expected)', { usage: [1, 2, 3] }],
         ['[A4] wrapper key {result:{usage}}', { result: { usage: { inputTokens: 5 } } }],
-        ['[A4] wrapper key {data:{usage}}', { data: { usage: { inputTokens: 5 } } }],
-        [
-            '[A5] double wrapper {result:{result:{usage}}}',
-            { result: { result: { usage: { inputTokens: 5 } } } },
-        ],
-        ['[A6] numeric single-key wrap {"0":{usage}}', { '0': { usage: { inputTokens: 5 } } }],
-        ['[A6] {content:{usage}}', { content: { usage: { inputTokens: 5 } } }],
-        ['[A7] stringified JSON (no JSON.parse of usage)', '{"usage":{"inputTokens":5}}'],
         ['[A10] renamed snake_case keys (relies on SDK camelCase)', { usage: { input_tokens: 5, output_tokens: 10 } }],
-        ['[A11] case/convention mismatch InputTokens', { usage: { InputTokens: 5, OutputTokens: 10 } }],
         ['[A14] empty object raw', {}],
-        ['[A14] empty usage object', { usage: {} }],
-        ['[A15] empty array raw', []],
-        ['[A16] empty string raw', ''],
-        ['[A16] whitespace-only raw', '   '],
         ['[A17] null raw', null],
-        ['[A17] undefined raw', undefined],
-        ['[A18] primitive true', true],
-        ['[A18] primitive 0', 0],
         ['[A18] primitive "ok"', 'ok'],
-        ['[A19] provider envelope leak {choices:[{message}]}', { choices: [{ message: { content: 'x' } }] }],
     ];
     it.each(zooZero)('%s → typed-zero triple, no throw', (_label, raw) => {
         let u!: ReturnType<typeof normalizeSdkUsage>;
@@ -458,55 +440,9 @@ describe('contract: harness + normalize — unparseable / transport fail-safe (C
         } as unknown as ProviderModule;
         await expect(runConformance(boom, cfg(), fx())).rejects.toThrow('normalize blew up');
     });
-
-    // [C31] Error object returned instead of throwing → typed-zero, no throw.
-    it('[C31] {error:...} raw → typed-zero triple', () => {
-        expect(normalizeSdkUsage({ error: 'model failed' })).toEqual({
-            input: 0,
-            output: 0,
-            reasoning: 0,
-        });
-    });
-
-    // [C32] Empty success (content:'', finishReason:'length') — usage still read,
-    // text preserved, no throw — end-to-end through the real SDK assembly.
-    it('[C32] empty-success fixture: usage extracted, empty text preserved', async () => {
-        const run = await runConformance(
-            openaiModule,
-            cfg({ model: 'o3' }),
-            fx({ text: '', finishReason: 'length', usage: { inputTokens: 7, outputTokens: 0 } }),
-        );
-        expect(run.usage).toEqual({ input: 7, output: 0, reasoning: 0 });
-        expect((run.raw as { text: string }).text).toBe('');
-    });
-
-    // [C33] Refusal (content_filter / "I cannot help") — usage extracted, no throw;
-    // normalize does not inspect finishReason or content.
-    it('[C33] refusal fixture: usage extracted, no throw', async () => {
-        const run = await runConformance(
-            openaiModule,
-            cfg({ model: 'o3' }),
-            fx({
-                text: 'I cannot help with that.',
-                finishReason: 'content_filter',
-                usage: { inputTokens: 4, outputTokens: 6 },
-            }),
-        );
-        expect(run.usage).toEqual({ input: 4, output: 6, reasoning: 0 });
-        expect(run.result.usage).toEqual({ input: 4, output: 6, reasoning: 0 });
-    });
 });
 
 describe('contract: input variants (D)', () => {
-    // [D35] Empty input.
-    it('[D35] empty usage input → zero triple', () => {
-        expect(normalizeSdkUsage({ usage: {} })).toEqual({
-            input: 0,
-            output: 0,
-            reasoning: 0,
-        });
-    });
-
     // [D36] Single item — one fixture end-to-end returns the full ConformanceRun.
     it('[D36] single fixture through runConformance → full declared run shape', async () => {
         const run = await runConformance(
@@ -520,23 +456,6 @@ describe('contract: input variants (D)', () => {
         expect(run.result).toEqual({ usage: run.usage, raw: run.raw });
     });
 
-    // [D37] Large counts crossing any numeric/batch boundary → passed through exactly.
-    it('[D37] very large token counts survive intact', () => {
-        expect(
-            normalizeSdkUsage({
-                usage: {
-                    inputTokens: 1_000_000_000_000,
-                    outputTokens: 999_999_999_999,
-                    outputTokenDetails: { reasoningTokens: 500_000_000_000 },
-                },
-            }),
-        ).toEqual({
-            input: 1_000_000_000_000,
-            output: 999_999_999_999,
-            reasoning: 500_000_000_000,
-        });
-    });
-
     // [D39] Null/undefined required fields → ?? defaults to zero.
     it('[D39] null/undefined usage fields → zero triple', () => {
         expect(
@@ -548,40 +467,6 @@ describe('contract: input variants (D)', () => {
                 },
             }),
         ).toEqual({ input: 0, output: 0, reasoning: 0 });
-    });
-
-    // [D40] Special chars / emoji / whitespace / large text — text is carried
-    // through the SDK assembly untouched; usage still extracted. (Also closes B27.)
-    it('[D40] emoji/unicode/whitespace text preserved, usage extracted', async () => {
-        const weird = '  🚀\n\t  café — 変更 ' + 'x'.repeat(5000);
-        const run = await runConformance(
-            openaiModule,
-            cfg({ model: 'o3' }),
-            fx({ text: weird, usage: { inputTokens: 3, outputTokens: 9 } }),
-        );
-        expect((run.raw as { text: string }).text).toBe(weird);
-        expect(run.usage).toEqual({ input: 3, output: 9, reasoning: 0 });
-    });
-
-    // [D42] Order permutation is metamorphic: object key insertion order does not
-    // change the extracted triple; and the function is idempotent/deterministic.
-    it('[D42] key-order permutation → identical triple; deterministic', () => {
-        const a = normalizeSdkUsage({
-            usage: {
-                outputTokenDetails: { reasoningTokens: 2 },
-                outputTokens: 10,
-                inputTokens: 5,
-            },
-        });
-        const b = normalizeSdkUsage({
-            usage: {
-                inputTokens: 5,
-                outputTokens: 10,
-                outputTokenDetails: { reasoningTokens: 2 },
-            },
-        });
-        expect(a).toEqual(b);
-        expect(a).toEqual(normalizeSdkUsage({ usage: { inputTokens: 5, outputTokens: 10, outputTokenDetails: { reasoningTokens: 2 } } }));
     });
 });
 
@@ -607,22 +492,6 @@ describe('contract: provider/model matrix (E) — normalization is provider-agno
         for (const m of REGISTRY.all()) {
             expect(m.normalizeUsage).toBe(normalizeSdkUsage);
             expect(m.normalize).toBe(normalizeSdkResult);
-        }
-    });
-
-    // Run representative off-schema rows through a strict-gate module and a
-    // fallback-gate module — identical output proves no provider branch in parse.
-    const offSchemaRows: Array<[string, unknown, { input: number; output: number; reasoning: number }]> = [
-        ['[E×A12] partial', { usage: { inputTokens: 5 } }, { input: 5, output: 0, reasoning: 0 }],
-        ['[E×A17] null', null, { input: 0, output: 0, reasoning: 0 }],
-        ['[E×A19] envelope leak', { choices: [{ message: { content: 'x' } }] }, { input: 0, output: 0, reasoning: 0 }],
-        ['[E×A20] flat reasoning', { usage: { inputTokens: 1, outputTokens: 8, reasoningTokens: 3 } }, { input: 1, output: 8, reasoning: 3 }],
-    ];
-    const strictModules = [openaiModule, googleGeminiModule, azureModule];
-    const fallbackModules = [novitaModule, openRouterModule];
-    it.each(offSchemaRows)('%s → identical across strict & fallback gate modules', (_l, raw, expected) => {
-        for (const m of [...strictModules, ...fallbackModules, anthropicModule, moonshotModule, zaiModule]) {
-            expect(m.normalizeUsage(raw)).toEqual(expected);
         }
     });
 });

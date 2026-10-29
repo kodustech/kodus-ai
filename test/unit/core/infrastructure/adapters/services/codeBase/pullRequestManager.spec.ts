@@ -53,10 +53,6 @@ describe('pullRequestManager', () => {
         );
     });
 
-    it('should be defined', () => {
-        expect(pullRequestManagerService).toBeDefined();
-    });
-
     const MOCK_ORGANIZATION_AND_TEAM_DATA: OrganizationAndTeamData = {
         organizationId: 'organizationId',
         teamId: 'teamId',
