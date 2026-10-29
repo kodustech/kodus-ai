@@ -2132,7 +2132,7 @@ describe('KodyRulesAgentProvider — probing the lookup before trusting it (#182
     });
 });
 
-// Azure Repos names changed files with a leading "/" ("/app/util.py") and the
+// Azure Repos names changed files with a leading "/" ("/src/util.ts") and the
 // sandbox rejects absolute paths. A companion-file rule on such a PR has to be
 // judged with the repository's answer, not skipped as context unavailable.
 describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Azure Repos)', () => {
@@ -2148,9 +2148,9 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
             fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
             fs.writeFileSync(path.join(dir, rel), content);
         };
-        write('app/main.py', 'def total(items):\n    return sum(items)\n');
-        write('app/util.py', 'def slugify(text):\n    return text.lower()\n');
-        write('tests/app/test_main.py', 'def test_total():\n    pass\n');
+        write('src/main.ts', 'export const total = (n: number[]) => n.length;\n');
+        write('src/util.ts', 'export const slugify = (t: string) => t;\n');
+        write('src/main.spec.ts', "import { total } from './main';\n");
     });
 
     afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -2171,14 +2171,14 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
             organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
             changedFiles: [
                 {
-                    filename: '/app/util.py',
+                    filename: '/src/util.ts',
                     status: 'modified',
-                    patch: '@@ -1,2 +1,2 @@\n def slugify(text):\n-    return text\n+    return text.lower()',
+                    patch: '@@ -1 +1 @@\n-export const slugify = (t: string) => t.trim();\n+export const slugify = (t: string) => t;',
                 },
                 {
-                    filename: '/app/main.py',
+                    filename: '/src/main.ts',
                     status: 'modified',
-                    patch: '@@ -1,2 +1,2 @@\n def total(items):\n-    return 0\n+    return sum(items)',
+                    patch: '@@ -1 +1 @@\n-export const total = (n: number[]) => 0;\n+export const total = (n: number[]) => n.length;',
                 },
             ],
             prTitle: 'p',
@@ -2188,12 +2188,12 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
             kodyRules: [
                 {
                     uuid: RULE_UUID,
-                    title: 'python modules have a companion test',
-                    rule: 'Every changed Python module must have a companion pytest file.',
+                    title: 'modules have a companion spec',
+                    rule: 'Every changed module must have a companion spec file.',
                     status: 'active',
                     severity: 'high',
                     scope: 'file',
-                    path: '**/*.py',
+                    path: '**/*.ts',
                     contextNeed: {
                         need: 'sibling-file',
                         sourceHash: 'h',
@@ -2211,7 +2211,7 @@ describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Az
         const prompts = mockRunStructuredReviewCall.mock.calls
             .map((call) => call[0]?.user as string)
             .join('\n');
-        expect(prompts).toContain('- /tests/app/test_main.py: exists');
-        expect(prompts).toContain('- /tests/app/test_util.py: does not exist');
+        expect(prompts).toContain('- /src/main.spec.ts: exists');
+        expect(prompts).toContain('- /src/util.spec.ts: does not exist');
     });
 });

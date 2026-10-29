@@ -214,8 +214,7 @@ const extensionOf = (filePath: string): string => {
 const isTestLikePath = (filePath: string): boolean =>
     /(^|\/)__tests__\//.test(filePath) ||
     /\.(spec|test)\.[^./]+$/.test(filePath) ||
-    /_test\.[^./]+$/.test(filePath) ||
-    /(^|\/)(test_[^/]+|conftest)\.py$/.test(filePath);
+    /_test\.[^./]+$/.test(filePath);
 
 /**
  * The RAW unified diff, not `patchWithLinesStr`. The line-numbered variant
@@ -374,29 +373,6 @@ function siblingCandidates(filename: string): string[] {
     const dir = slash < 0 ? '' : filename.slice(0, slash + 1);
     const base = filename.slice(slash + 1, filename.length - ext.length);
 
-    // pytest collects `test_<name>.py` (or `<name>_test.py`) beside the
-    // module, in a `tests/` next to it, or under a root `tests/` that is flat
-    // or mirrors the source tree. A root path keeps the file's own leading
-    // "/" (Azure Repos) so every candidate reads like a name in this PR.
-    if (ext === '.py') {
-        const root = filename.startsWith('/') ? '/' : '';
-        const relativeDir = dir.slice(root.length);
-        const testDirs = [
-            dir,
-            `${dir}tests/`,
-            `${root}tests/`,
-            `${root}tests/${relativeDir}`,
-        ];
-        return [
-            ...new Set(
-                testDirs.flatMap((testDir) => [
-                    `${testDir}test_${base}.py`,
-                    `${testDir}${base}_test.py`,
-                ]),
-            ),
-        ];
-    }
-
     return [
         `${dir}${base}.spec${ext}`,
         `${dir}${base}.test${ext}`,
@@ -419,24 +395,16 @@ async function retrieveSiblingFile(
     // path from: there is no sibling to report on, and nothing is hidden.
     if (candidates.length === 0) return [];
 
-    // Each check is a sandbox round trip, so they run together. One that could
-    // not be answered still fails the whole need: a partial list would read as
-    // "the rest do not exist".
-    const settled = await Promise.allSettled(
-        candidates.map((candidate) => lookup.exists(candidate)),
-    );
-    const failed = settled.find(
-        (s): s is PromiseRejectedResult => s.status === 'rejected',
-    );
-    if (failed) throw failed.reason;
-
     const changed = new Set(changedFilenames);
-    const lines = candidates.map((candidate, i) => {
-        const exists = (settled[i] as PromiseFulfilledResult<boolean>).value;
-        return `- ${candidate}: ${exists ? 'exists' : 'does not exist'}${
-            changed.has(candidate) ? ', changed by this PR' : ''
-        }`;
-    });
+    const lines: string[] = [];
+    for (const candidate of candidates) {
+        const exists = await lookup.exists(candidate);
+        lines.push(
+            `- ${candidate}: ${exists ? 'exists' : 'does not exist'}${
+                changed.has(candidate) ? ', changed by this PR' : ''
+            }`,
+        );
+    }
 
     return [
         {
