@@ -2212,6 +2212,7 @@ export class BitbucketCloudService implements Omit<
 
             return changedFiles.filter(Boolean);
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error to get incremental changed files since last commit',
