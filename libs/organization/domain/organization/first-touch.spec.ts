@@ -50,6 +50,13 @@ describe('sanitizeFirstTouch', () => {
         });
     });
 
+    it('returns null instead of throwing on an object that throws when read', () => {
+        const { proxy, revoke } = Proxy.revocable({}, {});
+        revoke();
+
+        expect(sanitizeFirstTouch(proxy, now)).toBeNull();
+    });
+
     it.each([undefined, null, 'utm_source=google', 42, ['google'], {}])(
         'returns null for %p',
         (input) => {
@@ -197,6 +204,15 @@ describe('sanitizeFirstTouch', () => {
                     now,
                 ),
             ).toBeNull();
+        });
+
+        it('keeps a path that does not decode, as sent', () => {
+            expect(
+                sanitizeFirstTouch(
+                    { landing_page: 'https://kodus.io/blog/caf%C3%A' },
+                    now,
+                ),
+            ).toEqual({ landing_page: 'https://kodus.io/blog/caf%C3%A' });
         });
 
         it.each([

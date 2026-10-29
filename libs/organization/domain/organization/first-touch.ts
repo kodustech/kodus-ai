@@ -70,6 +70,15 @@ export function sanitizeFirstTouch(
     input: unknown,
     now: Date = new Date(),
 ): FirstTouch | null {
+    // Attribution must never cost a signup, whatever reaches this point.
+    try {
+        return sanitize(input, now);
+    } catch {
+        return null;
+    }
+}
+
+function sanitize(input: unknown, now: Date): FirstTouch | null {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
         return null;
     }
@@ -176,12 +185,13 @@ function sanitizeUrl(
         return null;
     }
 
-    // A path that does not decode is dropped rather than scanned half-decoded.
+    // A path that does not decode (e.g. cut mid-escape by the tag) is scanned
+    // as is; containsEmail reads an encoded '@' too.
     let path: string;
     try {
         path = decodeURIComponent(url.pathname);
     } catch {
-        return null;
+        path = url.pathname;
     }
     if (containsEmail(path)) {
         return null;

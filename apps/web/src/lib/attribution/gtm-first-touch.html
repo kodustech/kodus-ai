@@ -39,9 +39,11 @@
 
     // Referrer and landing page without query strings or fragments, which is
     // where personal data in a URL usually lives.
+    // Cut without leaving half a %XX escape at the end.
+    var cutUrl = function (url) { return url.slice(0, 300).replace(/%[0-9A-Fa-f]?$/, ''); };
     var referrer = document.referrer.split(/[?#]/)[0];
-    if (referrer) touch.referrer = referrer.slice(0, 300);
-    touch.landing_page = (location.origin + location.pathname + (kept.length ? '?' + kept.join('&') : '')).slice(0, 300);
+    if (referrer) touch.referrer = cutUrl(referrer);
+    touch.landing_page = cutUrl(location.origin + location.pathname + (kept.length ? '?' + kept.join('&') : ''));
     touch.captured_at = new Date().toISOString();
 
     var cookie = encodeURIComponent(JSON.stringify(touch));

@@ -157,6 +157,16 @@ describe("GTM first-touch tag", () => {
         expect(touch?.utm_content).toBe("x".repeat(99));
     });
 
+    it("does not leave half a percent escape when it cuts a long landing page", () => {
+        const jar = new CookieJar();
+        // "https://kodus.io/" + 281 chars = 298; the 300-char cut lands in "%C3".
+        visit(jar, `https://kodus.io/${"a".repeat(281)}%C3%A9`);
+
+        expect(firstTouchOn(jar, "https://kodus.io/")?.landing_page).toBe(
+            `https://kodus.io/${"a".repeat(281)}`,
+        );
+    });
+
     it("does nothing outside kodus.io (self-hosted installs load the app container too)", () => {
         const jar = new CookieJar();
         visit(jar, "https://kodus.acme.internal/sign-up?utm_source=google");
