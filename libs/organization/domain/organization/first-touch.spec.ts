@@ -98,6 +98,20 @@ describe('sanitizeFirstTouch', () => {
         ).toEqual({ utm_source: 'newsletter' });
     });
 
+    it('drops emails whose @ is percent-encoded, once or more', () => {
+        expect(
+            sanitizeFirstTouch(
+                {
+                    utm_source: 'newsletter',
+                    utm_term: 'jane%40acme.com',
+                    utm_content: 'jane%252540Acme.com',
+                    utm_campaign: '50%off',
+                },
+                now,
+            ),
+        ).toEqual({ utm_source: 'newsletter', utm_campaign: '50%off' });
+    });
+
     it('drops an email that starts before the truncation point', () => {
         expect(
             sanitizeFirstTouch(

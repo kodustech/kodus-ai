@@ -54,6 +54,9 @@ const LONE_SURROGATE =
 const EMAIL_LOCAL_CHAR = /[a-z0-9._%+-]/i;
 const EMAIL_DOMAIN = /[a-z0-9.-]+/iy;
 const EMAIL_TLD = /\.[a-z]{2,}/i;
+// '@' percent-encoded once or more (%40, %2540, ...): a UTM tagged with an
+// encoded address arrives here still encoded.
+const ENCODED_AT = /%(?:25)*40/gi;
 const GCLID = /^[a-z0-9_-]+$/i;
 
 /**
@@ -130,11 +133,12 @@ function sanitizeText(value: unknown): string | null {
 }
 
 /**
- * Whether the text has something shaped like local@domain.tld. Linear on
- * purpose: the equivalent single regex backtracks quadratically on long
- * inputs such as a run of '%'.
+ * Whether the text has something shaped like local@domain.tld, with '@'
+ * possibly percent-encoded. Linear on purpose: the equivalent single regex
+ * backtracks quadratically on long inputs such as a run of '%'.
  */
-function containsEmail(text: string): boolean {
+function containsEmail(value: string): boolean {
+    const text = value.replace(ENCODED_AT, '@');
     for (let at = text.indexOf('@'); at >= 0; at = text.indexOf('@', at + 1)) {
         if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
             continue;
@@ -172,15 +176,14 @@ function sanitizeUrl(
         return null;
     }
 
-    // A path that does not decode is dropped: scanning it still encoded would
-    // miss an address written as %40.
+    // A path that does not decode is dropped rather than scanned half-decoded.
     let path: string;
     try {
         path = decodeURIComponent(url.pathname);
     } catch {
         return null;
     }
-    if (containsEmail(path) || containsEmail(path.replace(/%40/gi, '@'))) {
+    if (containsEmail(path)) {
         return null;
     }
 

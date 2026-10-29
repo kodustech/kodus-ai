@@ -118,6 +118,21 @@ describe("GTM first-touch tag", () => {
         });
     });
 
+    it("drops an email whose @ arrives percent-encoded", () => {
+        const jar = new CookieJar();
+        // Double-encoded in the ad URL, so it reaches the tag as jane%40acme.com.
+        visit(
+            jar,
+            "https://kodus.io/?utm_source=newsletter&utm_term=jane%2540acme.com",
+        );
+
+        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
+            utm_source: "newsletter",
+            landing_page: "https://kodus.io/?utm_source=newsletter",
+            captured_at: expect.any(String),
+        });
+    });
+
     it("drops an email that starts before the 100-character cut", () => {
         const jar = new CookieJar();
         visit(
