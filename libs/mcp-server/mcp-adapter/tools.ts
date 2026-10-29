@@ -169,27 +169,18 @@ export function mcpToolsToEngineTools(
 ): EngineTool[] {
     const validTools: EngineTool[] = [];
     const invalidTools: string[] = [];
-    const toolNameCounts = new Map<string, string[]>();
+    const seenNames = new Set<string>();
 
-    // Check for name conflicts
+    // Tool names carry no server prefix, so two servers listing the same name
+    // collapse to one tool. The registry resolves the server at execution time
+    // (and tries every server that lists the name), so keeping the first one is
+    // enough; throwing here dropped every tool of every server.
     for (const mcpTool of mcpTools) {
-        const existing = toolNameCounts.get(mcpTool.name) || [];
-        if (mcpTool.serverName) {
-            existing.push(mcpTool.serverName);
+        if (seenNames.has(mcpTool.name)) {
+            continue;
         }
-        toolNameCounts.set(mcpTool.name, existing);
-    }
+        seenNames.add(mcpTool.name);
 
-    // Handle conflicts
-    for (const [toolName, servers] of toolNameCounts) {
-        if (servers.length > 1) {
-            throw new Error(
-                `Tool name conflict detected: "${toolName}" exists in multiple servers: ${servers.join(', ')}. Please rename tools to ensure uniqueness.`,
-            );
-        }
-    }
-
-    for (const mcpTool of mcpTools) {
         try {
             const engineTool = mcpToolToEngineTool(mcpTool);
             validTools.push(engineTool);
