@@ -239,8 +239,6 @@ export function extractValidDiffLines(patch?: string): Array<[number, number]> {
     return ranges;
 }
 
-
-
 /**
  * Which out-of-hunk findings survive the snap as file-anchored PR comments.
  *
@@ -346,6 +344,17 @@ export function snapLinesToDiff(
  * - Results are stored in context.fileAnalysisResults for downstream stages
  */
 const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
+
+/** A suggestion the generalist finder wrote: not a Kody Rule, analyzer or
+ *  custom agent finding. Only these take the parse schema, the strip and the
+ *  enrichment (#1821). */
+function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
+    return (
+        s.label !== 'kody_rules' &&
+        !isAnalyzerSuggestion(s) &&
+        !isCustomAgentFinding(s)
+    );
+}
 
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -1370,7 +1379,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Custom agents write the full finding and keep main's anchoring:
             // one without lines snaps to the first hunk.
             const finderSuggestions = result.suggestions.filter(
-                (s) => s.label !== 'kody_rules' && !isCustomAgentFinding(s),
+                isFinderSuggestion,
             );
             const parsed = parseFinderSchema(
                 finderSuggestions as Array<Record<string, unknown>>,
@@ -1544,13 +1553,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // keep theirs: the custom agent stages after this read its fields.
             let severityNormalized: Partial<CodeSuggestion>[] =
                 repeatCheck.kept.map((s) => {
-                    if (
-                        s.label === 'kody_rules' ||
-                        isAnalyzerSuggestion(s) ||
-                        isCustomAgentFinding(s)
-                    ) {
-                        return s;
-                    }
+                    if (!isFinderSuggestion(s)) return s;
                     const lean = parseFinderSchema([
                         s as Record<string, unknown>,
                     ]).suggestions[0] as unknown as
@@ -1755,12 +1758,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     // Its enrichment call failed: no fix was proposed, and
                     // the finding posts as a plain comment.
-                    if (
-                        !s.fixStatus &&
-                        s.label !== 'kody_rules' &&
-                        !isAnalyzerSuggestion(s) &&
-                        !isCustomAgentFinding(s)
-                    ) {
+                    if (!s.fixStatus && isFinderSuggestion(s)) {
                         continue;
                     }
                     const reason = checkFix(
@@ -2498,12 +2496,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
-     * The definitive severity of each finding (the severity classifier; a Kody
-     * Rule finding keeps its rule's), then the team's severity threshold, the
-     * findings below it moved to `allDiscarded`. Returns the findings that stay.
-     * Called by executeStage; the severity evals call it too.
-     */
-    /**
      * The enrichment step (enrich-suggestions.ts) on the finder suggestions;
      * Kody Rules, analyzer and custom agent findings keep what their own
      * steps wrote. Called by executeStage; the enrichment eval calls it too.
@@ -2519,10 +2511,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             suggestions,
             changedFiles,
             {
-                shouldEnrich: (s) =>
-                    s.label !== 'kody_rules' &&
-                    !isAnalyzerSuggestion(s) &&
-                    !isCustomAgentFinding(s),
+                shouldEnrich: isFinderSuggestion,
                 byokConfig: context.codeReviewConfig?.byokConfig,
                 telemetryMetadata: telemetryMeta,
                 organizationId: context.organizationAndTeamData?.organizationId,
@@ -2547,6 +2536,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return enriched;
     }
 
+    /**
+     * The definitive severity of each finding (the severity classifier; a Kody
+     * Rule finding keeps its rule's), then the team's severity threshold, the
+     * findings below it moved to `allDiscarded`. Returns the findings that stay.
+     * Called by executeStage; the severity evals call it too.
+     */
     private async reclassifyAndFilterSeverity(
         suggestions: Partial<CodeSuggestion>[],
         context: CodeReviewPipelineContext,
