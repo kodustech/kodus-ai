@@ -377,6 +377,7 @@ export async function runAgentLoopViaCore(
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
                     input.previousDecisions,
+                    input.changedFiles?.map((f) => f.filename),
                 ),
         },
         { prompt: input.userPrompt },
