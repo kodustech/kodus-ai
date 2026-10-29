@@ -9,13 +9,9 @@
  * discarded, never moved to a category that is on. A label replaced by `bug`
  * follows the same rule, so a team with bug off loses it.
  */
-export const VALID_FINDING_LABELS = [
-    'bug',
-    'security',
-    'performance',
-    'kody_rules',
-    'repo_instruction',
-] as const;
+import { VALID_FINDING_LABELS } from './finding-labels';
+
+export { VALID_FINDING_LABELS };
 
 export const FALLBACK_FINDING_LABEL = 'bug';
 

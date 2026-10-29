@@ -8,6 +8,7 @@ import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engin
 import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import { enrichSuggestions } from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
 import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
+import { CATEGORY_LABELS } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
@@ -1434,7 +1435,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // is on. Kody Rules and custom agents answer to their own config.
             const labeled = normalizeFinderLabels(anchoredSuggestions, {
                 allowed: new Set<string>([
-                    ...(['bug', 'security', 'performance'] as const).filter(
+                    ...CATEGORY_LABELS.filter(
                         (c) => reviewOptions?.[c] !== false,
                     ),
                     ...(repoInstructions?.files?.length

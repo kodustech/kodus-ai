@@ -71,6 +71,10 @@ import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
+import {
+    FINDER_LABELS,
+    type FinderLabel,
+} from '@libs/code-review/infrastructure/agents/engine/finding-labels';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
@@ -82,7 +86,7 @@ const finderLogger = createLogger('finder');
 export interface FinderSuggestion {
     relevantFile: string;
     language?: string;
-    label?: 'bug' | 'security' | 'performance' | 'repo_instruction';
+    label?: FinderLabel;
     suggestionContent: string;
     existingCode?: string;
     improvedCode?: string;
@@ -98,13 +102,6 @@ export interface FinderSuggestion {
     kind?: 'bug' | 'convention';
     source?: { file: string; section?: string; quote: string };
 }
-
-const FINDER_LABELS = [
-    'bug',
-    'security',
-    'performance',
-    'repo_instruction',
-] as const;
 
 /** The finder's output: exactly the fields the prompt asks for, all required.
  *  Snippet, fix, severity and confidence are not part of it at all; a later
@@ -124,12 +121,7 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                 properties: {
                     label: {
                         type: 'string',
-                        enum: [
-                            'bug',
-                            'security',
-                            'performance',
-                            'repo_instruction',
-                        ],
+                        enum: [...FINDER_LABELS],
                     },
                     relevantFile: { type: 'string' },
                     relevantLinesStart: { type: 'number' },
