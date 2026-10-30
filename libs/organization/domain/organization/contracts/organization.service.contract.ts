@@ -2,13 +2,13 @@ import type { ReleaseTrack } from '@libs/feature-gate/domain/release-track';
 
 import { IOrganizationRepository } from './organization.repository.contract';
 import { OrganizationEntity } from '../entities/organization.entity';
-import { IOrganization } from '../interfaces/organization.interface';
+import { CreateOrganization } from '../interfaces/organization.interface';
 
 export const ORGANIZATION_SERVICE_TOKEN = Symbol.for('OrganizationService');
 
 export interface IOrganizationService extends IOrganizationRepository {
     createOrganizationWithTenant(
-        organizationData: Partial<IOrganization>,
+        organizationData: Partial<CreateOrganization>,
     ): Promise<OrganizationEntity | undefined>;
     findOneByUserId(user_id: string): Promise<OrganizationEntity | undefined>;
     /**

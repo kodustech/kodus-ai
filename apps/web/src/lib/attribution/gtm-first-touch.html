@@ -7,13 +7,17 @@
  * and GTM-T2TMHK7K (app.kodus.io). Publish only after the API that accepts
  * `firstTouch` is in production.
  *
- * On the first visit to any *.kodus.io page it stores where the visitor came
- * from in the cookie `kodus_first_touch` on .kodus.io. It never overwrites an
- * existing cookie. The app reads it at signup and the API stores it on the new
- * organization. ES5 on purpose: GTM rejects newer syntax in Custom HTML.
+ * On the first visit to kodus.io or app.kodus.io it stores where the visitor
+ * came from in the cookie `kodus_first_touch` on .kodus.io. It never
+ * overwrites an existing cookie. The app reads it at signup and the API stores
+ * it on the new organization. ES5 on purpose: GTM rejects newer syntax in
+ * Custom HTML.
  */
 (function () {
   var COOKIE = 'kodus_first_touch';
+  // Production only: the app container loads in every environment (QA,
+  // previews, e2e), and a visit there would write this production cookie.
+  var HOSTS = ['kodus.io', 'www.kodus.io', 'app.kodus.io'];
   var MAX_AGE = 60 * 60 * 24 * 365;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
   var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
@@ -82,8 +86,7 @@
   }
 
   try {
-    var host = location.hostname;
-    if (host !== 'kodus.io' && !/\.kodus\.io$/.test(host)) return;
+    if (HOSTS.indexOf(location.hostname) < 0) return;
     if (new RegExp('(?:^|;\\s*)' + COOKIE + '=').test(document.cookie)) return;
 
     var cookie = build(100, 300, true);

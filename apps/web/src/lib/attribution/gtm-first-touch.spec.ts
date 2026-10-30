@@ -233,6 +233,20 @@ describe("GTM first-touch tag", () => {
         expect(jar.getCookiesSync("https://notkodus.io/")).toHaveLength(0);
     });
 
+    it("does nothing on QA, preview or e2e hosts, whose cookie would reach production", () => {
+        const jar = new CookieJar();
+        visit(jar, "https://qa.web.kodus.io/sign-up?utm_source=qa");
+        visit(jar, "https://pr-2305.preview.kodus.io/?utm_source=preview");
+        visit(jar, "https://cloud-e2e.kodus.io/?utm_source=e2e");
+
+        expect(firstTouchOn(jar, "https://app.kodus.io/")).toBeUndefined();
+
+        visit(jar, "https://www.kodus.io/?utm_source=google");
+        expect(firstTouchOn(jar, "https://app.kodus.io/")?.utm_source).toBe(
+            "google",
+        );
+    });
+
     it("keeps the worst-case cookie under the browser limit, with consistent values", () => {
         const jar = new CookieJar();
         // 3-byte characters grow the most once encoded twice.

@@ -10,7 +10,15 @@ export interface IOrganization<TUser = any, TTeam = any> {
     codeHostMemberCount?: number;
     codeHostMemberCountUpdatedAt?: Date;
     releaseTrack?: ReleaseTrack;
-    firstTouch?: FirstTouch | null;
     users?: Partial<TUser>[] | null;
     teams?: Partial<TTeam>[] | null;
 }
+
+/**
+ * What creating an organization takes. The first touch is written then and
+ * never read back (the column is not selected), so IOrganization, which is
+ * what a read returns, does not have it.
+ */
+export type CreateOrganization = IOrganization & {
+    firstTouch?: FirstTouch | null;
+};
