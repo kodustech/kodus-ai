@@ -230,19 +230,31 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         expect(codeManagement.approvePullRequest).toHaveBeenCalled();
     });
 
-    it('holds a clean PR when the approval policy judged it risky', async () => {
-        await stage.execute(
-            makeContext({
-                approvalDecision: {
-                    kind: 'hold',
-                    reason: 'Authentication change needs a human.',
-                },
-            }),
-        );
+    it.each([
+        PlatformType.GITLAB,
+        PlatformType.FORGEJO,
+        PlatformType.AZURE_REPOS,
+    ])(
+        'asks %s to dismiss Kody approvals when a new review holds approval',
+        async (platformType) => {
+            await stage.execute(
+                makeContext({
+                    platformType,
+                    approvalDecision: {
+                        kind: 'hold',
+                        reason: 'Sensitive path changed.',
+                    },
+                }),
+            );
 
-        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-        expect(notificationService.emit).not.toHaveBeenCalled();
-    });
+            expect(
+                codeManagement.dismissOwnPullRequestApprovals,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ prNumber: 42 }),
+            );
+            expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        },
+    );
 
     it('dismisses Kody approvals when a new GitHub review holds approval', async () => {
         await stage.execute(
@@ -284,11 +296,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             { id: 'repo-1', name: 'acme/api' },
             'The PR does not carry a configured approval label.',
             'hold',
+            { onlyIfPresent: false },
         );
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
-    it('does not post a hold notice for an out-of-scope PR with no prior approval', async () => {
+    it('only updates an earlier reason note for an out-of-scope PR with no prior approval', async () => {
         codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
 
         await stage.execute(
@@ -301,7 +314,35 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             }),
         );
 
-        expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
+        // No note is opened for a PR that never had one; a stale hold reason
+        // from an earlier review is brought up to date.
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            'The PR does not carry a configured approval label.',
+            'hold',
+            { onlyIfPresent: true },
+        );
+    });
+
+    it('does not mark the review partial when refreshing an old note fails', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            new Error('Comment lookup timed out'),
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(result.errors ?? []).toEqual([]);
     });
 
     it('records a failed status comment after dismissing an out-of-scope approval', async () => {
@@ -330,22 +371,6 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         );
     });
 
-    it('does not attempt GitHub review dismissal on another provider', async () => {
-        await stage.execute(
-            makeContext({
-                platformType: PlatformType.GITLAB,
-                approvalDecision: {
-                    kind: 'hold',
-                    reason: 'Sensitive path changed.',
-                },
-            }),
-        );
-
-        expect(
-            codeManagement.dismissOwnPullRequestApprovals,
-        ).not.toHaveBeenCalled();
-        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
-    });
 
     it('records a failed dismissal so an old GitHub approval is not silent', async () => {
         codeManagement.dismissOwnPullRequestApprovals.mockRejectedValueOnce(

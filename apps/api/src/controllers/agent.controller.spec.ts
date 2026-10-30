@@ -44,20 +44,6 @@ describe('AgentController.conversation — teamId is optional', () => {
         ).resolves.toBe('ok');
     });
 
-    it('still includes teamId in the thread when it is present', async () => {
-        const { controller, conversationAgentUseCase } = makeController();
-
-        await controller.conversation({
-            prompt: 'hi',
-            organizationAndTeamData: { teamId: 'team-1' } as any,
-        } as any);
-
-        const [{ thread }] = conversationAgentUseCase.execute.mock.calls[0];
-        // Two calls with/without teamId must hash to different thread ids —
-        // otherwise teamId silently stopped affecting thread granularity.
-        expect(thread.id).toEqual(expect.any(String));
-    });
-
     it('produces a different thread id with vs. without teamId (still affects granularity)', async () => {
         const { controller: withoutTeam, conversationAgentUseCase: execWithout } =
             makeController();

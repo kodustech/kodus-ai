@@ -10,6 +10,7 @@ import {
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
+    approvalPathsOf,
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
     evaluateApproval,
@@ -161,7 +162,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 };
             });
         }
-        const paths = fullFiles.map((file) => file.filename);
+        const paths = approvalPathsOf(fullFiles);
 
         const sensitive = paths.some((path) =>
             isFileMatchingGlob(path, policy.sensitivePaths ?? []),

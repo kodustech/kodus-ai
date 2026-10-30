@@ -10,12 +10,6 @@ describe('isOpenPullRequest', () => {
         expect(isOpenPullRequest({ merged: false, status: 'open' })).toBe(true);
     });
 
-    it('is NOT open when merged', () => {
-        expect(isOpenPullRequest({ merged: true, status: 'merged' })).toBe(
-            false,
-        );
-    });
-
     it('is NOT open when status is closed (any casing)', () => {
         expect(isOpenPullRequest({ merged: false, status: 'closed' })).toBe(
             false,

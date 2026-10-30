@@ -441,6 +441,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(result.errors[0].metadata.reason).toBe(
             'summary_generation_failed',
         );
+        // A summary failure is never 'critical'; as of #1844 it alone no
+        // longer holds back the approve gate (RequestChangesOrApproveStage
+        // excludes SUMMARY_GENERATION_FAILED_REASON), but it stays 'partial'
+        // so one co-occurring with something else still counts there.
+        expect(result.errors[0].severity).toBe('partial');
     });
 
     it('appends to a frozen non-empty errors array without dropping the prior error', async () => {
@@ -464,21 +469,6 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(result.errors[1].metadata.reason).toBe(
             'summary_generation_failed',
         );
-    });
-
-    // The recorded error still has severity 'partial' — a summary failure is
-    // never 'critical' — but as of #1844 this alone no longer holds back the
-    // approve gate (RequestChangesOrApproveStage excludes
-    // SUMMARY_GENERATION_FAILED_REASON specifically); severity stays 'partial'
-    // so a summary failure co-occurring with something else still counts
-    // there. See finish-process-review.stage.spec.ts for the approve-gate
-    // behavior itself.
-    it('marks the summary failure as partial (not critical)', async () => {
-        const { stage } = makeStage();
-
-        const result = await (stage as any).executeStage(summaryFailContext());
-
-        expect(result.errors[0].severity).toBe('partial');
     });
 
     it('records lastReviewError so the PR comment can name the provider failure', async () => {

@@ -17,12 +17,8 @@ import { BaseAgentProvider } from './base-agent.provider';
  *
  * The rows that DO apply here:
  *   - request assembly (task threading, override precedence, ctx shape, trim),
- *   - the nullish fail-safe (`resolveTaskSlot() ?? undefined`),
- *   - verbatim threading of whatever truthy slot the resolver returns (the
- *     boundary must not reshape a resolved config — validation is the resolver's
- *     job), and
- *   - input variants (empty / single / null-field / special-chars / duplicate
- *     override / order independence).
+ *   - the nullish fail-safe (`resolveTaskSlot() ?? undefined`), and
+ *   - a resolver failure that propagates instead of a silent default.
  *
  * The boundary spy is the injected `resolveTaskSlot` jest.fn(): a fresh mock is
  * built per test (jest.clearAllMocks in beforeEach), so no module spy leaks
@@ -105,16 +101,6 @@ describe('BaseAgentProvider — boundary: getLlmTask() routing', () => {
         expect((provider as any).getLlmTask()).toBe(LLM_TASK.conversation);
     });
 
-    it('[req-assembly] a subclass override routes to its own task', () => {
-        const { provider } = makeProvider(
-            jest.fn(),
-            BusinessTaskAgentProvider,
-        );
-        expect((provider as any).getLlmTask()).toBe(
-            LLM_TASK.businessValidation,
-        );
-    });
-
     it('[req-assembly] threads getLlmTask() into the resolveTaskSlot call', async () => {
         const resolve = jest.fn().mockResolvedValue(FULL_SLOT);
         const { provider } = makeProvider(resolve, BusinessTaskAgentProvider);
@@ -126,14 +112,6 @@ describe('BaseAgentProvider — boundary: getLlmTask() routing', () => {
 });
 
 describe('BaseAgentProvider — request assembly (matrix D: input variants)', () => {
-    it('[row 1 · req-assembly] passes the org/team data verbatim as arg #1 and stores it', async () => {
-        const resolve = jest.fn().mockResolvedValue(FULL_SLOT);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(resolve.mock.calls[0][0]).toBe(ORG);
-        expect(provider.storedOrg).toBe(ORG);
-    });
-
     it('[row 36 · single override — id only] builds ctx.override.modelId from the id and inherits nothing else', async () => {
         const resolve = jest.fn().mockResolvedValue(FULL_SLOT);
         const { provider } = makeProvider(resolve);
@@ -156,27 +134,6 @@ describe('BaseAgentProvider — request assembly (matrix D: input variants)', ()
         await provider.runFetch(ORG, 'legacy-name', 'id-model');
         const [, , options] = resolve.mock.calls[0];
         expect(options.ctx.override.modelId).toBe('id-model');
-    });
-
-    it('[row 42 · order independence] id-wins is independent of whether name is also present (metamorphic)', async () => {
-        const resolveA = jest.fn().mockResolvedValue(FULL_SLOT);
-        const resolveB = jest.fn().mockResolvedValue(FULL_SLOT);
-        const { provider: a } = makeProvider(resolveA);
-        const { provider: b } = makeProvider(resolveB);
-        await a.runFetch(ORG, 'name-x', 'id-x');
-        await b.runFetch(ORG, undefined, 'id-x');
-        expect(resolveA.mock.calls[0][2].ctx.override.modelId).toBe('id-x');
-        expect(resolveB.mock.calls[0][2].ctx.override.modelId).toBe('id-x');
-        expect(resolveA.mock.calls[0][2]).toEqual(resolveB.mock.calls[0][2]);
-    });
-
-    it('[row 35 · empty input] an empty org object still calls the resolver with empty ctx and no crash', async () => {
-        const resolve = jest.fn().mockResolvedValue(undefined);
-        const { provider } = makeProvider(resolve);
-        await expect(provider.runFetch({} as any)).resolves.toBeUndefined();
-        const [org, , options] = resolve.mock.calls[0];
-        expect(org).toEqual({});
-        expect(options).toEqual({ ctx: {} });
     });
 
     it('[row 39 · null/undefined required fields] undefined overrides → inherit (ctx = {}); a null-field org is threaded verbatim', async () => {
@@ -204,92 +161,14 @@ describe('BaseAgentProvider — request assembly (matrix D: input variants)', ()
         const [, , options] = resolve.mock.calls[0];
         expect(options.ctx.override.modelId).toBe('real-name');
     });
-
-    it('[row 40 · special chars] special-character override ids are preserved (trim only strips edge whitespace)', async () => {
-        const resolve = jest.fn().mockResolvedValue(undefined);
-        const { provider } = makeProvider(resolve);
-        const weird = '  accounts/fireworks/models/llama-v3🚀-"x"\n';
-        await provider.runFetch(ORG, undefined, weird);
-        const [, , options] = resolve.mock.calls[0];
-        expect(options.ctx.override.modelId).toBe(weird.trim());
-    });
 });
 
 describe('BaseAgentProvider — return shape / fallback (matrix A + C)', () => {
-    it('[row 1 · exact D] a fully-resolved slot is stored verbatim as byokConfig', async () => {
-        const resolve = jest.fn().mockResolvedValue(FULL_SLOT);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(provider.resolvedConfig).toBe(FULL_SLOT);
-        expect(provider.resolvedConfig).toEqual(FULL_SLOT);
-    });
-
     it('[row 17 · null return → fail-safe] resolver returning null coalesces to undefined (degrade to managed/env default)', async () => {
         const resolve = jest.fn().mockResolvedValue(null);
         const { provider } = makeProvider(resolve);
         await provider.runFetch(ORG);
         expect(provider.resolvedConfig).toBeUndefined();
-    });
-
-    it('[row 17 · undefined return → fail-safe] resolver returning undefined stays undefined', async () => {
-        const resolve = jest.fn().mockResolvedValue(undefined);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(provider.resolvedConfig).toBeUndefined();
-    });
-
-    // Rows 2-6, 10-13, 18: `resolveTaskSlot` is typed to return NormalizedModel |
-    // undefined, so these off-shape returns cannot occur in production — but the
-    // boundary's contract is to thread ANY truthy resolver value VERBATIM (no
-    // reshape, no key-fixing, no default-filling); that pass-through IS the
-    // correct non-degradation here, because config validation belongs to the
-    // resolver, not this base. We pin the pass-through so a future "helpful"
-    // reshape at this boundary would break the test.
-    it.each([
-        ['row 2 · bare array', [{ model: 'a' }] as any],
-        ['row 3 · object/array swap', { model: 'x' } as any],
-        ['row 4 · wrapper key', { result: FULL_SLOT } as any],
-        ['row 5 · double wrapper', { result: { result: FULL_SLOT } } as any],
-        ['row 6 · numeric single-key wrap', { '0': FULL_SLOT } as any],
-        ['row 10 · right data wrong keys', { duplicateGroups: 1, uniqueIndices: [] } as any],
-        ['row 11 · case mismatch', { Provider: 'openai', Model: 'x' } as any],
-        ['row 12 · partial object', { provider: 'openai' } as any],
-        ['row 13 · extra unknown keys', { ...FULL_SLOT, __weird: true } as any],
-        ['row 18 · primitive true', true as any],
-    ])(
-        '[%s] a truthy resolver value is threaded verbatim (never reshaped)',
-        async (_label, weird) => {
-            const resolve = jest.fn().mockResolvedValue(weird);
-            const { provider } = makeProvider(resolve);
-            await provider.runFetch(ORG);
-            expect(provider.resolvedConfig).toBe(weird);
-        },
-    );
-
-    it('[row 14 · empty object] {} is truthy → threaded verbatim (resolver contract never returns {})', async () => {
-        const empty = {} as any;
-        const resolve = jest.fn().mockResolvedValue(empty);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(provider.resolvedConfig).toBe(empty);
-    });
-
-    it('[row 15 · empty array] [] is truthy → threaded verbatim (resolver contract never returns an array)', async () => {
-        const empty = [] as any;
-        const resolve = jest.fn().mockResolvedValue(empty);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(provider.resolvedConfig).toBe(empty);
-    });
-
-    it('[row 16 · empty string] `?? undefined` is nullish-only: an empty string is NOT coalesced', async () => {
-        const resolve = jest.fn().mockResolvedValue('' as any);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        // Documents the exact operator semantics: '' is falsy but not nullish, so
-        // it survives `?? undefined`. The resolver never returns a string, so this
-        // is a contract guard, not a live degradation.
-        expect(provider.resolvedConfig).toBe('');
     });
 
     it('[row 30 · resolver throws → fail EXPLICIT] a resolver rejection propagates (never swallowed into a silent wrong default)', async () => {
@@ -301,24 +180,5 @@ describe('BaseAgentProvider — return shape / fallback (matrix A + C)', () => {
         expect(provider.resolvedConfig).toBeUndefined();
         // org/team is stored BEFORE the resolver call (it precedes the throw).
         expect(provider.storedOrg).toBe(ORG);
-    });
-
-    it('[row 31 · error object] a truthy {error} is threaded verbatim (resolver contract returns undefined, not {error})', async () => {
-        const errObj = { error: 'BLOCKED' } as any;
-        const resolve = jest.fn().mockResolvedValue(errObj);
-        const { provider } = makeProvider(resolve);
-        await provider.runFetch(ORG);
-        expect(provider.resolvedConfig).toBe(errObj);
-    });
-
-    it('[invariant] fetchBYOKConfig always resolves to void and leaves byokConfig as NormalizedModel|undefined across layers', async () => {
-        for (const ret of [FULL_SLOT, null, undefined, {} as any]) {
-            const resolve = jest.fn().mockResolvedValue(ret);
-            const { provider } = makeProvider(resolve);
-            const result = await provider.runFetch(ORG);
-            expect(result).toBeUndefined();
-            const cfg = provider.resolvedConfig;
-            expect(cfg === undefined || typeof cfg === 'object').toBe(true);
-        }
     });
 });

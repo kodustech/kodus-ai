@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { PlatformType } from '@libs/core/domain/enums';
 import { ValidateNewCommitsStage } from './validate-new-commits.stage';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
@@ -156,47 +157,6 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
 
-        // logic returns "Only Merge Commits" with no tech detail in my implementation of stage,
-        // OR it might have tech detail if I passed one.
-        // Let's check my implementation:
-        // message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        // No second arg. So no tech detail in parens.
-        // But `StageMessageHelper` might append tech detail if I passed it to `skippedWithReason`.
-        // I didn't pass it.
-        // HOWEVER, the `ValidateNewCommitsStage.ts` logic at the top (lines 110+) does:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-        // Wait!
-        // In lines 110+, `message` is retrieved from `details.message`.
-        // If I set `details.message` using `skippedWithReason`, it already contains the formatted string.
-        // Then lines 151-153 append `(${details.technicalReason})` AGAIN?
-
-        // Let's look at lines 151-153 in `ValidateNewCommitsStage.ts`:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-
-        // In my implementation of `validateCommits`:
-        // details: {
-        //    message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        //    technicalReason: 'All new commits identified as merge commits',
-        // }
-
-        // So `message` = "Only Merge Commits — Merge commits are skipped to avoid noise"
-        // Then `draft.statusInfo.message` becomes:
-        // "Only Merge Commits — Merge commits are skipped to avoid noise (All new commits identified as merge commits)"
-
-        // This seems redundant or double-wrapping if `skippedWithReason` was supposed to handle it.
-        // But `skippedWithReason` was called WITHOUT tech detail.
-        // So the "outer" wrapping adds the tech detail.
-        // Ideally I should remove the outer wrapping in `executeStage` and let `validateCommits` handle full formatting using `skippedWithReason(reason, techDetail)`.
-
-        // IF I do that, I need to update `executeStage` logic.
-        // Currently `executeStage` forces the append.
-
-        // Let's fix `executeStage` to NOT double-wrap if `message` already looks formatted? No, that's hacky.
-        // Better: Update `executeStage` to just use `details.message` if available.
-        // AND ensure `validateCommits` returns the FULLY formatted message in `details.message`.
-
-        // Let's check `executeStage` again.
-
         const expectedMessage = `${PipelineReasons.COMMITS.ONLY_MERGE.message}`;
         expect(result.statusInfo.message).toContain(expectedMessage);
     });
@@ -253,6 +213,97 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
         expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+    });
+
+    // #1721, QA MR !68: lastExecution is the last SUCCESS, so a partial
+    // review's status note was never edited and each later review posted one.
+    describe('status note of the previous review', () => {
+        const lookup = (partial: unknown) =>
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    Array.isArray(filters.status)
+                        ? partial
+                        : {
+                              uuid: 'exec-ok',
+                              dataExecution: {
+                                  lastAnalyzedCommit: 'sha-1',
+                                  commentId: 11,
+                                  noteId: 11,
+                              },
+                          },
+            );
+
+        beforeEach(() => {
+            mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+                false,
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'sha-1' }, { sha: 'sha-2' }],
+            );
+        });
+
+        it('carries the note of a later partial review on GitLab', async () => {
+            context.platformType = PlatformType.GITLAB;
+            lookup({
+                uuid: 'exec-partial',
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: { commentId: 22, noteId: 22 },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toEqual({
+                commentId: 22,
+                noteId: 22,
+                threadId: undefined,
+            });
+            expect(result.lastExecution?.commentId).toBe(11);
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: [
+                        AutomationStatus.SUCCESS,
+                        AutomationStatus.PARTIAL_ERROR,
+                        AutomationStatus.ERROR,
+                    ],
+                    pullRequestNumber: 1,
+                    repositoryId: 'repo-1',
+                }),
+            );
+        });
+
+        it('leaves the note to lastExecution when the lookup fails', async () => {
+            context.platformType = PlatformType.GITLAB;
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) => {
+                    if (Array.isArray(filters.status)) throw new Error('db');
+                    return {
+                        uuid: 'exec-ok',
+                        dataExecution: { lastAnalyzedCommit: 'sha-1' },
+                    };
+                },
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+
+        it('does not look it up outside GitLab', async () => {
+            context.platformType = PlatformType.GITHUB;
+            lookup({ dataExecution: { commentId: 22, noteId: 22 } });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('orphaned baseCommit detection (rebase / force-push)', () => {
@@ -562,16 +613,6 @@ describe('ValidateNewCommitsStage', () => {
                 expect(
                     mockPullRequestManagerService.getRebaseInterdiff,
                 ).toHaveBeenCalled();
-            });
-
-            it('records the fallback on orphanedBaseCommit when the earlier diff is unreadable', async () => {
-                orphan();
-
-                const result = await stage.execute(context);
-
-                expect(result.orphanedBaseCommit?.interdiff).toEqual({
-                    fallback: 'previous_diff_unavailable',
-                });
             });
 
             it.each([

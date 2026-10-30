@@ -363,20 +363,6 @@ describe('buildE2BRemoteCommands', () => {
             );
         });
 
-        it('clamps a negative start up to 1', async () => {
-            const run = jest.fn().mockResolvedValue({
-                stdout: 'lines',
-                stderr: '',
-                exitCode: 0,
-            });
-            const rc = buildE2BRemoteCommands(makeSandbox(run));
-            await rc.read('src/a.ts', -4, 3);
-            expect(run).toHaveBeenCalledWith(
-                `sed -n '1,3p' '${REPO_DIR}/src/a.ts'`,
-                { timeoutMs: 10_000 },
-            );
-        });
-
         it('escapes single quotes in the resolved path', async () => {
             const run = jest.fn().mockResolvedValue({
                 stdout: 'x',

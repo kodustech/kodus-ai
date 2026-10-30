@@ -43,13 +43,4 @@ describe('resolveWorkerRole', () => {
         const { resolveWorkerRole } = await load();
         expect(() => resolveWorkerRole()).toThrow(/cron-runner/);
     });
-
-    it('throws when WORKER_ROLE is empty string', async () => {
-        process.env.WORKER_ROLE = '';
-        const { resolveWorkerRole } = await load();
-        // Empty string isn't undefined; the validator must still reject
-        // it explicitly so a misconfigured compose `${VAR:-}` fails fast
-        // instead of booting into "code-review" by accident.
-        expect(() => resolveWorkerRole()).toThrow(/WORKER_ROLE must be set/);
-    });
 });

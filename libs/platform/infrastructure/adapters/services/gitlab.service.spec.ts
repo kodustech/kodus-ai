@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
@@ -57,7 +58,7 @@ describe('GitlabService', () => {
     });
 
     it.each([
-        ['createIssueComment', 'MergeRequestDiscussions'],
+        ['createIssueComment', 'MergeRequestNotes'],
         ['createSingleIssueComment', 'MergeRequestNotes'],
     ] as const)('returns null when %s cannot publish', async (method, api) => {
         jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
@@ -73,6 +74,98 @@ describe('GitlabService', () => {
                 body: 'Automatic approval held',
             }),
         ).resolves.toBeNull();
+    });
+
+    // A rate-limit error has no `cause`; reading `cause.description` threw a
+    // TypeError, so the comment publisher never saw the 429.
+    it('surfaces a rate-limited inline comment as a 429, not a TypeError', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const rateLimited = Object.assign(
+            new Error('GitLab answered HTTP 429; retry after 30s'),
+            { name: 'GitbeakerRetryError', status: 429, retryAfterMs: 30_000 },
+        );
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequests: {
+                allDiffVersions: jest.fn().mockRejectedValue(rateLimited),
+            },
+        });
+
+        const error = await service
+            .createReviewComment({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                lineComment: { path: 'a.ts', line: 1, body: 'x' },
+            })
+            .catch((e) => e);
+
+        expect(error).not.toBeInstanceOf(TypeError);
+        expect(error.status).toBe(429);
+        expect(error.retryAfterMs).toBe(30_000);
+        expect(error.errorType).toBe('failed');
+    });
+
+    it('posts status as a plain note and PR-level findings as discussions', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const createNote = jest.fn().mockResolvedValue({ id: 11 });
+        const createDiscussion = jest.fn().mockResolvedValue({
+            id: 'discussion-1',
+            notes: [{ id: 12 }],
+        });
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestNotes: { create: createNote },
+            MergeRequestDiscussions: { create: createDiscussion },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+            body: 'Code Review Completed',
+        };
+
+        await service.createIssueComment(request);
+        await service.createIssueComment({
+            ...request,
+            body: 'Fix this rule violation',
+            suggestion: { id: 'finding-1' },
+        });
+
+        expect(createNote).toHaveBeenCalledTimes(1);
+        expect(createNote).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'Code Review Completed',
+        );
+        expect(createDiscussion).toHaveBeenCalledTimes(1);
+        expect(createDiscussion).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'Fix this rule violation',
+        );
+    });
+
+    it('updates a plain note without opening a discussion', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const editNote = jest.fn().mockResolvedValue({ id: 11 });
+        const editDiscussion = jest.fn();
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestNotes: { edit: editNote },
+            MergeRequestDiscussions: { editNote: editDiscussion },
+        });
+
+        await service.updateIssueComment({
+            organizationAndTeamData,
+            repository: { id: 'repo-1' },
+            prNumber: 42,
+            commentId: 11,
+            noteId: 11,
+            body: 'Code Review Started',
+        });
+
+        expect(editNote).toHaveBeenCalledWith('repo-1', 42, 11, {
+            body: 'Code Review Started',
+        });
+        expect(editDiscussion).not.toHaveBeenCalled();
     });
 
     it('keeps the discussion ID needed to update an approval reason', async () => {
@@ -172,6 +265,7 @@ describe('GitlabService', () => {
             host: 'https://gitlab.example.com',
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     });
 
@@ -805,7 +899,11 @@ describe('GitlabService', () => {
 
             process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK = webhookUrl;
 
-            return { createOrUpdateConfig, gitlabApi, findIntegrationConfigFormatted };
+            return {
+                createOrUpdateConfig,
+                gitlabApi,
+                findIntegrationConfigFormatted,
+            };
         };
 
         afterEach(() => {

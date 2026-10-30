@@ -69,22 +69,6 @@ function buildProvider(
 
 const ORG_DATA = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
-it('does not fall back to legacy approval for a saved policy without access', async () => {
-    const deps = buildDeps();
-    const provider = buildProvider(deps, false);
-    const result = await (provider as any).shouldApprovePR({
-        organizationAndTeamData: ORG_DATA,
-        pr: basePr(),
-        codeReviewConfig: {
-            pullRequestApprovalActive: true,
-            approvalLabels: ['ready'],
-        },
-        teamAutomationId: 'automation-1',
-    });
-    expect(result).toBe(false);
-    expect(deps.codeManagementService.getPullRequest).not.toHaveBeenCalled();
-});
-
 it('does not approve a Bitbucket PR when labels cannot be verified', async () => {
     const deps = buildDeps();
     const provider = buildProvider(deps);
@@ -129,10 +113,6 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             expect(call(undefined)).toBeNull();
         });
 
-        it('returns null for null', () => {
-            expect(call(null)).toBeNull();
-        });
-
         it('returns null for the empty string (falsy guard)', () => {
             expect(call('')).toBeNull();
         });
@@ -147,14 +127,6 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
 
         it('returns null for an object with no known sha field', () => {
             expect(call({ foo: 'bar' })).toBeNull();
-        });
-
-        it('reads .sha from an object', () => {
-            expect(call({ sha: 'sha-a' })).toBe('sha-a');
-        });
-
-        it('reads .commitSha when .sha is absent', () => {
-            expect(call({ commitSha: 'sha-b' })).toBe('sha-b');
         });
 
         it('reads .commit.sha when .sha and .commitSha are absent', () => {

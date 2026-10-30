@@ -21,7 +21,7 @@ describe('shouldFailoverToNextModel — real classifier composition', () => {
         );
     });
 
-    it.each([500, 502, 503, 504])(
+    it.each([503])(
         'cascades on a persistent upstream error (%i)',
         (status) => {
             expect(

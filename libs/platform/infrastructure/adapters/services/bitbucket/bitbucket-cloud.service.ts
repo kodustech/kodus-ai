@@ -2090,6 +2090,10 @@ export class BitbucketCloudService implements Omit<
 
             return prFilesWithDiffAndContents.map((file) => ({
                 filename: file.new?.path ?? file.old?.path,
+                previous_filename:
+                    file.new?.path && file.old?.path !== file.new.path
+                        ? file.old?.path
+                        : undefined,
                 sha: pr.source?.commit?.hash,
                 status: file.status,
                 additions: file.lines_added,
@@ -4362,6 +4366,44 @@ export class BitbucketCloudService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const workspace = await this.getWorkspaceFromRepository(
+            organizationAndTeamData,
+            repository.id,
+        );
+        if (!workspace) throw new Error('Bitbucket workspace not found');
+        const bitbucketAPI = this.instanceBitbucketApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        await bitbucketAPI.pullrequests.deleteApproval({
+            pull_request_id: prNumber,
+            repo_slug: `{${repository.id}}`,
+            workspace: `{${workspace}}`,
+        });
+        return 1;
     }
 
     async approvePullRequest(params: {

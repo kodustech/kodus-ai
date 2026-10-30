@@ -25,6 +25,7 @@ import {
 } from '../repositories/schemas/code-area-history.model';
 import {
     CODE_AREA_RISK_MAP_SERVICE_TOKEN,
+    type CodeAreaHistorySyncStatus,
     ICodeAreaRiskMapService,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 
@@ -72,7 +73,10 @@ export class RefreshCodeAreaRiskMapService {
         private readonly sync: Model<CodeAreaHistorySyncModel>,
     ) {}
 
-    async readStatus(organizationId: string, repositoryId: string) {
+    async readStatus(
+        organizationId: string,
+        repositoryId: string,
+    ): Promise<CodeAreaHistorySyncStatus | null> {
         if (
             typeof organizationId !== 'string' ||
             !organizationId ||
@@ -113,7 +117,12 @@ export class RefreshCodeAreaRiskMapService {
     async refreshOneBatch(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
-    }): Promise<{ complete: boolean; processed: number; cursorEnd: string }> {
+    }): Promise<{
+        complete: boolean;
+        processed: number;
+        failed: boolean;
+        cursorEnd: string;
+    }> {
         const { organizationAndTeamData, repository } = params;
         const organizationId = organizationAndTeamData.organizationId;
         if (
@@ -192,6 +201,7 @@ export class RefreshCodeAreaRiskMapService {
                 return {
                     complete: true,
                     processed: 0,
+                    failed: false,
                     cursorEnd: state.cursorEnd,
                 };
             }
@@ -429,6 +439,7 @@ export class RefreshCodeAreaRiskMapService {
         return {
             complete: nextState.complete,
             processed,
+            failed,
             cursorEnd: nextState.cursorEnd,
         };
     }

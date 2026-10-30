@@ -271,3 +271,42 @@ it.each([
         ).not.toHaveBeenCalled();
     },
 );
+
+it.each([
+    ['opens no note when none exists', [], 0, 0],
+    [
+        'updates the earlier note when one exists',
+        [{ id: 42, body: formatApprovalReasonComment('hold', 'Old reason') }],
+        1,
+        0,
+    ],
+])(
+    'with onlyIfPresent, %s',
+    async (_label, comments, updates, creates) => {
+        const codeManagement = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue(comments),
+            updateIssueComment: jest.fn().mockResolvedValue({}),
+            createIssueComment: jest.fn().mockResolvedValue({}),
+        };
+        const service = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagement as any,
+            { setApprovalReasonDeliveryFailure: jest.fn() } as any,
+        );
+
+        await service.postApprovalReason(
+            { organizationId: 'org', teamId: 'team' },
+            12,
+            { id: 'repo', name: 'api' },
+            'The PR does not carry a configured approval label.',
+            'hold',
+            { onlyIfPresent: true },
+        );
+
+        expect(codeManagement.updateIssueComment).toHaveBeenCalledTimes(updates);
+        expect(codeManagement.createIssueComment).toHaveBeenCalledTimes(creates);
+    },
+);

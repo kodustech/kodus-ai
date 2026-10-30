@@ -35,19 +35,11 @@ describe('extractVerdict (fail-open / refute-to-drop)', () => {
         expect(v.confidence).toBe('high');
     });
 
-    it('reads an explicit keep=true verdict', () => {
-        const v = extractVerdict(
-            stateWith([
-                { type: VERIFY_DONE_TOOL, payload: { keep: true, rationale: 'real gap' } } as any,
-            ]),
-        );
-        expect(v.keep).toBe(true);
-    });
-
     it('defaults to keep=true when no verdict artifact is present (fail-open)', () => {
         const v = extractVerdict(stateWith([]));
         expect(v.keep).toBe(true);
         expect(v.rationale).toMatch(/kept by default/);
+        expect(v.parseMode).toBe('default-keep');
     });
 
     it('defaults to keep=true when the verdict payload is malformed', () => {
@@ -188,9 +180,5 @@ describe('extractVerdict — verdict written as text (#1937)', () => {
         );
         expect(v.keep).toBe(true);
         expect(v.parseMode).toBe('tool');
-    });
-
-    it('labels the fail-open default', () => {
-        expect(extractVerdict(stateWith([])).parseMode).toBe('default-keep');
     });
 });

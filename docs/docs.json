@@ -55,6 +55,7 @@
                                         "group": "Advanced Configs",
                                         "pages": [
                                             "en/how_to_use/code_review/configs/general",
+                                            "en/how_to_use/code_review/configs/auto_approve",
                                             "en/how_to_use/code_review/configs/centralized_config",
                                             "en/how_to_use/code_review/configs/inheritance_overrides",
                                             "en/how_to_use/code_review/configs/directory_level",
@@ -302,19 +303,6 @@
                                     "en/knowledge_base/how-to-fix-webhook-issues",
                                     "en/knowledge_base/why-are-code-reviews-paused"
                                 ]
-                            },
-                            {
-                                "group": "LLM Providers",
-                                "pages": [
-                                    "en/knowledge_base/how-to-use-z-ai-with-kodus",
-                                    "en/knowledge_base/how-to-use-synthetic-with-kodus",
-                                    "en/knowledge_base/how-to-use-chutes-with-kodus",
-                                    "en/knowledge_base/how-to-use-moonshot-with-kodus",
-                                    "en/knowledge_base/how-to-use-novita-with-kodus",
-                                    "en/knowledge_base/how-to-use-groq-with-kodus",
-                                    "en/knowledge_base/how-to-use-together-ai-with-kodus",
-                                    "en/knowledge_base/how-to-use-fireworks-with-kodus"
-                                ]
                             }
                         ]
                     },
@@ -358,7 +346,11 @@
                                     "en/cookbook/novita",
                                     "en/cookbook/fireworks",
                                     "en/cookbook/together",
-                                    "en/cookbook/groq"
+                                    "en/cookbook/groq",
+                                    "en/cookbook/z-ai",
+                                    "en/cookbook/synthetic",
+                                    "en/cookbook/chutes",
+                                    "en/cookbook/moonshot"
                                 ]
                             }
                         ]
@@ -404,6 +396,7 @@
                                         "group": "Configuraciones Avanzadas",
                                         "pages": [
                                             "es/how_to_use/code_review/configs/general",
+                                            "es/how_to_use/code_review/configs/auto_approve",
                                             "es/how_to_use/code_review/configs/centralized_config",
                                             "es/how_to_use/code_review/configs/inheritance_overrides",
                                             "es/how_to_use/code_review/configs/directory_level",
@@ -651,19 +644,6 @@
                                     "es/knowledge_base/how-to-fix-webhook-issues",
                                     "es/knowledge_base/why-are-code-reviews-paused"
                                 ]
-                            },
-                            {
-                                "group": "Proveedores de LLM",
-                                "pages": [
-                                    "es/knowledge_base/how-to-use-z-ai-with-kodus",
-                                    "es/knowledge_base/how-to-use-synthetic-with-kodus",
-                                    "es/knowledge_base/how-to-use-chutes-with-kodus",
-                                    "es/knowledge_base/how-to-use-moonshot-with-kodus",
-                                    "es/knowledge_base/how-to-use-novita-with-kodus",
-                                    "es/knowledge_base/how-to-use-groq-with-kodus",
-                                    "es/knowledge_base/how-to-use-together-ai-with-kodus",
-                                    "es/knowledge_base/how-to-use-fireworks-with-kodus"
-                                ]
                             }
                         ]
                     },
@@ -707,7 +687,11 @@
                                     "es/cookbook/novita",
                                     "es/cookbook/fireworks",
                                     "es/cookbook/together",
-                                    "es/cookbook/groq"
+                                    "es/cookbook/groq",
+                                    "es/cookbook/z-ai",
+                                    "es/cookbook/synthetic",
+                                    "es/cookbook/chutes",
+                                    "es/cookbook/moonshot"
                                 ]
                             }
                         ]
@@ -753,6 +737,7 @@
                                         "group": "Configurações Avançadas",
                                         "pages": [
                                             "pt-BR/how_to_use/code_review/configs/general",
+                                            "pt-BR/how_to_use/code_review/configs/auto_approve",
                                             "pt-BR/how_to_use/code_review/configs/centralized_config",
                                             "pt-BR/how_to_use/code_review/configs/inheritance_overrides",
                                             "pt-BR/how_to_use/code_review/configs/directory_level",
@@ -1000,19 +985,6 @@
                                     "pt-BR/knowledge_base/how-to-fix-webhook-issues",
                                     "pt-BR/knowledge_base/why-are-code-reviews-paused"
                                 ]
-                            },
-                            {
-                                "group": "Provedores de LLM",
-                                "pages": [
-                                    "pt-BR/knowledge_base/how-to-use-z-ai-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-synthetic-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-chutes-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-moonshot-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-novita-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-groq-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-together-ai-with-kodus",
-                                    "pt-BR/knowledge_base/how-to-use-fireworks-with-kodus"
-                                ]
                             }
                         ]
                     },
@@ -1056,7 +1028,11 @@
                                     "pt-BR/cookbook/novita",
                                     "pt-BR/cookbook/fireworks",
                                     "pt-BR/cookbook/together",
-                                    "pt-BR/cookbook/groq"
+                                    "pt-BR/cookbook/groq",
+                                    "pt-BR/cookbook/z-ai",
+                                    "pt-BR/cookbook/synthetic",
+                                    "pt-BR/cookbook/chutes",
+                                    "pt-BR/cookbook/moonshot"
                                 ]
                             }
                         ]
@@ -1102,6 +1078,7 @@
                                         "group": "詳細設定",
                                         "pages": [
                                             "ja/how_to_use/code_review/configs/general",
+                                            "ja/how_to_use/code_review/configs/auto_approve",
                                             "ja/how_to_use/code_review/configs/centralized_config",
                                             "ja/how_to_use/code_review/configs/inheritance_overrides",
                                             "ja/how_to_use/code_review/configs/directory_level",
@@ -1349,19 +1326,6 @@
                                     "ja/knowledge_base/how-to-fix-webhook-issues",
                                     "ja/knowledge_base/why-are-code-reviews-paused"
                                 ]
-                            },
-                            {
-                                "group": "LLMプロバイダー",
-                                "pages": [
-                                    "ja/knowledge_base/how-to-use-z-ai-with-kodus",
-                                    "ja/knowledge_base/how-to-use-synthetic-with-kodus",
-                                    "ja/knowledge_base/how-to-use-chutes-with-kodus",
-                                    "ja/knowledge_base/how-to-use-moonshot-with-kodus",
-                                    "ja/knowledge_base/how-to-use-novita-with-kodus",
-                                    "ja/knowledge_base/how-to-use-groq-with-kodus",
-                                    "ja/knowledge_base/how-to-use-together-ai-with-kodus",
-                                    "ja/knowledge_base/how-to-use-fireworks-with-kodus"
-                                ]
                             }
                         ]
                     },
@@ -1405,7 +1369,11 @@
                                     "ja/cookbook/novita",
                                     "ja/cookbook/fireworks",
                                     "ja/cookbook/together",
-                                    "ja/cookbook/groq"
+                                    "ja/cookbook/groq",
+                                    "ja/cookbook/z-ai",
+                                    "ja/cookbook/synthetic",
+                                    "ja/cookbook/chutes",
+                                    "ja/cookbook/moonshot"
                                 ]
                             }
                         ]
@@ -1451,6 +1419,7 @@
                                         "group": "高级配置",
                                         "pages": [
                                             "zh/how_to_use/code_review/configs/general",
+                                            "zh/how_to_use/code_review/configs/auto_approve",
                                             "zh/how_to_use/code_review/configs/centralized_config",
                                             "zh/how_to_use/code_review/configs/inheritance_overrides",
                                             "zh/how_to_use/code_review/configs/directory_level",
@@ -1698,19 +1667,6 @@
                                     "zh/knowledge_base/how-to-fix-webhook-issues",
                                     "zh/knowledge_base/why-are-code-reviews-paused"
                                 ]
-                            },
-                            {
-                                "group": "LLM 提供商",
-                                "pages": [
-                                    "zh/knowledge_base/how-to-use-z-ai-with-kodus",
-                                    "zh/knowledge_base/how-to-use-synthetic-with-kodus",
-                                    "zh/knowledge_base/how-to-use-chutes-with-kodus",
-                                    "zh/knowledge_base/how-to-use-moonshot-with-kodus",
-                                    "zh/knowledge_base/how-to-use-novita-with-kodus",
-                                    "zh/knowledge_base/how-to-use-groq-with-kodus",
-                                    "zh/knowledge_base/how-to-use-together-ai-with-kodus",
-                                    "zh/knowledge_base/how-to-use-fireworks-with-kodus"
-                                ]
                             }
                         ]
                     },
@@ -1754,7 +1710,11 @@
                                     "zh/cookbook/novita",
                                     "zh/cookbook/fireworks",
                                     "zh/cookbook/together",
-                                    "zh/cookbook/groq"
+                                    "zh/cookbook/groq",
+                                    "zh/cookbook/z-ai",
+                                    "zh/cookbook/synthetic",
+                                    "zh/cookbook/chutes",
+                                    "zh/cookbook/moonshot"
                                 ]
                             }
                         ]
@@ -1952,6 +1912,166 @@
         {
             "source": "/cookbook/zh/:slug*",
             "destination": "/zh/cookbook/:slug*"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-z-ai-with-kodus",
+            "destination": "/en/cookbook/z-ai"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-synthetic-with-kodus",
+            "destination": "/en/cookbook/synthetic"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-chutes-with-kodus",
+            "destination": "/en/cookbook/chutes"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-moonshot-with-kodus",
+            "destination": "/en/cookbook/moonshot"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-z-ai-with-kodus",
+            "destination": "/es/cookbook/z-ai"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-synthetic-with-kodus",
+            "destination": "/es/cookbook/synthetic"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-chutes-with-kodus",
+            "destination": "/es/cookbook/chutes"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-moonshot-with-kodus",
+            "destination": "/es/cookbook/moonshot"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-z-ai-with-kodus",
+            "destination": "/pt-BR/cookbook/z-ai"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-synthetic-with-kodus",
+            "destination": "/pt-BR/cookbook/synthetic"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-chutes-with-kodus",
+            "destination": "/pt-BR/cookbook/chutes"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-moonshot-with-kodus",
+            "destination": "/pt-BR/cookbook/moonshot"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-z-ai-with-kodus",
+            "destination": "/ja/cookbook/z-ai"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-synthetic-with-kodus",
+            "destination": "/ja/cookbook/synthetic"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-chutes-with-kodus",
+            "destination": "/ja/cookbook/chutes"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-moonshot-with-kodus",
+            "destination": "/ja/cookbook/moonshot"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-z-ai-with-kodus",
+            "destination": "/zh/cookbook/z-ai"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-synthetic-with-kodus",
+            "destination": "/zh/cookbook/synthetic"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-chutes-with-kodus",
+            "destination": "/zh/cookbook/chutes"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-moonshot-with-kodus",
+            "destination": "/zh/cookbook/moonshot"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-fireworks-with-kodus",
+            "destination": "/en/cookbook/fireworks"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-groq-with-kodus",
+            "destination": "/en/cookbook/groq"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-novita-with-kodus",
+            "destination": "/en/cookbook/novita"
+        },
+        {
+            "source": "/en/knowledge_base/how-to-use-together-ai-with-kodus",
+            "destination": "/en/cookbook/together"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-fireworks-with-kodus",
+            "destination": "/es/cookbook/fireworks"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-groq-with-kodus",
+            "destination": "/es/cookbook/groq"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-novita-with-kodus",
+            "destination": "/es/cookbook/novita"
+        },
+        {
+            "source": "/es/knowledge_base/how-to-use-together-ai-with-kodus",
+            "destination": "/es/cookbook/together"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-fireworks-with-kodus",
+            "destination": "/pt-BR/cookbook/fireworks"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-groq-with-kodus",
+            "destination": "/pt-BR/cookbook/groq"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-novita-with-kodus",
+            "destination": "/pt-BR/cookbook/novita"
+        },
+        {
+            "source": "/pt-BR/knowledge_base/how-to-use-together-ai-with-kodus",
+            "destination": "/pt-BR/cookbook/together"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-fireworks-with-kodus",
+            "destination": "/ja/cookbook/fireworks"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-groq-with-kodus",
+            "destination": "/ja/cookbook/groq"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-novita-with-kodus",
+            "destination": "/ja/cookbook/novita"
+        },
+        {
+            "source": "/ja/knowledge_base/how-to-use-together-ai-with-kodus",
+            "destination": "/ja/cookbook/together"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-fireworks-with-kodus",
+            "destination": "/zh/cookbook/fireworks"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-groq-with-kodus",
+            "destination": "/zh/cookbook/groq"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-novita-with-kodus",
+            "destination": "/zh/cookbook/novita"
+        },
+        {
+            "source": "/zh/knowledge_base/how-to-use-together-ai-with-kodus",
+            "destination": "/zh/cookbook/together"
         }
     ]
 }

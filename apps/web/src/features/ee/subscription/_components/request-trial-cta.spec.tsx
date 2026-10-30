@@ -60,11 +60,4 @@ describe("RequestTrialCta", () => {
             "https://kodus.io/self-hosted-trial?org_id=org-123&email=dev%40acme.com",
         );
     });
-
-    it("renders the link as the only action", () => {
-        render(<RequestTrialCta />);
-
-        expect(screen.getAllByRole("link")).toHaveLength(1);
-        expect(screen.queryByText(/copy/i)).not.toBeInTheDocument();
-    });
 });

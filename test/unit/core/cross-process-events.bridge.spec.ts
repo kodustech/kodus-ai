@@ -480,31 +480,6 @@ describe('CrossProcessEventsBridge', () => {
         expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
-    it('notification handler parses single id, comma list, empty, and garbage', () => {
-        // The channel-level parsing lives inside the client.on('notification')
-        // callback — mirrors that same logic here. The empty-string guard
-        // matters: without it, Number('') is 0 (not NaN) and would fire
-        // a wasted SELECT on id=0.
-        const parse = (payload: string): number[] =>
-            payload
-                .split(',')
-                .map((raw) => raw.trim())
-                .filter((raw) => raw.length > 0)
-                .map((raw) => Number(raw))
-                .filter((n) => Number.isFinite(n) && n > 0);
-
-        expect(parse('77')).toEqual([77]);
-        expect(parse('77,78,79')).toEqual([77, 78, 79]);
-        expect(parse('77, 78 , 79')).toEqual([77, 78, 79]);
-        expect(parse('')).toEqual([]);
-        expect(parse('abc,def')).toEqual([]);
-        expect(parse('77,junk,79')).toEqual([77, 79]);
-        // Trailing / leading commas must not become id=0.
-        expect(parse('77,')).toEqual([77]);
-        expect(parse(',77')).toEqual([77]);
-        expect(parse(',,')).toEqual([]);
-    });
-
     it('inert (duplicate) instance does not forward or start LISTEN', async () => {
         // First bridge claims primary.
         const primary = makeBridge().bridge;

@@ -1201,6 +1201,43 @@ export class BitbucketDataCenterService implements Omit<
         }
     }
 
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const authDetails = await this.getAuthDetails(organizationAndTeamData);
+        const repoConfig = await this.getRepoConfig(
+            organizationAndTeamData,
+            repository.id || repository.name,
+        );
+        if (!authDetails || !repoConfig) {
+            throw new Error('Bitbucket Data Center repository not found');
+        }
+        await this.getAxiosInstance(authDetails).put(
+            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${authDetails.username}`,
+            { status: 'UNAPPROVED' },
+        );
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -1346,6 +1383,7 @@ export class BitbucketDataCenterService implements Omit<
 
                     return {
                         filename: filePath,
+                        previous_filename: file.srcPath?.toString,
                         sha: sourceCommit,
                         status:
                             file.type === 'MODIFY'
@@ -2758,12 +2796,13 @@ export class BitbucketDataCenterService implements Omit<
             );
 
             const pr = response.data;
-            const reviewers = pr.reviewers || [];
-
-            // Find the current user in the reviewers list
-            const userReview = reviewers.find(
-                (r: any) => r.user?.name === currentUser.id,
-            );
+            // approvePullRequest approves through /participants/{user}, which
+            // lists a user who is not a designated reviewer under
+            // `participants`, so both lists are read.
+            const userReview = [
+                ...(pr.reviewers || []),
+                ...(pr.participants || []),
+            ].find((r: any) => r.user?.name === currentUser.id);
 
             if (!userReview) return PullRequestReviewState.NONE;
 

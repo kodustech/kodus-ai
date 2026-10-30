@@ -359,6 +359,10 @@ function looksLikeQuota(lower: string): boolean {
         // failure mode of matching the exact phrase is exactly that delay --
         // if Anthropic rewords the cap, we wait instead of mislabelling.
         lower.includes('specified api usage limits') ||
+        // Z.AI's weekly/monthly cap (code 1310, #2104), matched on its exact
+        // wording for the same reason. Its short-window sibling ("Usage limit
+        // reached for 5 hour") reopens within hours and stays a rate limit.
+        lower.includes('weekly/monthly limit exhausted') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')

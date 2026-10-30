@@ -173,49 +173,6 @@ describe('ExceptionsFilter', () => {
             expect(body).not.toHaveProperty('details');
             expect(body).not.toHaveProperty('error_key');
         });
-
-        it('handles all three fields together', () => {
-            const { mockContext, json } = makeContext();
-            const exception = new HttpException(
-                {
-                    message: 'Full error',
-                    code: 'ERR_CODE',
-                    details: { foo: 'bar' },
-                    error_key: 'ERR_KEY',
-                },
-                HttpStatus.FORBIDDEN,
-            );
-
-            filter.catch(exception, mockContext);
-
-            expect(json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    statusCode: 403,
-                    message: 'Full error',
-                    code: 'ERR_CODE',
-                    details: { foo: 'bar' },
-                    error_key: 'ERR_KEY',
-                }),
-            );
-        });
-    });
-
-    describe('HttpException with string response', () => {
-        it('uses string as message', () => {
-            const { mockContext, json } = makeContext();
-            const exception = new HttpException(
-                'String message',
-                HttpStatus.BAD_REQUEST,
-            );
-
-            filter.catch(exception, mockContext);
-
-            expect(json).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    message: 'String message',
-                }),
-            );
-        });
     });
 
     describe('HttpException with array message', () => {

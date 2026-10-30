@@ -16,9 +16,8 @@ import { AzureReposService } from './azureRepos.service';
  * delaying every request the service account made — code reviews included —
  * by about 20 seconds.
  *
- * These exercise the real `AzureReposService`, deliberately: the pre-existing
- * `test/unit/platform/services/azure-delete-webhook.spec.ts` reimplements
- * `deleteWebhook` inside the spec file, so it passes no matter what the
+ * These exercise the real `AzureReposService`, deliberately: a spec that
+ * reimplements `deleteWebhook` inside the spec file passes no matter what the
  * service does and catches no regression in it.
  *
  * What must keep holding, and why each one is here:

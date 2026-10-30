@@ -342,7 +342,7 @@ export function renderCliText(outcome: BusinessValidationOutcome): string {
     }
     lines.push(
         '',
-        `status: ${outcome.passed ? 'compliant' : 'issues_found'} (--json for the full verdict)`,
+        `status: ${outcome.passed ? 'compliant' : 'issues_found'} (--format json for the full verdict)`,
     );
     return lines.join('\n');
 }

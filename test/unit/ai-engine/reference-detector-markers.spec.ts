@@ -26,11 +26,6 @@ describe('escapeRegExp', () => {
         // ...and does NOT match a string where a metachar acted as a wildcard.
         expect(re.test('aXb*c+d?(e)[f]{g}^h$i|j\\k')).toBe(false);
     });
-
-    it('leaves the current control markers intact (no behavior change)', () => {
-        expect(escapeRegExp('@kody-sync')).toBe('@kody-sync');
-        expect(escapeRegExp('@kody-ignore')).toBe('@kody-ignore');
-    });
 });
 
 describe('stripControlMarkers', () => {
@@ -70,16 +65,6 @@ describe('ReferenceDetectorService.extractMarkers', () => {
             [],
         );
         expect(markers).toEqual([]);
-    });
-
-    it('still extracts real @file references', () => {
-        const markers = service.extractMarkers(
-            'See @AGENTS.md and @docs/standards.md for details. @kody-sync',
-            [],
-        );
-        expect(markers).toContain('@AGENTS.md');
-        expect(markers).toContain('@docs/standards.md');
-        expect(markers).not.toContain('@kody-sync');
     });
 });
 

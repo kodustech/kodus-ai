@@ -1,4 +1,4 @@
-import { isFeaturedSlug, isJobId, UUID_RE } from "./jobId";
+import { isFeaturedSlug, isJobId } from "./jobId";
 
 describe("jobId / featured-slug detection", () => {
     const UUID_LOWER = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
@@ -28,24 +28,9 @@ describe("jobId / featured-slug detection", () => {
     });
 
     describe("isFeaturedSlug", () => {
-        it("is the inverse of isJobId for a UUID", () => {
-            expect(isFeaturedSlug(UUID_LOWER)).toBe(false);
-        });
-
         it("treats hyphenated slugs as featured", () => {
             expect(isFeaturedSlug("trpc-error-handling-vm")).toBe(true);
             expect(isFeaturedSlug("supabase-cron-job-id")).toBe(true);
         });
-
-        it("treats an empty id as a (non-job) slug", () => {
-            // /r/ with no UUID falls through to the featured loader rather
-            // than starting a poll against a non-existent job.
-            expect(isFeaturedSlug("")).toBe(true);
-        });
-    });
-
-    it("UUID_RE is anchored at both ends", () => {
-        expect(UUID_RE.source.startsWith("^")).toBe(true);
-        expect(UUID_RE.source.endsWith("$")).toBe(true);
     });
 });

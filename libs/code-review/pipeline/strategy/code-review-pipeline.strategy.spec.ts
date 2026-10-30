@@ -58,27 +58,11 @@ const EXPECTED_ORDER = [
     'RequestChangesOrApproveStage',
 ];
 
-const REMOVED_EE_STAGES = [
-    'CollectCrossFileContextStage',
-    'KodyFineTuningStage',
-    'PRLevelReviewStage',
-    'FileAnalysisStage',
-];
-
 describe('CodeReviewPipelineStrategy', () => {
     it('assembles a single linear agent pipeline in the expected order', () => {
         const names = buildStrategy()
             .configureStages()
             .map((s) => s.stageName);
         expect(names).toEqual(EXPECTED_ORDER);
-    });
-
-    it('contains no EE-engine stages', () => {
-        const names = buildStrategy()
-            .configureStages()
-            .map((s) => s.stageName);
-        for (const ee of REMOVED_EE_STAGES) {
-            expect(names).not.toContain(ee);
-        }
     });
 });

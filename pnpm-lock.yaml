@@ -66,6 +66,9 @@ importers:
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
+      '@gitbeaker/requester-utils':
+        specifier: ^43.8.0
+        version: 43.8.0
       '@gitbeaker/rest':
         specifier: ^43.8.0
         version: 43.8.0

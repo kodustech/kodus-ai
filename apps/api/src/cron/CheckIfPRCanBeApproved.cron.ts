@@ -36,9 +36,10 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
+    approvalPathsOf,
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
-    evaluateApproval,
+    evaluateReviewedHeadApproval,
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
 import {
@@ -486,22 +487,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                     ?.lastAnalyzedCommit,
                                             );
                                         if (reviewedHead) {
-                                            const reportMissingHead = async () =>
-                                                this.postConditionalApprovalReason(
-                                                    {
-                                                        organizationAndTeamData,
-                                                        repository: {
-                                                            id: repository.id,
-                                                            name: repository.name,
+                                            const reportMissingHead =
+                                                async () =>
+                                                    this.postConditionalApprovalReason(
+                                                        {
+                                                            organizationAndTeamData,
+                                                            repository: {
+                                                                id: repository.id,
+                                                                name: repository.name,
+                                                            },
+                                                            prNumber: pr.number,
                                                         },
-                                                        prNumber: pr.number,
-                                                    },
-                                                    pr.provider as PlatformType,
-                                                    {
-                                                        kind: 'hold',
-                                                        reason: 'The source commit could not be verified from the Git provider. Automatic approval will be retried.',
-                                                    },
-                                                );
+                                                        pr.provider as PlatformType,
+                                                        {
+                                                            kind: 'hold',
+                                                            reason: 'The source commit could not be verified from the Git provider. Automatic approval will be retried.',
+                                                        },
+                                                    );
                                             try {
                                                 currentPullRequest =
                                                     await this.codeManagementService.getPullRequest(
@@ -533,7 +535,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                 await reportMissingHead();
                                                 return;
                                             }
-                                            if (!currentPullRequest?.head?.sha) {
+                                            if (
+                                                !currentPullRequest?.head?.sha
+                                            ) {
                                                 await reportMissingHead();
                                                 return;
                                             }
@@ -631,9 +635,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                                     reason =
                                                         'The Git provider timed out while loading changed files. Automatic approval will be retried.';
                                                 } else if (
-                                                    /^(401|403)\b/.test(
-                                                        failure,
-                                                    )
+                                                    /^(401|403)\b/.test(failure)
                                                 ) {
                                                     reason =
                                                         'The Git provider denied access to changed files. Check the integration permissions before retrying automatic approval.';
@@ -660,6 +662,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             files = liveFiles?.map((file) => ({
                                                 filename:
                                                     file.filename ?? file.path,
+                                                previous_filename:
+                                                    file.previous_filename,
                                             }));
                                             if (cacheKey && files?.length) {
                                                 if (
@@ -709,9 +713,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                             );
                                             return;
                                         }
-                                        directoryChangedPaths = files.map(
-                                            (file) => file.filename,
-                                        );
+                                        directoryChangedPaths =
+                                            approvalPathsOf(files);
                                         resolvedConfig =
                                             await this.codeBaseConfigService.getConfig(
                                                 organizationAndTeamData,
@@ -991,12 +994,40 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         );
                         return false;
                     }
-                    changedPaths = files
-                        .map((file) => file.filename ?? file.path)
-                        .filter((path): path is string => !!path);
+                    changedPaths = approvalPathsOf(files);
                 }
-                const decision = evaluateApproval({
+                // A head approved while risk assessment was off keeps that
+                // approval only if the host still shows it; asked only then.
+                const approvedOnHost =
+                    !!policy?.assessRisk &&
+                    !lastExecution.dataExecution?.approvalRisk &&
+                    reviewedDecision?.kind === 'approve' &&
+                    (await runWithBoundedTimeout(
+                        this.codeManagementService.getReviewStatusByPullRequest(
+                            codeManagementRequestData,
+                        ),
+                        FINAL_PROVIDER_TIMEOUT_MS,
+                        'approval provider-status lookup',
+                    ).catch((error) => {
+                        this.logger.warn({
+                            message:
+                                'Could not read whether the reviewed head is still approved',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: repository?.id,
+                                prNumber,
+                                reviewedHeadSha: lastAnalyzedCommitSha,
+                                timeoutMs: FINAL_PROVIDER_TIMEOUT_MS,
+                            },
+                        });
+                        return null;
+                    })) === PullRequestReviewState.APPROVED;
+                const decision = evaluateReviewedHeadApproval({
                     approvalActive: true,
+                    reviewedDecision,
+                    approvedOnHost,
                     policy,
                     author:
                         currentPullRequest?.user?.login ??
@@ -1278,8 +1309,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         }
                         return false;
                     }
-                    conditionalDecision = evaluateApproval({
+                    conditionalDecision = evaluateReviewedHeadApproval({
                         approvalActive: true,
+                        reviewedDecision,
                         policy,
                         author: latestPullRequest?.user?.login,
                         labels: latestPullRequest?.labels,
@@ -1474,7 +1506,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     failure,
                 );
             if (!persisted) {
-                throw new Error('Pull request for delivery status was not found');
+                throw new Error(
+                    'Pull request for delivery status was not found',
+                );
             }
         } catch (error) {
             this.logger.error({

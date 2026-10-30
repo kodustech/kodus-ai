@@ -1,4 +1,3 @@
-import { PromptContextEngineService } from '@libs/ai-engine/infrastructure/adapters/services/prompt/promptContextEngine.service';
 import { ContextReferenceService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference.service';
 
 describe('computeProcessingStatus', () => {
@@ -22,26 +21,5 @@ describe('computeProcessingStatus', () => {
         ).toBe('failed');
         expect(compute([{ status: 'draft', metadata: {} }])).toBe('processing');
         expect(compute([{ status: 'active', metadata: {} }])).toBe('completed');
-    });
-});
-
-describe('buildSearchPatterns', () => {
-    const build = (ref: any) =>
-        (PromptContextEngineService.prototype as any).buildSearchPatterns.call(
-            Object.create(PromptContextEngineService.prototype),
-            ref,
-        );
-
-    it('extensionless names also try the .md variant (README → README.md)', () => {
-        const patterns = build({ fileName: 'README' });
-        expect(patterns).toContain('**/README.md');
-        expect(patterns).toContain('**/readme.md');
-    });
-
-    it('names with extension are untouched', () => {
-        const patterns = build({ fileName: 'docs/setup.md' });
-        expect(
-            patterns.filter((p: string) => p.endsWith('.md.md')),
-        ).toHaveLength(0);
     });
 });

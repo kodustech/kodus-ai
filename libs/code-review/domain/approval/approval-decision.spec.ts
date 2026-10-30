@@ -2,6 +2,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     approvalPolicyForPlatform,
     evaluateApproval,
+    evaluateReviewedHeadApproval,
 } from './approval-decision';
 
 const base = {
@@ -97,4 +98,79 @@ it('requires a person for unknown or elevated risk and respects the master toggl
             }).kind,
         ).toBe('hold');
     }
+});
+
+// Risk assessment turned on after a head was reviewed: the decision Kody made
+// under the policy of that review stands, and the next commit is assessed.
+describe('evaluateReviewedHeadApproval', () => {
+    const base = {
+        approvalActive: true,
+        policy: { labels: ['ready'], assessRisk: true },
+        labels: ['ready'],
+        changedPaths: ['src/a.ts'],
+        reviewClean: true,
+        currentHeadSha: 'head-1',
+    };
+
+    it('keeps an approval Kody gave while risk assessment was off', () => {
+        expect(
+            evaluateReviewedHeadApproval({
+                ...base,
+                reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
+            }).kind,
+        ).toBe('approve');
+    });
+
+    it('grants no new approval when the host does not show Kody approval yet', () => {
+        const decision = evaluateReviewedHeadApproval({
+            ...base,
+            reviewedDecision: { kind: 'approve' },
+            approvedOnHost: false,
+        });
+        expect(decision.kind).toBe('hold');
+        expect(decision.reason).toContain('next commit');
+    });
+
+    it('still holds a kept approval when a sensitive path or the scope changed', () => {
+        expect(
+            evaluateReviewedHeadApproval({
+                ...base,
+                policy: { ...base.policy, sensitivePaths: ['src/**'] },
+                reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
+            }).kind,
+        ).toBe('hold');
+        expect(
+            evaluateReviewedHeadApproval({
+                ...base,
+                labels: [],
+                reviewedDecision: { kind: 'approve' },
+                approvedOnHost: true,
+            }).kind,
+        ).toBe('out-of-scope');
+    });
+
+    it('says the next commit is assessed when an unapproved head has no assessment', () => {
+        const decision = evaluateReviewedHeadApproval({
+            ...base,
+            reviewedDecision: { kind: 'out-of-scope' },
+        });
+        expect(decision.kind).toBe('hold');
+        expect(decision.reason).toContain('next commit');
+    });
+
+    it('judges the saved assessment when the head has one', () => {
+        expect(
+            evaluateReviewedHeadApproval({
+                ...base,
+                risk: {
+                    level: 'high',
+                    reason: 'Touches billing.',
+                    reviewedHeadSha: 'head-1',
+                } as any,
+                reviewedDecision: { kind: 'approve' },
+            }).reason,
+        ).toBe('Touches billing.');
+    });
 });

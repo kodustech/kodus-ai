@@ -1563,8 +1563,9 @@ export class CodeManagementService implements ICodeManagementService {
     async userCanWrite(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string };
-            userId: string | number;
+            repository: { id: string; name?: string; owner?: string };
+            userId?: string | number;
+            login?: string;
         },
         type?: PlatformType,
     ): Promise<boolean | undefined> {
@@ -1747,13 +1748,12 @@ export class CodeManagementService implements ICodeManagementService {
         const type = await this.getTypeIntegration(
             params.organizationAndTeamData,
         );
-        if (type !== PlatformType.GITHUB) {
-            return 0;
-        }
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
-        if (!provider.dismissOwnPullRequestApprovals) {
-            throw new Error('GitHub approval dismissal is unavailable');
+        // Every host implements it; one that does not must fail the step
+        // rather than leave Kody's approval in place under a hold.
+        if (!provider?.dismissOwnPullRequestApprovals) {
+            throw new Error(`Approval dismissal is unavailable on ${type}`);
         }
         return provider.dismissOwnPullRequestApprovals(params);
     }

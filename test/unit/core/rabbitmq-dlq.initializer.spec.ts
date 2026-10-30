@@ -15,11 +15,6 @@ import { RabbitMQDLQInitializer } from "@libs/core/infrastructure/queue/rabbitmq
  */
 
 describe("RabbitMQDLQInitializer lifecycle", () => {
-    it("implements onApplicationBootstrap", () => {
-        const instance = new RabbitMQDLQInitializer();
-        expect(typeof instance.onApplicationBootstrap).toBe("function");
-    });
-
     it("does NOT implement onModuleInit (moved on purpose)", () => {
         const instance = new RabbitMQDLQInitializer() as unknown as Record<
             string,

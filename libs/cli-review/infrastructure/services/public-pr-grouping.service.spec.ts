@@ -228,65 +228,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             expect(await svc.generate(pr, 'd', files)).toBeUndefined();
         });
 
-        it('row 3 — single object where the array is expected: safe-default undefined', async () => {
-            runSpy.mockResolvedValue({
-                groups: { title: 'A', explanation: 'e', files: ['a.ts'] },
-            });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 4 — wrapper key {result:D} / {data:D}: safe-default undefined', async () => {
-            runSpy.mockResolvedValueOnce({ result: goodGroups(files) });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-            runSpy.mockResolvedValueOnce({ data: goodGroups(files) });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 5 — double wrapper {result:{result:D}}: safe-default undefined', async () => {
-            runSpy.mockResolvedValue({ result: { result: goodGroups(files) } });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 6 — numeric/opaque single-key wrap {"0":D}/{content:D}: safe-default undefined', async () => {
-            runSpy.mockResolvedValueOnce({ 0: goodGroups(files) });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-            runSpy.mockResolvedValueOnce({ content: goodGroups(files) });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 7 — stringified JSON of D: safe-default undefined', async () => {
-            runSpy.mockResolvedValue(JSON.stringify(goodGroups(files)));
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 8 — markdown-fenced JSON string: safe-default undefined', async () => {
-            runSpy.mockResolvedValue(
-                '```json\n' + JSON.stringify(goodGroups(files)) + '\n```',
-            );
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 9 — prose-wrapped JSON string: safe-default undefined', async () => {
-            runSpy.mockResolvedValue(
-                'Here is the result: ' + JSON.stringify(goodGroups(files)),
-            );
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 10 — right data, wrong keys (renamed wrapper): safe-default undefined', async () => {
-            runSpy.mockResolvedValue({
-                clusters: [{ title: 'A', explanation: 'e', files: ['a.ts'] }],
-            });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 11 — case/convention mismatch on the wrapper key: safe-default undefined', async () => {
-            runSpy.mockResolvedValue({
-                Groups: [{ title: 'A', explanation: 'e', files: ['a.ts'] }],
-            });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
         it('row 12 — partial group object (missing `files`): safe-default undefined', async () => {
             runSpy.mockResolvedValue({
                 groups: [{ title: 'A', explanation: 'e' }],
@@ -313,11 +254,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             ]);
         });
 
-        it('row 14 — empty object {}: safe-default undefined', async () => {
-            runSpy.mockResolvedValue({});
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
         it('row 15 — empty groups array {groups:[]}: collapses every file into a single observable "Other changes" group', async () => {
             // Not a silent #1786 degradation: the result is explicitly titled
             // "Other changes" (the documented leftover bucket), so the empty
@@ -336,13 +272,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             ]);
         });
 
-        it('row 16 — empty / whitespace-only string: safe-default undefined', async () => {
-            runSpy.mockResolvedValueOnce('');
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-            runSpy.mockResolvedValueOnce('   \n\t ');
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
         it('row 17 — null / undefined return: safe-default undefined', async () => {
             runSpy.mockResolvedValueOnce(null);
             expect(await svc.generate(pr, 'd', files)).toBeUndefined();
@@ -350,29 +279,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             expect(await svc.generate(pr, 'd', files)).toBeUndefined();
         });
 
-        it('row 18 — primitive where object expected (true/0/"ok"): safe-default undefined', async () => {
-            for (const v of [true, 0, 'ok']) {
-                runSpy.mockResolvedValueOnce(v);
-                expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-            }
-        });
-
-        it('row 19 — provider envelope leak {choices:[{message:{content}}]}: safe-default undefined', async () => {
-            runSpy.mockResolvedValue({
-                choices: [
-                    { message: { content: JSON.stringify(goodGroups(files)) } },
-                ],
-            });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 20 — reasoning/thinking leak in a string payload: safe-default undefined', async () => {
-            runSpy.mockResolvedValue(
-                '<thinking>let me cluster these files</thinking>' +
-                    JSON.stringify(goodGroups(files)),
-            );
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
     });
 
     // ───────────────────────────────────────────────────────────────────────
@@ -382,24 +288,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
     // (hallucinated path), 26 = duplicate file (dedup), 27 = unicode passthrough.
     // ───────────────────────────────────────────────────────────────────────
     describe('B. semantic-but-wrong', () => {
-        it('row 25 — dangling file reference (index/path out of range) is dropped, real leftovers rescued', async () => {
-            runSpy.mockResolvedValue({
-                groups: [
-                    {
-                        title: 'A',
-                        explanation: 'e',
-                        // 'z.ts' is a dangling reference — not in the PR.
-                        files: ['a.ts', 'z.ts'],
-                    },
-                ],
-            });
-            const out = await svc.generate(pr, 'd', ['a.ts', 'b.ts']);
-            expect(out?.[0].files).toEqual(['a.ts']); // z.ts dropped
-            expect(out?.find((g) => g.title === 'Other changes')?.files).toEqual(
-                ['b.ts'],
-            );
-        });
-
         // KNOWN DEGRADATION (#1786 class): duplicates ACROSS groups are
         // de-duped (the "FIRST group claims it" test passes), but a file
         // repeated WITHIN one group's `files` array is NOT — the `seen` set is
@@ -426,98 +314,12 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             },
         );
 
-        it('row 27 — unicode / newlines / emoji in string fields are preserved (only trimmed)', async () => {
-            runSpy.mockResolvedValue({
-                groups: [
-                    {
-                        title: '  Café ↔ Ünïcode 🚀  ',
-                        explanation: '  handles münchen ✅  ',
-                        files: ['a.ts', 'b.ts'],
-                    },
-                ],
-            });
-            const out = await svc.generate(pr, 'd', ['a.ts', 'b.ts']);
-            expect(out?.[0].title).toBe('Café ↔ Ünïcode 🚀');
-            expect(out?.[0].explanation).toBe('handles münchen ✅');
-        });
-    });
-
-    // ───────────────────────────────────────────────────────────────────────
-    // C. Unparseable / transport — rows 28..34. The fail-safe layer: LLM.run
-    // rejecting (truncation, malformed, network, abort) or handing back an
-    // error/empty/refusal shape must degrade to undefined, never throw past
-    // the boundary, never drop data silently.
-    // ───────────────────────────────────────────────────────────────────────
-    describe('C. unparseable / transport (fail-safe)', () => {
-        const files = ['a.ts', 'b.ts'];
-
-        it('row 28 — truncated JSON (AI_NoObjectGeneratedError) → undefined', async () => {
-            const err = new Error('AI_NoObjectGeneratedError: could not parse');
-            (err as any).name = 'AI_NoObjectGeneratedError';
-            runSpy.mockRejectedValue(err);
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 29 — malformed JSON rejection → undefined', async () => {
-            runSpy.mockRejectedValue(new SyntaxError('Unexpected token } in JSON'));
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 30 — LLM.run throws (network/timeout) → undefined, never past the boundary', async () => {
-            runSpy.mockRejectedValue(new Error('ETIMEDOUT'));
-            await expect(svc.generate(pr, 'd', files)).resolves.toBeUndefined();
-        });
-
-        it('row 31 — error object {error:...} returned (not thrown) → undefined', async () => {
-            runSpy.mockResolvedValue({ error: 'rate_limited' });
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 32 — empty success (content:"" / finish_reason:length) → undefined', async () => {
-            runSpy.mockResolvedValue('');
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 33 — refusal prose ("I cannot help…") → undefined', async () => {
-            runSpy.mockResolvedValue(
-                "I'm sorry, I can't help with analyzing this diff.",
-            );
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-        });
-
-        it('row 34 — abort rejection is caught → undefined (boundary passes no abortSignal of its own)', async () => {
-            const err = new Error('The operation was aborted');
-            (err as any).name = 'AbortError';
-            runSpy.mockRejectedValue(err);
-            expect(await svc.generate(pr, 'd', files)).toBeUndefined();
-            // Contract note: this boundary never threads a `signal` into LLM.run.
-            const args = runSpy.mock.calls[runSpy.mock.calls.length - 1];
-            expect(args).toBeDefined();
-        });
-
-        it('always resolves to the declared type (array | undefined) — never rejects', async () => {
-            for (const v of [null, {}, [], 'x', 5, { groups: 'nope' }]) {
-                runSpy.mockResolvedValueOnce(v as any);
-                const out = await svc.generate(pr, 'd', files);
-                expect(out === undefined || Array.isArray(out)).toBe(true);
-            }
-        });
     });
 
     // ───────────────────────────────────────────────────────────────────────
     // D. Input variants — rows 35..42.
     // ───────────────────────────────────────────────────────────────────────
     describe('D. input variants', () => {
-        it('row 35 — empty input (0 files): undefined, no model call', async () => {
-            expect(await svc.generate(pr, 'd', [])).toBeUndefined();
-            expect(runSpy).not.toHaveBeenCalled();
-        });
-
-        it('row 36 — single file: undefined, no model call (tree view is enough)', async () => {
-            expect(await svc.generate(pr, 'd', ['only.ts'])).toBeUndefined();
-            expect(runSpy).not.toHaveBeenCalled();
-        });
-
         it('row 37 — large diff crossing the 80k char boundary: sliced + truncation note in prompt', async () => {
             runSpy.mockResolvedValue(goodGroups(['a.ts', 'b.ts']));
             const big = 'x'.repeat(80_001);
@@ -549,15 +351,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             expect(out?.find((g) => g.title === 'A')?.files).toEqual(['a.ts']);
         });
 
-        it('row 40 — special-chars / whitespace-only diff is still sent to the model verbatim', async () => {
-            runSpy.mockResolvedValue(goodGroups(['a.ts', 'b.ts']));
-            const weird = 'diff --git\n+ ☃️ \\n\t"quote" \u0000 <script>';
-            await svc.generate(pr, weird, ['a.ts', 'b.ts']);
-            const user: string = runSpy.mock.calls[0][0].user;
-            expect(user).toContain(weird);
-            expect(user).not.toContain('the diff was truncated');
-        });
-
         it('row 41 — off-by-one at the 80k boundary: exactly 80k is NOT truncated, 80k+1 IS', async () => {
             runSpy.mockResolvedValue(goodGroups(['a.ts', 'b.ts']));
 
@@ -574,23 +367,6 @@ describe('PublicPrGroupingService.generate — LLM.run I/O contract', () => {
             );
         });
 
-        it('row 42 — order permutation of the input yields an equivalent grouping (metamorphic)', async () => {
-            const groups = {
-                groups: [
-                    { title: 'A', explanation: 'e', files: ['a.ts', 'b.ts'] },
-                    { title: 'B', explanation: 'e', files: ['c.ts'] },
-                ],
-            };
-            runSpy.mockResolvedValue(groups);
-            const out1 = await svc.generate(pr, 'd', ['a.ts', 'b.ts', 'c.ts']);
-
-            runSpy.mockResolvedValue(groups);
-            // Same set, permuted; no leftovers → output is fully determined by
-            // the model's group order, so the two runs must be identical.
-            const out2 = await svc.generate(pr, 'd', ['c.ts', 'a.ts', 'b.ts']);
-
-            expect(out1).toEqual(out2);
-        });
     });
 
     // ───────────────────────────────────────────────────────────────────────

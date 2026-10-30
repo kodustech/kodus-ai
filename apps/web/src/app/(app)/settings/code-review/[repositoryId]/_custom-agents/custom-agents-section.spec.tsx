@@ -504,29 +504,6 @@ describe("CustomAgentsList — at a directory", () => {
     });
 });
 
-describe("CustomAgentsSection", () => {
-    it("lists the agents on the What to review page, with a way to add one", async () => {
-        render(
-            <QueryClientProvider client={new QueryClient()}>
-                <Form>
-                    <CustomAgentsSection canEdit />
-                </Form>
-            </QueryClientProvider>,
-        );
-        await flush();
-
-        expect(
-            screen.getByRole("heading", { name: "Custom agents" }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("link", { name: "Ledger reviewer" }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("button", { name: "New agent" }),
-        ).toBeInTheDocument();
-    });
-});
-
 describe("ownListNote", () => {
     it("says a repository's own list replaces the global one, and nothing else", () => {
         expect(

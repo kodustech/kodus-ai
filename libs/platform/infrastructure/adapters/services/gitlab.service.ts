@@ -102,6 +102,7 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import {
     isDeniedStatus,
+    providerErrorStatus,
     RepositoryAccessDiagnosis,
     summarizeProviderError,
     UNKNOWN_REPOSITORY_ACCESS,
@@ -121,6 +122,7 @@ import {
     isGitlabRateLimitError,
     toGitlabRateLimitError,
 } from './gitlab-rate-limit.util';
+import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
 
 /**
@@ -381,6 +383,7 @@ export class GitlabService implements Omit<
             }),
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     }
 
@@ -2312,6 +2315,7 @@ export class GitlabService implements Omit<
                 deletions: changeCount.deletes,
                 changes: changeCount.adds + changeCount.deletes,
                 patch: file.diff,
+                previous_filename: file.renamed_file ? file.old_path : undefined,
             };
         });
     }
@@ -2633,7 +2637,9 @@ export class GitlabService implements Omit<
                 updatedAt: discussion?.notes[0]?.updated_at,
             };
         } catch (error) {
-            const isLineMismatch = error.cause.description.includes(
+            // A rate-limit error carries no `cause`; reading it threw a
+            // TypeError that hid the 429 from the caller.
+            const isLineMismatch = !!error?.cause?.description?.includes(
                 'must be a valid line code',
             );
 
@@ -2669,12 +2675,19 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Create the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.create(
-                repository.id,
-                prNumber,
-                body,
-            );
+            // Status and summary comments must not open resolvable threads.
+            // PR-level findings carry a suggestion and remain discussions.
+            const response = params.suggestion
+                ? await gitlabAPI.MergeRequestDiscussions.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  )
+                : await gitlabAPI.MergeRequestNotes.create(
+                      repository.id,
+                      prNumber,
+                      body,
+                  );
 
             return response;
         } catch (error) {
@@ -2991,14 +3004,21 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            // Update the comment in the Merge Request
-            const response = await gitlabAPI.MergeRequestDiscussions.editNote(
-                repository.id,
-                prNumber,
-                String(threadId ?? commentId),
-                noteId ?? Number(commentId),
-                { body: body },
-            );
+            const response =
+                threadId != null
+                    ? await gitlabAPI.MergeRequestDiscussions.editNote(
+                          repository.id,
+                          prNumber,
+                          String(threadId),
+                          noteId ?? Number(commentId),
+                          { body },
+                      )
+                    : await gitlabAPI.MergeRequestNotes.edit(
+                          repository.id,
+                          prNumber,
+                          noteId ?? Number(commentId),
+                          { body },
+                      );
 
             return response;
         } catch (error) {
@@ -3428,14 +3448,15 @@ export class GitlabService implements Omit<
             // cleared, or erase the one the newer save surfaced (#2003 review).
             // The record carries when it was written, so the stale run is a
             // no-op instead of a blind wholesale replace.
-            const stored = await this.integrationConfigService.findIntegrationConfigFormatted<{
-                startedAt?: string;
-                recordedAt?: string;
-                failures?: Record<string, { reason: string; at: string }>;
-            }>(
-                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
-                organizationAndTeamData,
-            );
+            const stored =
+                await this.integrationConfigService.findIntegrationConfigFormatted<{
+                    startedAt?: string;
+                    recordedAt?: string;
+                    failures?: Record<string, { reason: string; at: string }>;
+                }>(
+                    IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                    organizationAndTeamData,
+                );
 
             // Compare observation STARTS, not write times (#2003 review): an
             // older run that finishes while a newer one is still reconciling
@@ -3450,8 +3471,7 @@ export class GitlabService implements Omit<
                     context: GitlabService.name,
                     serviceName: 'GitlabService recordWebhookCreationFailures',
                     metadata: {
-                        organizationId:
-                            organizationAndTeamData?.organizationId,
+                        organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
                     },
                 });
@@ -4457,6 +4477,43 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * Removes the token user's approval when a later review holds it, so an
+     * MR Kody approved does not stay approved under an "approval held" note.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        if (!repository?.id || !prNumber) {
+            throw new Error(
+                'Repository and MR number are required to dismiss approval',
+            );
+        }
+        const gitlabAPI = this.instanceGitlabApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        const [approvalSettings, currentUser] = await Promise.all([
+            gitlabAPI.MergeRequestApprovals.showConfiguration(repository.id, {
+                mergerequestIId: prNumber,
+            }),
+            gitlabAPI.Users.showCurrentUser(),
+        ]);
+        const approvedByKody = (approvalSettings?.approved_by ?? []).some(
+            (approval) => approval?.user?.id === currentUser.id,
+        );
+        if (!approvedByKody) return 0;
+        await gitlabAPI.MergeRequestApprovals.unapprove(
+            repository.id,
+            prNumber,
+        );
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
@@ -5245,8 +5302,11 @@ export class GitlabService implements Omit<
     async userCanWrite(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
-        userId: string | number;
+        userId?: string | number;
     }): Promise<boolean | undefined> {
+        if (params.userId === undefined) {
+            return undefined;
+        }
         const authDetails = await this.getAuthDetails(
             params.organizationAndTeamData,
         );
@@ -5261,8 +5321,25 @@ export class GitlabService implements Omit<
             });
             return (member?.access_level ?? 0) >= 30;
         } catch (error) {
-            // Not a member answers 404; a credential that can't look, 401/403.
-            return isDeniedStatus(error) ? false : undefined;
+            // Not a member answers 404; a credential that can't look (401/403)
+            // can't say.
+            if (providerErrorStatus(error) === 404) {
+                return false;
+            }
+            this.logger.warn({
+                message: "Could not read a user's level on the project",
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    userId: params.userId,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 

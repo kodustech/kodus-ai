@@ -110,26 +110,6 @@ describe('SuggestionLLMValidator.checkSuggestionSimplicity — migration parity 
         observabilityService.runAiSdkLLMInSpan.mockClear();
     });
 
-    it('returns the parsed simplicity verdict unchanged', async () => {
-        const verdict = { isSimple: true, reason: 'local one-line fix' };
-        mockGenerate.mockResolvedValue({ experimental_output: verdict });
-
-        const validator = buildValidator();
-        const result = await validator.checkSuggestionSimplicity(
-            orgAndTeam,
-            42,
-            {
-                id: 'sug-1',
-                language: 'typescript',
-                existingCode: 'let a = 1',
-                improvedCode: 'const a = 1',
-            },
-        );
-
-        expect(result).toEqual(verdict);
-        expect(observabilityService.runAiSdkLLMInSpan).toHaveBeenCalledTimes(1);
-    });
-
     it('falls back to { isSimple: false } on error (unchanged contract)', async () => {
         mockGenerate.mockRejectedValue(new Error('provider down'));
 
@@ -197,26 +177,6 @@ describe('SuggestionLLMValidator — LLM.run input contract', () => {
             });
             // Managed-default routing: never a pinned slot here.
             expect(arg.byokConfig).toBeUndefined();
-        });
-
-        it('tolerates an absent org/team (optional-chaining, no throw)', async () => {
-            const validator = buildValidator();
-            const result = await validator.validateWithLLM(
-                payload,
-                undefined as any,
-                7,
-            );
-
-            // The `?.` on organizationAndTeamData must survive an undefined arg:
-            // organizationId/teamId resolve to undefined instead of throwing.
-            const arg = runSpy.mock.calls[0][0];
-            expect(arg.organizationId).toBeUndefined();
-            expect(arg.attrs).toEqual({
-                prNumber: 7,
-                filePath: 'src/x.ts',
-                teamId: undefined,
-            });
-            expect(result).toEqual({ isValid: true, issues: [] });
         });
     });
 

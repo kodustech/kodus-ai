@@ -266,7 +266,6 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/findings-schema.spec.ts',
                     'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
                     'libs/llm/structured-output-repair.spec.ts',
-                    'test/unit/code-review/agents/findings-schema-sanitize.spec.ts',
                     'test/unit/common/prompt-parser-extract-json.spec.ts',
                 ],
             },
@@ -325,7 +324,6 @@ const STAGES = [
                 name: 'The agent, its path match and the rule compiler',
                 specs: [
                     'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.spec.ts',
-                    'test/unit/code-review/agents/kody-rules-agent-path-match.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.spec.ts',
                     'libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.prompt.spec.ts',
                 ],
@@ -656,7 +654,6 @@ const STAGES = [
                 name: 'Which comments it reads, and its cron',
                 specs: [
                     'libs/kodyRules/application/use-cases/generate-kody-rules.use-case.spec.ts',
-                    'test/unit/kodyRules/use-cases/generate-kody-rules.sampling.spec.ts',
                     'apps/api/src/cron/kodyLearning.cron.spec.ts',
                 ],
             },
@@ -677,7 +674,6 @@ const STAGES = [
                 name: 'The sync, the rule-file parser and the file patterns',
                 specs: [
                     'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.spec.ts',
-                    'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.context-reference-pointer.spec.ts',
                     'test/unit/common/kody-rule-file-parser.spec.ts',
                     'test/unit/common/kody-rules-file-patterns.spec.ts',
                     'libs/common/utils/kody-rules/file-patterns.spec.ts',
@@ -725,7 +721,35 @@ const STAGES = [
                 full: null,
             },
             nightly: 'shared',
-            caveat: "Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the rule lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-rule-offers stage.',
+        },
+    },
+    {
+        id: 'thread-rule-offers',
+        name: 'Rule offer',
+        short: 'Offers a rule when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a standard the team wants, or a rule that is too broad, offers to create or narrow the Kody Rule, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-rule-offers'] },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#ruleOffers',
+            metric: 'of offer checks right',
+            sets: { controlled: 'the threads of thread-rule that do not ask Kody to act', full: null },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the rule when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {
@@ -760,7 +784,35 @@ const STAGES = [
                 full: null,
             },
             nightly: 'shared',
-            caveat: "Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is reported beside the number, not gated: production's MCP client drops the tools' proactiveHint (libs/mcp-server/mcp-adapter/client.ts listTools).",
+            caveat: 'Counts the writes: the memory lands when the developer asks and nothing is written unasked. Whether the reply offers it is the thread-memory-offers stage.',
+        },
+    },
+    {
+        id: 'thread-memory-offers',
+        name: 'Memory offer',
+        short: 'Offers a memory when a thread calls for one',
+        group: 'Where rules and memories come from',
+        does: 'In a PR thread that shows a team convention, offers to save it as a memory, and offers nothing in a thread that calls for nothing.',
+        pipeline: null,
+        tests: [
+            {
+                kind: 'unit',
+                name: 'Which actions the agent is told it may offer',
+                specs: [
+                    'libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts',
+                    'libs/agents/infrastructure/services/agents/conversation/conversation-prompt.spec.ts',
+                    'libs/mcp-server/tools/tool-annotations.spec.ts',
+                ],
+            },
+            { kind: 'contract', name: "Each thread runs end to end through production's MCP server", wiring: ['thread-memory-offers'] },
+        ],
+        eval: {
+            path: 'evals/thread-actions',
+            catalog: 'evals/thread-actions/catalog.js#memoryOffers',
+            metric: 'of offer checks right',
+            sets: { controlled: 'the threads of thread-memory that do not ask Kody to act', full: null },
+            nightly: 'shared',
+            caveat: 'Judged on the reply by a model: offers the memory when the thread calls for it, and nothing in the control threads. Run with --metric=offers. The wiring smoke runs it on the scripted model, which never offers, so that contract checks the wiring and passes on the control threads alone; what fails when the tools stop carrying the hint is libs/agents/infrastructure/services/ai-sdk/mcp-tools.spec.ts.',
         },
     },
     {

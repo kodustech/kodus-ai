@@ -51,6 +51,11 @@ reviewCadence:
     timeWindow: 15 # 分
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # GitLab では利用できません
 runOnDraft: true
 ignorePaths:
@@ -162,7 +167,7 @@ Kody は PR が開かれたときに自動的にレビューするか、`@kody s
 ### PR ワークフロー
 
 #### PR の自動承認
-**Enable Pull Request Approval** — 問題が見つからない場合、Kody は PR を承認します。
+**Automatic PR approval** — Kody は、クリーンなレビューの後、または自分が残したコメントがすべて解決された時点で PR を承認します。マージは行いません。**Conditional approval (Beta)** を使うと、Kody が承認できる PR と、代わりに人が承認すべき場合を指定できます。[自動承認](/ja/how_to_use/code_review/configs/auto_approve)を参照してください。
 
 **対応プラットフォーム：** GitHub、GitLab、Bitbucket、Azure Repos、Forgejo
 

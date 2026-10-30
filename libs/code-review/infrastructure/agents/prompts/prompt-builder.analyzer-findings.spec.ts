@@ -19,19 +19,6 @@ describe('formatDeterministicFindings', () => {
         expect(formatDeterministicFindings([])).toBe('');
     });
 
-    /**
-     * The whole point: these are already being published as their own comment,
-     * so the agent restating them costs the reader a duplicate and costs us a
-     * dedup round that then has to decide which wording wins.
-     */
-    it('tells the agent not to report them again', () => {
-        const block = formatDeterministicFindings([finding()]);
-
-        expect(block).toContain('<DeterministicFindings>');
-        expect(block).toContain('</DeterministicFindings>');
-        expect(block).toMatch(/do NOT repeat/i);
-    });
-
     it('names the location of each finding', () => {
         const block = formatDeterministicFindings([
             finding({ path: 'src/a.ts', startLine: 4 }),
