@@ -10,7 +10,9 @@ import {
     OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { DataSource, EntityManager } from 'typeorm';
 
 import {
     IOutboxMessageRepository,
@@ -148,6 +150,8 @@ export class OutboxRelayService
         private readonly observability: ObservabilityService,
         private readonly configService: ConfigService,
         private readonly distributedLockService: DistributedLockService,
+        @InjectDataSource()
+        private readonly dataSource: DataSource,
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly sandboxLeaseManager: ISandboxLeaseManager,
         @Optional()
@@ -486,34 +490,39 @@ export class OutboxRelayService
      * invisible: the row was already PENDING, the broker rejected the message,
      * and nothing ever re-drove it. The relay that owns the outbox retries the
      * publish and, when it gives up, marks the job FAILED, which is the state a
-     * person can act on. `async` on purpose: a rejection is settled by the
-     * caller's allSettled instead of aborting the batch.
+     * person can act on. Called inside the requeue transaction, so a rejection
+     * here rolls the requeue back instead of leaving the row PENDING with no
+     * message and nothing to re-drive it.
      */
     private async publishReclaimedJob(
         uuid: string,
         workflowType: string | undefined,
         at: Date,
+        transactionManager?: EntityManager,
     ): Promise<void> {
         if (!workflowType) {
             return;
         }
         const messageId = `reclaim-${uuid}-${at.getTime()}`;
-        await this.outboxRepository.create({
-            jobId: uuid,
-            exchange: 'workflow.exchange',
-            routingKey: `workflow.jobs.resumed.${workflowType}`,
-            payload: {
-                event_name: 'workflow.jobs.resumed',
-                event_version: 1,
-                occurred_on: at,
-                // The relay reads the envelope's `payload` for the job id and
-                // the workflow type it puts in the AMQP headers, and the
-                // consumer reads `jobId` to re-drive the turn.
-                payload: { jobId: uuid, workflowType },
-                messageId,
-            } as unknown as Record<string, unknown>,
-            nextAttemptAt: at,
-        });
+        await this.outboxRepository.create(
+            {
+                jobId: uuid,
+                exchange: 'workflow.exchange',
+                routingKey: `workflow.jobs.resumed.${workflowType}`,
+                payload: {
+                    event_name: 'workflow.jobs.resumed',
+                    event_version: 1,
+                    occurred_on: at,
+                    // The relay reads the envelope's `payload` for the job id and
+                    // the workflow type it puts in the AMQP headers, and the
+                    // consumer reads `jobId` to re-drive the turn.
+                    payload: { jobId: uuid, workflowType },
+                    messageId,
+                } as unknown as Record<string, unknown>,
+                nextAttemptAt: at,
+            },
+            transactionManager,
+        );
     }
 
     /**
@@ -606,21 +615,69 @@ export class OutboxRelayService
             // Fire both writes concurrently and settle BOTH before counting:
             // sequenced awaits meant a rejection on the first write skipped the
             // second entirely, leaving half the stale batch unreclaimed.
-            const requeueTask =
-                requeueUuids.length > 0 && this.jobRepository.requeueStaleJobs
-                    ? this.jobRepository.requeueStaleJobs({
-                          uuids: requeueUuids,
-                          lastError: leaseExpiredReason,
-                          requeuedBy: this.constructor.name,
-                          // Tenant traceability: the uuid list alone cannot be
-                          // correlated to an organization in the log system.
-                          organizationIds: [
-                              ...new Set(
-                                  requeueable.map((job) => job.organizationId),
-                              ),
-                          ],
-                      })
-                    : Promise.resolve([] as string[]);
+            //
+            // The requeue and its resume message are ONE unit of work (#1902
+            // review). `requeueStaleJobs` only flips PROCESSING to PENDING, and
+            // the reaper only ever looks at PROCESSING rows, so a requeued row
+            // whose outbox insert never landed stayed PENDING with no message
+            // and nothing to re-drive it. Both writes now share a transaction:
+            // if a message write rejects, the requeue rolls back, the row is
+            // still PROCESSING with its expired lease, and the next cycle picks
+            // it up again. The retry counter rolls back too, so a transient
+            // outbox failure does not spend the job's retry budget.
+            const requeueTask = (async (): Promise<string[]> => {
+                if (
+                    requeueUuids.length === 0 ||
+                    !this.jobRepository.requeueStaleJobs
+                ) {
+                    return [];
+                }
+                // Keep the call on the repository: reading the method into a
+                // local drops its receiver, and the implementation reads
+                // `this.repository` (#1902 review).
+                const repository = this.jobRepository;
+                const typeByUuid = new Map(
+                    requeueable.map((job) => [job.uuid, job.workflowType]),
+                );
+
+                return this.dataSource.transaction(
+                    async (transactionManager) => {
+                        const requeuedUuids =
+                            await repository.requeueStaleJobs!(
+                                {
+                                    uuids: requeueUuids,
+                                    lastError: leaseExpiredReason,
+                                    requeuedBy: this.constructor.name,
+                                    // Tenant traceability: the uuid list alone
+                                    // cannot be correlated to an organization
+                                    // in the log system.
+                                    organizationIds: [
+                                        ...new Set(
+                                            requeueable.map(
+                                                (job) => job.organizationId,
+                                            ),
+                                        ),
+                                    ],
+                                },
+                                transactionManager,
+                            );
+
+                        // Only the rows the guarded UPDATE actually flipped get
+                        // a message: a job that finished between the SELECT and
+                        // the write must not be re-driven (#1902).
+                        for (const uuid of requeuedUuids) {
+                            await this.publishReclaimedJob(
+                                uuid,
+                                typeByUuid.get(uuid),
+                                now,
+                                transactionManager,
+                            );
+                        }
+
+                        return requeuedUuids;
+                    },
+                );
+            })();
             const failTask = (async (): Promise<number> => {
                 // Keep the call on the repository: reading the method into a
                 // local drops its receiver, and the implementation reads
@@ -686,7 +743,8 @@ export class OutboxRelayService
 
             if (requeueResult.status === 'rejected') {
                 this.logger.error({
-                    message: 'Failed to requeue stale PROCESSING workflow jobs',
+                    message:
+                        'Failed to requeue stale PROCESSING workflow jobs and queue their resume messages',
                     context: OutboxRelayService.name,
                     error:
                         requeueResult.reason instanceof Error
@@ -699,66 +757,13 @@ export class OutboxRelayService
                                 requeueable.map((job) => job.organizationId),
                             ),
                         ],
+                        // The requeue and its resume messages are one
+                        // transaction, so a failure here means nothing landed:
+                        // the rows are still PROCESSING with an expired lease
+                        // and the next cycle retries them.
+                        rolledBack: true,
                     },
                 });
-            } else if (requeueResult.value.length > 0) {
-                // Re-publish the jobs that were ACTUALLY requeued (the repo
-                // returns only the UUIDs its guarded UPDATE flipped — a job
-                // that finished between the SELECT and the update is excluded
-                // and must NOT be re-driven). requeueStaleJobs only flips the
-                // row to PENDING; without a fresh broker message the consumer
-                // never re-runs it and the reclaimed job sits dead until an
-                // external trigger (issue #1902).
-                const requeuedUuidSet = new Set(requeueResult.value);
-                const typeByUuid = new Map(
-                    stale
-                        .filter((j) => requeuedUuidSet.has(j.uuid))
-                        .map((j) => [j.uuid, j.workflowType]),
-                );
-                // Settle EVERY publish instead of failing fast: with Promise.all
-                // a single broker rejection aborted the batch (the remaining
-                // messages were never attempted and this cycle's heartbeat and
-                // reap report were skipped entirely), leaving jobs whose
-                // republish never happened PENDING with no broker message — the
-                // #1902 failure this block exists to prevent.
-                const publishResults = await Promise.allSettled(
-                    requeueResult.value.map((uuid) =>
-                        this.publishReclaimedJob(
-                            uuid,
-                            typeByUuid.get(uuid),
-                            now,
-                        ),
-                    ),
-                );
-                const failedPublishes = publishResults
-                    .map((result, index) => ({
-                        result,
-                        uuid: requeueResult.value[index],
-                    }))
-                    .filter(({ result }) => result.status === 'rejected');
-                if (failedPublishes.length > 0) {
-                    this.logger.error({
-                        message: `Failed to queue a resume message for ${failedPublishes.length} reclaimed workflow job(s) — they stay PENDING until an external trigger`,
-                        context: OutboxRelayService.name,
-                        metadata: {
-                            uuids: failedPublishes.map(({ uuid }) => uuid),
-                            organizationIds: [
-                                ...new Set(
-                                    requeueable.map(
-                                        (job) => job.organizationId,
-                                    ),
-                                ),
-                            ],
-                            reasons: failedPublishes.map(({ result }) =>
-                                result.status === 'rejected'
-                                    ? result.reason instanceof Error
-                                        ? result.reason.message
-                                        : String(result.reason)
-                                    : '',
-                            ),
-                        },
-                    });
-                }
             }
             if (failResult.status === 'rejected') {
                 this.logger.error({

@@ -43,6 +43,8 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     let incidentManager: { failHeartbeat: jest.Mock };
     let messageBroker: { publishMessage: jest.Mock };
     let outboxRepository: { create: jest.Mock };
+    let dataSource: { transaction: jest.Mock };
+    let transactionManager: { marker: string };
 
     const build = () => {
         messageBroker = {
@@ -63,6 +65,12 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         incidentManager = {
             failHeartbeat: jest.fn().mockResolvedValue(undefined),
         };
+        // The requeue and its resume message are written on one manager; the
+        // oracle object lets a test assert that both calls received it.
+        transactionManager = { marker: 'reclaim-tx' };
+        dataSource = {
+            transaction: jest.fn(async (run: any) => run(transactionManager)),
+        };
 
         const configService = { get: jest.fn() };
 
@@ -74,6 +82,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             {} as any, // observability
             configService as any,
             distributedLockService as any,
+            dataSource as any,
             {} as any, // sandboxLeaseManager
             incidentManager as any,
         );
@@ -594,13 +603,14 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 uuids: ['job-a', 'job-b', 'job-c'],
                 organizationIds: ['org-1', 'org-2'],
             }),
+            transactionManager,
         );
     });
 
-    it('keeps queueing when one outbox write rejects — the reap report still runs', async () => {
+    it('writes every resume message on the requeue transaction, so both commit together', async () => {
         const service = build();
-        const jobs = Array.from({ length: 6 }, (_, i) => ({
-            uuid: `job-${i}`,
+        const jobs = Array.from({ length: 3 }, (_, i) => ({
+            uuid: `job-tx-${i}`,
             workflowType: 'CODE_REVIEW',
             organizationId: 'org-1',
             startedAt: new Date(),
@@ -612,24 +622,61 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         jobRepository.requeueStaleJobs.mockResolvedValue(
             jobs.map((j) => j.uuid),
         );
-        // One write rejection must not abort the batch nor the cycle: with
-        // Promise.all the rejection propagated to the outer catch, so the
-        // remaining rows were never written and the high-reap incident report
-        // was skipped entirely.
-        outboxRepository.create
-            .mockRejectedValueOnce(new Error('outbox is down'))
-            .mockResolvedValue(undefined);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+        // The UPDATE runs on the transaction, not on the repository's own
+        // connection: a requeue that committed on its own would survive a
+        // rolled-back message write and strand the job in PENDING.
+        expect(jobRepository.requeueStaleJobs).toHaveBeenCalledWith(
+            expect.objectContaining({ uuids: jobs.map((j) => j.uuid) }),
+            transactionManager,
+        );
+        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
+        for (const call of outboxRepository.create.mock.calls) {
+            expect(call[1]).toBe(transactionManager);
+        }
+    });
+
+    it('rolls the requeue back when a resume write rejects, so the next cycle reclaims the job', async () => {
+        const service = build();
+        const jobs = Array.from({ length: 2 }, (_, i) => ({
+            uuid: `job-back-${i}`,
+            workflowType: 'CODE_REVIEW',
+            organizationId: 'org-1',
+            startedAt: new Date(),
+            leaseExpiresAt: new Date(Date.now() - 1000),
+            retryCount: 0,
+            maxRetries: 3,
+        }));
+        jobRepository.findStaleProcessing.mockResolvedValue(jobs);
+        jobRepository.requeueStaleJobs.mockResolvedValue(
+            jobs.map((j) => j.uuid),
+        );
+        outboxRepository.create.mockRejectedValueOnce(
+            new Error('outbox is down'),
+        );
 
         await expect(
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        expect(outboxRepository.create).toHaveBeenCalledTimes(6);
-        // 6 reclaimed > high-reap threshold (5): the cycle reached its report.
-        expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
+        // The transaction aborted on the first message, so the reconciliation
+        // is reported as nothing reaped rather than as a half-written batch.
+        expect(outboxRepository.create).toHaveBeenCalledTimes(1);
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
+
+        // The rows are still PROCESSING (the transaction rolled the flip back),
+        // so the next cycle sees them again and retries both writes.
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.requeueStaleJobs).toHaveBeenCalledTimes(2);
+        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 
-    it('isolates a synchronous outbox throw to its own job', async () => {
+    it('rolls the requeue back when the outbox client throws synchronously', async () => {
         const service = build();
         const jobs = Array.from({ length: 3 }, (_, i) => ({
             uuid: `job-sync-${i}`,
@@ -644,8 +691,9 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         jobRepository.requeueStaleJobs.mockResolvedValue(
             jobs.map((j) => j.uuid),
         );
-        // A client that throws synchronously used to break out of the .map()
-        // that built the write list, so no later job was attempted.
+        // A client that throws synchronously used to break out of the write
+        // loop; inside the transaction it aborts the batch the same way a
+        // rejection does, and the requeue rolls back with it.
         outboxRepository.create
             .mockImplementationOnce(() => {
                 throw new Error('outbox connection closed');
@@ -656,6 +704,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
+        expect(outboxRepository.create).toHaveBeenCalledTimes(1);
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 });

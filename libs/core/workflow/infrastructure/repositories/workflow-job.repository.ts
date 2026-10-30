@@ -490,20 +490,29 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
      * lease + run state, so a fresh trigger re-processes it instead of the job
      * being permanently failed and reported forever as PROCESSING.
      */
-    async requeueStaleJobs(params: {
-        uuids: string[];
-        lastError: string;
-        requeuedBy: string;
-        // Tenant(s) the batch belongs to. Logged next to the uuids so a reclaim
-        // can be traced back to an organization: a bare uuid list cannot be
-        // filtered per customer in the log system.
-        organizationIds?: string[];
-    }): Promise<string[]> {
+    async requeueStaleJobs(
+        params: {
+            uuids: string[];
+            lastError: string;
+            requeuedBy: string;
+            // Tenant(s) the batch belongs to. Logged next to the uuids so a reclaim
+            // can be traced back to an organization: a bare uuid list cannot be
+            // filtered per customer in the log system.
+            organizationIds?: string[];
+        },
+        transactionManager?: EntityManager,
+    ): Promise<string[]> {
         if (params.uuids.length === 0) {
             return [];
         }
         try {
-            const result = await this.repository
+            // Same-manager read as `create`: the watchdog writes the requeue and
+            // its resume message in one transaction, so the UPDATE has to run on
+            // that transaction's manager or it commits independently of it.
+            const repository = transactionManager
+                ? transactionManager.getRepository(WorkflowJobModel)
+                : this.repository;
+            const result = await repository
                 .createQueryBuilder()
                 .update(WorkflowJobModel)
                 .set({

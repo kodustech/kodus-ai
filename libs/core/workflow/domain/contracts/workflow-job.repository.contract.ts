@@ -64,14 +64,17 @@ export interface IWorkflowJobRepository {
      * candidate batch — because a job that finished (or was permanently
      * failed) between the SELECT and this UPDATE must not be re-driven.
      */
-    requeueStaleJobs?(params: {
-        uuids: string[];
-        lastError: string;
-        requeuedBy: string;
-        // Tenant traceability: logged alongside the uuids so a reclaim can be
-        // traced back to an organization in the log system.
-        organizationIds?: string[];
-    }): Promise<string[]>;
+    requeueStaleJobs?(
+        params: {
+            uuids: string[];
+            lastError: string;
+            requeuedBy: string;
+            // Tenant traceability: logged alongside the uuids so a reclaim can be
+            // traced back to an organization in the log system.
+            organizationIds?: string[];
+        },
+        transactionManager?: unknown,
+    ): Promise<string[]>;
     /**
      * Terminally fails reclaimed jobs whose retry budget is exhausted.
      */
