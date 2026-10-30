@@ -587,6 +587,31 @@ describe('rebaseInterdiff', () => {
         expect(result.revertedFiles).toEqual(['src/a.ts']);
     });
 
+    it('does not name a file when only the context around a change was edited', () => {
+        const before = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 1;',
+            '+call();',
+            ' return x;',
+        );
+        const after = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 2;',
+            '+call();',
+            ' return x;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The change is still there, only its neighbours moved: the hunk is
+        // reviewed again, but it is not a removal (#2319 review finding).
+        expect(result.revertedFiles).toEqual([]);
+        expect(result.files).toHaveLength(1);
+    });
+
     it('names a file whose comparison gave up on size, when a line also went missing', () => {
         const big = (prefix: string) =>
             Array.from({ length: 5000 }, (_, i) => `+${prefix}${i}`);

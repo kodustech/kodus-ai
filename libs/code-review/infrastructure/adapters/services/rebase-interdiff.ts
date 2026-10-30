@@ -113,10 +113,11 @@ class ScopeStack {
 
 /** Each change line keyed on where it sits: the scope it is in (the nearest
  *  line of the hunk above it that is less indented, else the header's
- *  section, which Git takes from before the hunk), and the context lines
- *  right above and below its run of changes. A change the rebase moved
- *  elsewhere in the file then does not read as reviewed. */
-function changesOf(hunks: Hunk[]): string[] {
+ *  section, which Git takes from before the hunk), and, unless `withContext`
+ *  is off, the context lines right above and below its run of changes. A
+ *  change the rebase moved elsewhere in the file then does not read as
+ *  reviewed. */
+function changesOf(hunks: Hunk[], withContext = true): string[] {
     const changes: string[] = [];
     for (const hunk of hunks) {
         const { lines } = hunk;
@@ -145,7 +146,12 @@ function changesOf(hunks: Hunk[]): string[] {
                 if (!isChange(line)) continue;
                 const side = line.startsWith('+') ? added : removed;
                 const scope = side.enter(line.slice(1));
-                changes.push([scope, above, below, line].join('\u0000'));
+                changes.push(
+                    (withContext
+                        ? [scope, above, below, line]
+                        : [scope, line]
+                    ).join('\u0000'),
+                );
             }
             i = end - 1;
         }
@@ -178,14 +184,16 @@ function countsOf(keys: string[]): Map<string, number> {
     return counts;
 }
 
-/** How many change lines of `previous` the current diff lost. Changes are
- *  matched on where they sit, not on their text alone: a line dropped from one
- *  function while an identical line appears in another is a removal, and the
- *  interdiff cannot tell it from a move (#2319, review finding). */
+/** How many change lines of `previous` the current diff lost. The scope is
+ *  part of the identity, so a line dropped from one function while an
+ *  identical line appears in another is a removal, and the interdiff cannot
+ *  tell it from a move (#2319). The neighbouring context lines are left out on
+ *  purpose: an edit there moves nothing, and counting it would send every
+ *  touch of the lines around a change to a full review. */
 function missingChangeLines(previous: Hunk[], current: Hunk[]): number {
-    const now = countsOf(changesOf(current));
+    const now = countsOf(changesOf(current, false));
     let missing = 0;
-    for (const [key, count] of countsOf(changesOf(previous))) {
+    for (const [key, count] of countsOf(changesOf(previous, false))) {
         const left = now.get(key) ?? 0;
         if (left >= count) continue;
         missing += count - left;
