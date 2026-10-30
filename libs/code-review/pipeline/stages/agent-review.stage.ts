@@ -1427,6 +1427,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
+                {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber,
+                },
             );
 
             // Label normalization: a label off the list becomes `bug`, and a
@@ -2225,6 +2231,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         changedFiles: FileChange[],
         kodyRules: Partial<IKodyRule>[],
         allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        } = {},
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2247,6 +2259,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Dropped suggestion for ${s.relevantFile}: the file is not changed by this PR`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                     allDiscarded.push({
                         ...s,
@@ -2263,12 +2276,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         this.logger.log({
                             message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
                             context: this.stageName,
+                            metadata: { ...logMeta, relevantFile: s.relevantFile },
                         });
                         return { ...s, fileAnchored: true };
                     }
                     this.logger.log({
                         message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                     allDiscarded.push({
                         ...s,
@@ -2284,6 +2299,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                 }
                 return snapped;

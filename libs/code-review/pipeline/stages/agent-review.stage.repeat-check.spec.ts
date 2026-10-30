@@ -303,6 +303,28 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         expect(JSON.stringify(repeatCall![0])).toContain('old-moved');
     });
 
+    it("logs a finding on a file the PR does not change with the review's ids", async () => {
+        const { stage, reviewOrchestrator } = makeStage([]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([{ ...bugFinding, relevantFile: 'src/other.ts' }]),
+        );
+        const logSpy = jest.spyOn((stage as any).logger, 'log');
+
+        await run(stage, makeContext([]));
+
+        expect(logSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('the file is not changed by this PR'),
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    prNumber: 7,
+                    relevantFile: 'src/other.ts',
+                },
+            }),
+        );
+    });
+
     it('posts a bug the check does not match, with the revision link its finder chose', async () => {
         const applied = earlier({
             suggestionId: 'old-bug',
