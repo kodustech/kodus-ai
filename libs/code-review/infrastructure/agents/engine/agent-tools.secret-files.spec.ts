@@ -51,17 +51,21 @@ describe('agent tools — secret files of the repository', () => {
         fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it.each(['.env', 'certs/server.pem', 'CERTS/Server.PEM', '/.env'])(
-        'does not read %s',
-        async (file) => {
-            const out = await buildAgentTools(rc).readFile.execute({
-                path: file,
-            });
+    it.each([
+        '.env',
+        'certs/server.pem',
+        'CERTS/Server.PEM',
+        '/.env',
+        'certs/./server.pem',
+        'src/../.env',
+    ])('does not read %s', async (file) => {
+        const out = await buildAgentTools(rc).readFile.execute({
+            path: file,
+        });
 
-            expect(out).not.toContain(VALUE);
-            expect(out).toContain('secret');
-        },
-    );
+        expect(out).not.toContain(VALUE);
+        expect(out).toContain('secret');
+    });
 
     it('reads an env template', async () => {
         const out = await buildAgentTools(rc).readFile.execute({
@@ -85,6 +89,15 @@ describe('agent tools — secret files of the repository', () => {
         const out = await buildAgentTools(rc).grep.execute({
             pattern: 'API_TOKEN',
             path: '.env',
+        });
+
+        expect(out).not.toContain(VALUE);
+    });
+
+    it('does not grep a secret file under another spelling of its path', async () => {
+        const out = await buildAgentTools(rc).grep.execute({
+            pattern: VALUE,
+            path: 'certs/./server.pem',
         });
 
         expect(out).not.toContain(VALUE);

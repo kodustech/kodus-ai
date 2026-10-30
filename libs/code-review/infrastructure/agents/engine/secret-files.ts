@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 import { isFileMatchingGlobCaseInsensitive } from '@libs/common/utils/glob-utils';
 
 /**
@@ -23,7 +25,8 @@ export const SECRET_FILE_GLOBS = [
 const ENV_TEMPLATE = /(^|\/)\.env\.(example|sample|template|dist)$/i;
 
 export function isSecretFilePath(filePath: string): boolean {
-    const normalized = filePath.replace(/^\.?\/+/, '');
+    // The sandbox resolves `a/./b` and `a/../b`: every spelling is one file.
+    const normalized = posix.normalize(filePath).replace(/^\.?\/+/, '');
     if (!normalized || ENV_TEMPLATE.test(normalized)) return false;
     return isFileMatchingGlobCaseInsensitive(normalized, SECRET_FILE_GLOBS);
 }
