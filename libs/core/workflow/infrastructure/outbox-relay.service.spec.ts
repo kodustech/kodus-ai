@@ -201,6 +201,57 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         expect(byUuid.get('job-never-leased')).not.toContain('lease expired');
     });
 
+    it('reports the dead rows that landed when the other group rejects', async () => {
+        const service = build();
+        const logger = jest.requireMock('@libs/core/log/logger').createLogger();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-budget-spent',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 1,
+                maxRetries: 1,
+            },
+            {
+                uuid: 'job-never-leased',
+                workflowType: 'WEBHOOK',
+                organizationId: 'org-2',
+                startedAt: new Date(),
+                leaseExpiresAt: null,
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        // The lease-expired write rejects while the lease-less one lands. With
+        // Promise.all the rejection carried the whole group away, so the write
+        // that did land was reported as failed and left out of the count.
+        jobRepository.failStaleJobs
+            .mockRejectedValueOnce(new Error('deadlock detected'))
+            .mockResolvedValueOnce(1);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.failStaleJobs).toHaveBeenCalledTimes(2);
+        const failedWrites = logger.error.mock.calls
+            .map(([entry]: [any]) => entry)
+            .filter(
+                (entry: any) =>
+                    entry.message ===
+                    'Failed to permanently fail stale workflow jobs',
+            );
+        expect(failedWrites).toHaveLength(1);
+        expect(failedWrites[0].metadata.uuids).toEqual(['job-budget-spent']);
+        // The module mock is shared by every case in this file, so read the
+        // last report of this reap rather than the first one ever logged.
+        const report = logger.warn.mock.calls
+            .map(([entry]: [any]) => entry.message)
+            .filter((message: string) => message.startsWith('Reclaimed '))
+            .pop();
+        expect(report).toContain('permanently failed 1');
+    });
+
     it('passes an age cutoff ~ now - 180min for legacy rows', async () => {
         const service = build();
         const before = Date.now();

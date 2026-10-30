@@ -622,28 +622,58 @@ export class OutboxRelayService
                       })
                     : Promise.resolve([] as string[]);
             const failTask = (async (): Promise<number> => {
-                if (!this.jobRepository.failStaleJobs) {
+                const failStaleJobs = this.jobRepository.failStaleJobs;
+                if (!failStaleJobs) {
                     return 0;
                 }
-                const [exhausted, unleased] = await Promise.all([
-                    retryExhausted.length > 0
-                        ? this.jobRepository.failStaleJobs({
-                              uuids: retryExhausted.map((job) => job.uuid),
-                              lastError: `${leaseExpiredReason} Retry budget exhausted (${retryExhausted.length} job(s)).`,
-                              errorClassification:
-                                  ErrorClassification.PERMANENT,
-                          })
-                        : Promise.resolve(0),
-                    neverLeased.length > 0
-                        ? this.jobRepository.failStaleJobs({
-                              uuids: neverLeased.map((job) => job.uuid),
-                              lastError: unleasedReason,
-                              errorClassification:
-                                  ErrorClassification.PERMANENT,
-                          })
-                        : Promise.resolve(0),
-                ]);
-                return exhausted + unleased;
+                const groups = [
+                    {
+                        jobs: retryExhausted,
+                        lastError: `${leaseExpiredReason} Retry budget exhausted (${retryExhausted.length} job(s)).`,
+                    },
+                    { jobs: neverLeased, lastError: unleasedReason },
+                ].filter((group) => group.jobs.length > 0);
+
+                // Settle both writes: with Promise.all a rejected one hid the
+                // other group's outcome, so a batch that half landed was
+                // reported as wholly failed, and the group that succeeded was
+                // never counted in the reap report (#1902 review).
+                const results = await Promise.allSettled(
+                    groups.map((group) =>
+                        failStaleJobs({
+                            uuids: group.jobs.map((job) => job.uuid),
+                            lastError: group.lastError,
+                            errorClassification: ErrorClassification.PERMANENT,
+                        }),
+                    ),
+                );
+
+                let failed = 0;
+                results.forEach((result, index) => {
+                    if (result.status === 'fulfilled') {
+                        failed += result.value ?? 0;
+                        return;
+                    }
+                    this.logger.error({
+                        message: 'Failed to permanently fail stale workflow jobs',
+                        context: OutboxRelayService.name,
+                        error:
+                            result.reason instanceof Error
+                                ? result.reason
+                                : new Error(String(result.reason)),
+                        metadata: {
+                            uuids: groups[index].jobs.map((job) => job.uuid),
+                            organizationIds: [
+                                ...new Set(
+                                    groups[index].jobs.map(
+                                        (job) => job.organizationId,
+                                    ),
+                                ),
+                            ],
+                        },
+                    });
+                });
+                return failed;
             })();
 
             const [requeueResult, failResult] = await Promise.allSettled([
