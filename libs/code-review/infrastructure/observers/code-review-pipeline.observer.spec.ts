@@ -258,6 +258,7 @@ describe('CodeReviewPipelineObserver', () => {
                 metadata: {
                     category: 'generalist',
                     errorCategory: 'QUOTA_EXCEEDED',
+                    orgOwnedKey: true,
                 },
             } as any,
             {
@@ -270,6 +271,7 @@ describe('CodeReviewPipelineObserver', () => {
                 metadata: {
                     category: 'generalist',
                     errorCategory: 'QUOTA_EXCEEDED',
+                    orgOwnedKey: true,
                 },
             } as any,
         ];
@@ -322,6 +324,79 @@ describe('CodeReviewPipelineObserver', () => {
             context,
             CheckConclusion.FAILURE,
             CheckStageNames._pipelineEndFailure,
+            expect.any(String),
+        );
+    });
+
+    // The managed key is Kodus's: the org cannot top it up, so the review
+    // failed and the check must say so.
+    it('finalizes as FAILURE when the exhausted quota is on the Kodus-managed key', async () => {
+        context.statusInfo = { status: AutomationStatus.ERROR } as any;
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:generalist',
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity: 'critical',
+                metadata: {
+                    category: 'generalist',
+                    errorCategory: 'QUOTA_EXCEEDED',
+                    orgOwnedKey: false,
+                },
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.FAILURE,
+            CheckStageNames._pipelineEndFailure,
+            expect.any(String),
+        );
+    });
+
+    it('finalizes as NEUTRAL when an exhausted org quota comes with a partial error from another agent', async () => {
+        context.statusInfo = { status: AutomationStatus.ERROR } as any;
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:generalist',
+                error: new Error(
+                    'The configured API key (openai_compatible) is out of credits or has hit its billing limit.',
+                ),
+                severity: 'critical',
+                metadata: {
+                    category: 'generalist',
+                    errorCategory: 'QUOTA_EXCEEDED',
+                    orgOwnedKey: true,
+                },
+            } as any,
+            {
+                stage: 'AgentReviewStage',
+                substage: 'agent:security',
+                error: new Error('Agent stopped at the step limit'),
+                severity: 'partial',
+                metadata: { category: 'security' },
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.NEUTRAL,
+            CheckStageNames._pipelineEndPartial,
             expect.any(String),
         );
     });

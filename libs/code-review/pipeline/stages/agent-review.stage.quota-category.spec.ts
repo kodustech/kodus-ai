@@ -141,4 +141,45 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
         );
         expect(error?.metadata?.errorCategory).toBe('UNKNOWN');
     });
+
+    it.each([
+        ['the org brought its own key', { credentialId: 'cred-1' }, true],
+        ['the Kodus-managed key served the run', {}, false],
+    ])('records whether %s', async (_label, slot, orgOwnedKey) => {
+        const { stage } = makeStage({
+            suggestions: [],
+            agentResults: [],
+            failures: [
+                {
+                    agentName: 'generalist',
+                    category: 'generalist',
+                    error: Object.assign(new Error('Payment Required'), {
+                        status: 402,
+                    }),
+                },
+            ],
+            incomplete: [],
+            unverified: [],
+            warnings: [],
+        });
+
+        const result = await run(
+            stage,
+            makeContext({
+                codeReviewConfig: {
+                    reviewOptions: {},
+                    resolvedModelSlot: {
+                        provider: 'openai',
+                        model: 'gpt-4o-mini',
+                        ...slot,
+                    },
+                },
+            }),
+        );
+
+        const error = (result.errors ?? []).find(
+            (e: any) => e.substage === 'agent:generalist',
+        );
+        expect(error?.metadata?.orgOwnedKey).toBe(orgOwnedKey);
+    });
 });

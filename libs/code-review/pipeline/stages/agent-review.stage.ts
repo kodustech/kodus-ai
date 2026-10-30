@@ -147,6 +147,7 @@ import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
+    usesOrgOwnedKey,
     DedupTraceGroupSummary,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
@@ -1151,6 +1152,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             agentName: failure.agentName,
                             category: failure.category,
                             errorCategory: classifyFailure(failure).category,
+                            orgOwnedKey: usesOrgOwnedKey(context),
                             prNumber,
                         },
                     });
@@ -2010,6 +2012,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         prNumber,
                         durationMs,
                         errorCategory: classification.category,
+                        orgOwnedKey: usesOrgOwnedKey(context),
                     },
                 });
 
