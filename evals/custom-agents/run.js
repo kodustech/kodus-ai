@@ -290,6 +290,8 @@ async function main() {
         eval: 'custom-agents',
         question: evalQuestion('evals/custom-agents'),
         model: MODEL,
+        // A no-sandbox run is not the run its floor and baseline were measured on.
+        sandbox: args.sandbox === 'none' ? 'none' : 'local',
         runs: 1,
         metric: {
             name: "of the agents' property checks right",
