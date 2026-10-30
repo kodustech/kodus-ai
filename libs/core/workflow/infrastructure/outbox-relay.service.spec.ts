@@ -45,6 +45,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     let outboxRepository: { create: jest.Mock };
     let dataSource: { transaction: jest.Mock };
     let transactionManager: { marker: string };
+    let transactionOutcomes: string[];
 
     const build = () => {
         messageBroker = {
@@ -68,8 +69,20 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         // The requeue and its resume message are written on one manager; the
         // oracle object lets a test assert that both calls received it.
         transactionManager = { marker: 'reclaim-tx' };
+        transactionOutcomes = [];
         dataSource = {
-            transaction: jest.fn(async (run: any) => run(transactionManager)),
+            // Records whether the callback ran to completion, which is how a
+            // test observes "the requeue would have committed".
+            transaction: jest.fn(async (run: any) => {
+                try {
+                    const result = await run(transactionManager);
+                    transactionOutcomes.push('committed');
+                    return result;
+                } catch (error) {
+                    transactionOutcomes.push('rejected');
+                    throw error;
+                }
+            }),
         };
 
         const configService = { get: jest.fn() };
@@ -346,14 +359,9 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 maxRetries: 3,
             })),
         );
-        jobRepository.requeueStaleJobs.mockResolvedValue([
-            'job-1',
-            'job-2',
-            'job-3',
-            'job-4',
-            'job-5',
-            'job-6',
-        ]);
+        jobRepository.requeueStaleJobs.mockResolvedValue(
+            Array.from({ length: 6 }, (_, i) => `job-${i}`),
+        );
 
         await service.reapStaleProcessingJobs();
 
@@ -639,6 +647,33 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         }
     });
 
+    it('refuses to requeue a job with no workflow type instead of committing it without a message', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-no-type',
+                workflowType: undefined,
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.requeueStaleJobs.mockResolvedValue(['job-no-type']);
+
+        await expect(
+            service.reapStaleProcessingJobs(),
+        ).resolves.toBeUndefined();
+
+        // No message is written, so the transaction throws and the requeue is
+        // never committed: the row stays PROCESSING with its expired lease
+        // rather than going PENDING with nothing to re-drive it.
+        expect(outboxRepository.create).not.toHaveBeenCalled();
+        expect(transactionOutcomes).toEqual(['rejected']);
+        expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
+    });
+
     it('rolls the requeue back when a resume write rejects, so the next cycle reclaims the job', async () => {
         const service = build();
         const jobs = Array.from({ length: 2 }, (_, i) => ({
@@ -665,6 +700,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         // The transaction aborted on the first message, so the reconciliation
         // is reported as nothing reaped rather than as a half-written batch.
         expect(outboxRepository.create).toHaveBeenCalledTimes(1);
+        expect(transactionOutcomes).toEqual(['rejected']);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
 
         // The rows are still PROCESSING (the transaction rolled the flip back),
@@ -673,6 +709,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         expect(jobRepository.requeueStaleJobs).toHaveBeenCalledTimes(2);
         expect(outboxRepository.create).toHaveBeenCalledTimes(3);
+        expect(transactionOutcomes).toEqual(['rejected', 'committed']);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 

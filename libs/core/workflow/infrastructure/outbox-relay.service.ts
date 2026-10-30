@@ -496,13 +496,10 @@ export class OutboxRelayService
      */
     private async publishReclaimedJob(
         uuid: string,
-        workflowType: string | undefined,
+        workflowType: string,
         at: Date,
         transactionManager?: EntityManager,
     ): Promise<void> {
-        if (!workflowType) {
-            return;
-        }
         const messageId = `reclaim-${uuid}-${at.getTime()}`;
         await this.outboxRepository.create(
             {
@@ -666,9 +663,21 @@ export class OutboxRelayService
                         // a message: a job that finished between the SELECT and
                         // the write must not be re-driven (#1902).
                         for (const uuid of requeuedUuids) {
+                            const workflowType = typeByUuid.get(uuid);
+                            if (workflowType === undefined) {
+                                // Committing here would leave the row PENDING
+                                // with no resume message, the exact state this
+                                // transaction exists to prevent. Throwing rolls
+                                // the requeue back, so the row stays PROCESSING
+                                // and the next cycle reports it again instead of
+                                // stranding it silently (#1902 review).
+                                throw new Error(
+                                    `Reclaimed workflow job ${uuid} has no workflow type; refusing to requeue it without a resume message`,
+                                );
+                            }
                             await this.publishReclaimedJob(
                                 uuid,
-                                typeByUuid.get(uuid),
+                                workflowType,
                                 now,
                                 transactionManager,
                             );
