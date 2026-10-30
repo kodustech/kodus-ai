@@ -25,7 +25,10 @@ const args = Object.fromEntries(
     }),
 );
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
-const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const SANDBOX = args.sandbox === 'none' ? 'none' : 'local';
+// A no-sandbox run is judged only on floors measured without a sandbox.
+const MODEL_TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const TARGET = SANDBOX === 'none' ? MODEL_TARGET.noSandbox || {} : MODEL_TARGET;
 const picked = args.cases
     ? CASES.filter((c) => String(args.cases).split(',').includes(c.id))
     : CASES;
@@ -290,8 +293,7 @@ async function main() {
         eval: 'custom-agents',
         question: evalQuestion('evals/custom-agents'),
         model: MODEL,
-        // A no-sandbox run is not the run its floor and baseline were measured on.
-        sandbox: args.sandbox === 'none' ? 'none' : 'local',
+        sandbox: SANDBOX,
         runs: 1,
         metric: {
             name: "of the agents' property checks right",
@@ -354,7 +356,7 @@ async function main() {
     if (!args.gate) return 0;
     if (result.metric.floor === null) {
         console.error(
-            `not measured: no floor for ${MODEL} in evals/custom-agents/targets.json, so --gate cannot judge it`,
+            `not measured: no floor for ${MODEL}${SANDBOX === 'none' ? ' without a sandbox (noSandbox)' : ''} in evals/custom-agents/targets.json, so --gate cannot judge it`,
         );
         return 2;
     }
