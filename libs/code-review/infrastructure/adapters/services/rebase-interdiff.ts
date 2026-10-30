@@ -172,24 +172,23 @@ function reviewedFlags(
     return flags;
 }
 
-function changeLineCounts(hunks: Hunk[]): Map<string, number> {
+function countsOf(keys: string[]): Map<string, number> {
     const counts = new Map<string, number>();
-    for (const hunk of hunks) {
-        for (const line of hunk.lines) {
-            if (!isChange(line)) continue;
-            counts.set(line, (counts.get(line) ?? 0) + 1);
-        }
-    }
+    for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
     return counts;
 }
 
-/** How many change lines of `previous` the current diff lost. A moved change
- *  keeps its line and does not count: only a removal does (#2319). */
+/** How many change lines of `previous` the current diff lost. Changes are
+ *  matched on where they sit, not on their text alone: a line dropped from one
+ *  function while an identical line appears in another is a removal, and the
+ *  interdiff cannot tell it from a move (#2319, review finding). */
 function missingChangeLines(previous: Hunk[], current: Hunk[]): number {
-    const now = changeLineCounts(current);
+    const now = countsOf(changesOf(current));
     let missing = 0;
-    for (const [line, count] of changeLineCounts(previous)) {
-        missing += Math.max(0, count - (now.get(line) ?? 0));
+    for (const [key, count] of countsOf(changesOf(previous))) {
+        const left = now.get(key) ?? 0;
+        if (left >= count) continue;
+        missing += count - left;
     }
     return missing;
 }
@@ -263,18 +262,19 @@ export function rebaseInterdiff(
         }
 
         const previousHunks = splitHunks(before.patch);
+        // #2319: a reviewed change line the current diff no longer carries is
+        // either reverted by the push or absorbed by the base branch, and the
+        // two diffs look alike. An interdiff cannot show the removal, so the
+        // caller has to review the whole current PR instead. This runs before
+        // the bounded comparison, which can come back empty on a big file.
+        if (missingChangeLines(previousHunks, hunks) > 0) {
+            result.revertedFiles.push(file.filename);
+        }
         const flags = reviewedFlags(changesOf(hunks), changesOf(previousHunks));
         if (!flags) {
             result.uncomparedFiles.push(file.filename);
             result.files.push(file);
             continue;
-        }
-        // #2319: a reviewed change line the current diff no longer carries is
-        // either reverted by the push or absorbed by the base branch, and the
-        // two diffs look alike. An interdiff cannot show the removal, so the
-        // caller has to review the whole current PR instead.
-        if (missingChangeLines(previousHunks, hunks) > 0) {
-            result.revertedFiles.push(file.filename);
         }
         let next = 0;
         const reviewed = () => flags[next++];
@@ -310,5 +310,6 @@ export function rebaseInterdiff(
         if (!changesOf(splitHunks(before.patch)).length) continue;
         result.revertedFiles.push(before.filename);
     }
+
     return result;
 }

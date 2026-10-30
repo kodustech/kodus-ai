@@ -561,7 +561,7 @@ describe('rebaseInterdiff', () => {
         expect(result.revertedFiles).toEqual(['src/a.ts']);
     });
 
-    it('does not name a file when the change only moved', () => {
+    it('names a file when a change moved, since a move and a removal read alike', () => {
         const before = hunk(
             '@@ -10,3 +10,4 @@ function a()',
             ' const x = 1;',
@@ -580,9 +580,28 @@ describe('rebaseInterdiff', () => {
             [file('src/a.ts', before)],
         );
 
-        // The line is still in the diff, so nothing was removed: the moved
-        // change is reviewed again in its new place, as before.
-        expect(result.revertedFiles).toEqual([]);
+        // The moved change is reviewed again in its new place, and the file is
+        // named too: from the two diffs alone a move is indistinguishable from
+        // a line removed here and an identical one added there (#2319).
         expect(result.files).toHaveLength(1);
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
+    });
+
+    it('names a file whose comparison gave up on size, when a line also went missing', () => {
+        const big = (prefix: string) =>
+            Array.from({ length: 5000 }, (_, i) => `+${prefix}${i}`);
+        const before = hunk('@@ -0,0 +1,5001 @@', '+guard();', ...big('old'));
+        const after = hunk('@@ -0,0 +1,5000 @@', ...big('new'));
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The comparison exceeds its bound, so the file is reviewed whole...
+        expect(result.uncomparedFiles).toEqual(['src/a.ts']);
+        // ...and the removal is still reported: it must not depend on a
+        // comparison that gave up (#2319 review finding).
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
     });
 });
