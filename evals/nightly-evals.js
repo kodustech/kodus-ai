@@ -50,14 +50,23 @@ const NIGHTLY_EVALS = [
         sets: { controlled: [], full: null },
         files: ['evals/conversation/targets.json'],
     },
-    // Offers are reported beside the number, not gated (evals/thread-actions).
-    ...['rule', 'memory'].map((kind) => ({
-        id: `thread-${kind}`,
-        stage: `thread-${kind}`,
-        run: ['evals/thread-actions/run.js', `--kind=${kind}`],
-        sets: { controlled: [], full: null },
-        files: ['evals/thread-actions/targets.json'],
-    })),
+    // Writes and offers are two stages, each gating its own number (evals/thread-actions).
+    ...['rule', 'memory'].flatMap((kind) => [
+        {
+            id: `thread-${kind}`,
+            stage: `thread-${kind}`,
+            run: ['evals/thread-actions/run.js', `--kind=${kind}`],
+            sets: { controlled: [], full: null },
+            files: ['evals/thread-actions/targets.json'],
+        },
+        {
+            id: `thread-${kind}-offers`,
+            stage: `thread-${kind}-offers`,
+            run: ['evals/thread-actions/run.js', `--kind=${kind}`, '--metric=offers'],
+            sets: { controlled: [], full: null },
+            files: ['evals/thread-actions/targets.json'],
+        },
+    ]),
     // The stages after the finder, on a production review's frozen findings (evals/funnel).
     ...['dedup', 'severity', 'verify'].map((stage) => ({
         id: `funnel-${stage}`,

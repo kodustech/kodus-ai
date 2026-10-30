@@ -207,4 +207,32 @@ describe('RepoLookup contract, over a real sandbox', () => {
             await expect(lying.grep('slugify')).rejects.toThrow(/unavailable/);
         });
     });
+
+    // Azure Repos names changed files with a leading "/" ("/src/x.ts"), and
+    // the sandbox refuses absolute paths. Those names reach the lookup as-is.
+    describe('a changed-file name with a leading slash', () => {
+        it('probe leaves the lookup available', async () => {
+            await lookup.probe('/src/shared/strings.ts');
+            expect(lookup.available).toBe(true);
+        });
+
+        it('read answers from the repository root', async () => {
+            const out = await lookup.read('/src/shared/strings.ts', 1, 1);
+            expect(out).toContain('slugify');
+        });
+
+        it('exists answers from the repository root', async () => {
+            await expect(
+                lookup.exists('/src/orders/order.controller.spec.ts'),
+            ).resolves.toBe(true);
+            await expect(
+                lookup.exists('/src/orders/order.controller.test.ts'),
+            ).resolves.toBe(false);
+        });
+
+        it('grep searches under a path from the repository root', async () => {
+            const out = await lookup.grep('slugify', '/src/shared');
+            expect(grepIsEmpty(out)).toBe(false);
+        });
+    });
 });

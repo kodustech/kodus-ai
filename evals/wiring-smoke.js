@@ -458,6 +458,30 @@ async function main() {
             ],
         },
         {
+            name: 'thread-rule-offers',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=rule',
+                '--metric=offers',
+                '--gate',
+            ],
+        },
+        {
+            name: 'thread-memory-offers',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/thread-actions/run.js',
+                '--model=eval-fake',
+                '--kind=memory',
+                '--metric=offers',
+                '--gate',
+            ],
+        },
+        {
             name: 'review-rounds',
             result: 'shared',
             model: true,

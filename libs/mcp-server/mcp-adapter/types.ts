@@ -261,9 +261,12 @@ export interface MCPToolRaw {
     inputSchema?: unknown;
     outputSchema?: unknown;
     annotations?: Record<string, unknown>;
+    _meta?: Record<string, unknown>;
 }
 
 export interface MCPTool extends MCPToolRaw {
+    /** The configured server (`MCPServerConfig.name`) that listed the tool. */
+    serverName?: string;
     execute: (args: unknown, ctx: unknown) => Promise<unknown>;
 }
 
@@ -331,6 +334,8 @@ export interface EngineTool {
     outputSchema?: unknown;
     outputZodSchema?: z.ZodSchema;
     annotations?: Record<string, unknown>;
+    _meta?: Record<string, unknown>;
+    serverName?: string;
     title?: string;
     execute: (args: unknown, ctx: unknown) => Promise<unknown>;
 }

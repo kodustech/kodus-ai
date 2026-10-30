@@ -277,6 +277,9 @@ export default {
         // by the eval's simulated sandbox — their *.spec.ts files are review
         // input, not this repo's tests.
         '<rootDir>/evals/[^/]+/fixtures/',
+        // Local scratch space (gitignored): may hold old checkouts of this
+        // repo, whose specs are not this branch's tests.
+        '<rootDir>/.tmp/',
     ],
     // Resolve ESM-style .js imports to .ts files in packages
     resolver: '<rootDir>/jest-resolver.cjs',

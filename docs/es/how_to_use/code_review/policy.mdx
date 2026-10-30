@@ -11,7 +11,7 @@ Aclarar cómo interpretar el feedback de Kody y cómo interactúa con las polít
 
 - Sugerencias: Por defecto, Kody publica comentarios no bloqueantes para que los evalúes.
 - Solicitar Cambios (opcional): Si está habilitado, Kody puede marcar una revisión como "cambios solicitados" para problemas críticos.
-- Auto-aprobar (opcional): Si está habilitado, Kody aprueba los PRs cuando no se encuentran problemas.
+- Auto-aprobar (opcional): Si está habilitado, Kody puede aprobar un PR después de una revisión limpia. La aprobación condicional también puede restringir las etiquetas y autores elegibles, exigir una persona para rutas seleccionadas y retener los PRs que Kody no pueda evaluar como de bajo riesgo. Consulta [Auto-aprobación](/es/how_to_use/code_review/configs/auto_approve).
 
 <Note>
   Habilita los comportamientos de bloqueo solo cuando tu equipo esté de acuerdo con los umbrales y tenga una CI sólida en su lugar.
@@ -25,7 +25,7 @@ Aclarar cómo interpretar el feedback de Kody y cómo interactúa con las polít
 
 ## Cuándo Usar Auto-aprobar
 
-- Cambios pequeños y de bajo riesgo (documentación/pruebas).
+- Cambios pequeños y de bajo riesgo (documentación/pruebas). Configura la aprobación condicional cuando solo un subconjunto de PRs deba ser elegible.
 - Equipos con alta cobertura de pruebas y CI confiable.
 
 ## La Decisión Humana Siempre Importa

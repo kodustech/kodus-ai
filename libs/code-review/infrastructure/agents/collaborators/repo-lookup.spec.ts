@@ -11,6 +11,7 @@
 import {
     buildRepoLookup,
     RepoLookupUnavailableError,
+    toRepoPath,
 } from './repo-lookup';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -160,5 +161,77 @@ describe('probe — an available lookup that answers with silence is not availab
         expect(lookup.available).toBe(false);
         expect(lookup.unavailableReason).toBe('null sandbox');
         expect(warn).not.toHaveBeenCalled();
+    });
+});
+
+describe('paths reach the sandbox relative to the repository root', () => {
+    // Azure Repos names changed files with a leading "/", and both sandboxes
+    // reject absolute paths.
+    it('read forwards a name without its leading slash', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/src/a.ts', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('src/a.ts', 1, 1);
+    });
+
+    it('read keeps the spaces a file name carries', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/src/ notes.ts ', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('src/ notes.ts ', 1, 1);
+    });
+
+    it('probe forwards a name without its leading slash', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.probe('/src/a.ts');
+
+        expect(read).toHaveBeenCalledWith('src/a.ts', 0, 0);
+        expect(lookup.available).toBe(true);
+    });
+
+    it('exists lists the parent directory without the leading slash and matches the entry', async () => {
+        const listDir = jest
+            .fn()
+            .mockResolvedValue('src/a.ts\nsrc/a.spec.ts\n');
+        const lookup = buildRepoLookup(realHandle({ listDir }));
+
+        await expect(lookup.exists('/src/a.spec.ts')).resolves.toBe(true);
+        expect(listDir).toHaveBeenCalledWith('src', 1);
+    });
+
+    it('exists of a root-level file lists the repository root', async () => {
+        const listDir = jest.fn().mockResolvedValue('README.md\n');
+        const lookup = buildRepoLookup(realHandle({ listDir }));
+
+        await expect(lookup.exists('/README.md')).resolves.toBe(true);
+        expect(listDir).toHaveBeenCalledWith('.', 1);
+    });
+
+    it('grep forwards a search path without its leading slash', async () => {
+        const grep = jest.fn().mockResolvedValue('');
+        const lookup = buildRepoLookup(realHandle({ grep }));
+
+        await lookup.grep('formatDate', '/src');
+
+        expect(grep).toHaveBeenCalledWith('formatDate', 'src', undefined);
+    });
+});
+
+describe('toRepoPath', () => {
+    it.each([
+        ['/src/a.ts', 'src/a.ts'],
+        ['//src/a.ts', 'src/a.ts'],
+        ['./src/a.ts', 'src/a.ts'],
+        ['src/a.ts', 'src/a.ts'],
+        // A file name may legitimately start or end with a space.
+        ['/src/ a.ts ', 'src/ a.ts '],
+    ])('%j -> %j', (input, expected) => {
+        expect(toRepoPath(input)).toBe(expected);
     });
 });
