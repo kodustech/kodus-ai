@@ -419,7 +419,14 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 }
             }
 
-            await this.completeJob(jobId, leaseOwner);
+            const completed = await this.completeJob(jobId, leaseOwner);
+            if (!completed) {
+                // The row belongs to another worker now. This run's review did
+                // finish, but it is not the job's outcome: recording a success
+                // for a job the other worker is still running would double
+                // count it in the metrics (#1902 review).
+                return;
+            }
 
             const durationMs = Date.now() - startTime;
             this.metricsCollector?.recordHistogram(
@@ -457,7 +464,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     )?.organizationAndTeamData?.organizationId;
                 this.logger.warn({
                     message:
-                        'Job lease lost after repeated renewal failures — leaving the row PROCESSING for the lease reaper to reclaim',
+                        'Job lease lost — leaving the row PROCESSING for the lease reaper to reclaim',
                     context: CodeReviewJobProcessorService.name,
                     error,
                     metadata: { jobId, organizationId: orgId },
@@ -794,7 +801,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         jobId: string,
         leaseOwner: string,
         result?: unknown,
-    ): Promise<void> {
+    ): Promise<boolean> {
         const stillOwned = await this.jobRepository.update(
             jobId,
             {
@@ -815,7 +822,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     instanceId: leaseOwner,
                 },
             });
+            return false;
         }
+
+        return true;
     }
 
     private removeByokConcurrencyGateMetadata(

@@ -252,6 +252,32 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         expect(report).toContain('permanently failed 1');
     });
 
+    it('keeps the repository as the receiver of the failure writes', async () => {
+        const service = build();
+        const receivers: unknown[] = [];
+        // A real implementation reads `this.repository`, so a detached method
+        // reference throws instead of failing the rows.
+        jobRepository.failStaleJobs = jest.fn(function (this: unknown) {
+            receivers.push(this);
+            return Promise.resolve(1);
+        });
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-never-leased',
+                workflowType: 'WEBHOOK',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: null,
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(receivers).toEqual([jobRepository]);
+    });
+
     it('passes an age cutoff ~ now - 180min for legacy rows', async () => {
         const service = build();
         const before = Date.now();

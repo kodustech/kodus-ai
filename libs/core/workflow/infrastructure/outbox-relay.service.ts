@@ -622,8 +622,11 @@ export class OutboxRelayService
                       })
                     : Promise.resolve([] as string[]);
             const failTask = (async (): Promise<number> => {
-                const failStaleJobs = this.jobRepository.failStaleJobs;
-                if (!failStaleJobs) {
+                // Keep the call on the repository: reading the method into a
+                // local drops its receiver, and the implementation reads
+                // `this.repository` (#1902 review).
+                const repository = this.jobRepository;
+                if (!repository.failStaleJobs) {
                     return 0;
                 }
                 const groups = [
@@ -640,7 +643,7 @@ export class OutboxRelayService
                 // never counted in the reap report (#1902 review).
                 const results = await Promise.allSettled(
                     groups.map((group) =>
-                        failStaleJobs({
+                        repository.failStaleJobs({
                             uuids: group.jobs.map((job) => job.uuid),
                             lastError: group.lastError,
                             errorClassification: ErrorClassification.PERMANENT,

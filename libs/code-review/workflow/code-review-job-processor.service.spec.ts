@@ -638,6 +638,51 @@ describe('CodeReviewJobProcessorService', () => {
         });
     });
 
+    describe('a completion that matched no row (#1902 review)', () => {
+        const buildWithMetrics = (metrics: { recordHistogram: jest.Mock }) =>
+            new CodeReviewJobProcessorService(
+                jobRepository as any,
+                runCodeReviewAutomationUseCase as any,
+                byokConcurrencyGateService as any,
+                notificationService as any,
+                prAuthorRecipientResolver as any,
+                rateLimitGate as any,
+                prReviewDeferralService as any,
+                codeReviewHandlerService as any,
+                metrics as any,
+            );
+
+        it('drops the success metric when another worker holds the row', async () => {
+            const metrics = { recordHistogram: jest.fn() };
+            const serviceWithMetrics = buildWithMetrics(metrics);
+            jobRepository.update.mockImplementation(
+                (_id: string, data: any) =>
+                    data?.status === JobStatus.COMPLETED
+                        ? Promise.resolve(false)
+                        : Promise.resolve(true),
+            );
+
+            await serviceWithMetrics.process('job-1');
+
+            // The review ran, but the row belongs to another worker: counting
+            // it here would report two successes for one job.
+            expect(metrics.recordHistogram).not.toHaveBeenCalled();
+        });
+
+        it('still records it when the completion lands', async () => {
+            const metrics = { recordHistogram: jest.fn() };
+            const serviceWithMetrics = buildWithMetrics(metrics);
+
+            await serviceWithMetrics.process('job-1');
+
+            expect(metrics.recordHistogram).toHaveBeenCalledWith(
+                'code_review_duration_ms',
+                expect.any(Number),
+                { status: 'success' },
+            );
+        });
+    });
+
     describe('completion ownership (#1902 review)', () => {
         it('completes under the lease of its own attempt, not the one that took the job over', async () => {
             // A row that only accepts a write from the owner it currently
