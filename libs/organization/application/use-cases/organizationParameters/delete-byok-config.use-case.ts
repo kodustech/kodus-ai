@@ -6,6 +6,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { isByokConfig } from '@libs/llm/byok-config';
@@ -121,6 +125,8 @@ export class DeleteByokConfigUseCase {
         private readonly organizationParametersService: IOrganizationParametersService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
 
     async execute(
@@ -175,21 +181,36 @@ export class DeleteByokConfigUseCase {
         if (!isLastModel) {
             const routingRefs = findModelReferences(config, modelId);
 
-            const codeReviewConfig = await this.parametersService
-                .findByKey(
-                    ParametersKey.CODE_REVIEW_CONFIG,
-                    organizationAndTeamData,
-                )
-                .then((p) => p?.configValue ?? null)
-                .catch(() => null);
-            const overrideRefs = findRepoFolderModelReferences(
-                codeReviewConfig,
-                modelId,
-                model?.model,
+            // BYOK is per org, the code-review config is per team: read every
+            // team's. A lookup by org alone matches no row (it filters on a
+            // null team), which left this guard empty in production. A read
+            // that fails rejects the delete rather than passing unchecked.
+            const teams = await this.teamService.find({
+                organization: { uuid: organizationId },
+            });
+            const codeReviewConfigs = await Promise.all(
+                teams.map((team) =>
+                    this.parametersService
+                        .findByKey(ParametersKey.CODE_REVIEW_CONFIG, {
+                            organizationId,
+                            teamId: team.uuid,
+                        })
+                        .then((p) => p?.configValue ?? null),
+                ),
+            );
+            const overrideRefs = codeReviewConfigs.flatMap((codeReviewConfig) =>
+                findRepoFolderModelReferences(
+                    codeReviewConfig,
+                    modelId,
+                    model?.model,
+                ),
             );
             // A custom agent pins its model by id; deleting it left the agent
             // calling the provider with that id as the model name.
-            const agentRefs = collectCustomAgentModelOverrides(codeReviewConfig)
+            const agentRefs = codeReviewConfigs
+                .flatMap((codeReviewConfig) =>
+                    collectCustomAgentModelOverrides(codeReviewConfig),
+                )
                 .filter((agent) => agent.model === modelId)
                 .map((agent) => `custom agent "${agent.agentName}"`);
 
