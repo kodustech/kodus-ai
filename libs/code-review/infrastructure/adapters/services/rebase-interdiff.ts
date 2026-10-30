@@ -264,20 +264,21 @@ export function rebaseInterdiff(
                 : undefined);
         if (before) compared.add(before.filename);
         const hunks = file.patch ? splitHunks(file.patch) : [];
-        if (!before?.patch || !hunks.length) {
-            result.files.push(file);
-            continue;
-        }
-
-        const previousHunks = splitHunks(before.patch);
+        const previousHunks = before?.patch ? splitHunks(before.patch) : [];
         // #2319: a reviewed change line the current diff no longer carries is
         // either reverted by the push or absorbed by the base branch, and the
         // two diffs look alike. An interdiff cannot show the removal, so the
         // caller has to review the whole current PR instead. This runs before
-        // the bounded comparison, which can come back empty on a big file.
+        // the early return and before the bounded comparison, so a file whose
+        // patch is empty now, or too big to compare, still reports.
         if (missingChangeLines(previousHunks, hunks) > 0) {
             result.revertedFiles.push(file.filename);
         }
+        if (!previousHunks.length || !hunks.length) {
+            result.files.push(file);
+            continue;
+        }
+
         const flags = reviewedFlags(changesOf(hunks), changesOf(previousHunks));
         if (!flags) {
             result.uncomparedFiles.push(file.filename);

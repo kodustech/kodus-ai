@@ -612,6 +612,21 @@ describe('rebaseInterdiff', () => {
         expect(result.files).toHaveLength(1);
     });
 
+    it('names a file whose patch is empty now, when it carried changes before', () => {
+        const before = hunk('@@ -1,3 +1,4 @@', ' a', '+guard();', ' c');
+        const renamed: FileChange = {
+            ...file('src/b.ts', ''),
+            previous_filename: 'src/a.ts',
+        };
+
+        const result = rebaseInterdiff([renamed], [file('src/a.ts', before)]);
+
+        // A rename with no content change has no patch to compare, and the
+        // changes it carried before must not go unreported.
+        expect(result.revertedFiles).toEqual(['src/b.ts']);
+        expect(result.files).toHaveLength(1);
+    });
+
     it('names a file whose comparison gave up on size, when a line also went missing', () => {
         const big = (prefix: string) =>
             Array.from({ length: 5000 }, (_, i) => `+${prefix}${i}`);
