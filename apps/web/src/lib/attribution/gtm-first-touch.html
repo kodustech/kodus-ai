@@ -20,30 +20,13 @@
   var HOSTS = ['kodus.io', 'www.kodus.io', 'app.kodus.io'];
   var MAX_AGE = 60 * 60 * 24 * 365;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid'];
-  var EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+  // The API is the filter and cleans every value again. This only keeps out of
+  // the cookie a newsletter link's reader address carried in a UTM, which
+  // URLSearchParams has already decoded once.
+  var AT = /@|%40/i;
   var GCLID = /^[A-Za-z0-9_-]{1,255}$/;
   // A UTF-8 lead byte at the end with fewer continuation bytes than it needs.
   var PARTIAL_CHAR = /(?:%[CD][0-9A-F]|%E[0-9A-F](?:%[89AB][0-9A-F])?|%F[0-7](?:%[89AB][0-9A-F]){0,2})$/i;
-
-  // Email-shaped anywhere in the text, however it is encoded: percent-escapes
-  // decoded (nested ones too, at most 4 passes; only the valid ASCII ones when
-  // the whole does not decode), lookalikes folded by NFKC, and everything
-  // outside printable ASCII ignored. Bounded so the regex stays cheap.
-  function hasEmail(text) {
-    var t = text.slice(0, 600);
-    for (var pass = 0; pass < 4; pass++) {
-      var next;
-      try {
-        next = decodeURIComponent(t);
-      } catch (e) {
-        next = t.replace(/%([0-7][0-9A-Fa-f])/g, function (m, hex) { return String.fromCharCode(parseInt(hex, 16)); });
-      }
-      if (next === t) break;
-      t = next;
-    }
-    if (t.normalize) t = t.normalize('NFKC');
-    return EMAIL.test(t.replace(/%[89A-Fa-f][0-9A-Fa-f]/g, '').replace(/[^\x20-\x7E]/g, ''));
-  }
 
   // Never cut an emoji in half: encodeURIComponent throws on the leftover.
   function cut(text, max) {
@@ -64,7 +47,7 @@
     var query = new URLSearchParams(location.search);
     for (var i = 0; i < PARAMS.length; i++) {
       var full = (query.get(PARAMS[i]) || '').slice(0, 400).replace(/^\s+|\s+$/g, '');
-      if (!full || hasEmail(full)) continue;
+      if (!full || AT.test(full)) continue;
       // A cut click id no longer identifies the click: whole or nothing, at
       // any size.
       if (PARAMS[i] === 'gclid' && !GCLID.test(full)) continue;
@@ -74,12 +57,11 @@
     }
 
     // Referrer and landing page without query strings or fragments, which is
-    // where personal data in a URL usually lives, and never with a path that
-    // carries an email.
+    // where personal data in a URL usually lives.
     var referrer = document.referrer.split(/[?#]/)[0];
-    if (referrer && !hasEmail(referrer)) touch.referrer = cutUrl(referrer, urlMax);
-    var path = hasEmail(location.pathname) ? '/' : cutUrl(location.pathname, urlMax);
-    touch.landing_page = location.origin + path + (landingQuery && kept.length ? '?' + kept.join('&') : '');
+    if (referrer) touch.referrer = cutUrl(referrer, urlMax);
+    touch.landing_page = location.origin + cutUrl(location.pathname, urlMax) +
+      (landingQuery && kept.length ? '?' + kept.join('&') : '');
     touch.captured_at = new Date().toISOString();
 
     return encodeURIComponent(JSON.stringify(touch));

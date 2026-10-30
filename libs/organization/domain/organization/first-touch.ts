@@ -48,32 +48,29 @@ const MAX_AGE_MS = 365 * DAY_MS + MAX_CLOCK_SKEW_MS;
 const TEXT_SCAN_MAX = FIRST_TOUCH_TEXT_MAX + 254;
 const URL_INPUT_MAX = 2048;
 
-// Controls, format characters and anything else that renders as nothing: they
-// could hide an address from containsEmail (jane@\u200bacme.com).
+// Controls, format characters and anything else that renders as nothing:
+// 'goo\u200bgle' would count as a source of its own, and Postgres rejects
+// \u0000 in jsonb.
 const INVISIBLE_CHARS = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
 // Half of a surrogate pair: Postgres rejects it in jsonb, failing the insert
 // of the organization. Comes from a cut through an emoji or straight from JSON.
 const LONE_SURROGATE =
     /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+const ENCODED_AT = /%40/gi;
 const EMAIL_LOCAL_CHAR = /[a-z0-9._%+-]/i;
 const EMAIL_DOMAIN = /[a-z0-9.-]+/iy;
 const EMAIL_TLD = /\.[a-z]{2,}/i;
-const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
-const NON_ASCII_ESCAPE = /%[89a-f][0-9a-f]/gi;
-const NOT_PRINTABLE_ASCII = /[^\x20-\x7e]/g;
 // A UTF-8 lead byte at the end with fewer continuation bytes than it needs.
 const PARTIAL_CHARACTER =
     /(?:%[cd][0-9a-f]|%e[0-9a-f](?:%[89ab][0-9a-f])?|%f[0-7](?:%[89ab][0-9a-f]){0,2})$/i;
-// Enough for any real nesting (an address encoded twice in an ad URL).
-const MAX_DECODE_PASSES = 4;
 const GCLID = /^[a-z0-9_-]+$/i;
 
 /**
  * Keeps only the known keys, as trimmed strings, truncated, with anything that
- * could identify a person dropped (email-like values, URL query strings,
- * fragments and credentials). Never throws: a malformed value is dropped
- * rather than failing the signup that carries it. Returns null when nothing
- * survives.
+ * could identify a person dropped (campaign values with an '@', paths with an
+ * email, URL query strings, fragments and credentials). Never throws: a
+ * malformed value is dropped rather than failing the signup that carries it.
+ * Returns null when nothing survives.
  */
 export function sanitizeFirstTouch(
     input: unknown,
@@ -142,7 +139,8 @@ function sanitizeText(value: unknown): string | null {
         .replace(INVISIBLE_CHARS, '')
         .replace(LONE_SURROGATE, '')
         .trim();
-    if (!text || containsEmail(text)) {
+    // A campaign value has no business carrying an '@'.
+    if (!text || withAtSigns(text).includes('@')) {
         return null;
     }
 
@@ -150,12 +148,30 @@ function sanitizeText(value: unknown): string | null {
 }
 
 /**
- * Whether the text has something shaped like local@domain.tld, however it is
- * percent-encoded. Linear on purpose: the equivalent single regex backtracks
- * quadratically on long inputs such as a run of '%'.
+ * The value decoded once, with an '@' still encoded read as one. That covers
+ * the real case, a newsletter link carrying the reader's address, also when a
+ * click tracker encoded it twice. Getting past it (deeper encoding, lookalike
+ * or invisible characters) only stores someone's own address on their own
+ * organization.
  */
-function containsEmail(value: string): boolean {
-    const text = revealForEmailCheck(value);
+function withAtSigns(value: string): string {
+    let text: string;
+    try {
+        text = decodeURIComponent(value);
+    } catch {
+        text = value;
+    }
+    return text.replace(ENCODED_AT, '@');
+}
+
+/**
+ * Whether the path has something shaped like local@domain.tld: a path can
+ * hold a handle (medium.com/@jane), so an '@' alone does not drop it. Linear
+ * on purpose: the equivalent single regex backtracks quadratically on long
+ * inputs.
+ */
+function containsEmail(path: string): boolean {
+    const text = withAtSigns(path);
     for (let at = text.indexOf('@'); at >= 0; at = text.indexOf('@', at + 1)) {
         if (at === 0 || !EMAIL_LOCAL_CHAR.test(text[at - 1])) {
             continue;
@@ -167,36 +183,6 @@ function containsEmail(value: string): boolean {
         }
     }
     return false;
-}
-
-/**
- * The text as an address would read in it: percent-escapes decoded (nested
- * ones too, a bounded number of times; only the valid ASCII ones when the
- * whole does not decode), lookalikes folded by NFKC, and everything outside
- * printable ASCII dropped, so no encoding, invisible or combining character
- * can split an address.
- */
-function revealForEmailCheck(value: string): string {
-    let text = value;
-    for (let pass = 0; pass < MAX_DECODE_PASSES; pass++) {
-        let next: string;
-        try {
-            next = decodeURIComponent(text);
-        } catch {
-            next = text.replace(ASCII_ESCAPE, (_, hex: string) =>
-                String.fromCharCode(parseInt(hex, 16)),
-            );
-        }
-        if (next === text) {
-            break;
-        }
-        text = next;
-    }
-
-    return text
-        .normalize('NFKC')
-        .replace(NON_ASCII_ESCAPE, '')
-        .replace(NOT_PRINTABLE_ASCII, '');
 }
 
 /**
@@ -223,15 +209,7 @@ function sanitizeUrl(
         return null;
     }
 
-    // A path that does not decode (e.g. a stray '%') is scanned as is;
-    // containsEmail reads an encoded '@' too.
-    let path: string;
-    try {
-        path = decodeURIComponent(url.pathname);
-    } catch {
-        path = url.pathname;
-    }
-    if (containsEmail(path.replace(INVISIBLE_CHARS, ''))) {
+    if (containsEmail(url.pathname)) {
         return null;
     }
 

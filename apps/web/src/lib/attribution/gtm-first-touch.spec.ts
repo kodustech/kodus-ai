@@ -189,39 +189,6 @@ describe("GTM first-touch tag", () => {
         },
     );
 
-    it("leaves out a referrer or landing path that carries an email", () => {
-        const jar = new CookieJar();
-        visit(
-            jar,
-            "https://kodus.io/u/jane%40acme.com/?utm_source=x",
-            "https://example.com/users/jane@example.com",
-        );
-
-        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
-            utm_source: "x",
-            landing_page: "https://kodus.io/?utm_source=x",
-            captured_at: expect.any(String),
-        });
-    });
-
-    it("drops values where invisible, combining or lookalike characters hide an email", () => {
-        const jar = new CookieJar();
-        visit(
-            jar,
-            "https://kodus.io/?utm_source=x" +
-                "&utm_term=jane%40%E2%80%8Bacme.com" + // zero-width space
-                "&utm_content=jane%40%CC%81acme.com" + // combining acute
-                "&utm_campaign=jane%EF%BC%A0acme.com" + // fullwidth @
-                "&utm_medium=jane%252540example%25252ecom", // nested encoding
-        );
-
-        expect(firstTouchOn(jar, "https://kodus.io/")).toEqual({
-            utm_source: "x",
-            landing_page: "https://kodus.io/?utm_source=x",
-            captured_at: expect.any(String),
-        });
-    });
-
     it("does nothing outside kodus.io (self-hosted installs load the app container too)", () => {
         const jar = new CookieJar();
         visit(jar, "https://kodus.acme.internal/sign-up?utm_source=google");
