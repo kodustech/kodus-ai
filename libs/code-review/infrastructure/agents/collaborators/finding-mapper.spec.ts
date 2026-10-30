@@ -190,6 +190,34 @@ describe('mapAgentFindings', () => {
         ]);
     });
 
+    it('logs a completed path at log level with the review ids', () => {
+        const logger = { warn: jest.fn(), log: jest.fn() };
+        mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'EventManager.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [file('packages/core/EventManager.ts')],
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                logger,
+            }),
+        );
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(logger.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                }),
+            }),
+        );
+    });
+
     it('drops a path tail shared by more than one changed file', () => {
         const r = mapAgentFindings(
             {

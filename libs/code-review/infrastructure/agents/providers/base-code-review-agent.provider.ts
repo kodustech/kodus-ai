@@ -1066,6 +1066,8 @@ export abstract class BaseCodeReviewAgentProvider {
             changedFiles: input.changedFiles,
             kodyRules: input.kodyRules,
             prNumber: input.prNumber,
+            organizationId: input.organizationAndTeamData?.organizationId,
+            teamId: input.organizationAndTeamData?.teamId,
             isKodyRules: this.getCategoryLabel() === 'kody_rules',
             identityName: this.getIdentity().name,
             labelPolicy: {

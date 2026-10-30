@@ -148,13 +148,16 @@ export interface FindingMapperContext {
     changedFiles: FileChange[];
     kodyRules?: Partial<IKodyRule>[];
     prNumber: number;
+    /** The review's org and team, on the mapper's log lines. */
+    organizationId?: string;
+    teamId?: string;
     isKodyRules: boolean;
     /** Name used in warning logs (the agent identity). */
     identityName: string;
     labelPolicy: LabelPolicy;
     /** Injected so the mapper stays free of NestJS; optional for tests.
      *  Typed loosely to accept the app's SimpleLogger.warn shape. */
-    logger?: { warn: (entry: any) => void };
+    logger?: { warn: (entry: any) => void; log?: (entry: any) => void };
 }
 
 export interface MappedFindings {
@@ -213,10 +216,15 @@ export function mapAgentFindings(
             );
             if (tails.length === 1) {
                 resolved = validFilesByNormalized.get(tails[0]);
-                warn(
-                    `[AGENT] Completed partial relevantFile "${relevantFile}" → "${resolved}"`,
-                    { prNumber: ctx.prNumber },
-                );
+                ctx.logger?.log?.({
+                    message: `[AGENT] Completed partial relevantFile "${relevantFile}" → "${resolved}"`,
+                    context: ctx.identityName,
+                    metadata: {
+                        organizationId: ctx.organizationId,
+                        teamId: ctx.teamId,
+                        prNumber: ctx.prNumber,
+                    },
+                });
             }
         }
         resolvedByEmitted.set(emitted, resolved);
