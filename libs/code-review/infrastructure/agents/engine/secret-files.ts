@@ -45,14 +45,16 @@ export function withoutSecretFileLines(output: string): string {
     const lines = output.split('\n');
     const kept = lines.filter((line) => !lineFromSecretFile(line));
     if (kept.length === lines.length) return output;
-    // A `--` group separator left with nothing between two others.
-    return kept
-        .filter(
-            (line, i) =>
-                line !== '--' ||
-                (i > 0 && i < kept.length - 1 && kept[i + 1] !== '--'),
-        )
-        .join('\n');
+    // A `--` group separator is kept only between two groups that remain.
+    const out: string[] = [];
+    for (const line of kept) {
+        if (line === '--' && (!out.length || out[out.length - 1] === '--')) {
+            continue;
+        }
+        out.push(line);
+    }
+    if (out[out.length - 1] === '--') out.pop();
+    return out.join('\n');
 }
 
 /** Linked-repository grep tags each line with `[owner/repo] `. */

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 
 import { buildFinderToolRegistry } from '../adapters/finder-tools.adapter';
-import { buildAgentTools } from './agent-tools.factory';
+import { buildAgentTools, MAX_GREP_GROUPS } from './agent-tools.factory';
 import { withoutSecretFileLines } from './secret-files';
 
 /**
@@ -211,6 +211,65 @@ describe('agent tools — secret files of the repository', () => {
         expect(out).toBe(
             `[org/api] src/config.ts:1:export const name = '${VALUE}';`,
         );
+    });
+
+    it('does not let secret file matches use up the grep result limit', async () => {
+        const repo = fs.mkdtempSync(
+            path.join(os.tmpdir(), 'kodus-secret-limit-'),
+        );
+        try {
+            // One rg match group per secret line, past MAX_GREP_GROUPS.
+            fs.writeFileSync(
+                path.join(repo, 'big.pem'),
+                Array.from(
+                    { length: MAX_GREP_GROUPS + 10 },
+                    (_, i) => `KEY_${i}=${VALUE}\n\n\n\n\n\n`,
+                ).join(''),
+            );
+            fs.mkdirSync(path.join(repo, 'src'));
+            fs.writeFileSync(
+                path.join(repo, 'src', 'app.ts'),
+                `export const v = '${VALUE}';\n`,
+            );
+            const repoRc = (
+                new LocalSandboxService({} as any) as any
+            ).buildRemoteCommands(repo);
+
+            const out = await buildAgentTools(repoRc).grep.execute({
+                pattern: VALUE,
+            });
+
+            expect(out).toContain('src/app.ts');
+            expect(out).not.toContain('more matches hidden');
+        } finally {
+            fs.rmSync(repo, { recursive: true, force: true });
+        }
+    });
+
+    it('does not let secret file matches use up the sandbox rg limit', async () => {
+        const secretGroups = Array.from(
+            { length: MAX_GREP_GROUPS + 10 },
+            (_, i) => `certs/server.pem:${i * 10 + 1}:${VALUE}`,
+        );
+        const remote = {
+            grep: async () => '',
+            read: async () => '',
+            listDir: async () => '',
+            exec: async () => ({
+                stdout: [
+                    ...secretGroups,
+                    `src/config.ts:1:export const name = '${VALUE}';`,
+                ].join('\n--\n'),
+                stderr: '',
+                exitCode: 0,
+            }),
+        };
+
+        const out = await buildAgentTools(remote).grep.execute({
+            pattern: VALUE,
+        });
+
+        expect(out).toBe(`src/config.ts:1:export const name = '${VALUE}';`);
     });
 
     it('drops secret files from the sandbox rg output, context lines included', async () => {

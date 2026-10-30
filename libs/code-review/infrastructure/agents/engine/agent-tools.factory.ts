@@ -404,10 +404,12 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
-                        if (exitCode === 1 || !stdout.trim()) {
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
+                        if (exitCode === 1 || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
-                        const raw = stdout.trim();
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -480,15 +482,17 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             throw new Error('rg error');
                         }
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
                         // exit code 1 = no matches (not an error)
-                        if (exitCode === 1 || !stdout.trim()) {
+                        if (exitCode === 1 || !raw) {
                             return withSubmoduleNote(
                                 'No matches found.',
                                 searchPath,
                             );
                         }
                         if (exitCode === 0) {
-                            const raw = stdout.trim();
                             if (namesOnly) {
                                 return raw
                                     .split('\n')
@@ -531,6 +535,7 @@ export function buildAgentTools(
                         searchPath,
                     );
                 }
+                result = withoutSecretFileLines(result);
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty
