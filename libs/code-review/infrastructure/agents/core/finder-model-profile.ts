@@ -96,17 +96,11 @@ export function finderProfileFor(modelName?: string): FinderModelProfile {
  * reviews keep the budget and rescue they were given; so does a caller that
  * already skipped the rescue.
  */
-/** Above this many changed files a fixed-budget family takes the
- *  orchestrator's adaptive budget instead (20, plus 0.5 per file above 8, up
- *  to 100): its fixed cap was measured on PRs up to 104 files. */
-export const LARGE_PR_FILES = 100;
-
 export function finderRunSettings(
     input: {
         reviewMode?: 'fast' | 'normal' | 'deep';
         maxSteps?: number;
         skipSynthesisRescue?: boolean;
-        changedFiles?: readonly unknown[];
     },
     modelName?: string,
 ): {
@@ -125,10 +119,7 @@ export function finderRunSettings(
     return {
         profile,
         maxSteps:
-            profile.maxSteps === 'adaptive' ||
-            (input.changedFiles?.length ?? 0) > LARGE_PR_FILES
-                ? input.maxSteps
-                : profile.maxSteps,
+            profile.maxSteps === 'adaptive' ? input.maxSteps : profile.maxSteps,
         skipSynthesisRescue:
             !!input.skipSynthesisRescue || !profile.synthesisRescue,
     };
