@@ -302,3 +302,7 @@ packages/
 # Research run outputs (#1821): kept locally, out of the repo.
 evals/enrichment/results/
 evals/severity/results/
+
+# Research data kept locally, out of the repo (#1821).
+evals/dedup/gold-v3/trabalho/
+evals/dedup/holdout-20/

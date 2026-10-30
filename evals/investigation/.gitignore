@@ -4,3 +4,5 @@ results/*
 !results/.gitkeep
 pools/*
 !pools/.gitkeep
+native/
+datasets/*--b*of5.json
