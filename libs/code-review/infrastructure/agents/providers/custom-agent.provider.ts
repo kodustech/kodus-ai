@@ -386,20 +386,19 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
 
     /**
      * Runs on the `customAgent` routing task, overridable per agent by a BYOK
-     * model id; with no agent override the repository's model override still
-     * applies. Its findings are verified on that same model, as the built-in
+     * model id; with no agent override, or when its model was deleted, the
+     * repository's model override applies. Its findings are verified on that
+     * same model, as the built-in
      * agents' are: the check is the review's verify, not a model of its own.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel> {
-        const runOverride = this.agent.models?.run?.trim();
         return resolveReviewAgentModel(
-            runOverride
-                ? { ...input, byokModelId: runOverride, byokModel: undefined }
-                : input,
+            input,
             this.permissionValidationService,
             LLM_TASK.customAgent,
+            this.agent.models?.run,
         );
     }
 

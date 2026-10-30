@@ -5,6 +5,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
+import { overrideContext } from '@libs/llm/routing-strategy';
 
 @Injectable()
 export abstract class BaseAgentProvider {
@@ -71,16 +72,15 @@ export abstract class BaseAgentProvider {
 
         // byokModelId (id) wins over the legacy byokModel NAME; the strategy
         // handles the id-THEN-name match inside the resolver.
-        const overrideRef =
-            byokModelIdOverride?.trim() || byokModelOverride?.trim();
         this.byokConfig =
             (await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
                 this.getLlmTask(),
                 {
-                    ctx: overrideRef
-                        ? { override: { modelId: overrideRef } }
-                        : {},
+                    ctx: overrideContext(
+                        byokModelIdOverride,
+                        byokModelOverride,
+                    ),
                 },
             )) ?? undefined;
     }

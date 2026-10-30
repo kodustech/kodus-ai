@@ -251,6 +251,16 @@ describe('classifyLLMError', () => {
             expect(classifyLLMError(err).httpStatus).toBe(503);
         });
 
+        // Production 2026-10-29: an OpenAI-compatible gateway answers 499 when
+        // its upstream drops the request. Read as UNKNOWN it got no same-model
+        // retry and no failover, and the file's review was lost.
+        it('a gateway 499 (upstream cancelled) → TRANSIENT', () => {
+            const err = exhausted(apiError(499, 'status code 499'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
         it('a 404 on every attempt → MODEL_NOT_FOUND', () => {
             const err = exhausted(apiError(404, 'Not Found'));
             expect(classifyLLMError(err).category).toBe(
@@ -346,6 +356,16 @@ describe('classifyLLMError', () => {
             const err = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
             );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        // Production 2026-10-29: a gateway caps the request body instead of
+        // the token count. Read as UNKNOWN, the PR summary never retried on a
+        // smaller budget and failed outright.
+        it('"total text input size exceeds 8 MB" → CONTEXT_OVERFLOW', () => {
+            const err = new Error('The total text input size exceeds 8 MB');
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.CONTEXT_OVERFLOW,
             );
