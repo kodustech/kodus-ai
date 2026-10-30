@@ -183,13 +183,14 @@ export class AuthController {
     })
     @ApiCreatedResponse({ type: AuthTokensResponseDto })
     async oAuth(@Body() body: CreateUserOrganizationOAuthDto) {
-        const { name, email, refreshToken, authProvider } = body;
+        const { name, email, refreshToken, authProvider, firstTouch } = body;
 
         return await this.oAuthLoginUseCase.execute(
             name,
             email,
             refreshToken,
             authProvider,
+            firstTouch,
         );
     }
 

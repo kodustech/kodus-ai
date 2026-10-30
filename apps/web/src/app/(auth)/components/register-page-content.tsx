@@ -29,6 +29,7 @@ import {
 } from "react-hook-form";
 import type { TODO } from "src/core/types";
 import { cn } from "src/core/utils/components";
+import { readFirstTouchFromDocument } from "src/lib/attribution/first-touch";
 import { checkForEmailExistence, registerUser } from "src/lib/auth/fetchers";
 import { z } from "zod";
 
@@ -212,7 +213,12 @@ const WithEmail = () => {
         try {
             const { name, password, email } = data;
 
-            await registerUser({ name, email, password });
+            await registerUser({
+                name,
+                email,
+                password,
+                firstTouch: readFirstTouchFromDocument(),
+            });
 
             await signIn("credentials", {
                 email,
