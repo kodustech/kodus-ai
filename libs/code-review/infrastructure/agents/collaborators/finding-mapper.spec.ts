@@ -218,6 +218,37 @@ describe('mapAgentFindings', () => {
         );
     });
 
+    it('gives a lean agent only the lean fields, and a full one everything', () => {
+        const finding = {
+            suggestionContent: 'x',
+            relevantFile: 'src/a.ts',
+            relevantLinesStart: 1,
+            relevantLinesEnd: 2,
+            label: 'bug',
+            language: 'ts',
+            existingCode: 'a',
+            improvedCode: 'b',
+            severity: 'high',
+        };
+        const map = (leanOutput: boolean) =>
+            mapAgentFindings(
+                { findings: { suggestions: [finding as any] } },
+                ctx({ changedFiles: [file('src/a.ts')], leanOutput }),
+            ).suggestions[0];
+        expect(Object.keys(map(true)).sort()).toEqual(
+            [
+                'label',
+                'llmPrompt',
+                'relevantFile',
+                'relevantLinesEnd',
+                'relevantLinesStart',
+                'severity',
+                'suggestionContent',
+            ].sort(),
+        );
+        expect(map(false)).toMatchObject({ existingCode: 'a', improvedCode: 'b', language: 'ts' });
+    });
+
     it('drops a path tail shared by more than one changed file', () => {
         const r = mapAgentFindings(
             {

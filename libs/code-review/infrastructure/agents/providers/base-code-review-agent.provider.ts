@@ -1069,6 +1069,9 @@ export abstract class BaseCodeReviewAgentProvider {
             organizationId: input.organizationAndTeamData?.organizationId,
             teamId: input.organizationAndTeamData?.teamId,
             isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            leanOutput:
+                this.getCategoryLabel() !== 'kody_rules' &&
+                this.getConventionGuides(input) === undefined,
             identityName: this.getIdentity().name,
             labelPolicy: {
                 categoryLabel: this.getCategoryLabel(),

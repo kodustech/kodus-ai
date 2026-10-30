@@ -148,6 +148,11 @@ export interface FindingMapperContext {
     changedFiles: FileChange[];
     kodyRules?: Partial<IKodyRule>[];
     prNumber: number;
+    /** The generalist finder's lean output (#1821): a finding keeps only its
+     *  five fields, the agent prompt copy, its severity and its revision link;
+     *  snippets, fix and title come at enrichment. Kody Rules and custom
+     *  agents keep the full finding. */
+    leanOutput?: boolean;
     /** The review's org and team, on the mapper's log lines. */
     organizationId?: string;
     teamId?: string;
@@ -352,6 +357,24 @@ export function mapAgentFindings(
         const canonicalRelevantFile = s.relevantFile
             ? (resolveChangedFile(s.relevantFile) ?? s.relevantFile)
             : s.relevantFile;
+
+        if (ctx.leanOutput) {
+            return {
+                relevantFile: canonicalRelevantFile,
+                suggestionContent: s.suggestionContent,
+                relevantLinesStart: s.relevantLinesStart,
+                relevantLinesEnd: s.relevantLinesEnd,
+                label: resolveSuggestionLabel(s, ctx.labelPolicy),
+                severity: s.severity || 'medium',
+                llmPrompt: s.suggestionContent,
+                ...(s.oneSentenceSummary && {
+                    oneSentenceSummary: s.oneSentenceSummary,
+                }),
+                ...(s.revisesSuggestionId && {
+                    revisesSuggestionId: s.revisesSuggestionId,
+                }),
+            } as Partial<CodeSuggestion>;
+        }
 
         return {
             relevantFile: canonicalRelevantFile,

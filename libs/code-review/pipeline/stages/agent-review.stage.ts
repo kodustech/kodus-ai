@@ -1372,11 +1372,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // After the finder, in order: parse schema, anchoring, label
             // normalization (#1821). Then the dedup and the rest.
             //
-            // Parse schema, check half: a finder suggestion without the five
-            // lean fields is discarded here, before anchoring, so every
-            // suggestion anchored has a file and lines. The fields it does not
-            // carry are removed later (leanFinderSuggestions), after the repeat
-            // check, which matches an earlier comment by its existingCode.
+            // Parse schema: a finder suggestion without the five lean fields
+            // is discarded here, before anchoring, so every suggestion
+            // anchored has a file and lines. The mapper already gave it the
+            // lean shape (finding-mapper.ts, leanOutput).
             // Custom agents write the full finding and keep main's anchoring:
             // one without lines snaps to the first hunk.
             const finderSuggestions = result.suggestions.filter(
@@ -1522,13 +1521,22 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     f,
                 ]),
             );
+            // The cited code goes on a copy the check reads; the suggestion
+            // itself stays lean, and the enrichment reads the code again.
+            const originalOf = new Map<
+                Partial<CodeSuggestion>,
+                Partial<CodeSuggestion>
+            >();
             const withCitedCode = severityNormalizedNonRules.map((s) => {
                 if (s.existingCode || isCustomAgentFinding(s)) return s;
                 const { existingCode } = enrichDeterministic(
                     s,
                     headFiles.get(s.relevantFile)?.fileContent ?? null,
                 );
-                return existingCode ? { ...s, existingCode } : s;
+                if (!existingCode) return s;
+                const copy = { ...s, existingCode };
+                originalOf.set(copy, s);
+                return copy;
             });
             const repeatCheck = await this.dropRepeats(
                 context,
@@ -1547,21 +1555,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     deliveryStatus: DeliveryStatus.NOT_SENT,
                 });
             }
-            // Parse schema (#1821), strip half: from here on a finder suggestion
-            // carries only the lean fields (and its normalized severity, which
-            // the severity steps after the dedup read); code snippets come back
-            // at enrichment. Kody Rules, analyzer and custom agent findings
-            // keep theirs: the custom agent stages after this read its fields.
             let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept.map((s) => {
-                    if (!isFinderSuggestion(s)) return s;
-                    const lean = parseFinderSchema([
-                        s as Record<string, unknown>,
-                    ]).suggestions[0] as unknown as
-                        | Partial<CodeSuggestion>
-                        | undefined;
-                    return lean ? { ...lean, severity: s.severity } : s;
-                });
+                repeatCheck.kept.map((s) => originalOf.get(s) ?? s);
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
